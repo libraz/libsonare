@@ -220,10 +220,10 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("points", points);
-  out.Set("pitchRangeOctaves", Napi::Number::New(env, result.pitch_range_octaves));
-  out.Set("pitchStability", Napi::Number::New(env, result.pitch_stability));
-  out.Set("meanFrequency", Napi::Number::New(env, result.mean_frequency_hz));
-  out.Set("vibratoRate", Napi::Number::New(env, result.vibrato_rate_hz));
+  SetMeasured(out, "pitchRangeOctaves", result.pitch_range_octaves);
+  SetMeasured(out, "pitchStability", result.pitch_stability);
+  SetMeasured(out, "meanFrequency", result.mean_frequency_hz);
+  SetMeasured(out, "vibratoRate", result.vibrato_rate_hz);
   sonare_free_melody_result(&result);
   return out;
   SONARE_NODE_CATCH(env)

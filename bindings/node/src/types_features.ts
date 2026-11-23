@@ -411,10 +411,10 @@ export interface PitchResult {
   voicedProb: Float32Array;
   /** Per-frame voicing decision from the Viterbi path — the voicing oracle. */
   voicedFlag: boolean[];
-  /** Median F0 in Hz over the voiced frames. */
-  medianF0: number;
-  /** Mean F0 in Hz over the voiced frames. */
-  meanF0: number;
+  /** Median F0 in Hz over the voiced frames; absent when no frame is voiced. */
+  medianF0?: number;
+  /** Mean F0 in Hz over the voiced frames; absent when no frame is voiced. */
+  meanF0?: number;
 }
 
 /** Per-bin pitch candidates and peak magnitudes from spectral piptrack. */

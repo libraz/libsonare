@@ -601,7 +601,7 @@ export interface PercussiveEvent {
   peakAmplitude: number;
   /**
    * Share of the span's energy the separation assigned to percussion, in
-   * `[0, 1]`; 0 when the span is silent.
+   * `[0, 1]`; absent when the span is silent.
    *
    * It describes the span rather than the onset that opened it. An isolated hit
    * sits near 1, but a real hit over a loud sustain sits near 0, because the
@@ -609,7 +609,7 @@ export interface PercussiveEvent {
    * only where nothing is sustaining through both, and it is not a test for
    * whether a hit is there.
    */
-  percussiveRatio: number;
+  percussiveRatio?: number;
   /** This event's pending edit; the identity as returned. */
   edit: PercussiveEventEdit;
 }

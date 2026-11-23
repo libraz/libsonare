@@ -13317,8 +13317,8 @@ export interface MasteringAudioProfileDefects {
 export interface MasteringAudioProfile {
   /** Duration of the input in seconds. */
   durationSec: number;
-  /** Estimated tempo in beats per minute. */
-  bpm: number;
+  /** Estimated tempo in beats per minute; absent when no tempo is found (silence). */
+  bpm?: number;
   /** Confidence of the tempo estimate. */
   bpmConfidence: number;
   /** Loudness group of the profile. */
@@ -13338,8 +13338,8 @@ export interface MasteringAudioProfile {
 export interface MasteringAssistantProfile {
   /** Duration of the input in seconds. */
   durationSec: number;
-  /** Estimated tempo in beats per minute. */
-  bpm: number;
+  /** Estimated tempo in beats per minute; absent when no tempo is found (silence). */
+  bpm?: number;
   /** Confidence of the tempo estimate. */
   bpmConfidence: number;
   /**

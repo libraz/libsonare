@@ -351,7 +351,7 @@ Napi::Array PercussiveEventsToJs(Napi::Env env, const SonarePercussiveEventsResu
     row.Set("offsetSample", Napi::Number::New(env, static_cast<double>(event.offset_sample)));
     row.Set("strength", Napi::Number::New(env, event.strength));
     row.Set("peakAmplitude", Napi::Number::New(env, event.peak_amplitude));
-    row.Set("percussiveRatio", Napi::Number::New(env, event.percussive_ratio));
+    SetMeasured(row, "percussiveRatio", event.percussive_ratio);
 
     Napi::Object edit = Napi::Object::New(env);
     edit.Set("timeOffsetSamples",

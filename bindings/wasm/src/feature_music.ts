@@ -547,10 +547,13 @@ export function analyzeMelody(...args: unknown[]): MelodyResult {
           ? { timeSec: p.time, frequencyHz: p.frequency, confidence: p.confidence }
           : { timeSec: p.time, confidence: p.confidence },
       ),
-      pitchRangeOctaves: result.pitchRangeOctaves,
-      pitchStability: result.pitchStability,
-      meanFrequencyHz: result.meanFrequency,
-      vibratoRateHz: result.vibratoRate,
+      // An absent summary stays an absent key rather than becoming a present undefined.
+      ...(result.pitchRangeOctaves === undefined
+        ? {}
+        : { pitchRangeOctaves: result.pitchRangeOctaves }),
+      ...(result.pitchStability === undefined ? {} : { pitchStability: result.pitchStability }),
+      ...(result.meanFrequency === undefined ? {} : { meanFrequencyHz: result.meanFrequency }),
+      ...(result.vibratoRate === undefined ? {} : { vibratoRateHz: result.vibratoRate }),
     };
   });
 }

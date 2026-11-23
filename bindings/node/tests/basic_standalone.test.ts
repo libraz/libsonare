@@ -143,10 +143,11 @@ describe('standalone functions', () => {
     );
   });
 
-  it('detectBpm returns a number', () => {
-    const bpm = detectBpm(new Float32Array(SR), SR);
+  it('detectBpm returns a number for audible input and undefined for silence', () => {
+    const bpm = detectBpm(generateSine(220, SR, 2), SR);
     expect(typeof bpm).toBe('number');
     expect(bpm).toBeGreaterThanOrEqual(0);
+    expect(detectBpm(new Float32Array(SR), SR)).toBeUndefined();
   });
 
   it('detectKey returns key object', () => {
@@ -167,7 +168,7 @@ describe('standalone functions', () => {
   });
 
   it('analyze returns full result', () => {
-    const result = analyze(new Float32Array(SR), SR);
+    const result = analyze(generateSine(220, SR, 2), SR);
     expect(result).toHaveProperty('bpm');
     expect(result).toHaveProperty('key');
     expect(result).toHaveProperty('timeSignature');

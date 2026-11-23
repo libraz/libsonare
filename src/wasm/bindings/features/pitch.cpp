@@ -28,8 +28,8 @@ val pitch_result_to_val(const PitchResult& result) {
   out.set("voicedFlag", voiced_arr);
 
   out.set("nFrames", result.n_frames());
-  out.set("medianF0", result.median_f0());
-  out.set("meanF0", result.mean_f0());
+  setMeasured(out, "medianF0", result.median_f0());
+  setMeasured(out, "meanF0", result.mean_f0());
   return out;
 }
 

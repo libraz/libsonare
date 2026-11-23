@@ -206,23 +206,21 @@ describe('every converted quick-detailed float parameter refuses a value the flo
 });
 
 describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {
-  it('reads startBpm back exactly when detection cannot run', () => {
+  it('reports no tempo when detection cannot run, whatever startBpm says', () => {
     // 512 samples is far too short for autocorrelation-based tempo tracking
-    // (well under the default 2048-sample FFT), so BpmAnalyzer falls straight
-    // through to config_.start_bpm before running any detection.
+    // (well under the default 2048-sample FFT); startBpm only seeds the beat
+    // tracker and is never reported in place of a measurement.
     const low = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 96 });
     const high = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 180 });
-    expect(low.bpm).toBe(96);
-    expect(high.bpm).toBe(180);
+    expect('bpm' in low).toBe(false);
+    expect('bpm' in high).toBe(false);
   });
 
-  it('reads bpmMin as switching between the startBpm fallback and real detection', () => {
+  it('reads bpmMin as switching between no tempo and real detection', () => {
     // bpm_to_lag(1e6, sr, hopLength) rounds to 0 regardless of audio content,
-    // so bpmMin: 1e6 puts every lag out of range and forces BpmAnalyzer's
-    // earliest return path, returning startBpm verbatim. bpmMin: 30 instead
-    // gives the 150 BPM click train's autocorrelation peak a reachable window
-    // to detect within, so the result should reflect detection rather than
-    // the startBpm sentinel.
+    // so bpmMin: 1e6 puts every lag out of range and no tempo is measured.
+    // bpmMin: 30 instead gives the 150 BPM click train's autocorrelation peak a
+    // reachable window to detect within.
     const forcedFallback = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 1e6,
       bpmMax: 2e6,
@@ -237,14 +235,13 @@ describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
-    expect(forcedFallback.bpm).toBe(64);
-    expect(detected.bpm).not.toBe(64);
+    expect('bpm' in forcedFallback).toBe(false);
+    expect(Number.isFinite(detected.bpm)).toBe(true);
   });
 
   it('reads bpmMax as bounding the result to the configured range', () => {
-    // startBpm sits inside each range under test, so the assertion holds
-    // whether the range excludes every real candidate (falls back to
-    // startBpm) or finds one (bounded to [bpmMin, bpmMax] by construction).
+    // The click train has a candidate inside each range, so each result is
+    // measured and bounded to [bpmMin, bpmMax] by construction.
     const narrow = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 30,
       bpmMax: 40,
@@ -269,14 +266,14 @@ describe('analyzeRhythm consumes bpmMin, bpmMax and startBpm it accepts', () => 
   // analyzeRhythm's `bpm` is BeatAnalyzer::bpm(), which BeatAnalyzer::track_beats()
   // sets from the very same BpmAnalyzer with the same bpmMin/bpmMax/startBpm, so
   // the same bound holds.
-  it('reads startBpm back exactly when detection cannot run', () => {
+  it('reports no tempo when detection cannot run, whatever startBpm says', () => {
     const low = analyzeRhythm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 96 });
     const high = analyzeRhythm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 180 });
-    expect(low.bpm).toBe(96);
-    expect(high.bpm).toBe(180);
+    expect('bpm' in low).toBe(false);
+    expect('bpm' in high).toBe(false);
   });
 
-  it('reads bpmMin as switching between the startBpm fallback and real detection', () => {
+  it('reads bpmMin as switching between no tempo and real detection', () => {
     const forcedFallback = analyzeRhythm(bpmClickTrain, BPM_SR, {
       bpmMin: 1e6,
       bpmMax: 2e6,
@@ -291,8 +288,8 @@ describe('analyzeRhythm consumes bpmMin, bpmMax and startBpm it accepts', () => 
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
-    expect(forcedFallback.bpm).toBe(64);
-    expect(detected.bpm).not.toBe(64);
+    expect('bpm' in forcedFallback).toBe(false);
+    expect(Number.isFinite(detected.bpm)).toBe(true);
   });
 
   it('reads bpmMax as bounding the result to the configured range', () => {

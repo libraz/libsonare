@@ -609,7 +609,7 @@ export interface PercussiveEvent {
   peakAmplitude: number;
   /**
    * Share of the span's energy the separation assigned to percussion, in
-   * `[0, 1]`; 0 when the span is silent.
+   * `[0, 1]`; absent when the span is silent.
    *
    * It describes the span rather than the onset that opened it. An isolated hit
    * sits near 1, but a real hit over a loud sustain sits near 0, because the
@@ -617,7 +617,7 @@ export interface PercussiveEvent {
    * only where nothing is sustaining through both, and it is not a test for
    * whether a hit is there.
    */
-  percussiveRatio: number;
+  percussiveRatio?: number;
   /** This event's pending edit; the identity as returned. */
   edit: PercussiveEventEdit;
 }
@@ -816,10 +816,10 @@ export interface PitchResult {
   voicedProb: Float32Array;
   /** Per-frame voicing decision from the Viterbi path — the voicing oracle. */
   voicedFlag: boolean[];
-  /** Median F0 in Hz over the voiced frames. */
-  medianF0: number;
-  /** Mean F0 in Hz over the voiced frames. */
-  meanF0: number;
+  /** Median F0 in Hz over the voiced frames. Absent when no frame is voiced. */
+  medianF0?: number;
+  /** Mean F0 in Hz over the voiced frames. Absent when no frame is voiced. */
+  meanF0?: number;
 }
 
 /** Per-bin pitch candidates and peak magnitudes from spectral piptrack. */

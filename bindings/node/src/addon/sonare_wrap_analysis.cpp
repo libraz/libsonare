@@ -123,7 +123,7 @@ Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  return Napi::Number::New(env, static_cast<double>(bpm));
+  return sonare_node::MeasuredNumber(env, static_cast<double>(bpm));
   SONARE_NODE_CATCH(env)
 }
 
@@ -607,7 +607,7 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   }
 
   Napi::Object result = Napi::Object::New(env);
-  result.Set("bpm", Napi::Number::New(env, analysis.bpm));
+  SetMeasured(result, "bpm", analysis.bpm);
   result.Set("confidence", Napi::Number::New(env, analysis.confidence));
 
   Napi::Array candidates = Napi::Array::New(env, analysis.candidate_count);
@@ -784,16 +784,16 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   if (rhythm.groove_type == SONARE_GROOVE_SWING) groove = "swing";
 
   Napi::Object result = Napi::Object::New(env);
-  result.Set("bpm", Napi::Number::New(env, rhythm.bpm));
+  SetMeasured(result, "bpm", rhythm.bpm);
   Napi::Object time_signature = Napi::Object::New(env);
   time_signature.Set("numerator", Napi::Number::New(env, rhythm.time_signature.numerator));
   time_signature.Set("denominator", Napi::Number::New(env, rhythm.time_signature.denominator));
   time_signature.Set("confidence", Napi::Number::New(env, rhythm.time_signature.confidence));
   result.Set("timeSignature", time_signature);
   result.Set("grooveType", Napi::String::New(env, groove));
-  result.Set("syncopation", Napi::Number::New(env, rhythm.syncopation));
-  result.Set("patternRegularity", Napi::Number::New(env, rhythm.pattern_regularity));
-  result.Set("tempoStability", Napi::Number::New(env, rhythm.tempo_stability));
+  SetMeasured(result, "syncopation", rhythm.syncopation);
+  SetMeasured(result, "patternRegularity", rhythm.pattern_regularity);
+  SetMeasured(result, "tempoStability", rhythm.tempo_stability);
 
   auto intervals = Float32ArrayFrom(env, rhythm.beat_intervals, rhythm.beat_interval_count);
   result.Set("beatIntervals", intervals);
@@ -889,11 +889,11 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   }
 
   Napi::Object result = Napi::Object::New(env);
-  result.Set("brightness", Napi::Number::New(env, timbre.brightness));
-  result.Set("warmth", Napi::Number::New(env, timbre.warmth));
-  result.Set("density", Napi::Number::New(env, timbre.density));
-  result.Set("roughness", Napi::Number::New(env, timbre.roughness));
-  result.Set("complexity", Napi::Number::New(env, timbre.complexity));
+  SetMeasured(result, "brightness", timbre.brightness);
+  SetMeasured(result, "warmth", timbre.warmth);
+  SetMeasured(result, "density", timbre.density);
+  SetMeasured(result, "roughness", timbre.roughness);
+  SetMeasured(result, "complexity", timbre.complexity);
 
   auto centroid = Float32ArrayFrom(env, timbre.spectral_centroid, timbre.spectral_centroid_count);
   result.Set("spectralCentroid", centroid);
@@ -908,11 +908,11 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   for (size_t i = 0; i < timbre.timbre_over_time_count; ++i) {
     const SonareTimbreFrame& frame = timbre.timbre_over_time[i];
     Napi::Object entry = Napi::Object::New(env);
-    entry.Set("brightness", Napi::Number::New(env, frame.brightness));
-    entry.Set("warmth", Napi::Number::New(env, frame.warmth));
-    entry.Set("density", Napi::Number::New(env, frame.density));
-    entry.Set("roughness", Napi::Number::New(env, frame.roughness));
-    entry.Set("complexity", Napi::Number::New(env, frame.complexity));
+    SetMeasured(entry, "brightness", frame.brightness);
+    SetMeasured(entry, "warmth", frame.warmth);
+    SetMeasured(entry, "density", frame.density);
+    SetMeasured(entry, "roughness", frame.roughness);
+    SetMeasured(entry, "complexity", frame.complexity);
     over_time.Set(static_cast<uint32_t>(i), entry);
   }
   result.Set("timbreOverTime", over_time);

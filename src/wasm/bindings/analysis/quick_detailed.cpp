@@ -33,7 +33,7 @@ val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
   BpmAnalyzer analyzer(audio, config);
 
   val out = val::object();
-  out.set("bpm", analyzer.bpm());
+  setMeasured(out, "bpm", analyzer.bpm());
   out.set("confidence", analyzer.confidence());
 
   auto candidates = analyzer.candidates(max_candidates);
@@ -77,11 +77,11 @@ val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_va
 
   val out = val::object();
   out.set("timeSignature", time_sig);
-  out.set("syncopation", features.syncopation);
+  setMeasured(out, "syncopation", features.syncopation);
   out.set("grooveType", features.groove_type);
-  out.set("patternRegularity", features.pattern_regularity);
-  out.set("tempoStability", features.tempo_stability);
-  out.set("bpm", analyzer.bpm());
+  setMeasured(out, "patternRegularity", features.pattern_regularity);
+  setMeasured(out, "tempoStability", features.tempo_stability);
+  setMeasured(out, "bpm", analyzer.bpm());
 
   const auto& intervals = analyzer.beat_intervals();
   out.set("beatIntervals", vectorToFloat32Array(intervals));
@@ -141,11 +141,11 @@ val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
 
   const auto& t = analyzer.timbre();
   val out = val::object();
-  out.set("brightness", t.brightness);
-  out.set("warmth", t.warmth);
-  out.set("density", t.density);
-  out.set("roughness", t.roughness);
-  out.set("complexity", t.complexity);
+  setMeasured(out, "brightness", t.brightness);
+  setMeasured(out, "warmth", t.warmth);
+  setMeasured(out, "density", t.density);
+  setMeasured(out, "roughness", t.roughness);
+  setMeasured(out, "complexity", t.complexity);
 
   out.set("spectralCentroid", vectorToFloat32Array(analyzer.spectral_centroid()));
   out.set("spectralFlatness", vectorToFloat32Array(analyzer.spectral_flatness()));
@@ -155,11 +155,11 @@ val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
   val ot_array = val::array();
   for (const auto& entry : over_time) {
     val obj = val::object();
-    obj.set("brightness", entry.brightness);
-    obj.set("warmth", entry.warmth);
-    obj.set("density", entry.density);
-    obj.set("roughness", entry.roughness);
-    obj.set("complexity", entry.complexity);
+    setMeasured(obj, "brightness", entry.brightness);
+    setMeasured(obj, "warmth", entry.warmth);
+    setMeasured(obj, "density", entry.density);
+    setMeasured(obj, "roughness", entry.roughness);
+    setMeasured(obj, "complexity", entry.complexity);
     ot_array.call<void>("push", obj);
   }
   out.set("timbreOverTime", ot_array);

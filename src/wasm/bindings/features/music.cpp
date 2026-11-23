@@ -307,10 +307,10 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
 
   val out = val::object();
   out.set("points", points);
-  out.set("pitchRangeOctaves", contour.pitch_range_octaves);
-  out.set("pitchStability", contour.pitch_stability);
-  out.set("meanFrequency", contour.mean_frequency);
-  out.set("vibratoRate", contour.vibrato_rate);
+  setMeasured(out, "pitchRangeOctaves", contour.pitch_range_octaves);
+  setMeasured(out, "pitchStability", contour.pitch_stability);
+  setMeasured(out, "meanFrequency", contour.mean_frequency);
+  setMeasured(out, "vibratoRate", contour.vibrato_rate);
   return out;
 }
 

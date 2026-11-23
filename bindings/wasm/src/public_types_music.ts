@@ -571,14 +571,14 @@ export interface MelodyPoint {
 export interface MelodyResult {
   /** Melody contour, one point per analysis frame. */
   points: MelodyPoint[];
-  /** Span between the lowest and highest voiced pitch, in octaves. */
-  pitchRangeOctaves: number;
-  /** Pitch stability in `[0, 1]`; 1 is very stable. */
-  pitchStability: number;
-  /** Mean fundamental frequency of the voiced frames, in Hz. */
-  meanFrequencyHz: number;
-  /** Vibrato rate in Hz; 0 when there is no vibrato. */
-  vibratoRateHz: number;
+  /** Span between the lowest and highest voiced pitch, in octaves. Absent when no frame is voiced. */
+  pitchRangeOctaves?: number;
+  /** Pitch stability in `[0, 1]`; 1 is very stable. Absent when no frame is voiced. */
+  pitchStability?: number;
+  /** Mean fundamental frequency of the voiced frames, in Hz. Absent when no frame is voiced. */
+  meanFrequencyHz?: number;
+  /** Vibrato rate in Hz; 0 when there is no vibrato. Absent when no frame is voiced. */
+  vibratoRateHz?: number;
 }
 
 /**
@@ -702,14 +702,14 @@ export interface MeterEstimate {
  * Rhythm features from the unified analysis.
  */
 export interface AnalysisRhythm {
-  /** Syncopation level in `[0, 1]`. */
-  syncopation: number;
+  /** Syncopation level in `[0, 1]`. Absent below four tracked beats, with silent accents, or with no strong and weak position. */
+  syncopation?: number;
   /** Rhythmic feel of the track. */
   grooveType: GrooveType;
-  /** Regularity of the beat intervals in `[0, 1]`; 0 with no beat interval. */
-  patternRegularity: number;
-  /** Tempo stability over time in `[0, 1]`; 0 below two beat intervals. */
-  tempoStability: number;
+  /** Regularity of the beat intervals in `[0, 1]`. Absent below two beat intervals. */
+  patternRegularity?: number;
+  /** Tempo stability over time in `[0, 1]`. Absent below two positive beat intervals. */
+  tempoStability?: number;
   /** Estimated time signature. */
   timeSignature: TimeSignature;
 }
@@ -718,14 +718,14 @@ export interface AnalysisRhythm {
  * Melody contour from the unified analysis (pitch trajectory + summary stats).
  */
 export interface AnalysisMelody {
-  /** Span between the lowest and highest voiced pitch, in octaves. */
-  pitchRangeOctaves: number;
-  /** Pitch stability in `[0, 1]`; 1 is very stable. */
-  pitchStability: number;
-  /** Mean fundamental frequency of the voiced frames, in Hz. */
-  meanFrequencyHz: number;
-  /** Vibrato rate in Hz; 0 when there is no vibrato. */
-  vibratoRateHz: number;
+  /** Span between the lowest and highest voiced pitch, in octaves. Absent when no frame is voiced. */
+  pitchRangeOctaves?: number;
+  /** Pitch stability in `[0, 1]`; 1 is very stable. Absent when no frame is voiced. */
+  pitchStability?: number;
+  /** Mean fundamental frequency of the voiced frames, in Hz. Absent when no frame is voiced. */
+  meanFrequencyHz?: number;
+  /** Vibrato rate in Hz; 0 when there is no vibrato. Absent when no frame is voiced. */
+  vibratoRateHz?: number;
   /** Pitch contour, one point per analysis frame. */
   pitches: MelodyPoint[];
 }
@@ -734,8 +734,8 @@ export interface AnalysisMelody {
  * Complete analysis result
  */
 export interface AnalysisResult {
-  /** Global tempo in beats per minute. */
-  bpm: number;
+  /** Global tempo in beats per minute. Absent when no tempo is found (silence). */
+  bpm?: number;
   /**
    * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
    * `analyzeBpm()` searches 60–200 BPM at the input rate, so the two can differ on the same
@@ -835,14 +835,14 @@ export interface RhythmResult {
     /** Support for this signature in `[0, 1]`. */
     confidence: number;
   };
-  /** Syncopation level in `[0, 1]`. */
-  syncopation: number;
+  /** Syncopation level in `[0, 1]`. Absent below four tracked beats, with silent accents, or with no strong and weak position. */
+  syncopation?: number;
   /** Rhythmic feel of the track. */
   grooveType: GrooveType;
-  /** Regularity of the beat intervals in `[0, 1]`; 0 with no beat interval. */
-  patternRegularity: number;
-  /** Tempo stability over time in `[0, 1]`; 0 below two beat intervals. */
-  tempoStability: number;
+  /** Regularity of the beat intervals in `[0, 1]`. Absent below two beat intervals. */
+  patternRegularity?: number;
+  /** Tempo stability over time in `[0, 1]`. Absent below two positive beat intervals. */
+  tempoStability?: number;
   /**
    * The beat tracker's own tempo, refined from the local beat period. It is a
    * third figure rather than either tempo entry point's: measured against
@@ -850,8 +850,10 @@ export interface RhythmResult {
    * lands closer to the known tempo than either. Analysed at the sample rate
    * you pass: `nFft` is a window length in samples at 22050 Hz, rescaled to
    * that rate, and `hopLength` is in samples of your buffer.
+   *
+   * Absent when no tempo is found (silence).
    */
-  bpm: number;
+  bpm?: number;
   /** Intervals between consecutive beats, in seconds. */
   beatIntervals: Float32Array;
 }
@@ -884,18 +886,21 @@ export interface DynamicsResult {
   loudnessRmsDb: Float32Array;
 }
 
-/** Timbre metrics for one analysis window. Entries are ordered by time in `timbreOverTime`. */
+/**
+ * Timbre metrics for one analysis window. Entries are ordered by time in `timbreOverTime`. On a
+ * window, and on the overall result, a metric is absent when no frame of the span carries energy.
+ */
 export interface TimbreFrame {
-  /** Spectral brightness in `[0, 1]`; high is bright. */
-  brightness: number;
-  /** Spectral warmth in `[0, 1]`; high is warm. */
-  warmth: number;
-  /** Spectral density in `[0, 1]`; high is rich. */
-  density: number;
-  /** Spectral roughness in `[0, 1]`; high is rough. */
-  roughness: number;
-  /** Harmonic complexity in `[0, 1]`; high is complex. */
-  complexity: number;
+  /** Spectral brightness in `[0, 1]`; high is bright. Absent when no frame of the span carries energy. */
+  brightness?: number;
+  /** Spectral warmth in `[0, 1]`; high is warm. Absent when no frame of the span carries energy. */
+  warmth?: number;
+  /** Spectral density in `[0, 1]`; high is rich. Absent when no frame of the span carries energy. */
+  density?: number;
+  /** Spectral roughness in `[0, 1]`; high is rough. Absent when no frame of the span carries energy. */
+  roughness?: number;
+  /** Harmonic complexity in `[0, 1]`; high is complex. Absent when no frame of the span carries energy. */
+  complexity?: number;
 }
 
 /** Result of `analyzeTimbre`: overall timbre metrics and per-frame spectral curves. */

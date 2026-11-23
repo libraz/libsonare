@@ -202,7 +202,7 @@ export class OfflineWorkerClient {
   detectBpm(
     request: WorkerRequest<DetectBpmRequest>,
     options?: OfflineWorkerCallOptions,
-  ): Promise<number> {
+  ): Promise<number | undefined> {
     return this.call('detectBpm', request, options);
   }
 

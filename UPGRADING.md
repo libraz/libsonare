@@ -4231,18 +4231,33 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalysisMelody.pitchRangeOctaves` | optional; absent when no frame is voiced (was NaN) |
+| `AnalysisMelody.pitchStability` | optional; absent when no frame is voiced (was NaN) |
+| `AnalysisResult.bpm` | optional; absent when no tempo is found (was NaN) |
+| `AnalysisRhythm.patternRegularity` | optional; absent below 2 beat intervals (was NaN) |
+| `AnalysisRhythm.syncopation` | optional; absent below 4 tracked beats, with silent accents, or without a strong and a weak position (was NaN) |
+| `AnalysisRhythm.tempoStability` | optional; absent below 2 positive beat intervals (was NaN) |
 | `AnalyzePolyphonicRequest.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.minRidgeDurationMs` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.minRidgePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.minSeparationCents` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.reattackRatio` | absent = re-attack splitting off; explicit 0 refused (RangeError) |
+| `BpmAnalysisResult.bpm` | optional; absent when no tempo is found (was NaN) |
 | `ChordSymbolFields.slashBassPc` | absent when the bass is the root, instead of 255; read it with ?? to supply a default |
 | `ClicksRequest.length` | absent = derived from the last click; explicit 0 refused (RangeError) |
+| `MelodyResult.pitchRangeOctaves` | optional; absent when no frame is voiced (was NaN) |
+| `MelodyResult.pitchStability` | optional; absent when no frame is voiced (was NaN) |
+| `PitchResult.meanF0` | optional; absent when no frame is voiced (was NaN) |
+| `PitchResult.medianF0` | optional; absent when no frame is voiced (was NaN) |
 | `PolyphonicAnalysisOptions.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minRidgeDurationMs` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minRidgePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minSeparationCents` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.reattackRatio` | absent = re-attack splitting off; explicit 0 refused (RangeError) |
+| `RhythmResult.bpm` | optional; absent when no tempo is found (was NaN) |
+| `RhythmResult.patternRegularity` | optional; absent below 2 beat intervals (was NaN) |
+| `RhythmResult.syncopation` | optional; absent below 4 tracked beats, with silent accents, or without a strong and a weak position (was NaN) |
+| `RhythmResult.tempoStability` | optional; absent below 2 positive beat intervals (was NaN) |
 | `SegmentCrossSimilarityRequest.k` | 0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default |
 | `SegmentRecurrenceMatrixRequest.k` | 0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default |
 | `StreamFramesI16.featureFlags` | removed: Drop it; test each feature array (mel, chroma, onsetStrength, spectralCentroid) for undefined, since an uncomputed feature is absent. |
@@ -4278,6 +4293,16 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `StreamProgressiveEstimate.keyName` | removed: Read estimate.key?.name from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate. |
 | `StreamProgressiveEstimate.keyShortName` | removed: Read estimate.key?.shortName from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate. |
 | `StreamProgressiveEstimate.key` | key?: Key (root, mode, confidence, name, shortName); absent until estimated (was -1) |
+| `TimbreFrame.brightness` | optional; absent for a window with no energy-carrying frame (was NaN) |
+| `TimbreFrame.complexity` | optional; absent for a window with no energy-carrying frame (was NaN) |
+| `TimbreFrame.density` | optional; absent for a window with no energy-carrying frame (was NaN) |
+| `TimbreFrame.roughness` | optional; absent for a window with no energy-carrying frame (was NaN) |
+| `TimbreFrame.warmth` | optional; absent for a window with no energy-carrying frame (was NaN) |
+| `TimbreResult.brightness` | optional; absent when no frame carries energy (was NaN) |
+| `TimbreResult.complexity` | optional; absent when no frame carries energy (was NaN) |
+| `TimbreResult.density` | optional; absent when no frame carries energy (was NaN) |
+| `TimbreResult.roughness` | optional; absent when no frame carries energy (was NaN) |
+| `TimbreResult.warmth` | optional; absent when no frame carries energy (was NaN) |
 | `TranscribeRequest.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `TranscribeRequest.minRidgePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `TranscribeRequest.reattackRatio` | absent = re-attack splitting off; explicit 0 refused (RangeError) |
@@ -4592,7 +4617,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PlpRequest.tempoMin` | `PlpRequest.bpmMin` |
 | `analyzeBpm` | bpmMin/bpmMax default 60/200 (was 30/300) |
 | `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
-| `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined instead of NaN when no tempo is found; Audio.detectBpm likewise |
 | `plp` | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 
 #### One-shot JavaScript calls take a request object
@@ -5249,6 +5274,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `NnFilterRequest.k` | 0 or a negative k is refused with RangeError; it used to filter with 5 neighbours (capped at the frame count). Omit k for the default 7 |
+| `PercussiveEvent.percussiveRatio` | optional; absent for a silent span (was 0 or NaN) |
 | `RealtimeVoiceChangerOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is refused |
 | `RirSynthOptions.crossfadeMs` | `SynthesizeRirRequest.crossfadeMs`: absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default |
 | `RirSynthOptions.mixingTimeMs` | `SynthesizeRirRequest.mixingTimeMs`: absent = library default; explicit 0 -> RangeError ("omit for the default") |
@@ -5715,6 +5741,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `MasteringAssistantProfile.bpm` | optional; absent when no tempo is found (was NaN) |
+| `MasteringAudioProfile.bpm` | optional; absent when no tempo is found (was NaN) |
 | `MasteringAudioProfile.defects` | defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes) |
 | `MasteringAudioProfileDefects.measured` | removed: test whether defects is present; it is absent when detectDefects is false |
 | `MasteringInsertParamInfo.choices` | T \| null -> optional: a value the result cannot give is an absent field, never null |
@@ -7269,7 +7297,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.detectBeats` | searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it |
-| `Audio.detectBpm` | searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it |
+| `Audio.detectBpm` | searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it; returns undefined when no tempo is found (was NaN) |
 | `Audio.detectDownbeats` | the beat grid under it searches 60-200 BPM (was 30-300) |
 
 #### One-shot JavaScript calls take a request object
@@ -7866,11 +7894,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalysisResult.bpm` (`./analysis`) | optional; absent when no tempo is found (silence) (was a required number) |
+| `AnalysisResult.bpm` | optional; absent when no tempo is found (silence) (was a required number) |
 | `AnalyzePolyphonicRequest.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.minRidgeDurationMs` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.minRidgePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.minSeparationCents` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `AnalyzePolyphonicRequest.reattackRatio` | absent = re-attack splitting off; explicit 0 refused (RangeError) |
+| `BpmAnalysisResult.bpm` (`./analysis`) | optional; absent when no tempo is found (silence) (was a required number) |
+| `BpmAnalysisResult.bpm` | optional; absent when no tempo is found (silence) (was a required number) |
 | `ChordAnnotationFields.slashBassPc` | `ChordSymbolFields.slashBassPc`: absent when the bass is the root, instead of 255; read it with ?? to supply a default |
 | `ClicksRequest.length` (`./analysis`) | absent = derived from the last click; explicit 0 refused (RangeError) |
 | `ClicksRequest.length` | absent = derived from the last click; explicit 0 refused (RangeError) |
@@ -7882,6 +7914,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `FrameBuffer.rmsEnergy` | `StreamFrames.rmsEnergy`: optional; absent when the feature is not computed |
 | `FrameBuffer.spectralCentroid` | `StreamFrames.spectralCentroid`: optional; absent when the feature is not computed |
 | `FrameBuffer.spectralFlatness` | `StreamFrames.spectralFlatness`: optional; absent when the feature is not computed |
+| `MelodyContour.pitchRangeOctaves` (`./analysis`) | `AnalysisMelody.pitchRangeOctaves`: optional; absent when no frame is voiced (was a required number) |
+| `MelodyContour.pitchStability` (`./analysis`) | `AnalysisMelody.pitchStability`: optional; absent when no frame is voiced (was a required number) |
+| `MelodyResult.pitchRangeOctaves` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
+| `MelodyResult.pitchRangeOctaves` | optional; absent when no frame is voiced (was a required number) |
+| `MelodyResult.pitchStability` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
+| `MelodyResult.pitchStability` | optional; absent when no frame is voiced (was a required number) |
+| `PitchResult.meanF0` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
+| `PitchResult.meanF0` | optional; absent when no frame is voiced (was a required number) |
+| `PitchResult.medianF0` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
+| `PitchResult.medianF0` | optional; absent when no frame is voiced (was a required number) |
 | `PolyphonicAnalysisOptions.minFramePeakRatio` (`./analysis`) | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minRidgeDurationMs` (`./analysis`) | explicit 0 now means 0; negative refused (RangeError); absent = library default |
@@ -7907,6 +7949,20 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProgressiveEstimate.keyName` | removed: Read estimate.key?.name from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate. |
 | `ProgressiveEstimate.keyShortName` | removed: Read estimate.key?.shortName from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate. |
 | `ProgressiveEstimate.key` | `StreamProgressiveEstimate.key`: key?: Key (root, mode, confidence, name, shortName); absent until estimated (was -1) |
+| `RhythmAnalysisResult.bpm` (`./analysis`) | `RhythmResult.bpm`: optional; absent when no tempo is found (silence) (was a required number) |
+| `RhythmAnalysisResult.bpm` | `RhythmResult.bpm`: optional; absent when no tempo is found (silence) (was a required number) |
+| `RhythmAnalysisResult.patternRegularity` (`./analysis`) | `RhythmResult.patternRegularity`: optional; absent when below two beat intervals (was a required number) |
+| `RhythmAnalysisResult.patternRegularity` | `RhythmResult.patternRegularity`: optional; absent when below two beat intervals (was a required number) |
+| `RhythmAnalysisResult.syncopation` (`./analysis`) | `RhythmResult.syncopation`: optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number) |
+| `RhythmAnalysisResult.syncopation` | `RhythmResult.syncopation`: optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number) |
+| `RhythmAnalysisResult.tempoStability` (`./analysis`) | `RhythmResult.tempoStability`: optional; absent when below two positive beat intervals (was a required number) |
+| `RhythmAnalysisResult.tempoStability` | `RhythmResult.tempoStability`: optional; absent when below two positive beat intervals (was a required number) |
+| `RhythmFeatures.patternRegularity` (`./analysis`) | `AnalysisRhythm.patternRegularity`: optional; absent when below two beat intervals (was a required number) |
+| `RhythmFeatures.patternRegularity` | `AnalysisRhythm.patternRegularity`: optional; absent when below two beat intervals (was a required number) |
+| `RhythmFeatures.syncopation` (`./analysis`) | `AnalysisRhythm.syncopation`: optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number) |
+| `RhythmFeatures.syncopation` | `AnalysisRhythm.syncopation`: optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number) |
+| `RhythmFeatures.tempoStability` (`./analysis`) | `AnalysisRhythm.tempoStability`: optional; absent when below two positive beat intervals (was a required number) |
+| `RhythmFeatures.tempoStability` | `AnalysisRhythm.tempoStability`: optional; absent when below two positive beat intervals (was a required number) |
 | `SegmentCrossSimilarityRequest.k` (`./analysis`) | 0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default |
 | `SegmentCrossSimilarityRequest.k` | 0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default |
 | `SegmentRecurrenceMatrixRequest.k` (`./analysis`) | 0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default |
@@ -7923,6 +7979,36 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `StreamFramesU8.spectralFlatness` | optional; absent when the feature is not computed |
 | `StreamingEqualizerConfig.maxBlockSize` (`./analysis`) | the 1.x default value is gone: omit it for the library default; an explicit 0 is refused |
 | `StreamingEqualizerConfig.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is refused |
+| `Timbre.brightness` (`./analysis`) | `TimbreFrame.brightness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.brightness` | `TimbreFrame.brightness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.complexity` (`./analysis`) | `TimbreFrame.complexity`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.complexity` | `TimbreFrame.complexity`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.density` (`./analysis`) | `TimbreFrame.density`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.density` | `TimbreFrame.density`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.roughness` (`./analysis`) | `TimbreFrame.roughness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.roughness` | `TimbreFrame.roughness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.warmth` (`./analysis`) | `TimbreFrame.warmth`: optional; absent when no frame of the span carries energy (was a required number) |
+| `Timbre.warmth` | `TimbreFrame.warmth`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.brightness` (`./analysis`) | `TimbreResult.brightness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.brightness` | `TimbreResult.brightness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.complexity` (`./analysis`) | `TimbreResult.complexity`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.complexity` | `TimbreResult.complexity`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.density` (`./analysis`) | `TimbreResult.density`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.density` | `TimbreResult.density`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.roughness` (`./analysis`) | `TimbreResult.roughness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.roughness` | `TimbreResult.roughness`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.warmth` (`./analysis`) | `TimbreResult.warmth`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreAnalysisResult.warmth` | `TimbreResult.warmth`: optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.brightness` (`./analysis`) | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.brightness` | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.complexity` (`./analysis`) | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.complexity` | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.density` (`./analysis`) | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.density` | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.roughness` (`./analysis`) | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.roughness` | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.warmth` (`./analysis`) | optional; absent when no frame of the span carries energy (was a required number) |
+| `TimbreFrame.warmth` | optional; absent when no frame of the span carries energy (was a required number) |
 | `TranscribeRequest.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `TranscribeRequest.minRidgePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `TranscribeRequest.reattackRatio` | absent = re-attack splitting off; explicit 0 refused (RangeError) |
@@ -8508,8 +8594,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `analyzeBpm` | bpmMin/bpmMax default 60/200 (was 30/300) |
 | `detectBeats` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
 | `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
-| `detectBpm` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
-| `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBpm` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined when no tempo is found (was NaN) |
+| `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined when no tempo is found (was NaN) |
 | `plp` (`./analysis`) | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 | `plp` | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 
@@ -9682,6 +9768,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `NnFilterRequest.k` (`./analysis`) | 0 or a negative k is refused with RangeError; it used to filter with 5 neighbours (capped at the frame count). Omit k for the default 7 |
 | `NnFilterRequest.k` | 0 or a negative k is refused with RangeError; it used to filter with 5 neighbours (capped at the frame count). Omit k for the default 7 |
+| `PercussiveEvent.percussiveRatio` (`./analysis`) | optional; absent when the span is silent (was 0) |
+| `PercussiveEvent.percussiveRatio` | optional; absent when the span is silent (was 0) |
 | `RirSynthOptions.crossfadeMs` (`./analysis`) | `SynthesizeRirRequest.crossfadeMs`: absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default |
 | `RirSynthOptions.crossfadeMs` | `SynthesizeRirRequest.crossfadeMs`: absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default |
 | `RirSynthOptions.mixingTimeMs` (`./analysis`) | `SynthesizeRirRequest.mixingTimeMs`: absent = library default; explicit 0 -> RangeError ("omit for the default") |
@@ -10442,6 +10530,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `MasteringAssistantProfile.bpm` (`./analysis`) | optional; absent when no tempo is found (silence) (was a required number) |
+| `MasteringAssistantProfile.bpm` | optional; absent when no tempo is found (silence) (was a required number) |
+| `MasteringAudioProfile.bpm` | optional; absent when no tempo is found (silence) (was a required number) |
 | `MasteringAudioProfile.defects` | defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes) |
 | `MasteringAudioProfileDefects.measured` | removed: test whether defects is present; it is absent when detectDefects is false |
 | `MasteringInsertParamInfo.choices` | T \| null -> optional: a value the result cannot give is an absent field, never null |

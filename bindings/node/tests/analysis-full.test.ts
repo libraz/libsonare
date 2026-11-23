@@ -73,7 +73,8 @@ describe('analyze() full result', () => {
 
     expect(result.rhythm).toBeDefined();
     expect(result.rhythm.timeSignature).toBeDefined();
-    expect(typeof result.rhythm.syncopation).toBe('number');
+    // A sustained chord has no tracked beats to measure syncopation on.
+    expect('syncopation' in result.rhythm).toBe(false);
     expect(typeof result.rhythm.grooveType).toBe('string');
 
     expect(result.melody).toBeDefined();

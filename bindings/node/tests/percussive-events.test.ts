@@ -274,6 +274,11 @@ function anySpanCovers(events: PercussiveEvent[], start: number): boolean {
   return events.some((event) => event.onsetSample <= start && event.offsetSample > start);
 }
 
+/** The measured ratio of an event; NaN when the span was silent. */
+function ratioOf(event: PercussiveEvent): number {
+  return event.percussiveRatio ?? Number.NaN;
+}
+
 /** Every field a separation produced, so two runs can be compared as a whole. */
 function measurements(event: PercussiveEvent): number[] {
   return [
@@ -281,7 +286,7 @@ function measurements(event: PercussiveEvent): number[] {
     event.offsetSample,
     event.strength,
     event.peakAmplitude,
-    event.percussiveRatio,
+    event.percussiveRatio ?? Number.NaN,
   ];
 }
 
@@ -491,9 +496,9 @@ describe('extractPercussiveEvents', () => {
     // the one in silence. That is also why 0 is the default.
     const underSustain = eventAt(layeredEvents, LAYERED_HIT_START);
     const isolated = eventAt(isolatedEvents, LAYERED_HIT_START);
-    const between = 0.5 * (underSustain.percussiveRatio + isolated.percussiveRatio);
-    expect(between).toBeGreaterThan(underSustain.percussiveRatio);
-    expect(between).toBeLessThan(isolated.percussiveRatio);
+    const between = 0.5 * (ratioOf(underSustain) + ratioOf(isolated));
+    expect(between).toBeGreaterThan(ratioOf(underSustain));
+    expect(between).toBeLessThan(ratioOf(isolated));
 
     const selective = extractPercussiveEvents({
       samples: layered.mixed,
@@ -515,7 +520,7 @@ describe('extractPercussiveEvents', () => {
     // Selection happens after measurement, so a survivor is the very same event
     // rather than one whose span grew over a dropped neighbour.
     expect(measuredSet(selective)).toEqual(
-      measuredSet(layeredEvents.filter((event) => event.percussiveRatio >= between)),
+      measuredSet(layeredEvents.filter((event) => ratioOf(event) >= between)),
     );
 
     // 0 is this field's own meaning as well as its default, so it must keep

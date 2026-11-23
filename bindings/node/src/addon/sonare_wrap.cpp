@@ -924,7 +924,7 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return Napi::Number::New(env, static_cast<double>(bpm));
+  return sonare_node::MeasuredNumber(env, static_cast<double>(bpm));
   SONARE_NODE_CATCH(env)
 }
 

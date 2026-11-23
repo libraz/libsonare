@@ -199,34 +199,34 @@ export interface AnalysisDynamics {
 export interface AnalysisRhythm {
   /** Estimated time signature. */
   timeSignature: TimeSignature;
-  /** Syncopation level in `[0, 1]`. */
-  syncopation: number;
+  /** Syncopation level in `[0, 1]`; absent below 4 tracked beats, with silent accents, or without both a strong and a weak position. */
+  syncopation?: number;
   /** Rhythmic feel of the track. */
   grooveType: GrooveType;
-  /** Regularity of the beat intervals in `[0, 1]`; 0 with no beat interval. */
-  patternRegularity: number;
-  /** Tempo stability over time in `[0, 1]`; 0 below two beat intervals. */
-  tempoStability: number;
+  /** Regularity of the beat intervals in `[0, 1]`; absent below 2 beat intervals. */
+  patternRegularity?: number;
+  /** Tempo stability over time in `[0, 1]`; absent below 2 positive beat intervals. */
+  tempoStability?: number;
 }
 
 /** Melody-contour summary in {@link AnalysisResult.melody}. */
 export interface AnalysisMelody {
-  /** Span between the lowest and highest voiced pitch, in octaves. */
-  pitchRangeOctaves: number;
-  /** Pitch stability in `[0, 1]`; 1 is very stable. */
-  pitchStability: number;
-  /** Mean fundamental frequency of the voiced frames, in Hz. */
-  meanFrequencyHz: number;
-  /** Vibrato rate in Hz; 0 when there is no vibrato. */
-  vibratoRateHz: number;
+  /** Span between the lowest and highest voiced pitch, in octaves; absent when no frame is voiced. */
+  pitchRangeOctaves?: number;
+  /** Pitch stability in `[0, 1]`; 1 is very stable; absent when no frame is voiced. */
+  pitchStability?: number;
+  /** Mean fundamental frequency of the voiced frames, in Hz; absent when no frame is voiced. */
+  meanFrequencyHz?: number;
+  /** Vibrato rate in Hz; 0 when there is no vibrato; absent when no frame is voiced. */
+  vibratoRateHz?: number;
   /** Pitch contour, one point per analysis frame. */
   pitches: MelodyPoint[];
 }
 
 /** Complete result of the unified {@link analyze} call. */
 export interface AnalysisResult {
-  /** Global tempo in beats per minute. */
-  bpm: number;
+  /** Global tempo in beats per minute; absent when no tempo is found (silence). */
+  bpm?: number;
   /**
    * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
    * `analyzeBpm()` searches the same 60–200 BPM by default at the input rate, so the two can
@@ -589,14 +589,14 @@ export interface MelodyPoint {
 export interface MelodyResult {
   /** Melody contour, one point per analysis frame. */
   points: MelodyPoint[];
-  /** Span between the lowest and highest voiced pitch, in octaves. */
-  pitchRangeOctaves: number;
-  /** Pitch stability in `[0, 1]`; 1 is very stable. */
-  pitchStability: number;
-  /** Mean fundamental frequency of the voiced frames, in Hz. */
-  meanFrequencyHz: number;
-  /** Vibrato rate in Hz; 0 when there is no vibrato. */
-  vibratoRateHz: number;
+  /** Span between the lowest and highest voiced pitch, in octaves; absent when no frame is voiced. */
+  pitchRangeOctaves?: number;
+  /** Pitch stability in `[0, 1]`; 1 is very stable; absent when no frame is voiced. */
+  pitchStability?: number;
+  /** Mean fundamental frequency of the voiced frames, in Hz; absent when no frame is voiced. */
+  meanFrequencyHz?: number;
+  /** Vibrato rate in Hz; 0 when there is no vibrato; absent when no frame is voiced. */
+  vibratoRateHz?: number;
 }
 
 /** A tempo hypothesis with its confidence. */
@@ -615,8 +615,8 @@ export interface AnalysisBpmCandidate extends BpmCandidate {
 
 /** Result of {@link analyzeBpm}. */
 export interface BpmAnalysisResult {
-  /** Chosen tempo in beats per minute. */
-  bpm: number;
+  /** Chosen tempo in beats per minute; absent when no tempo is found (silence). */
+  bpm?: number;
   /**
    * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (60–200 by default), searched at
    * the input rate. `analyze()` searches at 22050 Hz, so its `bpmConfidence` can differ.
@@ -624,7 +624,7 @@ export interface BpmAnalysisResult {
   confidence: number;
   /**
    * Chosen tempo first (`candidates[0].bpm === bpm`), then the other histogram
-   * bins by descending vote share.
+   * bins by descending vote share; empty when no tempo is found.
    */
   candidates: BpmCandidate[];
   /** Autocorrelation of the onset envelope over tempo lags. */
@@ -965,19 +965,20 @@ export interface RhythmResult {
    * synthesized click trains it differs from both at every sample rate, and
    * lands closer to the known tempo than either. Analysed at the sample rate
    * you pass: `nFft` is a window length in samples at 22050 Hz, rescaled to
-   * that rate, and `hopLength` is in samples of your buffer.
+   * that rate, and `hopLength` is in samples of your buffer. Absent when no tempo is found
+   * (silence).
    */
-  bpm: number;
+  bpm?: number;
   /** Estimated time signature. */
   timeSignature: TimeSignature;
   /** Rhythmic feel of the track. */
   grooveType: GrooveType;
-  /** Syncopation level in `[0, 1]`. */
-  syncopation: number;
-  /** Regularity of the beat intervals in `[0, 1]`; 0 with no beat interval. */
-  patternRegularity: number;
-  /** Tempo stability over time in `[0, 1]`; 0 below two beat intervals. */
-  tempoStability: number;
+  /** Syncopation level in `[0, 1]`; absent below 4 tracked beats, with silent accents, or without both a strong and a weak position. */
+  syncopation?: number;
+  /** Regularity of the beat intervals in `[0, 1]`; absent below 2 beat intervals. */
+  patternRegularity?: number;
+  /** Tempo stability over time in `[0, 1]`; absent below 2 positive beat intervals. */
+  tempoStability?: number;
   /** Intervals between consecutive beats, in seconds. */
   beatIntervals: Float32Array;
 }
@@ -1013,30 +1014,30 @@ export interface DynamicsResult {
 
 /** Timbre metrics for one analysis window. Entries are ordered by time in {@link TimbreResult.timbreOverTime}. */
 export interface TimbreFrame {
-  /** Spectral brightness in `[0, 1]`; high is bright. */
-  brightness: number;
-  /** Spectral warmth in `[0, 1]`; high is warm. */
-  warmth: number;
-  /** Spectral density in `[0, 1]`; high is rich. */
-  density: number;
-  /** Spectral roughness in `[0, 1]`; high is rough. */
-  roughness: number;
-  /** Harmonic complexity in `[0, 1]`; high is complex. */
-  complexity: number;
+  /** Spectral brightness in `[0, 1]`; high is bright; absent for a window with no energy-carrying frame. */
+  brightness?: number;
+  /** Spectral warmth in `[0, 1]`; high is warm; absent for a window with no energy-carrying frame. */
+  warmth?: number;
+  /** Spectral density in `[0, 1]`; high is rich; absent for a window with no energy-carrying frame. */
+  density?: number;
+  /** Spectral roughness in `[0, 1]`; high is rough; absent for a window with no energy-carrying frame. */
+  roughness?: number;
+  /** Harmonic complexity in `[0, 1]`; high is complex; absent for a window with no energy-carrying frame. */
+  complexity?: number;
 }
 
 /** Result of {@link analyzeTimbre}: overall timbre metrics and per-frame spectral curves. */
 export interface TimbreResult {
-  /** Spectral brightness in `[0, 1]`; high is bright. */
-  brightness: number;
-  /** Spectral warmth in `[0, 1]`; high is warm. */
-  warmth: number;
-  /** Spectral density in `[0, 1]`; high is rich. */
-  density: number;
-  /** Spectral roughness in `[0, 1]`; high is rough. */
-  roughness: number;
-  /** Harmonic complexity in `[0, 1]`; high is complex. */
-  complexity: number;
+  /** Spectral brightness in `[0, 1]`; high is bright; absent when no frame carries energy. */
+  brightness?: number;
+  /** Spectral warmth in `[0, 1]`; high is warm; absent when no frame carries energy. */
+  warmth?: number;
+  /** Spectral density in `[0, 1]`; high is rich; absent when no frame carries energy. */
+  density?: number;
+  /** Spectral roughness in `[0, 1]`; high is rough; absent when no frame carries energy. */
+  roughness?: number;
+  /** Harmonic complexity in `[0, 1]`; high is complex; absent when no frame carries energy. */
+  complexity?: number;
   /** Spectral centroid per analysis frame, in Hz. */
   spectralCentroid: Float32Array;
   /** Spectral flatness per analysis frame, in `[0, 1]`. */

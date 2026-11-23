@@ -30,6 +30,12 @@ import { init } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import { expectArgumentRefusal } from './_helpers';
 
+/** A measured field this case's input is built to produce; absent fails the case. */
+function measured(value: number | undefined): number {
+  expect(value).toBeTypeOf('number');
+  return value as number;
+}
+
 const SR = 8000;
 const N = 4096; // ~0.512s at SR -- short enough for the expensive (CQT/pYIN) entries too.
 
@@ -426,15 +432,15 @@ describe('pitchYin and pitchPyin consume the fmax they accept', () => {
   it('reads a fmax excluding vs including a 300 Hz tone as two different median f0', () => {
     const included = m().pitchYin(pureTone300, SR, 1024, 256, 65, 1000, 0.1);
     const excluded = m().pitchYin(pureTone300, SR, 1024, 256, 65, 200, 0.1);
-    expect(Math.abs(included.medianF0 - 300)).toBeLessThan(30);
-    expect(Math.abs(excluded.medianF0 - 300)).toBeGreaterThan(30);
+    expect(Math.abs(measured(included.medianF0) - 300)).toBeLessThan(30);
+    expect(Math.abs(measured(excluded.medianF0) - 300)).toBeGreaterThan(30);
   });
 
   it('pitchPyin reads the same bound the same way', () => {
     const included = m().pitchPyin(pureTone300, SR, 1024, 256, 65, 1000, 0.1, false);
     const excluded = m().pitchPyin(pureTone300, SR, 1024, 256, 65, 200, 0.1, false);
-    expect(Math.abs(included.medianF0 - 300)).toBeLessThan(30);
-    expect(Math.abs(excluded.medianF0 - 300)).toBeGreaterThan(30);
+    expect(Math.abs(measured(included.medianF0) - 300)).toBeLessThan(30);
+    expect(Math.abs(measured(excluded.medianF0) - 300)).toBeGreaterThan(30);
   });
 });
 
@@ -476,8 +482,8 @@ describe('analyzeMelody consumes the fmax/threshold it accepts', () => {
   it('reads a fmax excluding vs including the tone as two different mean frequencies', () => {
     const included = m().analyzeMelody(pureTone300, SR, 65, 1000, 1024, 256, 0.1, false, true);
     const excluded = m().analyzeMelody(pureTone300, SR, 65, 200, 1024, 256, 0.1, false, true);
-    expect(Math.abs(included.meanFrequency - 300)).toBeLessThan(30);
-    expect(Math.abs(excluded.meanFrequency - 300)).toBeGreaterThan(30);
+    expect(Math.abs(measured(included.meanFrequency) - 300)).toBeLessThan(30);
+    expect(Math.abs(measured(excluded.meanFrequency) - 300)).toBeGreaterThan(30);
   });
 
   it('reads a lenient vs strict threshold as two different mean frequencies on an octave-ambiguous tone', () => {
@@ -494,7 +500,9 @@ describe('analyzeMelody consumes the fmax/threshold it accepts', () => {
     );
     const lenient = m().analyzeMelody(octaveAmbiguous, SR, 65, 2000, 1024, 256, 0.9, false, true);
     const strict = m().analyzeMelody(octaveAmbiguous, SR, 65, 2000, 1024, 256, 0.05, false, true);
-    expect(Math.abs(lenient.meanFrequency - strict.meanFrequency)).toBeGreaterThan(20);
+    expect(
+      Math.abs(measured(lenient.meanFrequency) - measured(strict.meanFrequency)),
+    ).toBeGreaterThan(20);
   });
 });
 

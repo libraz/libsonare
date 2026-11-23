@@ -51,7 +51,7 @@ val percussiveEventToVal(const PercussiveEvent& event) {
   row.set("offsetSample", static_cast<double>(event.offset_sample));
   row.set("strength", event.strength);
   row.set("peakAmplitude", event.peak_amplitude);
-  row.set("percussiveRatio", event.percussive_ratio);
+  setMeasured(row, "percussiveRatio", event.percussive_ratio);
   val edit = val::object();
   edit.set("timeOffsetSamples", static_cast<double>(event.edit.time_offset_samples));
   edit.set("gainDb", event.edit.gain_db);

@@ -5020,7 +5020,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "detectBpm"
-changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined instead of NaN when no tempo is found; Audio.detectBpm likewise"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
@@ -19314,3 +19314,227 @@ changed = "required, as are source and destination: an absent depth is refused w
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/list-element-readers.test.ts::an absent depth"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.bpm"
+changed = "optional; absent when no tempo is found (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "BpmAnalysisResult.bpm"
+changed = "optional; absent when no tempo is found (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeBpm omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.bpm"
+changed = "optional; absent when no tempo is found (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeRhythm omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.bpm"
+changed = "optional; absent when no tempo is found (was NaN)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::the mastering audio profile and the assistant profile omit bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.bpm"
+changed = "optional; absent when no tempo is found (was NaN)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::the mastering audio profile and the assistant profile omit bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.syncopation"
+changed = "optional; absent below 4 tracked beats, with silent accents, or without a strong and a weak position (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeRhythm omits syncopation on a three-impulse clip"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.patternRegularity"
+changed = "optional; absent below 2 beat intervals (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.tempoStability"
+changed = "optional; absent below 2 positive beat intervals (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.syncopation"
+changed = "optional; absent below 4 tracked beats, with silent accents, or without a strong and a weak position (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the rhythm measures on silence"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.patternRegularity"
+changed = "optional; absent below 2 beat intervals (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the rhythm measures on silence"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.tempoStability"
+changed = "optional; absent below 2 positive beat intervals (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the rhythm measures on silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.brightness"
+changed = "optional; absent when no frame carries energy (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.brightness"
+changed = "optional; absent for a window with no energy-carrying frame (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits the measures of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.warmth"
+changed = "optional; absent when no frame carries energy (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.warmth"
+changed = "optional; absent for a window with no energy-carrying frame (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits the measures of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.density"
+changed = "optional; absent when no frame carries energy (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.density"
+changed = "optional; absent for a window with no energy-carrying frame (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits the measures of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.roughness"
+changed = "optional; absent when no frame carries energy (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.roughness"
+changed = "optional; absent for a window with no energy-carrying frame (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits the measures of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.complexity"
+changed = "optional; absent when no frame carries energy (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.complexity"
+changed = "optional; absent for a window with no energy-carrying frame (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeTimbre omits the measures of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.pitchRangeOctaves"
+changed = "optional; absent when no frame is voiced (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the melody measures on silence"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.pitchStability"
+changed = "optional; absent when no frame is voiced (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the melody measures on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitchRangeOctaves"
+changed = "optional; absent when no frame is voiced (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeMelody omits all four on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitchStability"
+changed = "optional; absent when no frame is voiced (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeMelody omits all four on silence"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.medianF0"
+changed = "optional; absent when no frame is voiced (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::omits medianF0 and meanF0 on silence"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.meanF0"
+changed = "optional; absent when no frame is voiced (was NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::omits medianF0 and meanF0 on silence"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEvent.percussiveRatio"
+changed = "optional; absent for a silent span (was 0 or NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/not-measured-analysis.test.ts::report percussiveRatio as a finite number"

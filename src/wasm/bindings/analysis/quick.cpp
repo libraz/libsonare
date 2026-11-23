@@ -152,7 +152,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   val out = val::object();
 
   // BPM
-  out.set("bpm", result.bpm);
+  setMeasured(out, "bpm", result.bpm);
   out.set("bpmConfidence", result.bpm_confidence);
   val bpmCandidates = val::array();
   for (const auto& candidate : result.bpm_candidates) {
@@ -251,11 +251,11 @@ val analysisResultToVal(const AnalysisResult& result) {
 
   // Timbre
   val timbre = val::object();
-  timbre.set("brightness", result.timbre.brightness);
-  timbre.set("warmth", result.timbre.warmth);
-  timbre.set("density", result.timbre.density);
-  timbre.set("roughness", result.timbre.roughness);
-  timbre.set("complexity", result.timbre.complexity);
+  setMeasured(timbre, "brightness", result.timbre.brightness);
+  setMeasured(timbre, "warmth", result.timbre.warmth);
+  setMeasured(timbre, "density", result.timbre.density);
+  setMeasured(timbre, "roughness", result.timbre.roughness);
+  setMeasured(timbre, "complexity", result.timbre.complexity);
   out.set("timbre", timbre);
 
   // Dynamics. Field order mirrors analysis_result_to_json /
@@ -273,19 +273,19 @@ val analysisResultToVal(const AnalysisResult& result) {
 
   // Rhythm
   val rhythm = val::object();
-  rhythm.set("syncopation", result.rhythm.syncopation);
+  setMeasured(rhythm, "syncopation", result.rhythm.syncopation);
   rhythm.set("grooveType", result.rhythm.groove_type);
-  rhythm.set("patternRegularity", result.rhythm.pattern_regularity);
-  rhythm.set("tempoStability", result.rhythm.tempo_stability);
+  setMeasured(rhythm, "patternRegularity", result.rhythm.pattern_regularity);
+  setMeasured(rhythm, "tempoStability", result.rhythm.tempo_stability);
   rhythm.set("timeSignature", timeSignatureToVal(result.rhythm.time_signature));
   out.set("rhythm", rhythm);
 
   // Melody
   val melody = val::object();
-  melody.set("pitchRangeOctaves", result.melody.pitch_range_octaves);
-  melody.set("pitchStability", result.melody.pitch_stability);
-  melody.set("meanFrequencyHz", result.melody.mean_frequency);
-  melody.set("vibratoRateHz", result.melody.vibrato_rate);
+  setMeasured(melody, "pitchRangeOctaves", result.melody.pitch_range_octaves);
+  setMeasured(melody, "pitchStability", result.melody.pitch_stability);
+  setMeasured(melody, "meanFrequencyHz", result.melody.mean_frequency);
+  setMeasured(melody, "vibratoRateHz", result.melody.vibrato_rate);
   val melodyPitches = val::array();
   for (size_t i = 0; i < result.melody.pitches.size(); ++i) {
     val pitch = val::object();
@@ -311,15 +311,17 @@ val analysisResultToVal(const AnalysisResult& result) {
 // Quick API (high-level)
 // ============================================================================
 
-float js_detect_bpm(val samples, const val& sample_rate_val, const val& bpm_min_val,
-                    const val& bpm_max_val) {
+val js_detect_bpm(val samples, const val& sample_rate_val, const val& bpm_min_val,
+                  const val& bpm_max_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   BpmConfig config;
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
   validate_bpm_config(config);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-  return quick::detect_bpm(audio.data(), audio.size(), sample_rate, config);
+  const float bpm = quick::detect_bpm(audio.data(), audio.size(), sample_rate, config);
+  // No tempo found (silence) is undefined, not NaN.
+  return std::isnan(bpm) ? val::undefined() : val(bpm);
 }
 
 val js_detect_key(val samples, const val& sample_rate_val) {

@@ -741,8 +741,8 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   out.Set("voicedFlag", voiced_arr);
 
   out.Set("nFrames", Napi::Number::New(env, result.n_frames()));
-  out.Set("medianF0", Napi::Number::New(env, static_cast<double>(result.median_f0())));
-  out.Set("meanF0", Napi::Number::New(env, static_cast<double>(result.mean_f0())));
+  SetMeasured(out, "medianF0", static_cast<double>(result.median_f0()));
+  SetMeasured(out, "meanF0", static_cast<double>(result.mean_f0()));
 
   return out;
   SONARE_NODE_CATCH(env)
@@ -792,8 +792,8 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   out.Set("voicedFlag", voiced_arr);
 
   out.Set("nFrames", Napi::Number::New(env, result.n_frames()));
-  out.Set("medianF0", Napi::Number::New(env, static_cast<double>(result.median_f0())));
-  out.Set("meanF0", Napi::Number::New(env, static_cast<double>(result.mean_f0())));
+  SetMeasured(out, "medianF0", static_cast<double>(result.median_f0()));
+  SetMeasured(out, "meanF0", static_cast<double>(result.mean_f0()));
 
   return out;
   SONARE_NODE_CATCH(env)

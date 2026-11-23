@@ -87,7 +87,7 @@ const SWELLING = (() => {
 })();
 
 /** Sixteen decaying transients at 120 BPM, so a tempo bound has a peak to include or exclude. */
-/** Too short for the tempo search to hold one lag, so the BPM prior is the answer. */
+/** Too short for the tempo search to hold one lag, so no tempo is measured. */
 const SHORT_TONE = Float32Array.from({ length: 256 }, (_, i) => 0.5 * Math.sin(0.3 * i));
 
 const PULSED = (() => {
@@ -208,6 +208,11 @@ interface FloatArgument {
   site: string;
   /** Two legitimate values whose results must differ. */
   control: [number, number];
+  /**
+   * True when the argument seeds a search whose seed no reported field reflects, so no two values
+   * give different results; the refusals are still driven.
+   */
+  controlUnobservable?: boolean;
   call: (value: number) => unknown;
 }
 
@@ -809,8 +814,9 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
   {
     name: 'analyzeBpm startBpm',
     site: 'sonare_wrap_analysis.cpp AnalyzeBpm startBpm',
-    // The prior is the answer only when the input is too short to hold one lag.
+    // The seed only steers the beat tracker; a tempo it cannot back is reported as not measured.
     control: [90, 150],
+    controlUnobservable: true,
     call: (v) =>
       JSON.stringify(native.analyzeBpm(SHORT_TONE, SAMPLE_RATE, 60, 200, v, 2048, 512, 3)),
   },
@@ -818,6 +824,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     name: 'analyzeRhythm startBpm',
     site: 'sonare_wrap_analysis.cpp AnalyzeRhythm startBpm',
     control: [90, 150],
+    controlUnobservable: true,
     call: (v) =>
       JSON.stringify(native.analyzeRhythm(SHORT_TONE, SAMPLE_RATE, 60, 200, v, 2048, 512)),
   },
@@ -1074,7 +1081,9 @@ describe('an optional float argument is refused rather than saturated', () => {
       const [low, high] = argument.control;
       // Positive control: the argument is consumed, so an entry point that
       // ignored it could not reach the refusals below looking like this one.
-      expect(argument.call(low)).not.toBe(argument.call(high));
+      if (!argument.controlUnobservable) {
+        expect(argument.call(low)).not.toBe(argument.call(high));
+      }
       for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
         expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
       }

@@ -696,18 +696,18 @@ function nativeAnalyzeOptions(request: AnalyzeRequest): Record<string, unknown> 
 }
 
 /**
- * Detect the tempo in BPM.
+ * Detect the tempo in BPM; `undefined` when no tempo is found (silence).
  *
  * @throws TypeError for a wrong-typed argument or an omitted `sampleRate`;
  *   RangeError for empty or non-finite audio or an out-of-range rate.
  */
-export function detectBpm(request: DetectBpmRequest): number;
+export function detectBpm(request: DetectBpmRequest): number | undefined;
 export function detectBpm(
   samples: Float32Array,
   sampleRate: number,
   options?: OptionsOf<DetectBpmRequest>,
-): number;
-export function detectBpm(...args: unknown[]): number {
+): number | undefined;
+export function detectBpm(...args: unknown[]): number | undefined {
   return withEntry('detectBpm', () => {
     const request = audioCall<DetectBpmRequest>('detectBpm', args);
     const [bpmMin, bpmMax] = tempoRange(request);
@@ -1150,13 +1150,20 @@ export function analyzeMelody(...args: unknown[]): MelodyResult {
       request.usePyin ?? false,
       request.center ?? true,
     );
-    return {
-      points: raw.points.map(melodyPointFromNative),
-      pitchRangeOctaves: raw.pitchRangeOctaves,
-      pitchStability: raw.pitchStability,
-      meanFrequencyHz: raw.meanFrequency,
-      vibratoRateHz: raw.vibratoRate,
-    };
+    const result: MelodyResult = { points: raw.points.map(melodyPointFromNative) };
+    if (raw.pitchRangeOctaves !== undefined) {
+      result.pitchRangeOctaves = raw.pitchRangeOctaves;
+    }
+    if (raw.pitchStability !== undefined) {
+      result.pitchStability = raw.pitchStability;
+    }
+    if (raw.meanFrequency !== undefined) {
+      result.meanFrequencyHz = raw.meanFrequency;
+    }
+    if (raw.vibratoRate !== undefined) {
+      result.vibratoRateHz = raw.vibratoRate;
+    }
+    return result;
   });
 }
 

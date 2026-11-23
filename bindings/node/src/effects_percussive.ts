@@ -274,7 +274,7 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
  *
  * // Drop every hit the separation was least sure about by 6 dB.
  * const tamed = events.map((event) =>
- *   event.percussiveRatio < 0.3 ? { ...event, edit: { ...event.edit, gainDb: -6 } } : event,
+ *   (event.percussiveRatio ?? 1) < 0.3 ? { ...event, edit: { ...event.edit, gainDb: -6 } } : event,
  * );
  * const output = renderPercussiveEvents({ samples, sampleRate, events: tamed, fadeMs: 10 });
  * ```

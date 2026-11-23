@@ -9356,7 +9356,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBpm"
-changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined when no tempo is found (was NaN)"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -9364,7 +9364,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBpm"
-changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined when no tempo is found (was NaN)"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -27308,7 +27308,7 @@ rule = "unit-in-name"
 [[entry]]
 kind = "method"
 old = "Audio.detectBpm"
-changed = "searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it"
+changed = "searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it; returns undefined when no tempo is found (was NaN)"
 domain = "core"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::Audio tempo methods search 60-200 BPM by default"
@@ -36284,3 +36284,575 @@ changed = "an anchor that is not an object is refused with TypeError 'anchors[i]
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/list-element-readers.test.ts::a non-object anchor"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyze omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyze omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "BpmAnalysisResult.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeBpm omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "BpmAnalysisResult.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeBpm omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::the mastering profile and the assistant profile omit bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::the mastering profile and the assistant profile omit bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::the mastering profile and the assistant profile omit bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.bpm"
+to = "RhythmResult.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.bpm"
+to = "RhythmResult.bpm"
+changed = "optional; absent when no tempo is found (silence) (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits bpm on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.syncopation"
+to = "RhythmResult.syncopation"
+changed = "optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.syncopation"
+to = "RhythmResult.syncopation"
+changed = "optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmFeatures.syncopation"
+to = "AnalysisRhythm.syncopation"
+changed = "optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmFeatures.syncopation"
+to = "AnalysisRhythm.syncopation"
+changed = "optional; absent when below four tracked beats, with silent accents, or with no strong and weak position (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.patternRegularity"
+to = "RhythmResult.patternRegularity"
+changed = "optional; absent when below two beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.patternRegularity"
+to = "RhythmResult.patternRegularity"
+changed = "optional; absent when below two beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmFeatures.patternRegularity"
+to = "AnalysisRhythm.patternRegularity"
+changed = "optional; absent when below two beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmFeatures.patternRegularity"
+to = "AnalysisRhythm.patternRegularity"
+changed = "optional; absent when below two beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.tempoStability"
+to = "RhythmResult.tempoStability"
+changed = "optional; absent when below two positive beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmAnalysisResult.tempoStability"
+to = "RhythmResult.tempoStability"
+changed = "optional; absent when below two positive beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmFeatures.tempoStability"
+to = "AnalysisRhythm.tempoStability"
+changed = "optional; absent when below two positive beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmFeatures.tempoStability"
+to = "AnalysisRhythm.tempoStability"
+changed = "optional; absent when below two positive beat intervals (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeRhythm omits all three on silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.brightness"
+to = "TimbreResult.brightness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.brightness"
+to = "TimbreResult.brightness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.brightness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.brightness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.brightness"
+to = "TimbreFrame.brightness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.brightness"
+to = "TimbreFrame.brightness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.warmth"
+to = "TimbreResult.warmth"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.warmth"
+to = "TimbreResult.warmth"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.warmth"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.warmth"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.warmth"
+to = "TimbreFrame.warmth"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.warmth"
+to = "TimbreFrame.warmth"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.density"
+to = "TimbreResult.density"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.density"
+to = "TimbreResult.density"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.density"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.density"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.density"
+to = "TimbreFrame.density"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.density"
+to = "TimbreFrame.density"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.roughness"
+to = "TimbreResult.roughness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.roughness"
+to = "TimbreResult.roughness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.roughness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.roughness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.roughness"
+to = "TimbreFrame.roughness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.roughness"
+to = "TimbreFrame.roughness"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.complexity"
+to = "TimbreResult.complexity"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreAnalysisResult.complexity"
+to = "TimbreResult.complexity"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeTimbre omits every overall measure"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.complexity"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.complexity"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.complexity"
+to = "TimbreFrame.complexity"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "Timbre.complexity"
+to = "TimbreFrame.complexity"
+changed = "optional; absent when no frame of the span carries energy (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::omits the fields of a window with no energy"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitchRangeOctaves"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitchRangeOctaves"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyContour.pitchRangeOctaves"
+to = "AnalysisMelody.pitchRangeOctaves"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitchStability"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitchStability"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyContour.pitchStability"
+to = "AnalysisMelody.pitchStability"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.meanF0"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::pitchYin and pitchPyin omit medianF0"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.meanF0"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::pitchYin and pitchPyin omit medianF0"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.medianF0"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::pitchYin and pitchPyin omit medianF0"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.medianF0"
+changed = "optional; absent when no frame is voiced (was a required number)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::pitchYin and pitchPyin omit medianF0"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEvent.percussiveRatio"
+changed = "optional; absent when the span is silent (was 0)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::keeps percussiveRatio a finite number"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEvent.percussiveRatio"
+changed = "optional; absent when the span is silent (was 0)"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::keeps percussiveRatio a finite number"

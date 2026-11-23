@@ -182,11 +182,11 @@ export interface WasmSectionResult {
 }
 
 export interface WasmTimbreResult {
-  brightness: number;
-  warmth: number;
-  density: number;
-  roughness: number;
-  complexity: number;
+  brightness?: number;
+  warmth?: number;
+  density?: number;
+  roughness?: number;
+  complexity?: number;
 }
 
 /** Each scalar level is absent when not measured. */
@@ -200,10 +200,10 @@ export interface WasmDynamicsResult {
 }
 
 export interface WasmRhythmResult {
-  syncopation: number;
+  syncopation?: number;
   grooveType: string;
-  patternRegularity: number;
-  tempoStability: number;
+  patternRegularity?: number;
+  tempoStability?: number;
   timeSignature: WasmTimeSignatureResult;
 }
 
@@ -214,10 +214,10 @@ export interface WasmTimeSignatureResult {
 }
 
 export interface WasmMelodyContourResult {
-  pitchRangeOctaves: number;
-  pitchStability: number;
-  meanFrequencyHz: number;
-  vibratoRateHz: number;
+  pitchRangeOctaves?: number;
+  pitchStability?: number;
+  meanFrequencyHz?: number;
+  vibratoRateHz?: number;
   pitches: WasmAnalysisMelodyPoint[];
 }
 
@@ -229,7 +229,7 @@ export interface WasmAnalysisMelodyPoint {
 }
 
 export interface WasmAnalysisResult {
-  bpm: number;
+  bpm?: number;
   bpmConfidence: number;
   bpmCandidates: WasmBpmHypothesis[];
   key: WasmKeyResult;
@@ -262,7 +262,7 @@ export interface WasmBpmCandidate {
 }
 
 export interface WasmBpmAnalysisResult {
-  bpm: number;
+  bpm?: number;
   confidence: number;
   candidates: WasmBpmCandidate[];
   autocorrelation: Float32Array;
@@ -271,11 +271,11 @@ export interface WasmBpmAnalysisResult {
 
 export interface WasmRhythmAnalysisResult {
   timeSignature: WasmTimeSignatureResult;
-  syncopation: number;
+  syncopation?: number;
   grooveType: string;
-  patternRegularity: number;
-  tempoStability: number;
-  bpm: number;
+  patternRegularity?: number;
+  tempoStability?: number;
+  bpm?: number;
   beatIntervals: Float32Array;
 }
 
@@ -292,19 +292,19 @@ export interface WasmDynamicsAnalysisResult {
 }
 
 export interface WasmTimbreFrameResult {
-  brightness: number;
-  warmth: number;
-  density: number;
-  roughness: number;
-  complexity: number;
+  brightness?: number;
+  warmth?: number;
+  density?: number;
+  roughness?: number;
+  complexity?: number;
 }
 
 export interface WasmTimbreAnalysisResult {
-  brightness: number;
-  warmth: number;
-  density: number;
-  roughness: number;
-  complexity: number;
+  brightness?: number;
+  warmth?: number;
+  density?: number;
+  roughness?: number;
+  complexity?: number;
   spectralCentroid: Float32Array;
   spectralFlatness: Float32Array;
   spectralRolloff: Float32Array;
@@ -704,8 +704,8 @@ export interface WasmPitchResult {
   voicedProb: Float32Array;
   voicedFlag: boolean[];
   nFrames: number;
-  medianF0: number;
-  meanF0: number;
+  medianF0?: number;
+  meanF0?: number;
 }
 
 export interface WasmNoteSegment {
@@ -808,10 +808,10 @@ export interface WasmBoundaryResult {
 
 export interface WasmMelodyResult {
   points: WasmMelodyPoint[];
-  pitchRangeOctaves: number;
-  pitchStability: number;
-  meanFrequency: number;
-  vibratoRate: number;
+  pitchRangeOctaves?: number;
+  pitchStability?: number;
+  meanFrequency?: number;
+  vibratoRate?: number;
 }
 
 export interface WasmCqtResult {
@@ -1894,7 +1894,7 @@ export interface SonareModule {
     sampleRate: number,
     bpmMin?: number,
     bpmMax?: number,
-  ) => number;
+  ) => number | undefined;
   detectKey: (samples: Float32Array, sampleRate: number) => WasmKeyResult;
   _detectKeyWithOptions: (
     samples: Float32Array,

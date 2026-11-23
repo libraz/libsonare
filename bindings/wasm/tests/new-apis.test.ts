@@ -54,6 +54,12 @@ import {
 import { expectRefusalOf } from './_helpers';
 import { REALTIME_ENGINE_ROWS } from './_list_budget_rows';
 
+/** A measured field this case's input is built to produce; absent fails the case. */
+function measured(value: number | undefined): number {
+  expect(value).toBeTypeOf('number');
+  return value as number;
+}
+
 const SR = 22050;
 
 function generateSine(freq: number, sr: number, duration: number, amp = 0.5): Float32Array {
@@ -291,7 +297,7 @@ describe('v1.2 feature additions (WASM)', () => {
         f0MaxHz: 1000,
       });
       const expectedHz = 220 * 2 ** (3 / 12);
-      const centsError = 1200 * Math.log2(detected.medianF0 / expectedHz);
+      const centsError = 1200 * Math.log2(measured(detected.medianF0) / expectedHz);
       expect(Math.abs(centsError)).toBeLessThan(5);
     });
 

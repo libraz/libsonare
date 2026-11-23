@@ -94,7 +94,7 @@ describe('editing effects', () => {
       f0MaxHz: 1000,
     });
     const expectedHz = 440 * 2 ** (2 / 12);
-    const centsError = 1200 * Math.log2(detected.medianF0 / expectedHz);
+    const centsError = 1200 * Math.log2((detected.medianF0 ?? Number.NaN) / expectedHz);
     expect(Math.abs(centsError)).toBeLessThan(5);
   });
 

@@ -23,6 +23,12 @@ import {
 } from '../src/index';
 import { expectRefusalOf, unknownKeyText } from './_helpers';
 
+/** A measured field this case's input is built to produce; absent fails the case. */
+function measured(value: number | undefined): number {
+  expect(value).toBeTypeOf('number');
+  return value as number;
+}
+
 const sampleRate = 22050;
 const hopLength = 512;
 
@@ -463,8 +469,8 @@ describe('extractPercussiveEvents', () => {
     expectSpanCovers(events[noteIndex], noteStart);
     expectSpanCovers(events[hitIndex], lateHitStart);
 
-    const noteRatio = events[noteIndex].percussiveRatio;
-    const hitRatio = events[hitIndex].percussiveRatio;
+    const noteRatio = measured(events[noteIndex].percussiveRatio);
+    const hitRatio = measured(events[hitIndex].percussiveRatio);
     expect(hitRatio).toBeGreaterThan(noteRatio);
     // Discriminating rather than merely ordered, from both ends.
     expect(noteRatio).toBeLessThan(0.9);
@@ -502,8 +508,8 @@ describe('extractPercussiveEvents', () => {
     const isolated = extractPercussiveEvents({ samples: fixture.hitOnly, sampleRate });
     const threshold =
       0.5 *
-      (eventAt(buried, fixture.hitStart).percussiveRatio +
-        eventAt(isolated, fixture.hitStart).percussiveRatio);
+      (measured(eventAt(buried, fixture.hitStart).percussiveRatio) +
+        measured(eventAt(isolated, fixture.hitStart).percussiveRatio));
 
     expect(anySpanCovers(buried, fixture.hitStart)).toBe(true);
     expect(

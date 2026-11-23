@@ -531,8 +531,8 @@ export class Audio {
 
   // -- Analysis --
 
-  /** Tempo of the held audio in BPM. */
-  detectBpm(options?: OptionsOf<DetectBpmRequest>): number {
+  /** Tempo of the held audio in BPM; `undefined` when no tempo is found (silence). */
+  detectBpm(options?: OptionsOf<DetectBpmRequest>): number | undefined {
     return detectBpm(audioRequest('detectBpm', this.samples, this.sampleRate, options));
   }
 

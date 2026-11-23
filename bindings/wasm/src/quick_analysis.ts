@@ -352,17 +352,17 @@ export interface AnalyzeTimbreRequest extends SampleInput, AnalyzeTimbreOptions 
  *
  * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
  *   optional BPM search range; or pass `(samples, sampleRate, options?)`.
- * @returns Detected BPM
+ * @returns Detected BPM, or `undefined` when no tempo is found (silence)
  * @throws {TypeError} when `sampleRate` is missing or not a number
  * @throws {RangeError} on empty or non-finite audio, or an out-of-range rate
  */
-export function detectBpm(request: DetectBpmRequest): number;
+export function detectBpm(request: DetectBpmRequest): number | undefined;
 export function detectBpm(
   samples: Float32Array,
   sampleRate: number,
   options?: OptionsOf<DetectBpmRequest>,
-): number;
-export function detectBpm(...args: unknown[]): number {
+): number | undefined;
+export function detectBpm(...args: unknown[]): number | undefined {
   return withEntry('detectBpm', () => {
     const request = sampleOneShot<DetectBpmRequest>('detectBpm', args);
     assertAudioInput(request.samples, request.sampleRate, request);
@@ -1192,8 +1192,8 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
 
 /** Result of {@link analyzeBpm}: the chosen tempo with its alternatives and tempo curves. */
 export interface BpmAnalysisResult {
-  /** Detected tempo in BPM. */
-  bpm: number;
+  /** Detected tempo in BPM. Absent when no tempo is found (silence). */
+  bpm?: number;
   /**
    * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (60–200 by default), searched at
    * the input rate. `analyze()` searches 60–200 BPM at 22050 Hz, so its `bpmConfidence` can differ.
