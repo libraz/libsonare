@@ -1,8 +1,8 @@
 #include <sonare/sonare_c_acoustic.h>
 
 #include <array>
+#include <limits>
 
-#include "acoustic/estimate_geometry.h"
 #include "acoustic/late_reverb.h"
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
@@ -13,13 +13,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
 
+#include "acoustic/estimate_geometry.h"
 #include "acoustic/material.h"
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
@@ -222,6 +222,7 @@ const char* sonare_acoustic_mode_name(int mode) {
 SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimate,
                                                SonareRirSynthConfig* out) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(estimate);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -251,6 +252,11 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
   out->listener = {placement.listener.x, placement.listener.y, placement.listener.z};
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  sonare_rir_synth_config_init(out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, estimate,
+                                                 out);
+#endif
 }
 
 void sonare_room_estimate_config_init(SonareRoomEstimateConfig* config) {

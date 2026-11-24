@@ -297,9 +297,6 @@ std::vector<Param> insert_params_from_root(const Value* root, const std::string&
 
 using Processor = sonare::rt::ProcessorBase;
 
-// -ln(1000): the tank amplitude reaches -60 dB after the decay time.
-constexpr float kNegLn1000 = -6.907755f;
-
 template <typename T, typename... Args>
 std::unique_ptr<Processor> make(Args&&... args) {
   return std::make_unique<T>(std::forward<Args>(args)...);
@@ -799,6 +796,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::declare_number(params, "decaySec", kSecondsLog);
     detail::declare_number(params, "preDelayMs", kMs);
     if (params.find("decaySec") != params.end()) {
+      constexpr float kNegLn1000 = -6.907755f;
       constexpr float kTankLoopSeconds = 21589.0f / 29761.0f;  // both halves at ref rate
       constexpr float kMinDecaySeconds = 0.05f;
       // The tank feedback reaches the core's ceiling at this tail length.

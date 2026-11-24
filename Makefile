@@ -734,6 +734,8 @@ FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_MIXING_ASSISTANT BU
        BUILD_FX BUILD_ACOUSTIC_SIM BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT \
        BUILD_ASSIST BUILD_PLAYBACK BUILD_LIVE_DEVICES
 FEATURE_MATRIX_ALL_OFF := $(foreach opt,$(FEATURE_MATRIX_OPTIONS),-D$(opt)=OFF)
+# An ELF shared library links with undefined symbols, so refuse them as a Mach-O link does.
+FEATURE_MATRIX_LINK := $(if $(filter Darwin,$(UNAME_S)),,-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--no-undefined)
 
 build-feature-matrix:
 	@set -e; \
@@ -743,7 +745,7 @@ build-feature-matrix:
 	for opt in $(FEATURE_MATRIX_OPTIONS); do \
 	  dir="build-feature-$$(echo $$opt | tr 'A-Z_' 'a-z-')-off"; \
 	  echo "=== $$opt=OFF ($$dir) ==="; \
-	  if ! $(CMAKE) -B "$$dir" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF -D$$opt=OFF > "$$dir.log" 2>&1; then \
+	  if ! $(CMAKE) -B "$$dir" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF $(FEATURE_MATRIX_LINK) -D$$opt=OFF > "$$dir.log" 2>&1; then \
 	    echo "    SKIPPED: configuring with $$opt=OFF failed, so this row has nothing to build"; \
 	    sed 's/^/    /' "$$dir.log"; \
 	    blocked="$$blocked $$opt"; \
@@ -763,7 +765,7 @@ build-feature-matrix:
 	  fi; \
 	done; \
 	echo "=== all features OFF (build-feature-all-off) ==="; \
-	if ! $(CMAKE) -B build-feature-all-off -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF -DBUILD_SHARED=ON $(FEATURE_MATRIX_ALL_OFF) > build-feature-all-off.log 2>&1 \
+	if ! $(CMAKE) -B build-feature-all-off -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF -DBUILD_SHARED=ON $(FEATURE_MATRIX_LINK) $(FEATURE_MATRIX_ALL_OFF) > build-feature-all-off.log 2>&1 \
 	   || ! $(CMAKE) --build build-feature-all-off --parallel $(HARDENING_JOBS) >> build-feature-all-off.log 2>&1; then \
 	  cat build-feature-all-off.log; \
 	  broken="$$broken ALL_OFF"; \
