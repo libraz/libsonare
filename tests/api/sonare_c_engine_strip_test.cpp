@@ -1944,6 +1944,40 @@ TEST_CASE("sonare_engine_set_bus_strip_eq_band_json updates embedded bus EQ", "[
   sonare_engine_destroy(engine);
 }
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("engine strip EQ DSP frequency refusal names the band JSON field",
+          "[c_api][engine][mixing]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 64, 0) == SONARE_OK);
+
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, R"({"id":"track-10"})") == SONARE_OK);
+
+  const char* at_nyquist = R"({"type":"peak","frequencyHz":24000,"enabled":true})";
+  const char* below_nyquist = R"({"type":"peak","frequencyHz":23999,"enabled":true})";
+  const std::string expected = "band.frequencyHz must be finite and in (0, 24000)";
+  CHECK(sonare_engine_set_track_strip_eq_band_json(engine, 10, 0, at_nyquist) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == expected);
+  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, at_nyquist) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == expected);
+  CHECK(sonare_engine_set_bus_strip_eq_band_json(engine, 1, 0, at_nyquist) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == expected);
+  CHECK(sonare_engine_set_track_strip_eq_band_json(engine, 10, 0, below_nyquist) == SONARE_OK);
+  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, below_nyquist) == SONARE_OK);
+  CHECK(sonare_engine_set_bus_strip_eq_band_json(engine, 1, 0, below_nyquist) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+#endif
+
 TEST_CASE(
     "sonare_engine_set_master_strip_json keeps EQ across an identical resend and drops it "
     "without eq",

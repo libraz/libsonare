@@ -96,6 +96,39 @@ inline std::string send_subject(MixerEditScope scope, const sonare::engine::Mixe
 
 }  // namespace mixer_refusal_detail
 
+inline void check_mixer_pan(double pan, const char* subject) {
+  sonare::util::check::in_range(pan, sonare::mixing::kPanMin, sonare::mixing::kPanMax, subject);
+}
+
+inline void check_mixer_pan_law(int pan_law) {
+  constexpr std::array<int, 4> laws{SONARE_PAN_LAW_CONST_3DB, SONARE_PAN_LAW_CONST_4P5DB,
+                                    SONARE_PAN_LAW_CONST_6DB, SONARE_PAN_LAW_LINEAR_0DB};
+  sonare::util::check::one_of(pan_law, laws, "pan_law");
+}
+
+inline void check_mixer_pan_mode(int pan_mode) {
+  constexpr std::array<int, 3> modes{SONARE_PAN_MODE_BALANCE, SONARE_PAN_MODE_STEREO_PAN,
+                                     SONARE_PAN_MODE_DUAL_PAN};
+  sonare::util::check::one_of(pan_mode, modes, "pan_mode");
+}
+
+inline void check_mixer_surround_pan(double azimuth, double divergence, double lfe) {
+  sonare::util::check::in_range(azimuth, -sonare::constants::kDegreesPerHalfTurn,
+                                sonare::constants::kDegreesPerHalfTurn, "pan.azimuth");
+  sonare::util::check::in_range(divergence, 0.0, 1.0, "pan.divergence");
+  sonare::util::check::in_range(lfe, 0.0, 1.0, "pan.lfe");
+}
+
+[[noreturn]] inline void refuse_unknown_mixer_bus() {
+  sonare::util::check::refuse_unknown_id("bus_id", "a bus", "engine");
+}
+
+[[noreturn]] inline void throw_bus_not_pannable(sonare::engine::RealtimeEngine& engine,
+                                                uint32_t bus_id) {
+  if (!engine.track_mixer().configured_bus(bus_id)) refuse_unknown_mixer_bus();
+  sonare::util::check::refuse("bus_id", "must be the id of a bus with at most two channels");
+}
+
 /// @brief Refuses a track id that names no lane of @p realtime's mixer.
 [[noreturn]] inline void refuse_unknown_mixer_track() {
   sonare::util::check::refuse_unknown_id("track_id", "a track", "engine");

@@ -85,6 +85,31 @@ inline void require_master_insert(const RealtimeEngine& engine, unsigned int ins
   refuse_insert_automation_table_full();
 }
 
+[[noreturn]] inline void refuse_insert_bypass() {
+  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                "the insert refused to change its bypass state");
+}
+
+[[noreturn]] inline void refuse_insert_restore_value(std::string_view param_name) {
+  check::refuse("value", "must be accepted by the parameter \"" + std::string(param_name) +
+                             "\" of that insert");
+}
+
+[[noreturn]] inline void refuse_insert_queue_full() {
+  throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                "the realtime command queue is full");
+}
+
+inline void require_insert_construction_value(RealtimeEngine& engine, uint32_t param_id,
+                                              float* out_value) {
+  if (engine.insert_parameter_constructed_value(param_id, out_value)) return;
+  if (!sonare::engine::is_insert_param_id(param_id)) {
+    check::refuse("param_id", "must be an insert parameter automation id");
+  }
+  check::refuse_unknown_id("param_id", "a live insert parameter with a construction value",
+                           "engine");
+}
+
 inline uint32_t resolve_track_insert(RealtimeEngine& engine, uint32_t track_id,
                                      unsigned int insert_index, const char* param_name) {
   const int64_t id = engine.resolve_track_insert_automation_id(track_id, insert_index, param_name);
