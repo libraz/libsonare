@@ -516,8 +516,8 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'realtime/midi.cpp',
       text: 'subject.c_str()',
-      count: 4,
-      reason: 'error-subject label built from a clip index and a literal member name',
+      count: 5,
+      reason: 'numeric reader labels use a clip index and literal member names',
     },
     {
       file: 'metering/metering.cpp',
