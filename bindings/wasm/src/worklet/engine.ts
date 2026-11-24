@@ -112,7 +112,12 @@ import * as strips from './engine-strips.js';
 import { resolveParamId, resolveTargetId } from './engine-sync.js';
 import type { EngineTempoContext } from './engine-tempo-facade.js';
 import * as tempo from './engine-tempo-facade.js';
-import { requireChannelCount, resolveContextSampleRate } from './guards.js';
+import {
+  assertEngineProcessorOptionTypes,
+  assertKnownProcessorOptions,
+  requireChannelCount,
+  resolveContextSampleRate,
+} from './guards.js';
 import {
   SonareEngineCommandType,
   type WorkletMeterSnapshot,
@@ -306,6 +311,9 @@ export class SonareEngine {
     context: BaseAudioContext,
     options: SonareEngineOptions,
   ): Promise<SonareEngine> {
+    const facadeOptions = ['offlineEngine', 'offlineBlockSize', 'offlineNumChannels'] as const;
+    assertKnownProcessorOptions('engineNode', options, facadeOptions);
+    assertEngineProcessorOptionTypes('engineNode', options, facadeOptions);
     const sampleRate = resolveContextSampleRate(options.sampleRate, context);
     const {
       offlineEngine: offlineEngineOption,

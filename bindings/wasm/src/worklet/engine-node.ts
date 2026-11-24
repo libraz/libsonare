@@ -32,6 +32,7 @@ import { engineCapabilities } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import { externalMidiEventFromWire, telemetryFromRecord } from './engine-records.js';
 import {
+  assertEngineProcessorOptionTypes,
   assertKnownProcessorOptions,
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
@@ -48,6 +49,7 @@ import {
   requireIntegerOption,
   resolveContextSampleRate,
   resolveScopeBandCount,
+  resolveScopeIntervalFrames,
 } from './guards.js';
 import {
   type ClipPageRequestRingBuffer,
@@ -441,9 +443,12 @@ export class SonareRealtimeEngineNode {
     options: SonareRealtimeEngineNodeOptions,
   ): Promise<SonareRealtimeEngineNode> {
     assertKnownProcessorOptions('engineNode', options);
+    assertEngineProcessorOptionTypes('engineNode', options);
     const maxBlockSize = workletBlockSize(options.maxBlockSize);
     const sampleRate = resolveContextSampleRate(options.sampleRate, context);
     const processorName = options.processorName ?? 'sonare-realtime-engine-processor';
+    const scopeIntervalFrames = resolveScopeIntervalFrames(options.scopeIntervalFrames, 0);
+    const scopeBands = resolveScopeBandCount(options.scopeBands);
     const moduleUrl = options.moduleUrl;
     if (moduleUrl && context.audioWorklet?.addModule) {
       await context.audioWorklet.addModule(moduleUrl);
@@ -516,7 +521,6 @@ export class SonareRealtimeEngineNode {
       'scopeRingCapacity',
       1,
     );
-    const scopeBands = resolveScopeBandCount(options.scopeBands);
     const clipPageRequestRingCapacity = requireIntegerOption(
       options.clipPageRequestRingCapacity,
       128,
@@ -546,12 +550,6 @@ export class SonareRealtimeEngineNode {
     // heavier than the meter path, so it is created only when the caller
     // requests scope telemetry via scopeIntervalFrames > 0. Zero is the off
     // switch, so the interval's floor is 0 rather than the capacities' 1.
-    const scopeIntervalFrames = requireIntegerOption(
-      options.scopeIntervalFrames,
-      0,
-      'scopeIntervalFrames',
-      0,
-    );
     const scopeRing =
       mode === 'sab' && scopeIntervalFrames > 0
         ? createScopeRingBuffer({ capacity: scopeRingCapacity, bands: scopeBands })

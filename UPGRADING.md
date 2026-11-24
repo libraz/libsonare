@@ -12249,7 +12249,11 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
 | `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `SonareEngine.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
+| `SonareEngineOptions.scopeIntervalFrames` (`./worklet`) | Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture. |
 | `SonareEngineTransportFacade.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
+| `SonareRealtimeEngineNodeOptions.scopeIntervalFrames` (`./worklet`) | Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture. |
+| `SonareRealtimeEngineWorkletProcessorOptions.scopeIntervalFrames` (`./worklet`) | Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture. |
+| `SonareRealtimeEngineWorkletProcessorOptions.scopeSharedBuffer` (`./worklet`) | An external scopeSharedBuffer must be a SharedArrayBuffer whose descriptor declares 1 to 64 bands. A descriptor above 64 raises RangeError during construction, including with scope capture disabled. The previous transport could attach it and cap the tap's band count. |
 
 #### String values are lowerCamelCase tokens
 

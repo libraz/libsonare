@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  SonareEngine,
   SonareRealtimeEngineNode,
   type SonareRealtimeEngineNodeOptions,
 } from '../../dist/worklet.js';
@@ -136,11 +137,64 @@ describe('SonareRealtimeEngineNode integer ring options', () => {
   it.each([2048.5, -1, Number.NaN, Number.POSITIVE_INFINITY])(
     'refuses a scopeIntervalFrames of %p',
     async (scopeIntervalFrames) => {
-      await expect(capture({ scopeIntervalFrames })).rejects.toThrow(
-        /scopeIntervalFrames must be an integer in \[0, 9007199254740991\]/,
-      );
+      await expect(capture({ scopeIntervalFrames })).rejects.toMatchObject({
+        name: 'RangeError',
+        message:
+          'SonareRealtimeEngineNode.create: scopeIntervalFrames must be an integer in [0, 2147483647]',
+      });
     },
   );
+
+  it('bounds the scope interval at worklet node creation', async () => {
+    const max = 2147483647;
+    expect(
+      (await capture({ scopeIntervalFrames: max })).processorOptions?.scopeIntervalFrames,
+    ).toBe(max);
+    await expect(capture({ scopeIntervalFrames: max + 1 })).rejects.toMatchObject({
+      name: 'RangeError',
+      message: expect.stringContaining('scopeIntervalFrames must be an integer in [0, 2147483647]'),
+    });
+    await expect(
+      capture({ scopeIntervalFrames: '128' as unknown as number }),
+    ).rejects.toMatchObject({
+      name: 'TypeError',
+      message: expect.stringContaining('scopeIntervalFrames must be an integer'),
+    });
+  });
+
+  it('checks later option shapes before an earlier scope domain', async () => {
+    await expect(
+      capture({ scopeIntervalFrames: 2147483648, scopeBands: '4' as unknown as number }),
+    ).rejects.toMatchObject({
+      name: 'TypeError',
+      message: expect.stringContaining('scopeBands must be an integer'),
+    });
+  });
+
+  it('checks option shapes before the outer engine rate domain', async () => {
+    await expect(
+      SonareEngine.create(fakeContext(), {
+        numChannels: 2,
+        sampleRate: 44100,
+        scopeBands: '4' as unknown as number,
+      }),
+    ).rejects.toMatchObject({
+      name: 'TypeError',
+      message: expect.stringContaining('scopeBands must be an integer'),
+    });
+  });
+
+  it('reports wrong option types in their declared order', async () => {
+    await expect(
+      capture({
+        sampleRate: '48000' as unknown as number,
+        maxBlockSize: '128' as unknown as number,
+      }),
+    ).rejects.toMatchObject({
+      name: 'TypeError',
+      message: expect.stringContaining('sampleRate must be a number'),
+    });
+  });
 
   it('sizes the meter ring by the requested capacity', async () => {
     const meterRing = async (meterRingCapacity: number) => {
@@ -172,7 +226,7 @@ describe('SonareRealtimeEngineNode integer ring options', () => {
       /scopeRingCapacity must be an integer in \[1, 9007199254740991\]/,
     );
     await expect(capture({ mode: 'postMessage', scopeBands: 0 })).rejects.toThrow(
-      /scopeBands must be an integer in \[1, 9007199254740991\]/,
+      /scopeBands must be an integer in \[1, 64\]/,
     );
   });
 });

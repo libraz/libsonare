@@ -3,6 +3,7 @@ import { RealtimeEngine } from '../dist/index.js';
 import {
   SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION,
   SONARE_METER_RING_PROTOCOL_VERSION,
+  SONARE_SCOPE_RING_HEADER_INTS,
   SONARE_SCOPE_RING_PROTOCOL_VERSION,
 } from '../dist/worklet.js';
 import type { SonareEngineSyncMessage } from '../src/internal/worklet_messages';
@@ -38,6 +39,7 @@ import {
   SonareRealtimeEngineWorkletProcessor,
   scopeRingFromSharedBuffer,
   setupWorklet,
+  sonareScopeRingRecordFloats,
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
 
@@ -268,9 +270,81 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
       for (const scopeIntervalFrames of [256.5, -1, Number.NaN]) {
         expect(() => scopeCount(scopeIntervalFrames)).toThrow(
-          /scopeIntervalFrames must be an integer in \[0, 9007199254740991\]/,
+          new RangeError('scopeIntervalFrames must be an integer in [0, 2147483647]'),
         );
       }
+    });
+
+    it('bounds the scope interval before selecting a telemetry sink', () => {
+      const create = (scopeIntervalFrames: number) =>
+        new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: 48000,
+          numChannels: 2,
+          scopeIntervalFrames,
+        }).destroy();
+      expect(() => create(2147483647)).not.toThrow();
+      expect(() => create(2147483648)).toThrow(RangeError);
+      expect(() => create(2147483648)).toThrow(
+        'scopeIntervalFrames must be an integer in [0, 2147483647]',
+      );
+      expect(() => create('128' as unknown as number)).toThrow(TypeError);
+    });
+
+    it('checks later option shapes before an earlier scope domain', () => {
+      const create = () =>
+        new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: 48000,
+          numChannels: 2,
+          scopeIntervalFrames: 2147483648,
+          scopeBands: '4' as unknown as number,
+        });
+      expect(create).toThrow(new TypeError('scopeBands must be an integer'));
+    });
+
+    it('reports wrong option types in their declared order', () => {
+      const create = () =>
+        new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: '48000' as unknown as number,
+          maxBlockSize: '128' as unknown as number,
+          numChannels: 2,
+        });
+      expect(create).toThrow(new TypeError('sampleRate must be a number'));
+    });
+
+    it('refuses external scope descriptors beyond the native band limit', () => {
+      const create = (scopeSharedBuffer: SharedArrayBuffer) =>
+        new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: 48000,
+          numChannels: 2,
+          scopeIntervalFrames: 0,
+          scopeSharedBuffer,
+        }).destroy();
+      const descriptor = (bands: number) => {
+        const recordFloats = sonareScopeRingRecordFloats(bands, 0);
+        const shared = new SharedArrayBuffer(
+          (SONARE_SCOPE_RING_HEADER_INTS + recordFloats + 1) * Int32Array.BYTES_PER_ELEMENT,
+        );
+        new Int32Array(shared, 0, SONARE_SCOPE_RING_HEADER_INTS).set([
+          0,
+          1,
+          recordFloats,
+          bands,
+          0,
+          SONARE_SCOPE_RING_PROTOCOL_VERSION,
+        ]);
+        return shared;
+      };
+      expect(() => create(descriptor(1))).not.toThrow();
+      expect(() => create(descriptor(64))).not.toThrow();
+      for (const bands of [65, 0]) {
+        expect(() => create(descriptor(bands))).toThrow(RangeError);
+        expect(() => create(descriptor(bands))).toThrow(
+          'scopeSharedBuffer must declare a band count in [1, 64]',
+        );
+      }
+      const plainBuffer = new ArrayBuffer(24) as unknown as SharedArrayBuffer;
+      expect(() => create(plainBuffer)).toThrow(TypeError);
+      expect(() => create(plainBuffer)).toThrow('scopeSharedBuffer must be a SharedArrayBuffer');
     });
 
     it('applies SAB transport commands within the next processed block', () => {
@@ -3387,6 +3461,42 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       } finally {
         applySyncSpy.mockRestore();
         receiveSyncSpy.mockRestore();
+        Object.assign(globalThis, {
+          AudioWorkletProcessor: previousProcessor,
+          registerProcessor: previousRegister,
+        });
+      }
+    });
+
+    it('checks processor option shapes before starting the WASM lifecycle', () => {
+      const previousProcessor = (
+        globalThis as typeof globalThis & { AudioWorkletProcessor?: unknown }
+      ).AudioWorkletProcessor;
+      const previousRegister = (globalThis as typeof globalThis & { registerProcessor?: unknown })
+        .registerProcessor;
+      let registeredCtor: (new (options?: { processorOptions?: unknown }) => object) | undefined;
+      try {
+        Object.assign(globalThis, {
+          AudioWorkletProcessor: class {},
+          registerProcessor: (_name: string, ctor: unknown) => {
+            registeredCtor = ctor as typeof registeredCtor;
+          },
+        });
+        registerSonareRealtimeEngineWorkletProcessor();
+        const Ctor = registeredCtor;
+        if (!Ctor) throw new Error('processor was not registered');
+        expect(
+          () =>
+            new Ctor({
+              processorOptions: {
+                wasmBinary: 7 as unknown as ArrayBuffer,
+                sampleRate: 48000,
+                numChannels: 2,
+                scopeIntervalFrames: 2147483648,
+              },
+            }),
+        ).toThrow(new TypeError('wasmBinary must be an ArrayBuffer or Uint8Array'));
+      } finally {
         Object.assign(globalThis, {
           AudioWorkletProcessor: previousProcessor,
           registerProcessor: previousRegister,

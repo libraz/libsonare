@@ -20638,6 +20638,42 @@ entry = "./analysis"
 
 [[entry]]
 kind = "field"
+old = "SonareEngineOptions.scopeIntervalFrames"
+changed = "Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture."
+domain = "engine"
+rule = "finite-or-refused"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet/engine-node.test.ts::bounds the scope interval at worklet node creation"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineNodeOptions.scopeIntervalFrames"
+changed = "Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture."
+domain = "engine"
+rule = "finite-or-refused"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet/engine-node.test.ts::bounds the scope interval at worklet node creation"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineWorkletProcessorOptions.scopeIntervalFrames"
+changed = "Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture."
+domain = "engine"
+rule = "finite-or-refused"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_processor.test.ts::bounds the scope interval before selecting a telemetry sink"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineWorkletProcessorOptions.scopeSharedBuffer"
+changed = "An external scopeSharedBuffer must be a SharedArrayBuffer whose descriptor declares 1 to 64 bands. A descriptor above 64 raises RangeError during construction, including with scope capture disabled. The previous transport could attach it and cap the tap's band count."
+domain = "engine"
+rule = "finite-or-refused"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_processor.test.ts::refuses external scope descriptors beyond the native band limit"
+
+[[entry]]
+kind = "field"
 old = "SonareRealtimeEngineWorkletProcessorOptions.blockSize"
 new = "SonareRealtimeEngineWorkletProcessorOptions.maxBlockSize"
 domain = "engine"

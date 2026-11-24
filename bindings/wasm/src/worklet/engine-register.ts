@@ -5,7 +5,7 @@ import type { WorkletPort } from '../internal/worklet_messages.js';
 import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
-import { assertKnownProcessorOptions } from './guards.js';
+import { assertEngineProcessorOptionTypes, assertKnownProcessorOptions } from './guards.js';
 
 /**
  * Registers the realtime-engine processor in an AudioWorkletGlobalScope. The processor initializes
@@ -43,6 +43,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         const processorOptions =
           options?.processorOptions ?? ({} as SonareRealtimeEngineWorkletProcessorOptions);
         assertKnownProcessorOptions('engineProcessor', processorOptions);
+        assertEngineProcessorOptionTypes('engineProcessor', processorOptions);
         this.lifecycle = new WorkletProcessorLifecycle({
           port,
           usesModule: true,

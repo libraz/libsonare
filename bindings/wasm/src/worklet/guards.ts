@@ -1,5 +1,6 @@
 import type { EngineCaptureStatus } from '../index.js';
 import { assertDeclaredKeys, refuse, refuseType } from '../internal/entry.js';
+import { SCOPE_BAND_DOMAIN, SCOPE_INTERVAL_DOMAIN } from '../internal/numeric_domains.js';
 import { isAbsent, UINT32_MAX } from '../internal/value_guards.js';
 import type {
   EngineClipPageRequestMessage,
@@ -31,6 +32,7 @@ import {
   type WorkletMeterSnapshot,
   type WorkletScopeSnapshot,
 } from './protocol.js';
+import { requireRingDimension, sharedArrayBufferByteLength } from './ring-core.js';
 
 export function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
   if (!isRecord(value) || typeof value.type !== 'string') {
@@ -524,15 +526,128 @@ export type ProcessorOptionsTable = keyof typeof PROCESSOR_OPTION_KEYS;
  *
  * @throws TypeError naming the first undeclared key.
  */
-export function assertKnownProcessorOptions(table: ProcessorOptionsTable, options: unknown): void {
+export function assertKnownProcessorOptions(
+  table: ProcessorOptionsTable,
+  options: unknown,
+  additionalKeys: readonly string[] = [],
+): void {
   if (isAbsent(options)) {
     return;
   }
   if (typeof options !== 'object' || Array.isArray(options)) {
     throw refuseType(`options must be an object`);
   }
-  const keys: readonly string[] = PROCESSOR_OPTION_KEYS[table];
+  const keys: readonly string[] = [...PROCESSOR_OPTION_KEYS[table], ...additionalKeys];
   assertDeclaredKeys(options, keys, '');
+}
+
+/**
+ * Checks engine option shapes in their declared order before resolving any option domains.
+ */
+export function assertEngineProcessorOptionTypes(
+  table: Extract<
+    ProcessorOptionsTable,
+    'engineNode' | 'engineProcessor' | 'engineProcessorConstructor'
+  >,
+  options: unknown,
+  additionalKeys: readonly string[] = [],
+): void {
+  if (isAbsent(options) || typeof options !== 'object' || Array.isArray(options)) {
+    return;
+  }
+  const values = options as Record<string, unknown>;
+  for (const name of [...PROCESSOR_OPTION_KEYS[table], ...additionalKeys]) {
+    const value = values[name];
+    if (isAbsent(value)) {
+      if (name === 'numChannels') {
+        throw refuseType('numChannels must be an integer');
+      }
+      continue;
+    }
+    let expected: string | undefined;
+    switch (name) {
+      case 'wasmBinary':
+        if (!(value instanceof ArrayBuffer) && !(value instanceof Uint8Array)) {
+          expected = 'an ArrayBuffer or Uint8Array';
+        }
+        break;
+      case 'initialSyncMessages':
+      case 'initialCommands':
+        if (!Array.isArray(value)) {
+          expected = 'an array';
+        }
+        break;
+      case 'sampleRate':
+      case 'engineAbiVersion':
+      case 'expectedEngineAbiVersion':
+        if (typeof value !== 'number') {
+          expected = 'a number';
+        }
+        break;
+      case 'offlineBlockSize':
+      case 'offlineNumChannels':
+      case 'maxBlockSize':
+      case 'numChannels':
+      case 'meterIntervalFrames':
+      case 'commandRingCapacity':
+      case 'telemetryRingCapacity':
+      case 'meterRingCapacity':
+      case 'scopeIntervalFrames':
+      case 'scopeBands':
+      case 'scopeRingCapacity':
+      case 'clipPageRequestRingCapacity':
+      case 'externalMidiRingCapacity':
+        if (typeof value !== 'number') {
+          expected = 'an integer';
+        }
+        break;
+      case 'commandSharedBuffer':
+      case 'telemetrySharedBuffer':
+      case 'meterSharedBuffer':
+      case 'scopeSharedBuffer':
+      case 'clipPageRequestSharedBuffer':
+      case 'externalMidiSharedBuffer':
+        if (sharedArrayBufferByteLength(value) === undefined) {
+          expected = 'a SharedArrayBuffer';
+        }
+        break;
+      case 'cueOutput':
+      case 'requireAbiCompatible':
+        if (typeof value !== 'boolean') {
+          expected = 'a boolean';
+        }
+        break;
+      case 'processorName':
+      case 'mode':
+        if (typeof value !== 'string') {
+          expected = 'a string';
+        }
+        break;
+      case 'moduleUrl':
+        if (typeof value !== 'string' && !(typeof URL !== 'undefined' && value instanceof URL)) {
+          expected = 'a string or URL';
+        }
+        break;
+      case 'nodeFactory':
+        if (typeof value !== 'function') {
+          expected = 'a function';
+        }
+        break;
+      case 'transport':
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          expected = 'an object';
+        }
+        break;
+      case 'offlineEngine':
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+          expected = 'a RealtimeEngine';
+        }
+        break;
+    }
+    if (expected !== undefined) {
+      throw refuseType(`${name} must be ${expected}`);
+    }
+  }
 }
 
 /**
@@ -588,16 +703,18 @@ export function requireIntegerOption(
   return resolved;
 }
 
-/** Resolves scope bands, refusing a count past the native tap's fixed 64-band ceiling. */
-export function resolveScopeBandCount(
-  value: number | undefined,
-  fallback = SONARE_SCOPE_DEFAULT_BANDS,
-): number {
-  const bands = requireIntegerOption(value, fallback, 'scopeBands', 1);
-  if (bands > SONARE_SCOPE_MAX_BANDS) {
-    throw refuse(`scopeBands must be an integer in [1, ${SONARE_SCOPE_MAX_BANDS}]`);
-  }
-  return bands;
+/** Resolves the worklet interval before the native tap is available. */
+export function resolveScopeIntervalFrames(value: number | undefined, fallback: number): number {
+  return requireRingDimension(value ?? fallback, 'scopeIntervalFrames', ...SCOPE_INTERVAL_DOMAIN);
+}
+
+/** Resolves the requested spectrum band count. */
+export function resolveScopeBandCount(value: number | undefined): number {
+  return requireRingDimension(
+    value ?? SONARE_SCOPE_DEFAULT_BANDS,
+    'scopeBands',
+    ...SCOPE_BAND_DOMAIN,
+  );
 }
 
 /** As {@link requireIntegerOption}, for a field whose domain admits either sign. */

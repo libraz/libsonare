@@ -26,6 +26,7 @@ import type { SonareRealtimeEngineWorkletProcessorConstructorOptions } from '../
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
 import {
+  assertEngineProcessorOptionTypes,
   assertKnownProcessorOptions,
   isEngineCaptureRequestMessage,
   isEngineCommandRecord,
@@ -36,6 +37,7 @@ import {
   requireChannelCount,
   requireIntegerOption,
   resolveScopeBandCount,
+  resolveScopeIntervalFrames,
   resolveScopeSampleRate,
   SONARE_SCOPE_MAX_BANDS,
   SONARE_SCOPE_MAX_POINTS,
@@ -325,6 +327,7 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   constructor(options: SonareRealtimeEngineWorkletProcessorConstructorOptions) {
     assertKnownProcessorOptions('engineProcessorConstructor', options);
+    assertEngineProcessorOptionTypes('engineProcessorConstructor', options);
     this.sampleRate = resolveScopeSampleRate(options.sampleRate);
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
@@ -337,6 +340,12 @@ export class SonareRealtimeEngineWorkletProcessor {
       'meterIntervalFrames',
       0,
     );
+    const scopeBuffer = options.scopeSharedBuffer;
+    this.scopeIntervalFrames = resolveScopeIntervalFrames(
+      options.scopeIntervalFrames,
+      scopeBuffer == null ? 0 : this.blockSize,
+    );
+    this.scopeBands = resolveScopeBandCount(options.scopeBands);
     this.commandRing = options.commandSharedBuffer
       ? this.commandRingFromSharedBuffer(options.commandSharedBuffer, options.commandRingCapacity)
       : undefined;
@@ -349,20 +358,10 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.meterRing = options.meterSharedBuffer
       ? meterRingFromSharedBuffer(options.meterSharedBuffer, options.meterRingCapacity)
       : undefined;
-    this.scopeRing = options.scopeSharedBuffer
-      ? scopeRingFromSharedBuffer(
-          options.scopeSharedBuffer,
-          options.scopeRingCapacity,
-          options.scopeBands,
-        )
-      : undefined;
-    this.scopeIntervalFrames = requireIntegerOption(
-      options.scopeIntervalFrames,
-      this.scopeRing ? this.blockSize : 0,
-      'scopeIntervalFrames',
-      0,
-    );
-    this.scopeBands = resolveScopeBandCount(options.scopeBands);
+    this.scopeRing =
+      scopeBuffer == null
+        ? undefined
+        : scopeRingFromSharedBuffer(scopeBuffer, options.scopeRingCapacity, options.scopeBands);
     this.scopeEnabled =
       this.scopeIntervalFrames > 0 &&
       (this.scopeRing !== undefined || typeof this.transport?.postMessage === 'function');
@@ -408,7 +407,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     if (this.scopeEnabled) {
       this.engine.configureScopeTelemetry(
         this.scopeIntervalFrames,
-        Math.min(this.scopeRing?.bands ?? this.scopeBands, SONARE_SCOPE_MAX_BANDS),
+        this.scopeRing?.bands ?? this.scopeBands,
       );
     }
   }

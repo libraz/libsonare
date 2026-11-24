@@ -157,13 +157,16 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   // only when scopeIntervalFrames > 0, since the per-block FFT is heavier than
   // the meter path. scopeBands selects the linear band resolution.
   /**
-   * Frames between scope publications, an integer of at least 0; 0 switches scope telemetry off.
+   * Frames between scope publications, an integer in [0, 2147483647]; 0 switches scope telemetry off.
    * Omitted: off, or one record per block when a `scopeSharedBuffer` is given.
    */
   scopeIntervalFrames?: number;
   /** Spectrum bands per scope record, an integer in [1, 64]. Omitted: 48. */
   scopeBands?: number;
-  /** Shared memory from `createScopeRingBuffer`. Omitted: scope records are posted as port messages. */
+  /**
+   * Shared memory from `createScopeRingBuffer`, with a header declaring 1 through 64 bands.
+   * Omitted: scope records are posted as port messages.
+   */
   scopeSharedBuffer?: SharedArrayBuffer;
   /**
    * Slots of the scope ring, an integer of at least 1. Omitted: read from the buffer's header; a

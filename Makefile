@@ -1255,6 +1255,7 @@ numeric-domains:
 	set -e; \
 	$(CXX) -std=c++17 -I include -I src tools/api/dump_numeric_domains.cpp -o "$$scratch/dump"; \
 	"$$scratch/dump" > $(NUMERIC_DOMAINS_JSON)
+	python3 tools/api/gen_numeric_domains.py
 
 # Fail if the committed table is stale or a named domain is missing from the rows.
 numeric-domains-check:
@@ -1266,6 +1267,7 @@ numeric-domains-check:
 	diff -u $(NUMERIC_DOMAINS_JSON) "$$scratch/numeric-domains.json" \
 	  || { echo "numeric-domains-check: $(NUMERIC_DOMAINS_JSON) is stale; run make numeric-domains" >&2; exit 1; }; \
 	python3 tools/api/check_numeric_domain_rows.py
+	python3 tools/api/gen_numeric_domains.py --check
 
 # Verify the ABI-version mirror literals in every binding match the C source of
 # truth (per-subsystem + packed aggregate). Stdlib-only, read-only.

@@ -1,5 +1,6 @@
 import { ErrorCode } from '../errors.js';
-import { codedError, refuse, withEntry } from '../internal/entry.js';
+import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
+import { SCOPE_BAND_DOMAIN } from '../internal/numeric_domains.js';
 import { decodeFrame } from './engine-rings.js';
 import {
   attachProtocolVersion,
@@ -15,6 +16,7 @@ import {
   requireRingDimension,
   resolveRingOptions,
   ringCursorSpan,
+  sharedArrayBufferByteLength,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   tryAcquireOverwriteRead,
@@ -33,7 +35,7 @@ export const SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS = 5;
 /** Scope band and goniometer point counts used when a caller supplies none. */
 export const SONARE_SCOPE_DEFAULT_BANDS = 48;
 export const SONARE_SCOPE_DEFAULT_MAX_POINTS = 32;
-export const SONARE_SCOPE_MAX_BANDS = 64;
+export const SONARE_SCOPE_MAX_BANDS = SCOPE_BAND_DOMAIN[1];
 export const SONARE_SCOPE_MAX_POINTS = 32;
 
 /**
@@ -117,7 +119,7 @@ function resolveScopeRingOptions(
   });
   return {
     capacity: requireRingDimension(resolved.capacity, 'capacity', 1),
-    bands: requireRingDimension(resolved.bands, 'bands', 1, SONARE_SCOPE_MAX_BANDS),
+    bands: requireRingDimension(resolved.bands, 'bands', ...SCOPE_BAND_DOMAIN),
     maxPoints: requireRingDimension(resolved.maxPoints, 'maxPoints', 0, SONARE_SCOPE_MAX_POINTS),
   };
 }
@@ -274,8 +276,12 @@ export function scopeRingFromSharedBuffer(
   fallbackBands?: number,
   fallbackMaxPoints?: number,
 ): SharedScopeRingWriter {
+  const byteLength = sharedArrayBufferByteLength(sharedBuffer);
+  if (byteLength === undefined) {
+    throw refuseType('scopeSharedBuffer must be a SharedArrayBuffer');
+  }
   const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  if (sharedBuffer.byteLength < headerBytes) {
+  if (byteLength < headerBytes) {
     throw refuse('scopeSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_SCOPE_RING_HEADER_INTS);
@@ -288,8 +294,9 @@ export function scopeRingFromSharedBuffer(
   const maxPoints = recordDescriptor
     ? existingMaxPoints
     : (fallbackMaxPoints ?? SONARE_SCOPE_DEFAULT_MAX_POINTS);
-  if (!Number.isSafeInteger(bands) || bands < 1) {
-    throw refuse(`scopeBands must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
+  const [minBands, maxBands] = SCOPE_BAND_DOMAIN;
+  if (!Number.isSafeInteger(bands) || bands < minBands || bands > maxBands) {
+    throw refuse(`scopeSharedBuffer must declare a band count in [${minBands}, ${maxBands}]`);
   }
   if (!Number.isSafeInteger(maxPoints) || maxPoints < 0) {
     throw refuse(`scopeMaxPoints must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);

@@ -6,6 +6,7 @@ import {
   refuseUnknownKey,
 } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { AUDIO_SAMPLE_RATE_DOMAIN } from './internal/numeric_domains.js';
 import { requireOneOf } from './internal/one_of.js';
 import { isAbsent, isNonArrayObject, isPlainRecord, UINT32_MAX } from './internal/value_guards.js';
 import type { Matrix2D } from './public_types.js';
@@ -20,8 +21,8 @@ export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
  * Every guarded WASM entry point rejects the same out-of-range rates the C ABI,
  * Node, and Python surfaces do.
  */
-export const MIN_AUDIO_SAMPLE_RATE = 8000;
-export const MAX_AUDIO_SAMPLE_RATE = 384000;
+export const MIN_AUDIO_SAMPLE_RATE = AUDIO_SAMPLE_RATE_DOMAIN[0];
+export const MAX_AUDIO_SAMPLE_RATE = AUDIO_SAMPLE_RATE_DOMAIN[1];
 
 function assertNonEmptySamples(samples: ArrayLike<number>, argName = 'samples'): void {
   if (samples.length === 0) {

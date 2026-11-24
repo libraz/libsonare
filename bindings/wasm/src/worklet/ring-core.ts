@@ -157,6 +157,25 @@ export function requireRingDimension(
 }
 
 /**
+ * Reads a SharedArrayBuffer's byte length through its intrinsic getter, so cross-realm buffers
+ * work and an ordinary ArrayBuffer is refused.
+ */
+export function sharedArrayBufferByteLength(value: unknown): number | undefined {
+  if (typeof SharedArrayBuffer === 'undefined') {
+    return undefined;
+  }
+  const getter = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength')?.get;
+  if (!getter) {
+    return undefined;
+  }
+  try {
+    return getter.call(value) as number;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Reads a ring options object: a key outside `defaults` is a TypeError, an
  * absent or `null` value takes its default, and a field with no default is
  * required (TypeError when missing). Values are returned unvalidated.
