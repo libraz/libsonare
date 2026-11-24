@@ -254,6 +254,8 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
 ///   whether this can be non-zero depends on which processor was named. One
 ///   that does not substitute reports zero because it has nothing to replace
 ///   with, not because nothing needed replacing.
+/// @param params For @c effects.gsEfx, give @c typeMsb and @c typeLsb together.
+///               Omit both to use the default pair (0, 0).
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_processor(const char* processor, const float* samples,
                                              size_t length, int sample_rate,
@@ -862,11 +864,9 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
 /// @brief Analyze audio and return mastering assistant profile JSON.
 /// @details @p params accepts nFft, hopLength, truePeakOversample, and
 /// detectDefects. @c nFft and @c hopLength are the window length and hop in
-/// samples at 48000 Hz, rescaled to @p sample_rate. The last runs the six repair detectors and
-/// fills the
-/// @c defects block; it is off by default because they are six further
-/// analysis passes. The block is present either way, and its @c measured
-/// field is what says whether anything looked.
+/// samples at 48000 Hz, rescaled to @p sample_rate. When @c detectDefects is true,
+/// six repair detectors run and their results appear in @c defects. The default
+/// is false and omits that block.
 /// The returned string must be released with sonare_free_string().
 SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
                                            const SonareMasteringParam* params, size_t param_count,
