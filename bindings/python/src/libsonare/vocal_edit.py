@@ -766,8 +766,8 @@ class VocalRenderSnapshot(_HandleOwner):
     @_entry("VocalRenderSnapshot")
     def __init__(self, handle: ctypes.c_void_p, sample_rate: int) -> None:
         self._handle = handle
-        self._sample_rate = sample_rate
         try:
+            self._sample_rate = _vocal_sample_rate(sample_rate)
             self._output_length = _native_output_length(
                 _get_lib(), "sonare_vocal_snapshot_output_length", handle
             )

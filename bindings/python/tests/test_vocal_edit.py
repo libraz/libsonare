@@ -30,6 +30,7 @@ from libsonare.vocal_edit import (
     VocalMergeNotes,
     VocalNoteEdit,
     VocalNotesResult,
+    VocalRenderSnapshot,
     VocalSetNoteEdit,
     VocalSetTransition,
     VocalTransition,
@@ -134,6 +135,22 @@ def test_context_lifetime_and_owned_note_arrays() -> None:
             assert np.array_equal(original, notes[0].amplitude) is False
     finally:
         snapshot.close()
+
+
+def test_render_snapshot_refuses_a_fractional_sample_rate() -> None:
+    source, analysis = _source_and_analysis()
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
+        handle = session._capture_snapshot_handle()
+        snapshot = VocalRenderSnapshot.__new__(VocalRenderSnapshot)
+        try:
+            with pytest.raises(
+                SonareValueError,
+                match=r"^VocalRenderSnapshot: sample_rate must be an integer in \[8000, 384000\]$",
+            ):
+                snapshot.__init__(handle, 16_000.5)
+            assert not snapshot._handle.value
+        finally:
+            snapshot.close()
 
 
 def test_extended_output_length_survives_export_restore_and_snapshot() -> None:
