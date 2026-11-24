@@ -263,18 +263,20 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
-  it('reports the error diagnostics of a failed bounce', () => {
+  it('reports a failed bounce through its error and leaves the compile result empty', () => {
     const project = new Project();
     try {
       project.setSampleRate(48000);
       const trackId = project.addTrack({ kind: 'audio' });
       // A clip whose audio source was never supplied cannot be compiled.
       project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
-      expect(() => project.bounce({ totalFrames: 256 })).toThrow();
-      const result = project.lastBounceCompileResult();
-      expect(result).toBeDefined();
-      expect(Object.keys(result ?? {})).toEqual(['diagnostics']);
-      expect(result?.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(true);
+      expect(() => project.bounce({ totalFrames: 256 })).toThrow(
+        expect.objectContaining({
+          codeName: 'InvalidState',
+          message: expect.stringMatching(/^Project\.bounce: the project does not compile: /),
+        }),
+      );
+      expect(project.lastBounceCompileResult()).toBeUndefined();
     } finally {
       project.destroy();
     }

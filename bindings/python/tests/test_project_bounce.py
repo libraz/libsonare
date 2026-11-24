@@ -769,18 +769,14 @@ def test_last_bounce_compile_result_after_a_clean_bounce_has_no_diagnostics() ->
         project.close()
 
 
-def test_last_bounce_compile_result_after_a_failed_bounce_carries_the_error() -> None:
+def test_a_failed_bounce_refuses_and_leaves_the_compile_result_empty() -> None:
     project = Project()
     try:
         # One track more than the realtime track mixer holds is a compile error.
         for index in range(33):
             project.add_track("audio", f"t{index}")
-        with raises_coded(ErrorCode.INVALID_STATE):
+        with raises_coded(ErrorCode.INVALID_STATE, match=r"the project does not compile: "):
             project.bounce(total_frames=480, num_channels=2)
-        result = project.last_bounce_compile_result()
-        assert isinstance(result, ProjectCompileResult)
-        assert ("automationLaneCapacity", "error") in [
-            (d.code, d.severity) for d in result.diagnostics
-        ]
+        assert project.last_bounce_compile_result() is None
     finally:
         project.close()
