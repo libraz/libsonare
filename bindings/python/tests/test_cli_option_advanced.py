@@ -215,8 +215,8 @@ def test_native_rhythm_handlers_use_explicit_mel_envelopes() -> None:
     tempogram = source[source.index("int cmd_tempogram(") : source.index("int cmd_plp(")]
     plp = source[source.index("int cmd_plp(") : source.index("int cmd_cqt(")]
     for function, call in (
-        (tempogram, "tempogram(envelope, audio.sample_rate(), config)"),
-        (plp, "plp(envelope, config)"),
+        (tempogram, "detail::tempogram_of_envelope(envelope, config)"),
+        (plp, "detail::plp_of_envelope(envelope, config)"),
     ):
         assert 'mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);' in function
         assert (
