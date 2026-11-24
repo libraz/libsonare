@@ -268,8 +268,11 @@ describe('StreamingMasteringChain', () => {
     });
     const block = new Float32Array(64).fill(0.5);
     const entry = numChannels === 1 ? 'flushMono' : 'flushStereo';
-    if (numChannels === 1) chain.processMono(block);
-    else chain.processStereo(block, block);
+    if (numChannels === 1) {
+      chain.processMono(block);
+    } else {
+      chain.processStereo(block, block);
+    }
     expect(() => (numChannels === 1 ? chain.flushMono() : chain.flushStereo())).toThrow(
       expect.objectContaining({
         code: ErrorCode.NotSupported,

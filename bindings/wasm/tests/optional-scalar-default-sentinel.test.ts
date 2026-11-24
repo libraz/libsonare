@@ -146,7 +146,9 @@ describe('meteringSpectrum optional scalars', () => {
         new RangeError(`${name}: nFft must be a power of two in [2, 4194304]`),
       );
     }
-    for (const nFft of [2, 4194304]) expect(() => run(nFft)).not.toThrow();
+    for (const nFft of [2, 4194304]) {
+      expect(() => run(nFft)).not.toThrow();
+    }
   });
 });
 
