@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import type { BuiltinSynthConfig, ProjectMidiEvent } from '../src/index.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { BuiltinSynthConfig, ProjectMidiEvent, ProjectTrack } from '../src/index.js';
 import {
   ErrorCode,
   gm2DrumName,
@@ -2454,5 +2454,13 @@ describe('Project meter plumbing', () => {
       source.destroy();
       target.destroy();
     }
+  });
+});
+
+describe('project track records', () => {
+  it('exposes the track kind as a token in a readonly record', () => {
+    expectTypeOf<Pick<ProjectTrack, 'kind'>>().toEqualTypeOf<{
+      readonly kind: 'audio' | 'midi' | 'aux';
+    }>();
   });
 });

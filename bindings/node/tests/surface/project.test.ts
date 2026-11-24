@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   midiNoteOff,
   midiNoteOn,
@@ -6,6 +6,12 @@ import {
   ProjectTimeline,
   RealtimeEngine,
 } from '../../dist/index.js';
+import type {
+  ExternalSeparatedStem,
+  ProjectLoopMode,
+  ProjectStemLayout,
+  ProjectTrackKind,
+} from '../../dist/types.js';
 
 const SR = 48000;
 
@@ -178,6 +184,19 @@ describe('closed sets', () => {
     });
   });
 
+  it('ProjectTrackKind is a named token set', () => {
+    expectTypeOf<ProjectTrackKind>().toEqualTypeOf<'audio' | 'midi' | 'aux'>();
+  });
+
+  it('ProjectLoopMode uses names rather than numeric ordinals', () => {
+    expectTypeOf<ProjectLoopMode>().toEqualTypeOf<'off' | 'loop'>();
+    withProject((project) => {
+      const { clipId } = addUriClip(project);
+      expect(() => project.setClipLoop(clipId, { loopMode: 'loop' })).not.toThrow();
+      expect(() => project.setClipLoop(clipId, { loopMode: 1 as never })).toThrow(TypeError);
+    });
+  });
+
   it('spells fade curves, warp modes and automation targets in lowerCamel', () => {
     withProject((project) => {
       const { trackId, clipId } = addUriClip(project);
@@ -319,11 +338,38 @@ describe('edits', () => {
         project.importExternalStems(
           stem({ channels: undefined, planarSamples: [left, right] }) as never,
         ),
-      ).toThrow();
+      ).toThrow(/planarSamples/);
       expect(() => project.importExternalStems(stem({ layout: 2 }) as never)).toThrow(TypeError);
       expect(() =>
         project.addClip({ trackId, lengthPpq: 4, audio: left, audioSampleRate: SR } as never),
       ).toThrow(/unknown key audio \(expected /);
+    });
+  });
+
+  it('ExternalSeparatedStem uses channel names and named layout tokens', () => {
+    expectTypeOf<ExternalSeparatedStem['layout']>().toEqualTypeOf<ProjectStemLayout>();
+    expectTypeOf<ProjectStemLayout>().toEqualTypeOf<'mono' | 'stereo'>();
+    expectTypeOf<ExternalSeparatedStem['channels']>().toEqualTypeOf<Float32Array[]>();
+    // @ts-expect-error planarSamples was renamed to channels
+    type Removed = ExternalSeparatedStem['planarSamples'];
+    expectTypeOf<Removed>().not.toBeNever();
+    const oldShape = () => {
+      // @ts-expect-error numeric channel-layout ordinals are no longer accepted
+      const stem: ExternalSeparatedStem = { name: 'stem', layout: 1, channels: [] };
+      return stem;
+    };
+    expect(typeof oldShape).toBe('function');
+  });
+
+  it('Project.rehydrateVocalEdits takes cancellation in an options object', () => {
+    withProject((project) => {
+      expect(project.rehydrateVocalEdits([], { cancel: () => false })).toEqual([]);
+      expect(() => loose(project).rehydrateVocalEdits([], () => false)).toThrow(TypeError);
+      const formerCall = () => {
+        // @ts-expect-error the positional cancellation callback moved into options.cancel
+        return project.rehydrateVocalEdits([], () => false);
+      };
+      expect(typeof formerCall).toBe('function');
     });
   });
 

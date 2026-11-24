@@ -18,6 +18,24 @@ function armedLoop() {
 const PUNCH = { startSample: 0, endSample: 1000 };
 
 describe('configureCapture applies the record offset and the punch window together', () => {
+  it('refuses a shorter loop or faster tempo that invalidates the armed capture offset', () => {
+    const { engine } = armedLoop();
+    try {
+      engine.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+      const loop = engine.sampleAtPpq(4) - engine.sampleAtPpq(0);
+      engine.configureCapture({ capacityFrames: 128, recordOffsetSamples: loop, punch: PUNCH });
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 2 })).toThrow(RangeError);
+      expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 240 }])).toThrow(RangeError);
+      expect(engine.sampleAtPpq(4) - engine.sampleAtPpq(0)).toBe(loop);
+      expect(engine.captureStatus()).toMatchObject({
+        recordOffsetSamples: loop,
+        punchEnabled: true,
+      });
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('accepts an offset of exactly one loop pass and refuses one sample more, leaving the engine as it was', () => {
     const { engine, loop } = armedLoop();
     try {

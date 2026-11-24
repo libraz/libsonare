@@ -4129,6 +4129,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `projectAbiVersion` | returns undefined instead of 0 when the feature is compiled out |
 | `vocalEditApiVersion` | `vocalEditAbiVersion`: returns undefined instead of 0 when the feature is compiled out |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Audio.crestFactorDb` | Check the result for undefined before using it as a number; silence has no crest factor. |
+
 #### Every call scans its input for non-finite values
 
 | 1.x | 2.0.0 |
@@ -4145,7 +4151,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EqBandInput.coeffMode` | type EqCoeffMode (core-owned); tokens 'rbj','vicanek' |
 | `EqBandInput.phase` | type EqBandPhase (core-owned); tokens 'inherit','zeroLatency','naturalPhase','linearPhase' |
 | `EqBandInput.type` | type EqBandType (core-owned union); tokens lowerCamel: 'peak','lowShelf','highShelf','lowPass','highPass','bandPass','notch','allPass','tiltShelf','flatTilt' |
-| `EqBandInput` | closed-set fields take the core EqBandType / EqCoeffMode / EqBandPhase unions (lowerCamel tokens); lookaheadMs removed |
+| `EqBandInput` | The closed-set fields take the core EqBandType, EqCoeffMode and EqBandPhase unions. Remove lookaheadMs and use lowerCamel EqStereoPlacement tokens such as stereo in place of Stereo. |
 | `VoicePresetId='bright-idol'` | `VoicePresetId='brightIdol'` |
 | `VoicePresetId='dark-villain'` | `VoicePresetId='darkVillain'` |
 | `VoicePresetId='deep-narrator'` | `VoicePresetId='deepNarrator'` |
@@ -4190,7 +4196,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.harmonic` | harmonic(options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>) |
 | `Audio.hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
 | `Audio.hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
-| `Audio.hpss` | hpss(options?: Omit<HpssRequest,'samples'\|'sampleRate'>) |
+| `Audio.hpss` | hpss(options?: Omit<HpssRequest,'samples'\|'sampleRate'>). An out-of-domain kernel raises RangeError instead of SonareError InvalidParameter. |
 | `Audio.melSpectrogram(fmax)` | removed: pass it as fmaxHz in MelSpectrogramRequest |
 | `Audio.melSpectrogram(fmin)` | removed: pass it as fminHz in MelSpectrogramRequest |
 | `Audio.melSpectrogram(hopLength)` | removed: pass hopLength as a field of MelSpectrogramRequest |
@@ -4274,7 +4280,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Audio.fromFileChannel` | removed: Call Audio.fromFile(path, channelIndex). |
+| `Audio.fromFileChannel` | removed: Call Audio.fromFile(path, channelIndex). Catch RangeError if the channel does not exist. The equivalent 1.x call raised SonareError InvalidParameter. |
 | `Audio.masteringChain` | removed: Call masterAudio({ preset, overrides }); the old config is now overrides. |
 | `Audio.stftDb` | removed: Call audio.stft({ db: true }); the result then also carries db. |
 
@@ -4318,6 +4324,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.pitchShift(semitones)` | removed: pass it as pitchSemitones in PitchShiftRequest |
 | `Audio.pitchShift` | pitchShift(options: Omit<PitchShiftRequest,'samples'\|'sampleRate'>) |
 
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareError` | Pass (code, message, options?) instead of (code, codeName, message); codeName is derived from the ErrorCode. |
+
 #### Historical aliases are removed
 
 | 1.x | 2.0.0 |
@@ -4343,6 +4355,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.dynamicRange` | delegates to meteringDynamicRange: an unknown option key is a TypeError naming meteringDynamicRange, where the method used to read past it |
 | `Audio.spectrumFrame` | delegates to meteringSpectrumFrame: an unknown option key is a TypeError naming meteringSpectrumFrame; an explicit nFft of 0 is a RangeError, where the method used to read past it |
 | `Audio.spectrum` | delegates to meteringSpectrum: an unknown option key is a TypeError naming meteringSpectrum; an explicit nFft of 0 is a RangeError, where the method used to read past it |
+| `CapabilityCatalogPresets` | Result records expose readonly fields or arrays. Copy the record or array before mutating it. Affected types: Capabilities, CapabilityCatalog, CapabilityCatalogChain, CapabilityCatalogChainList, CapabilityCatalogChainStage, CapabilityCatalogPresets, ChordSymbolFields, EngineBounceResult, MasteringInsertParamChoice, MasteringInsertParamDependency, MasteringInsertSlot, MasteringInsertTiming, ProjectChordSymbol, ProjectClip, ProjectDiagnostic, ProjectMarker, ProjectSource, ProjectTempoCandidate, ProjectTrack, VocalStateToken. |
 
 ### Node: Analysis and features
 
@@ -4659,6 +4672,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AnalysisDynamics.peakDb` | optional: `-Infinity` for silence, absent when not measured |
 | `AnalysisDynamics.rmsDb` | optional: `-Infinity` for silence, absent when not measured |
+| `AnalysisDynamics` | Check crestFactor for undefined before using it as a number; an unmeasured crest factor is absent. Check dynamicRangeDb for undefined before using it as a number; an unmeasured dynamic range is absent. |
+| `AnalysisResult` | Read startSec and endSec in place of start and end, and read the section type as a token. Check brightness, warmth, density, roughness and complexity for absence before using them as numbers. |
+| `DynamicsResult` | Handle undefined in crestFactor, dynamicRangeDb. |
+| `LufsResult` | Handle undefined in maxMomentaryLufs, maxShortTermLufs, momentaryLufs, shortTermLufs. |
 | `SilenceCommonReport.silenceCeilingDb` | optional: a signal with no peak constrains nothing (was 0 for the whole report); Infinity when every signal that has a level holds an exactly zero frame (was 120); absent when every signal is silent |
 
 #### Every call scans its input for non-finite values
@@ -4786,10 +4803,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalysisMelody` | Read timeSec and frequencyHz on MelodyPoint instead of time and frequency on the old pitch rows. Handle an absent frequencyHz for an unvoiced point. |
 | `AnalysisResult.beatTimes` | removed: Read beats and take timeSec from each Beat: result.beats.map((b) => b.timeSec). |
 | `AnalysisResult.downbeatIndices` | `AnalysisResult.downbeats` |
+| `ChordSymbolFields` | Use a ProjectChordQuality token in place of a numeric quality. |
 | `EstimateMeterRequest.beatStrengths` | removed: Pass analysis.beatObservations in EstimateMeterRequest.observations. |
 | `EstimateMeterRequest.beatTimes` | `EstimateMeterRequest.observations` |
+| `StreamAnalyzer.stats` | Read the StreamStats result and use durationSec in place of durationSeconds. |
 | `splitSilenceCommonWithReport` | returns SplitSilenceCommonWithReportResult |
 
 #### Python arrays are numpy arrays
@@ -4965,7 +4985,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `amplitudeToDb(topDb)` | removed: pass topDb as a field of AmplitudeToDbRequest |
 | `amplitudeToDb(values)` | removed: pass values as a field of AmplitudeToDbRequest |
 | `amplitudeToDb` | request-only: amplitudeToDb(request: AmplitudeToDbRequest) |
-| `analyzeAsync` | request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required; a rejection is named like a synchronous throw (analyzeAsync: samples must be a Float32Array), where 1.x rejected with the addon's bare text |
+| `analyzeAsync` | request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required; a rejection is named like a synchronous throw (analyzeAsync: samples must be a Float32Array), where 1.x rejected with the addon's bare text. Invalid hop lengths and FFT sizes reject with RangeError instead of SonareError InvalidParameter. |
 | `analyzeDynamics` | one positional form (analyzeDynamics(samples, sampleRate, options?: Omit<AnalyzeDynamicsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeDynamicsRequest |
 | `analyzeImpulseResponse(minDecayDb)` | removed: pass minDecayDb as a field of AnalyzeImpulseResponseRequest |
 | `analyzeImpulseResponse(nOctaveBands)` | removed: pass nOctaveBands as a field of AnalyzeImpulseResponseRequest |
@@ -4981,7 +5001,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `chirp(fmax)` | removed: pass it as fmaxHz in ChirpRequest |
 | `chirp(fmin)` | removed: pass it as fminHz in ChirpRequest |
 | `chirp(sampleRate)` | removed: pass sampleRate as a field of ChirpRequest |
-| `chirp` | request-only: chirp(request: ChirpRequest) |
+| `chirp` | request-only: chirp(request?: ChirpRequest). Omit the request for the default chirp. |
 | `chordFunctionalAnalysis(chromaMethod)` | removed: pass chromaMethod as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(hmmBeamWidth)` | removed: pass hmmBeamWidth as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(hopLength)` | removed: pass hopLength as a field of ChordFunctionalAnalysisRequest |
@@ -4991,7 +5011,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `chordFunctionalAnalysis(nFft)` | removed: pass nFft as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(smoothingWindow)` | removed: pass it as smoothingWindowSec in ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(threshold)` | removed: pass threshold as a field of ChordFunctionalAnalysisRequest |
-| `chordFunctionalAnalysis` | one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'\|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields) |
+| `chordFunctionalAnalysis` | one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'\|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields). Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
 | `chordFunctions` | one generic signature chordFunctions<T extends ChordFunctionsInput>(request: ChordFunctionsRequest<T>): FunctionalChord<T>[] |
 | `chroma(hopLength)` | removed: pass hopLength as a field of ChromaRequest |
 | `chroma(nFft)` | removed: pass nFft as a field of ChromaRequest |
@@ -5049,10 +5069,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `detectChords(nFft)` | removed: pass nFft as a field of DetectChordsRequest |
 | `detectChords(smoothingWindow)` | removed: pass it as smoothingWindowSec in DetectChordsRequest |
 | `detectChords(threshold)` | removed: pass threshold as a field of DetectChordsRequest |
-| `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest |
+| `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
-| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest |
+| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
 | `estimateTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(hopLength)` | removed: pass hopLength as a field of EstimateTuningRequest |
@@ -5161,7 +5181,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `pcen(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
 | `pcen(options)` | removed: pass the option fields in PcenRequest |
 | `pcen(values)` | removed: pass values as a field of PcenRequest |
-| `peakPick(delta)` | removed: pass delta as a field of PeakPickRequest |
+| `peakPick(delta)` | removed: pass delta as a field of PeakPickRequest. Use a finite delta. NaN and Infinity raise RangeError. |
 | `peakPick(postAvg)` | removed: pass postAvg as a field of PeakPickRequest |
 | `peakPick(postMax)` | removed: pass postMax as a field of PeakPickRequest |
 | `peakPick(preAvg)` | removed: pass preAvg as a field of PeakPickRequest |
@@ -5271,7 +5291,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `tone(frequency)` | removed: pass it as frequencyHz in ToneRequest |
 | `tone(phase)` | removed: pass phase as a field of ToneRequest |
 | `tone(sampleRate)` | removed: pass sampleRate as a field of ToneRequest |
-| `tone` | request-only: tone(request: ToneRequest) |
+| `tone` | request-only: tone(request?: ToneRequest). Omit the request for the default tone. |
 | `tonnetz(chromagram)` | removed: pass chromagram as a field of TonnetzRequest |
 | `tonnetz(nChroma)` | removed: the Matrix2D input carries it as rows / cols |
 | `tonnetz(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
@@ -5445,7 +5465,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `OnsetBacktrackRequest.events` | type Int32Array \| ArrayLike<number> |
 | `SegmentSubsegmentRequest.boundaries` | type Int32Array \| ArrayLike<number> |
-| `decodeChannels` | parameter typed Uint8Array (was any) |
+| `StreamAnalyzer` | Pass an explicit StreamConfig to the constructor. |
+| `decodeChannels` | parameter typed Uint8Array (was any). An empty input buffer raises RangeError instead of SonareError InvalidParameter. |
 
 #### Historical aliases are removed
 
@@ -5489,7 +5510,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` | norm option removed |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
+| `hzToNote` | A non-positive or nonfinite frequency raises RangeError instead of SonareError InvalidParameter. |
 | `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
+| `noteToHz` | An invalid note name raises RangeError instead of SonareError InvalidParameter. |
 | `samplesToFrames(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 
 ### Node: Effects, separation, repair and room acoustics
@@ -5564,7 +5587,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PitchShiftRequest` | removes `semitones`; adds `pitchSemitones: number` (required); `sampleRate` is now required |
 | `RemixRequest.sampleRate` | optional -> required (no default) |
 | `RemixRequest` | `sampleRate` is now required |
-| `RenderNotesRequest` | `voiced` is now `VoicedFlags` (was `VoicedFlags \| null`) |
+| `RenderNotesRequest` | `voiced` is now `VoicedFlags` (was `VoicedFlags \| null`). Omit voiced or use undefined instead of passing null. |
 | `RirSynthOptions.sampleRate` | `SynthesizeRirRequest.sampleRate`: optional -> required (no default) |
 | `RoomEstimateRequest.sampleRate` | `EstimateRoomRequest.sampleRate`: optional -> required (no default) |
 | `RoomMorphOptions` | removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement` |
@@ -5663,6 +5686,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
 | `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: always full length, NaN for each band not fitted, even when no band was |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
+| `MasteringRepairAnalysis` | Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records. |
+| `NoiseDetection` | Handle undefined in floorDbfs. |
+| `ReverbDetection` | Handle undefined in latePredictability. |
 | `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent together with rt60Bands only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when the absorption solve fails |
 | `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
@@ -5670,6 +5696,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent together with bandAbsorption only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when no band decay was measured |
 | `RoomEstimateResult.volume` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.widthM` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomGeometryEstimate` | Handle undefined in heightM, lengthM, widthM. |
 
 #### Every call scans its input for non-finite values
 
@@ -5704,6 +5731,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `RealtimeVoiceChangerPresetMetadata` | Use schemaVersion 4 in place of 1. |
+| `RealtimeVoiceChangerPreset` | Use schemaVersion 4 in place of 1. |
 | `masteringRepairDeclick` | returns DeclickResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel |
 | `masteringRepairDeclip` | returns DeclipResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel |
 | `masteringRepairDecrackle` | returns DecrackleResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel |
@@ -5751,7 +5780,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
 | `hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
 | `hpss(nFft)` | removed: pass nFft as a field of HpssRequest |
-| `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult |
+| `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult. An out-of-domain kernel raises RangeError instead of SonareError InvalidParameter. |
 | `masteringRepairDeclickStereo` | request-only: masteringRepairDeclickStereo(request: MasteringRepairDeclickStereoRequest): MasteringRepairDeclickResult |
 | `masteringRepairDeclipStereo` | request-only: masteringRepairDeclipStereo(request: MasteringRepairDeclipStereoRequest): MasteringRepairDeclipResult |
 | `masteringRepairDecrackleStereo` | request-only: masteringRepairDecrackleStereo(request: MasteringRepairDecrackleStereoRequest): MasteringRepairDecrackleResult |
@@ -5804,14 +5833,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `remixAlignedIntervals(intervals)` | removed: pass intervals as a field of RemixRequest |
 | `remixAlignedIntervals` | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
 | `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
-| `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError |
+| `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError. A malformed note element raises TypeError naming notes[i].<field> instead of coded InvalidParameter. |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
 | `roomGeometryFromEstimate(estimate)` | removed: pass estimate as a field of RoomGeometryFromEstimateRequest |
-| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest). An estimate with no measurable room dimensions raises RangeError instead of SonareError InvalidParameter. |
 | `spectralEdit(ops)` | removed: pass ops as a field of SpectralEditOptions |
 | `spectralEdit` | one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array |
 | `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[] |
-| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest). Catch RangeError for an out-of-room source or listener. The coded InvalidParameter and diagnostic ID are gone. Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. |
 | `timeStretch(hopLength)` | removed: pass hopLength as a field of TimeStretchRequest |
 | `timeStretch(nFft)` | removed: pass nFft as a field of TimeStretchRequest |
 | `timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
@@ -5885,7 +5914,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `ExtractNotesRequest` | declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`) |
+| `ExtractNotesRequest` | declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`). Omit voicedProb or use undefined instead of passing null. |
 | `HumDetection.harmonicDbfs` | number[] -> Float32Array |
 | `NoiseDetection.bandFloorDbfs` | number[] -> Float32Array |
 | `NoteTrackRequest` | `ExtractNotesRequest` |
@@ -5895,6 +5924,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomGeometryOptions` | `RoomGeometry` |
 | `VoiceChangeRealtimeRequest` | `RealtimeVoiceChangerRenderRequest`: renamed with realtimeVoiceChangerRender; the fields are unchanged |
 | `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(document: string): RealtimeVoiceChangerValidatePresetJsonResult |
+
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `DecomposeNotePitchRequest` | Omit voiced or use undefined instead of passing null. |
+| `MasteringRepairSamplesRequest` | Supply sampleRate explicitly; omission no longer uses a default. |
+| `RoomEstimateOptions` | Use impulseResponse in place of impulse_response for mode. |
 
 #### The ./worklet entry exports only the documented surface
 
@@ -5994,8 +6031,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomMorphStereoRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
-| `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
+| `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). Finite out-of-domain pitch and mix values raise RangeError. A grain outside the supported multiples also raises RangeError. The old configuration clamped controls and rounded the effective grain. |
 | `VoiceChangeRealtimeRequest.preset` | `RealtimeVoiceChangerRenderRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
+| `roomMorphStereo` | Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. Omitted receiverSpacingM is up to 0.5 m, reduced to keep both receivers in the room. Catch RangeError naming receiverSpacingM when the pair from an explicit spacing falls outside the room. The equivalent 1.x call raised SonareError InvalidParameter. |
+| `roomMorph` | Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
 
 ### Node: Mastering, mixing and loudness
@@ -6146,7 +6185,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DynamicRangeReport.lowPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
 | `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringLoudnessSummary` | Handle undefined in maxMomentaryLufs, maxShortTermLufs. |
 | `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringStreamingPreviewPlatform` | Handle undefined in normalizationGainDb. |
 | `MatchReferenceLoudnessResult.referenceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
 | `MatchReferenceLoudnessResult.sourceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
 | `MatchTonalBalanceBand.deviationDb` | optional: `-Infinity` when only the source band is silent, absent when the reference band is silent or the band holds no bin |
@@ -6154,11 +6195,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MatchTonalBalanceBand.sourceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
 | `MixAssistantTrackProfile.crestFactorDb` | optional: absent for silence or a track that could not be measured |
 | `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
+| `MixMeterSnapshot` | Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs. |
 | `MixMonoRisk.correlation` | optional: absent when either channel is silent |
 | `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
 | `StereoMonoCompatBand.correlation` | number -> optional number: absent when either channel is silent in the band, never 0 |
 | `StereoMonoCompatCheckResult.correlation` | optional: absent when either channel is silent |
 | `StereoMonoCompatCheckResult.width` | T \| null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence |
+| `StreamingLoudnessGainResult` | Handle undefined in loudnessStaticGainDb. |
 
 #### Every call scans its input for non-finite values
 
@@ -6231,6 +6274,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `JsonResult` | removed: Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast. |
+| `MasteringAmpPresetCatalogEntry` | Read named optional amplifier parameters, and handle absence instead of indexing an arbitrary string key. |
 | `MasteringAssistantResult.chainConfig` | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAudioProfileDefects.clickCount` | removed: read defects.click.count |
 | `MasteringAudioProfileDefects.clickLongestRunSamples` | removed: read defects.click.longestRunSamples |
@@ -6259,6 +6303,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: NoiseDetection, hum: HumDetection, reverb: ReverbDetection} |
 | `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringChainSection` | removed: Use MasteringChainConfig for a chain config, or Record<string, unknown> for a generic walk over its sections. |
+| `MasteringInsertParamUnit` | Handle the added dBTP unit in exhaustive switches over catalog units. |
 | `MasteringResult.latencySamples` | optional -> required |
 | `TypedJson` | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
 | `masteringPresetParams` | masteringPresetParams(preset: MasteringPreset): MasteringChainConfig |
@@ -6418,7 +6463,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingMasteringChain.prepare` | removed: the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them |
+| `StreamingMasteringChain.prepare` | removed: the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them. Pass an integer sampleRate to the constructor. A fractional rate raises RangeError instead of preparing successfully. |
 | `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
 
 #### Multichannel audio is planar: channels plus sampleRate
@@ -6573,6 +6618,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SuggestMixSceneRequest` | `MixingAssistantSuggestRequest` |
 | `TrimSilenceStereoResult` | `MasteringRepairTrimSilenceResult`: renamed to MasteringRepairTrimSilenceResult; shape {channels, reports} |
 
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingEqualizer.magnitudeResponse` | Pass lowerCamel placement tokens such as left in place of Left. |
+| `StreamingMasteringChain` | Pass an explicit StreamingMasteringChainConfig to the constructor. |
+
 #### Historical aliases are removed
 
 | 1.x | 2.0.0 |
@@ -6616,7 +6668,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError |
+| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError. Set denoise.enabled in its configuration object in place of a bare denoise boolean. |
 
 #### Other individual changes
 
@@ -6691,6 +6743,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'mod source must be a number or string' (1.x read each as its default) |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `EngineMeterTelemetry` | Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs. |
 
 #### A number outside its domain is refused, never passed through
 
@@ -6780,7 +6838,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineBus.channelLayout` | ChannelLayout name |
 | `EngineCaptureSource` | 'output' \| 'input' only |
 | `EngineGraphConnection.mix` | 'replace' \| 'add' instead of 0 \| 1; absent is add |
+| `EngineGraphMix` | Pass replace or add instead of 0 or 1. |
 | `EngineGraphNode.type` | 'passThrough' \| 'gain' instead of 0 \| 1 |
+| `EngineGraphNodeType` | Pass passThrough or gain instead of 0 or 1. |
 | `EngineMarker.kind` | MarkerKind name ('marker' \| 'text' \| 'lyric' \| 'cuePoint' \| 'keySignature'); a number is a TypeError |
 | `EngineParameterInfo.defaultCurve` | AutomationCurve name (was a number) |
 | `EngineTelemetry.error` | lowerCamel names of the engine telemetry errors instead of ordinals |
@@ -6819,16 +6879,18 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `EngineCaptureStatus` | Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
+| `RealtimeEngine.drainExternalMidi` | Read ExternalMidiEvent rows and handle an absent destinationId for broadcast events. |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
-| `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
+| `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). Edit the default master strip before any explicit strip settings. An insert still has to exist before it can be toggled. |
 | `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref. |
 | `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
+| `SynthParamInfo` | Handle the added dBTP unit where code exhaustively handles the unit union. |
 
 #### One-shot JavaScript calls take a request object
 
@@ -6890,6 +6952,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
+| `PlaybackRenderer.processPlanar` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
+| `PlaybackRenderer.renderOffline` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -7011,8 +7075,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.pushMidiInputProgram` | pushMidiInputProgram(group, channel, program, bank?, offsetInBlockSamples?) replaces bankValid, bankMsb and bankLsb |
 | `RealtimeEngine.pushMidiProgram` | pushMidiProgram(destinationId, group, channel, program, bank?: { msb, lsb }, renderFrame?) replaces bankValid, bankMsb and bankLsb |
 | `RealtimeEngine.setBusStripInsertBypassed` | `RealtimeEngine.setBusInsertBypassed`: setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass) |
-| `RealtimeEngine.setLoop` | setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled) |
-| `RealtimeEngine.setMasterStripInsertBypassed` | removed: Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? }). |
+| `RealtimeEngine.setLoop` | setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled). Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError. |
+| `RealtimeEngine.setMasterStripInsertBypassed` | removed: Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? }). A nonexistent insert on the default master strip raises RangeError before any explicit strip settings. The old call raised InvalidState when the master strip was absent. |
 | `RealtimeEngine.setTrackStripInsertBypassed` | `RealtimeEngine.setStripInsertBypassed`: setStripInsertBypassed(ref (a track id or 'master'), insertIndex, { bypassed, resetOnBypass? }) replaces setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass) |
 
 #### Mixer strips are addressed by StripRef
@@ -7026,7 +7090,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.clearMasterInsertParameterBases` | removed: Call clearStripInsertParameterBases('master'). |
 | `RealtimeEngine.clearTrackInsertParameterBases` | removed: Call clearStripInsertParameterBases(trackId). |
 | `RealtimeEngine.resolveMasterAutomationId` | removed: Call resolveStripAutomationId('master', kind) with kind 'faderDb', 'pan' or 'width'. |
-| `RealtimeEngine.resolveMasterInsertAutomationId` | removed: Call resolveStripInsertAutomationId('master', insertIndex, paramName). |
+| `RealtimeEngine.resolveMasterInsertAutomationId` | removed: Call resolveStripInsertAutomationId('master', insertIndex, paramName). A nonexistent insert on the default master strip raises RangeError before any explicit strip settings. The old call raised InvalidState when the master strip was absent. |
 | `RealtimeEngine.resolveTrackInsertAutomationId` | removed: Call resolveStripInsertAutomationId(trackId, insertIndex, paramName). |
 | `RealtimeEngine.resolveTrackLaneAutomationId` | removed: Call resolveStripAutomationId(trackId, kind) with kind 'faderDb', 'pan' or 'width'. |
 | `RealtimeEngine.setBusStripDualPan` | `RealtimeEngine.setBusDualPan` |
@@ -7060,6 +7124,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setTempoSegments` | takes readonly EngineTempoSegment[] |
 | `RealtimeEngine.setTimeSignatureSegments` | takes readonly EngineTimeSignatureSegment[] |
 
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `EngineClip` | Pass a ClipPageProvider instance; bare IDs and structural { id } objects are no longer accepted. |
+| `PartRigRequest` | Use a mode token instead of a numeric ordinal. |
+| `PlaybackTargetConfig` | Use left, right, center, leftSurround, rightSurround, leftSideSurround and rightSideSurround as speaker keys. |
+
 #### Each list input takes one item form
 
 | 1.x | 2.0.0 |
@@ -7086,12 +7158,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
 | `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
-| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. |
+| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError. |
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
 | `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void) |
-| `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. |
+| `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
 | `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); the destination id leads (absent or null is destination 0) and patch.destinationId is refused; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
 
@@ -7186,6 +7258,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ProjectVocalRehydrateItem.takeId` | absent for the base source instead of 0 |
 | `VocalApplyRequest.expectedGeneration` | optional; omitted means the draft current generation |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ProjectClip` | Check loopLengthPpq for undefined before using it and copy the record before editing the field. Read loopMode as ProjectLoopMode and copy the record before editing. Read sourceKind as ProjectSourceKind and copy the record before editing. |
+| `ProjectDiagnostic` | Read code as ProjectDiagnosticCode and copy the record before editing. Read severity as ProjectDiagnosticSeverity and copy the record before editing. Check targetId for undefined before using it and copy the record before editing the field. |
+| `ProjectMarker` | Read kind as ProjectMarkerKind and copy the record before editing. Check name for undefined before using it and copy the record before editing the field. |
+| `ProjectSource` | Check contentHash for undefined before using it and copy the record before editing the field. Check externalStemRole for undefined before using it and copy the record before editing the field. Read kind as ProjectSourceKind and copy the record before editing. |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -7220,7 +7301,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ProjectAutomationCurve` | the same tokens as AutomationCurve; an ordinal is a TypeError and the 'scurve' spelling is refused |
 | `ProjectChordSymbol.quality` | a ProjectChordQuality token instead of an ordinal; a number is refused with TypeError |
 | `ProjectKeySegment.mode` | a ProjectKeyMode token instead of an ordinal; a number is refused with TypeError |
+| `ProjectLoopMode` | Pass off or loop in place of numeric ordinals. |
 | `ProjectMidiCcBindingKind` | 'controlChange7' \| 'controlChange14' \| 'rpn' \| 'nrpn' (was 0 \| 1 \| 2 \| 3); an ordinal is a TypeError |
+| `ProjectTrackKind` | Pass audio, midi or aux in place of numeric ordinals. |
 | `ProjectVocalEditDependency.reason` | VocalReason token string instead of a number |
 | `ProjectVocalReason` | `VocalReason` |
 | `ProjectVocalRehydrateItem.reason` | VocalReason token string instead of a number |
@@ -7235,17 +7318,19 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.compile` | returns { diagnostics } with named codes and severities, plus timeline when withTimeline is set |
 | `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer |
 | `Project.exportSmf` | returns a plain Uint8Array, not a Buffer |
-| `Project.lastBounceCompileResult` | returns { diagnostics } only |
+| `Project.lastBounceCompileResult` | returns { diagnostics } only. Check for undefined when the most recent bounce has no compile result, including before the first bounce. |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
 | `ProjectMidiFxBakeRequest.configJson` | `ProjectMidiFxBakeRequest.config` |
 | `ProjectMidiFxPreviewRequest.configJson` | `ProjectMidiFxPreviewRequest.config` |
+| `ProjectTrack` | Read kind as ProjectTrackKind and copy the record before editing. |
 
 #### Public types never expose Wasm* names
 
 | 1.x | 2.0.0 |
 |---|---|
+| `VocalStateBytes` | removed: Use the Uint8Array returned by VocalEditSession.exportState() directly. There is no data wrapper. |
 | `VocalUint64` | removed: 64-bit counters in VocalStateToken are plain decimal strings |
 
 #### Cancellation uses signal for promises and cancel for sync calls
@@ -7466,6 +7551,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `ExternalSeparatedStem` | Pass mono or stereo instead of numeric channel-layout ordinals. |
+| `Project.rehydrateVocalEdits` | Move the former positional cancellation predicate into the second argument { cancel }. |
+| `ProjectMidiCcBinding` | Use controlChange7, controlChange14, rpn and nrpn in place of numeric kind ordinals. |
 | `VocalNote.analysisFrameEnd` | number instead of a decimal string |
 | `VocalNote.analysisFrameStart` | number instead of a decimal string |
 | `VocalRenderResult.cacheHitUnits` | number instead of a decimal string |

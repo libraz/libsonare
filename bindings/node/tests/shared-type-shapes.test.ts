@@ -19,21 +19,35 @@
 
 import { readFileSync } from 'node:fs';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AudioFormatCapabilities,
+  Capabilities,
   CapabilityCatalog,
   CapabilityCatalogChain,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   CapabilityCatalogPresets,
+  ChordSymbolFields,
   DynamicsProcessorResult,
   DynamicsResult,
+  EngineBounceResult,
+  MasteringInsertParamChoice,
+  MasteringInsertParamDependency,
   MasteringInsertParamInfo,
   MasteringInsertSlot,
+  MasteringInsertTiming,
   MasteringPresetCatalogEntry,
   MasteringProcessorCatalogEntry,
   MeterEstimate,
+  ProjectChordSymbol,
+  ProjectClip,
+  ProjectDiagnostic,
+  ProjectMarker,
+  ProjectSource,
+  ProjectTempoCandidate,
+  ProjectTrack,
+  VocalStateToken,
 } from '../src/index.js';
 
 interface SharedTypeShapes {
@@ -47,6 +61,14 @@ const shapes = JSON.parse(
     'utf8',
   ),
 ) as SharedTypeShapes;
+
+type Equal<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
+    ? (<Value>() => Value extends Right ? 1 : 2) extends <Value>() => Value extends Left ? 1 : 2
+      ? true
+      : false
+    : false;
+type IsReadonly<T, Key extends keyof T> = Equal<Pick<T, Key>, Readonly<Pick<T, Key>>>;
 
 // Exact by construction: `satisfies` rejects a missing or extra field, so these
 // literals cannot drift from the interfaces without a compile error.
@@ -216,5 +238,49 @@ describe('capability catalog type shapes', () => {
     ['AudioFormatCapabilities', catalogEncode],
   ] as const)('%s is the shape the shared corpus declares', (name, sample) => {
     expect(Object.keys(sample).sort()).toEqual([...shapes.types[name]].sort());
+  });
+});
+
+describe('readonly result record migration', () => {
+  it('CapabilityCatalogPresets migration: readonly records and arrays require copies', () => {
+    expectTypeOf<IsReadonly<Capabilities, 'version'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<CapabilityCatalog, 'version'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<CapabilityCatalogChain, 'stages'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<CapabilityCatalogChainList, 'key'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<CapabilityCatalogChainStage, 'prefix'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<CapabilityCatalogPresets, 'mastering'>>().toEqualTypeOf<true>();
+    expectTypeOf<CapabilityCatalogPresets['mastering']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<CapabilityCatalogPresets['synth']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<CapabilityCatalogPresets['mixingScene']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<CapabilityCatalogPresets['voiceChanger']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<CapabilityCatalogPresets['playbackRoom']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<CapabilityCatalog['processors']>().toEqualTypeOf<
+      readonly MasteringProcessorCatalogEntry[]
+    >();
+    expectTypeOf<CapabilityCatalog['masteringPresets']>().toEqualTypeOf<
+      readonly MasteringPresetCatalogEntry[]
+    >();
+    expectTypeOf<CapabilityCatalogChain['lists']>().toEqualTypeOf<
+      readonly CapabilityCatalogChainList[]
+    >();
+    expectTypeOf<CapabilityCatalogChain['params']>().toEqualTypeOf<
+      readonly MasteringInsertParamInfo[]
+    >();
+    expectTypeOf<IsReadonly<MasteringInsertParamChoice, 'name'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<MasteringInsertParamDependency, 'key'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<MasteringInsertSlot, 'name'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<MasteringInsertTiming, 'latencySamples'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<EngineBounceResult, 'channels'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<ProjectClip, 'id'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<ProjectDiagnostic, 'code'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<ProjectMarker, 'id'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<ProjectSource, 'id'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<ProjectTempoCandidate, 'bpm'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<ProjectTrack, 'id'>>().toEqualTypeOf<true>();
+    expectTypeOf<IsReadonly<VocalStateToken, 'sessionEpoch'>>().toEqualTypeOf<true>();
+    expectTypeOf<ProjectChordSymbol['extensions']>().toEqualTypeOf<
+      ReadonlyArray<number> | undefined
+    >();
+    expectTypeOf<ChordSymbolFields['extensions']>().toEqualTypeOf<ReadonlyArray<number>>();
   });
 });

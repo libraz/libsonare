@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { ChordSymbolFields, ProjectChordQuality } from '../src/index.js';
 import { type ChordFunctionsInput, chordFunctions, detectChords } from '../src/index.js';
 
 const SAMPLE_RATE = 22050;
@@ -166,5 +167,12 @@ describe('chordFunctions refuses a malformed request by the field the caller wro
     }
     expect(caught).toBeInstanceOf(errorClass);
     expect((caught as Error).message).toBe(`chordFunctions: ${text}`);
+  });
+});
+
+describe('chord annotation records', () => {
+  it('exposes a chord symbol quality token instead of an ordinal', () => {
+    expectTypeOf<ChordSymbolFields['quality']>().toEqualTypeOf<ProjectChordQuality>();
+    expectTypeOf<number>().not.toExtend<ChordSymbolFields['quality']>();
   });
 });

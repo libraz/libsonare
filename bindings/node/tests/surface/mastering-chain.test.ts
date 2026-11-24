@@ -698,13 +698,19 @@ describe('chain config: nested form only, tokens only', () => {
     ).not.toThrow();
   });
 
-  it('types: the config is closed over tokens', () => {
+  it('MasteringChainConfig uses a nested denoise object and closed token fields', () => {
     expectTypeOf<
       NonNullable<MasteringChainConfig['repair']>['denoise']
     >().not.toMatchTypeOf<boolean>();
     expectTypeOf<
       NonNullable<NonNullable<NonNullable<MasteringChainConfig['repair']>['denoise']>['mode']>
     >().toEqualTypeOf<'logMmse' | 'mmseStsa' | 'spectralSubtraction'>();
+    const booleanDenoise = () => {
+      // @ts-expect-error denoise takes its configuration object, not a boolean shorthand
+      const config: MasteringChainConfig = { repair: { denoise: true } };
+      return config;
+    };
+    expect(typeof booleanDenoise).toBe('function');
   });
 });
 

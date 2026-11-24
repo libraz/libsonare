@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
@@ -994,5 +994,11 @@ describe('synth parameter descriptors', () => {
         field.name === 'oneShot' && field.type === 'boolean',
     );
     expect(oneShot?.type).toBe('boolean');
+  });
+});
+
+describe('synth parameter metadata', () => {
+  it('includes dBTP in the synth parameter unit vocabulary', () => {
+    expectTypeOf<Extract<SynthParamInfo['unit'], 'dBTP'>>().toEqualTypeOf<'dBTP'>();
   });
 });

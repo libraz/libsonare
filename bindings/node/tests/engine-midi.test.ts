@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { ExternalMidiEvent } from '../src/index.js';
 import { ErrorCode, isSonareError, RealtimeEngine } from '../src/index.js';
 import { midi1Word, rms } from './_engine_signals.js';
 
@@ -535,5 +536,14 @@ describe('live MIDI push argument and state rule', () => {
     } finally {
       engine.destroy();
     }
+  });
+});
+
+describe('external MIDI records', () => {
+  it('drains byte arrays and permits broadcast events without a destination', () => {
+    type Event = ReturnType<RealtimeEngine['drainExternalMidi']>[number];
+    expectTypeOf<Event>().toEqualTypeOf<ExternalMidiEvent>();
+    expectTypeOf<Event['bytes']>().toEqualTypeOf<number[]>();
+    expectTypeOf<{}>().toExtend<Pick<Event, 'destinationId'>>();
   });
 });

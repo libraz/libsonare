@@ -913,7 +913,6 @@ export type {
   VocalSetSourceSpanOperation,
   VocalSetTransitionOperation,
   VocalSplitOperation,
-  VocalStateBytes,
   VocalStateToken,
   VocalTransition,
 } from './types_vocal_edit.js';

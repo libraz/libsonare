@@ -1,7 +1,23 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, RealtimeEngine, SampleBank } from '../../dist/index.js';
-import type { EngineLoop, MixSceneStrip, RealtimeEngineConfig } from '../../dist/types.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  type ClipPageProvider,
+  ErrorCode,
+  isSonareError,
+  RealtimeEngine,
+  SampleBank,
+} from '../../dist/index.js';
+import type {
+  EngineClip,
+  EngineGraphMix,
+  EngineGraphNodeType,
+  EngineLoop,
+  MixSceneStrip,
+  PartRigMode,
+  PartRigRequest,
+  ProjectMidiCcBinding,
+  RealtimeEngineConfig,
+} from '../../dist/types.js';
 import { unknownKeyError } from '../_helpers.js';
 
 interface MarkerIdStep {
@@ -335,11 +351,36 @@ describe('RealtimeEngine closed sets are names', () => {
         nodes: [{ id: 'in', type: 1 as never, numPorts: 2 }, ...spec.nodes.slice(1)],
       };
       expect(caught(() => engine.setGraph(numeric))).toBeInstanceOf(TypeError);
+      const numericMix = {
+        ...spec,
+        connections: [{ ...spec.connections[0], mix: 1 as never }],
+      };
+      expect(caught(() => engine.setGraph(numericMix))).toBeInstanceOf(TypeError);
       const unknown = {
         ...spec,
         connections: [{ ...spec.connections[0], mix: 'sum' as never }],
       };
       expect(caught(() => engine.setGraph(unknown))).toBeInstanceOf(RangeError);
+    });
+  });
+
+  it('EngineGraphNodeType is a named token set', () => {
+    expectTypeOf<EngineGraphNodeType>().toEqualTypeOf<'passThrough' | 'gain'>();
+  });
+
+  it('EngineGraphMix is a named token set', () => {
+    expectTypeOf<EngineGraphMix>().toEqualTypeOf<'replace' | 'add'>();
+  });
+
+  it('EngineClip.pageProvider requires a ClipPageProvider instance', () => {
+    expectTypeOf<EngineClip['pageProvider']>().toEqualTypeOf<ClipPageProvider | undefined>();
+    withEngine((engine) => {
+      for (const pageProvider of [7, { id: 7 }]) {
+        const refuse = () =>
+          engine.setClips([{ id: 1, startPpq: 0, pageProvider: pageProvider as never }]);
+        expect(refuse).toThrow(TypeError);
+        expect(refuse).toThrow(/pageProvider must be a ClipPageProvider instance/);
+      }
     });
   });
 
@@ -965,6 +1006,25 @@ describe('RealtimeEngine instruments and MIDI', () => {
           }),
         ),
       ).toBeInstanceOf(TypeError);
+    });
+  });
+
+  it('PartRigRequest.mode excludes numeric ordinals', () => {
+    expectTypeOf<PartRigRequest['mode']>().toEqualTypeOf<PartRigMode>();
+  });
+
+  it('ProjectMidiCcBinding uses named controller-kind tokens', () => {
+    expectTypeOf<ProjectMidiCcBinding['kind']>().toEqualTypeOf<
+      'controlChange7' | 'controlChange14' | 'rpn' | 'nrpn' | undefined
+    >();
+    withEngine((engine) => {
+      engine.addParameter({ id: 1, name: 'gain' });
+      expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 1, kind: 0 } as never)).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.bindMidiCc({ ccNumber: 7, paramId: 1, kind: 'controlChange7' }),
+      ).not.toThrow();
     });
   });
 

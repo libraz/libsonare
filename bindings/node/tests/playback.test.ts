@@ -198,7 +198,7 @@ describe('PlaybackRenderer processing', () => {
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const planes = [new Float32Array(32), new Float32Array(32), new Float32Array(32)];
-    expect(() => renderer.processPlanar(planes)).toThrow();
+    expect(() => renderer.processPlanar(planes)).toThrow(RangeError);
   });
 });
 

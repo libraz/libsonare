@@ -1,5 +1,11 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { ErrorCode, type ErrorCodeName, isSonareError, SonareError } from '../../dist/index.js';
+import {
+  ErrorCode,
+  type ErrorCodeName,
+  isSonareError,
+  SonareError,
+  type SonareErrorOptions,
+} from '../../dist/index.js';
 
 const expectedTable: Record<string, number> = {
   Ok: 0,
@@ -91,7 +97,10 @@ describe('SonareError', () => {
     expect(cloned instanceof SonareError).toBe(true);
   });
 
-  it('takes (code, message, options) only', () => {
+  it('takes the migrated (code, message, options) constructor shape only', () => {
+    expectTypeOf<ConstructorParameters<typeof SonareError>>().toEqualTypeOf<
+      [ErrorCode, string, SonareErrorOptions?]
+    >();
     // Type-level only: the closure is never called.
     const legacyForm = () =>
       // @ts-expect-error the codeName argument is gone

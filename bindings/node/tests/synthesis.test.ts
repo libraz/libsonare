@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { chirp, clicks, tone } from '../src/index.js';
 
 describe('synthetic audio generation', () => {
+  it('uses the documented defaults when tone and chirp requests are omitted', () => {
+    expect(tone()).toHaveLength(22050);
+    expect(tone(undefined)).toEqual(tone({}));
+    expect(chirp()).toHaveLength(22050);
+    expect(chirp(undefined)).toEqual(chirp({ linear: false }));
+  });
+
   it('generates tone, chirp, and clicks', () => {
     expect(tone({ frequencyHz: 440, sampleRate: 22050, durationSec: 0.01 })).toHaveLength(220);
     expect(chirp({ fminHz: 200, fmaxHz: 800, sampleRate: 22050, durationSec: 0.01 })).toHaveLength(

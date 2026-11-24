@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { MasteringAmpPresetCatalogEntry, MasteringInsertParamUnit } from '../src/index.js';
 import {
   capabilityCatalog,
   Mixer,
@@ -325,5 +326,18 @@ describe('insert timing takes the document an insert is built from', () => {
         sampleRate: 48000,
       }),
     ).toThrow();
+  });
+});
+
+describe('mastering catalog declarations', () => {
+  it('lists amp preset controls as named optional parameters', () => {
+    type Params = MasteringAmpPresetCatalogEntry['params'];
+    expectTypeOf<{}>().toExtend<Pick<Params, 'drive'>>();
+    expectTypeOf<Params['drive']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<string>().not.toExtend<keyof Params>();
+  });
+
+  it('includes dBTP in the closed insert unit vocabulary', () => {
+    expectTypeOf<Extract<MasteringInsertParamUnit, 'dBTP'>>().toEqualTypeOf<'dBTP'>();
   });
 });

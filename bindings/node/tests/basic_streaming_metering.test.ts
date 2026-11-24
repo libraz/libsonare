@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { StreamStats } from '../src/index.js';
 import {
   Audio,
   deemphasis,
@@ -1314,5 +1315,14 @@ describe('StreamAnalyzer chord and key names', () => {
     expect(estimate.key).toBeUndefined();
     expect(estimate.chord).toBeUndefined();
     analyzer.destroy();
+  });
+});
+
+describe('stream stats records', () => {
+  it('returns StreamStats with durationSec and no durationSeconds', () => {
+    type Stats = ReturnType<StreamAnalyzer['stats']>;
+    expectTypeOf<Stats>().toEqualTypeOf<StreamStats>();
+    expectTypeOf<Stats['durationSec']>().toEqualTypeOf<number>();
+    expectTypeOf<'durationSeconds'>().not.toExtend<keyof Stats>();
   });
 });

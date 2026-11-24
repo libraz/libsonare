@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { analyze, analyzeDynamics, analyzeMelody } from '../src/index.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { type AnalysisMelody, analyze, analyzeDynamics, analyzeMelody } from '../src/index.js';
 
 const SR = 22050;
 
@@ -160,5 +160,15 @@ describe('analyzeMelody pYIN / center', () => {
     const samples = generateSine(220, SR, 1);
     const melody = analyzeMelody(samples, SR);
     expect(Array.isArray(melody.points)).toBe(true);
+  });
+});
+
+describe('analysis melody records', () => {
+  it('names pitch contour time and frequency with their units', () => {
+    type Point = AnalysisMelody['pitches'][number];
+    expectTypeOf<Point['timeSec']>().toEqualTypeOf<number>();
+    expectTypeOf<{}>().toExtend<Pick<Point, 'frequencyHz'>>();
+    expectTypeOf<Point['frequencyHz']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<Extract<keyof Point, 'time' | 'frequency'>>().toEqualTypeOf<never>();
   });
 });

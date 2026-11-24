@@ -1646,7 +1646,7 @@ export class RealtimeEngine {
    * buffers are never mutated: the addon copies each plane before adding engine
    * output. Pass zero-filled planes when the engine is the only audio source.
    */
-  process(channels: Float32Array[]): Float32Array[];
+  process(channels: Float32Array[], options?: { withMonitor?: false }): Float32Array[];
   /**
    * Renders one block like the plain form, and also returns the monitor (cue/listen) bus output.
    * Audio thread only; each plane must not exceed the prepared block size.

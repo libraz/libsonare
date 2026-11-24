@@ -674,6 +674,29 @@ describe('geometric room acoustics', () => {
       /^roomMorph: airHumidityPercent must be finite and in \[0, 100\]$/,
     );
   });
+
+  it('enables air absorption by default in both room morphs', () => {
+    const samples = new Float32Array(4000);
+    samples[0] = 1;
+    const target = { ...airHall, maxSec: 0.3, wet: 1, sourceTailSuppression: 0.5 };
+    const mono = (airAbsorptionEnabled?: boolean) =>
+      roomMorph({ samples, sampleRate: 48000, ...target, airAbsorptionEnabled }).audio;
+    const stereo = (airAbsorptionEnabled?: boolean) =>
+      roomMorphStereo({
+        left: samples,
+        right: samples,
+        sampleRate: 48000,
+        ...target,
+        airAbsorptionEnabled,
+      });
+    expect(mono()).toEqual(mono(true));
+    expect(mono()).not.toEqual(mono(false));
+    const omittedStereo = stereo();
+    expect(omittedStereo).toEqual(stereo(true));
+    const disabledStereo = stereo(false);
+    expect(omittedStereo.left).not.toEqual(disabledStereo.left);
+    expect(omittedStereo.right).not.toEqual(disabledStereo.right);
+  });
 });
 
 describe('named selectors and estimate-to-geometry', () => {
@@ -792,7 +815,9 @@ describe('named selectors and estimate-to-geometry', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(silent.lengthM).toBeUndefined();
     // The estimate's absent geometry reaches the library, which refuses the room, not a field.
-    expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(
+    expectRefusal(
+      () => roomGeometryFromEstimate({ estimate: silent }),
+      RangeError,
       /^roomGeometryFromEstimate: room estimate has no measurable dimensions/,
     );
   });

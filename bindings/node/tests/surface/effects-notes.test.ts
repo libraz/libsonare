@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import * as sonare from '../../dist/index.js';
 import {
   Audio,
   autoTune,
+  type DecomposeNotePitchRequest,
+  type ExtractNotesRequest,
   extractNotes,
   extractPercussiveEvents,
   mergeNotes,
@@ -12,6 +14,7 @@ import {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchShift,
+  type RenderNotesRequest,
   renderNotes,
   renderPercussiveEvents,
   scaleCorrectionSemitones,
@@ -176,6 +179,21 @@ describe('effects notes surface', () => {
       return undefined as unknown as Removed;
     };
     expect(typeof typesOnly).toBe('function');
+  });
+
+  it('DecomposeNotePitchRequest.voiced is optional and non-nullable', () => {
+    expectTypeOf<DecomposeNotePitchRequest['voiced']>().toEqualTypeOf<
+      sonare.VoicedFlags | undefined
+    >();
+  });
+
+  it('ExtractNotesRequest voicing fields are optional and non-nullable', () => {
+    expectTypeOf<ExtractNotesRequest['voiced']>().toEqualTypeOf<sonare.VoicedFlags | undefined>();
+    expectTypeOf<ExtractNotesRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+  });
+
+  it('RenderNotesRequest.voiced is optional and non-nullable', () => {
+    expectTypeOf<RenderNotesRequest['voiced']>().toEqualTypeOf<sonare.VoicedFlags | undefined>();
   });
 
   it.each([

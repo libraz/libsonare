@@ -100,6 +100,12 @@ describe('StreamingEqualizer.setAutoGain', () => {
 });
 
 describe('StreamingMasteringChain.constructor', () => {
+  it('requires an explicit StreamingMasteringChainConfig in the constructor type', () => {
+    expectTypeOf<ConstructorParameters<typeof StreamingMasteringChain>>().toEqualTypeOf<
+      [StreamingMasteringChainConfig]
+    >();
+  });
+
   it.each([
     ['no config', undefined, TypeError, /config/],
     ['no sampleRate', { eq: { tilt: { tiltDb: 1 } }, numChannels: 1 }, TypeError, /sampleRate/],
@@ -273,8 +279,11 @@ describe('EqStereoPlacement', () => {
   const freqs = new Float32Array([100, 1000, 10000]);
   const mid = { type: 'peak', frequencyHz: 1000, gainDb: 6, q: 1, enabled: true, placement: 'mid' };
 
-  it('takes the five lowerCamel tokens, default stereo', () => {
+  it('StreamingEqualizer.magnitudeResponse takes an optional named placement token', () => {
     expectTypeOf<EqStereoPlacement>().toEqualTypeOf<'stereo' | 'left' | 'right' | 'mid' | 'side'>();
+    expectTypeOf<Parameters<StreamingEqualizer['magnitudeResponse']>>().toEqualTypeOf<
+      [Float32Array, EqStereoPlacement?]
+    >();
     const eq = new StreamingEqualizer({ sampleRate });
     try {
       eq.setBand(0, mid as never);

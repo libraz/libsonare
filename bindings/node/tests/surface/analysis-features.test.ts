@@ -1027,3 +1027,48 @@ describe('noteSegments voicing input', () => {
     ).toThrow(TypeError);
   });
 });
+
+describe('public request and constructor migration pins', () => {
+  it('EqBandInput uses the current named token vocabulary', () => {
+    expectTypeOf<sonare.EqBandInput['type']>().toEqualTypeOf<sonare.EqBandType | undefined>();
+    expectTypeOf<sonare.EqBandInput['coeffMode']>().toEqualTypeOf<sonare.EqCoeffMode | undefined>();
+    expectTypeOf<sonare.EqBandInput['phase']>().toEqualTypeOf<sonare.EqBandPhase | undefined>();
+    expectTypeOf<sonare.EqBandInput['placement']>().toEqualTypeOf<
+      sonare.EqStereoPlacement | undefined
+    >();
+    // @ts-expect-error lookaheadMs was removed from the band request
+    type Removed = sonare.EqBandInput['lookaheadMs'];
+    expectTypeOf<Removed>().not.toBeNever();
+  });
+
+  it('PlaybackTargetConfig uses speaker-role names as keys', () => {
+    type SpeakerRole = keyof NonNullable<sonare.PlaybackTargetConfig['speakers']>;
+    expectTypeOf<SpeakerRole>().toEqualTypeOf<
+      | 'left'
+      | 'right'
+      | 'center'
+      | 'leftSurround'
+      | 'rightSurround'
+      | 'leftSideSurround'
+      | 'rightSideSurround'
+    >();
+  });
+
+  it('RoomEstimateOptions uses named acoustic modes', () => {
+    expectTypeOf<sonare.RoomEstimateOptions['mode']>().toEqualTypeOf<
+      'auto' | 'blind' | 'impulseResponse' | undefined
+    >();
+    expect(() => sonare.estimateRoom({ samples, sampleRate, mode: 1 as never })).toThrow(TypeError);
+  });
+
+  it('StreamAnalyzer requires a StreamConfig at construction', () => {
+    expectTypeOf<ConstructorParameters<typeof sonare.StreamAnalyzer>>().toEqualTypeOf<
+      [StreamConfig]
+    >();
+    const noConfig = () => {
+      // @ts-expect-error StreamAnalyzer no longer supplies a default config
+      new sonare.StreamAnalyzer();
+    };
+    expect(typeof noConfig).toBe('function');
+  });
+});

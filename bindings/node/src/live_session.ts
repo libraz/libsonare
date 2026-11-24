@@ -23,11 +23,9 @@ function notCompiledIn(): never {
 @entryClass('LiveSession')
 export class LiveSession implements Disposable {
   /**
-   * @param engine - Engine that a live device session would drive.
-   * @param config - Device selections and negotiated audio settings.
+   * @param config - Engine to drive, device selections and negotiated audio settings.
    */
-  constructor(engine: RealtimeEngine, config: LiveSessionConfig) {
-    void engine;
+  constructor(config: LiveSessionConfig & { readonly engine: RealtimeEngine }) {
     void config;
     notCompiledIn();
   }

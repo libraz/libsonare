@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { ErrorCode } from '../src/errors.js';
+import type {
+  RealtimeVoiceChangerPreset,
+  RealtimeVoiceChangerPresetMetadata,
+} from '../src/index.js';
 import {
   RealtimeVoiceChanger,
   type RealtimeVoiceChangerConfig,
@@ -296,5 +300,19 @@ describe('RealtimeVoiceChanger config read', () => {
       viaConstructor.destroy();
       viaSetter.destroy();
     }
+  });
+});
+
+describe('voice changer preset document types', () => {
+  it('uses schema version four on preset documents', () => {
+    expectTypeOf<RealtimeVoiceChangerPreset['schemaVersion']>().toEqualTypeOf<4>();
+    expect(JSON.parse(realtimeVoiceChangerPresetJson('brightIdol')).schemaVersion).toBe(4);
+  });
+
+  it('uses schema version four in preset metadata', () => {
+    expectTypeOf<RealtimeVoiceChangerPresetMetadata['schemaVersion']>().toEqualTypeOf<4>();
+    expectTypeOf<{ schemaVersion: 1 }>().not.toExtend<
+      Pick<RealtimeVoiceChangerPresetMetadata, 'schemaVersion'>
+    >();
   });
 });

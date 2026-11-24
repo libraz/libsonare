@@ -78,6 +78,14 @@ rule = "error-class-by-cause"
 test = "bindings/node/tests/surface/core-errors.test.ts::derives codeName from code and keeps the cause"
 
 [[entry]]
+kind = "class"
+old = "SonareError"
+changed = "Pass (code, message, options?) instead of (code, codeName, message); codeName is derived from the ErrorCode."
+domain = "core"
+rule = "input-types"
+test = "bindings/node/tests/surface/core-errors.test.ts::takes the migrated (code, message, options) constructor shape only"
+
+[[entry]]
 kind = "function"
 old = "vocalEditApiVersion"
 to = "vocalEditAbiVersion"
@@ -152,11 +160,27 @@ test = "bindings/node/tests/surface/core-types.test.ts::shares one catalog type 
 
 [[entry]]
 kind = "type"
+old = "MasteringAmpPresetCatalogEntry"
+changed = "Read named optional amplifier parameters, and handle absence instead of indexing an arbitrary string key."
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/node/tests/insert-catalog-timing.test.ts::lists amp preset controls as named optional parameters"
+
+[[entry]]
+kind = "type"
 old = "MasteringInsertParamInfo"
 changed = "every field and array is readonly; copy before mutating"
 domain = "mastering"
 rule = "type-names"
 test = "bindings/node/tests/surface/core-types.test.ts::shares one catalog type family"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamUnit"
+changed = "Handle the added dBTP unit in exhaustive switches over catalog units."
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/node/tests/insert-catalog-timing.test.ts::includes dBTP in the closed insert unit vocabulary"
 
 [[entry]]
 kind = "method"
@@ -260,6 +284,13 @@ domain = "project"
 rule = "abi-probes"
 
 [[entry]]
+kind = "type"
+old = "VocalStateBytes"
+removed = "Use the Uint8Array returned by VocalEditSession.exportState() directly. There is no data wrapper."
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
 kind = "function"
 old = "amplitudeToDb"
 changed = "request-only: amplitudeToDb(request: AmplitudeToDbRequest)"
@@ -278,10 +309,10 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sa
 [[entry]]
 kind = "function"
 old = "chirp"
-changed = "request-only: chirp(request: ChirpRequest)"
+changed = "request-only: chirp(request?: ChirpRequest). Omit the request for the default chirp."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+test = "bindings/node/tests/synthesis.test.ts::uses the documented defaults when tone and chirp requests are omitted"
 
 [[entry]]
 kind = "function"
@@ -843,11 +874,27 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes the scalar 
 
 [[entry]]
 kind = "function"
+old = "hzToNote"
+changed = "A non-positive or nonfinite frequency raises RangeError instead of SonareError InvalidParameter."
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/basic_effects_features.test.ts::hzToNote(%d) is refused with a RangeError"
+
+[[entry]]
+kind = "function"
+old = "noteToHz"
+changed = "An invalid note name raises RangeError instead of SonareError InvalidParameter."
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/basic_effects_features.test.ts::noteToHz(%j) is refused with a RangeError"
+
+[[entry]]
+kind = "function"
 old = "tone"
-changed = "request-only: tone(request: ToneRequest)"
+changed = "request-only: tone(request?: ToneRequest). Omit the request for the default tone."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+test = "bindings/node/tests/synthesis.test.ts::uses the documented defaults when tone and chirp requests are omitted"
 
 [[entry]]
 kind = "function"
@@ -2071,7 +2118,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "option"
 old = "peakPick(delta)"
-removed = "pass delta as a field of PeakPickRequest"
+removed = "pass delta as a field of PeakPickRequest. Use a finite delta. NaN and Infinity raise RangeError."
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -3143,10 +3190,10 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "EqBandInput"
-changed = "closed-set fields take the core EqBandType / EqCoeffMode / EqBandPhase unions (lowerCamel tokens); lookaheadMs removed"
+changed = "The closed-set fields take the core EqBandType, EqCoeffMode and EqBandPhase unions. Remove lookaheadMs and use lowerCamel EqStereoPlacement tokens such as stereo in place of Stereo."
 domain = "core"
 rule = "token-case"
-test = "bindings/node/tests/surface/analysis-features.test.ts::declares result types without loose dimensions"
+test = "bindings/node/tests/surface/analysis-features.test.ts::EqBandInput uses the current named token vocabulary"
 
 [[entry]]
 kind = "type"
@@ -3341,6 +3388,14 @@ old = "StreamAnalyzerConfig"
 new = "StreamConfig"
 domain = "analysis"
 rule = "type-names"
+
+[[entry]]
+kind = "class"
+old = "StreamAnalyzer"
+changed = "Pass an explicit StreamConfig to the constructor."
+domain = "analysis"
+rule = "input-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::StreamAnalyzer requires a StreamConfig at construction"
 
 [[entry]]
 kind = "type"
@@ -3617,6 +3672,14 @@ old = "LufsResult.loudnessRange"
 new = "LufsResult.loudnessRangeLu"
 domain = "analysis"
 rule = "loudness-names"
+
+[[entry]]
+kind = "type"
+old = "LufsResult"
+changed = "Handle undefined in maxMomentaryLufs, maxShortTermLufs, momentaryLufs, shortTermLufs."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::LufsResult migration: short-signal windows can be omitted"
 
 [[entry]]
 kind = "field"
@@ -4917,10 +4980,10 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::reports progress thr
 [[entry]]
 kind = "function"
 old = "analyzeAsync"
-changed = "request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required; a rejection is named like a synchronous throw (analyzeAsync: samples must be a Float32Array), where 1.x rejected with the addon's bare text"
+changed = "request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required; a rejection is named like a synchronous throw (analyzeAsync: samples must be a Float32Array), where 1.x rejected with the addon's bare text. Invalid hop lengths and FFT sizes reject with RangeError instead of SonareError InvalidParameter."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/async.test.ts::analyzeAsync: samples must be a Float32Array"
+test = "bindings/node/tests/async.test.ts::rejects a refused argument as RangeError"
 
 [[entry]]
 kind = "function"
@@ -4988,10 +5051,10 @@ rule = "progress-callback"
 [[entry]]
 kind = "function"
 old = "chordFunctionalAnalysis"
-changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields)"
+changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields). Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "bindings/node/tests/analysis_tuning.test.ts::measures the tuning by default and reads the triads and key from it"
 
 [[entry]]
 kind = "function"
@@ -5028,10 +5091,10 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "detectChords"
-changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest"
+changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest. Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "bindings/node/tests/chord_functions.test.ts::defaults to the triads-only, HMM, CQT configuration"
 
 [[entry]]
 kind = "function"
@@ -5044,18 +5107,18 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "bindings/node/tests/analysis_tuning.test.ts::measures the tuning by default and reads the triads and key from it"
 
 [[entry]]
 kind = "function"
 old = "detectKeyCandidates"
-changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest"
+changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "bindings/node/tests/analysis_tuning.test.ts::measures the tuning by default and reads the triads and key from it"
 
 [[entry]]
 kind = "function"
@@ -5761,6 +5824,14 @@ domain = "analysis"
 rule = "loudness-names"
 
 [[entry]]
+kind = "type"
+old = "AnalysisDynamics"
+changed = "Check crestFactor for undefined before using it as a number; an unmeasured crest factor is absent. Check dynamicRangeDb for undefined before using it as a number; an unmeasured dynamic range is absent."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::AnalysisDynamics migration: dynamicRangeDb and crestFactor can be omitted"
+
+[[entry]]
 kind = "field"
 old = "AnalysisMelody.meanFrequency"
 changed = "unit in the name; optional, absent when no frame is voiced (was NaN)"
@@ -5777,6 +5848,14 @@ to = "AnalysisMelody.vibratoRateHz"
 domain = "analysis"
 rule = "unit-in-name"
 test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the melody measures on silence"
+
+[[entry]]
+kind = "type"
+old = "AnalysisMelody"
+changed = "Read timeSec and frequencyHz on MelodyPoint instead of time and frequency on the old pitch rows. Handle an absent frequencyHz for an unvoiced point."
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/node/tests/analysis-full.test.ts::names pitch contour time and frequency with their units"
 
 [[entry]]
 kind = "field"
@@ -5799,6 +5878,14 @@ old = "AnalysisResult.downbeatIndices"
 new = "AnalysisResult.downbeats"
 domain = "analysis"
 rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "AnalysisResult"
+changed = "Read startSec and endSec in place of start and end, and read the section type as a token. Check brightness, warmth, density, roughness and complexity for absence before using them as numbers."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::AnalysisResult migration: section positions and optional timbre measures"
 
 [[entry]]
 kind = "field"
@@ -6345,6 +6432,14 @@ old = "DynamicsResult.loudnessRangeDb"
 new = "DynamicsResult.loudnessRangeLu"
 domain = "analysis"
 rule = "loudness-names"
+
+[[entry]]
+kind = "type"
+old = "DynamicsResult"
+changed = "Handle undefined in crestFactor, dynamicRangeDb."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::DynamicsResult migration: dynamicRangeDb and crestFactor can be omitted"
 
 [[entry]]
 kind = "field"
@@ -6975,6 +7070,14 @@ test = "bindings/node/tests/surface/analysis-stream.test.ts::as getters"
 
 [[entry]]
 kind = "method"
+old = "StreamAnalyzer.stats"
+changed = "Read the StreamStats result and use durationSec in place of durationSeconds."
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/node/tests/basic_streaming_metering.test.ts::returns StreamStats with durationSec and no durationSeconds"
+
+[[entry]]
+kind = "method"
 old = "StreamAnalyzer.setTuningRefHz"
 new = "StreamAnalyzer.setReferenceHz"
 domain = "analysis"
@@ -7004,15 +7107,15 @@ rule = "unit-in-name"
 [[entry]]
 kind = "function"
 old = "decodeChannels"
-changed = "parameter typed Uint8Array (was any)"
+changed = "parameter typed Uint8Array (was any). An empty input buffer raises RangeError instead of SonareError InvalidParameter."
 domain = "analysis"
 rule = "input-types"
-test = "bindings/node/tests/surface/analysis-audio.test.ts::types its argument as Uint8Array"
+test = "bindings/node/tests/decode_channels.test.ts::refuses bytes that are not audio and empty input"
 
 [[entry]]
 kind = "method"
 old = "Audio.fromFileChannel"
-removed = "Call Audio.fromFile(path, channelIndex)."
+removed = "Call Audio.fromFile(path, channelIndex). Catch RangeError if the channel does not exist. The equivalent 1.x call raised SonareError InvalidParameter."
 domain = "core"
 rule = "one-entry-per-operation"
 
@@ -7102,6 +7205,14 @@ changed = "takes (options?: Omit<RmsEnergyRequest,'samples'|'sampleRate'>)"
 domain = "core"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.crestFactorDb"
+changed = "Check the result for undefined before using it as a number; silence has no crest factor."
+domain = "core"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::Audio.crestFactorDb migration: silence returns an absent measurement"
 
 [[entry]]
 kind = "method"
@@ -7576,10 +7687,10 @@ test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as get
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setLoop"
-changed = "setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled)"
+changed = "setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled). Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError."
 domain = "engine"
 rule = "no-positional-bools"
-test = "bindings/node/tests/surface/engine.test.ts::sets the loop from one object"
+test = "bindings/node/tests/engine-capture-timing.test.ts::refuses a shorter loop or faster tempo that invalidates the armed capture offset"
 
 [[entry]]
 kind = "method"
@@ -7845,12 +7956,28 @@ rule = "string-closed-sets"
 test = "bindings/node/tests/surface/engine.test.ts::names graph node types and mixing intents"
 
 [[entry]]
+kind = "type"
+old = "EngineGraphNodeType"
+changed = "Pass passThrough or gain instead of 0 or 1."
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::EngineGraphNodeType is a named token set"
+
+[[entry]]
 kind = "field"
 old = "EngineGraphConnection.mix"
 changed = "'replace' | 'add' instead of 0 | 1; absent is add"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/engine.test.ts::names graph node types and mixing intents"
+
+[[entry]]
+kind = "type"
+old = "EngineGraphMix"
+changed = "Pass replace or add instead of 0 or 1."
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::EngineGraphMix is a named token set"
 
 [[entry]]
 kind = "field"
@@ -8025,7 +8152,7 @@ rule = "typed-results"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripEqBand"
-removed = "Call setStripEqBand('master', bandIndex, band)."
+removed = "Call setStripEqBand('master', bandIndex, band). Edit the default master strip before any explicit strip settings. An insert still has to exist before it can be toggled."
 domain = "engine"
 rule = "typed-results"
 
@@ -8069,7 +8196,7 @@ test = "bindings/node/tests/surface/engine.test.ts::bypasses an insert from a la
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripInsertBypassed"
-removed = "Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? })."
+removed = "Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? }). A nonexistent insert on the default master strip raises RangeError before any explicit strip settings. The old call raised InvalidState when the master strip was absent."
 domain = "engine"
 rule = "no-positional-bools"
 
@@ -8181,7 +8308,7 @@ rule = "strip-ref"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.resolveMasterInsertAutomationId"
-removed = "Call resolveStripInsertAutomationId('master', insertIndex, paramName)."
+removed = "Call resolveStripInsertAutomationId('master', insertIndex, paramName). A nonexistent insert on the default master strip raises RangeError before any explicit strip settings. The old call raised InvalidState when the master strip was absent."
 domain = "engine"
 rule = "strip-ref"
 
@@ -8349,7 +8476,7 @@ test = "bindings/node/tests/surface/engine.test.ts::keys a sidechain by strip an
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setCaptureBuffer"
-removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch."
+removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError."
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -8370,7 +8497,7 @@ rule = "engine-vocabulary"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setRecordOffsetSamples"
-removed = "Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup."
+removed = "Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError."
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -8438,6 +8565,14 @@ changed = "request-only; the positional (destinationId, part, mode, inserts?) fo
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/engine.test.ts::takes the part rig as a request object with a required part"
+
+[[entry]]
+kind = "type"
+old = "PartRigRequest"
+changed = "Use a mode token instead of a numeric ordinal."
+domain = "engine"
+rule = "input-types"
+test = "bindings/node/tests/surface/engine.test.ts::PartRigRequest.mode excludes numeric ordinals"
 
 [[entry]]
 kind = "method"
@@ -9063,6 +9198,14 @@ rule = "one-positional-form"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
+kind = "type"
+old = "RoomEstimateOptions"
+changed = "Use impulseResponse in place of impulse_response for mode."
+domain = "effects"
+rule = "input-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::RoomEstimateOptions uses named acoustic modes"
+
+[[entry]]
 kind = "function"
 old = "harmonic"
 changed = "one positional form (harmonic(samples, sampleRate, options?: Omit<HarmonicRequest,'samples'|'sampleRate'>)); request form takes HarmonicRequest; returns Float32Array"
@@ -9073,10 +9216,10 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "hpss"
-changed = "one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'|'sampleRate'>)); request form takes HpssRequest; returns HpssResult"
+changed = "one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'|'sampleRate'>)); request form takes HpssRequest; returns HpssResult. An out-of-domain kernel raises RangeError instead of SonareError InvalidParameter."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+test = "bindings/node/tests/hpss-kernel-ceiling.test.ts::refuses ${direction} kernel ${kernel} by naming the ceiling"
 
 [[entry]]
 kind = "method"
@@ -9151,18 +9294,34 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "roomGeometryFromEstimate"
-changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest)"
+changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest). An estimate with no measurable room dimensions raises RangeError instead of SonareError InvalidParameter."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/node/tests/request-unknown-keys.test.ts::synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares"
+test = "bindings/node/tests/acoustic.test.ts::refuses an estimate with no measurable room"
 
 [[entry]]
 kind = "function"
 old = "synthesizeRir"
-changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest)"
+changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest). Catch RangeError for an out-of-room source or listener. The coded InvalidParameter and diagnostic ID are gone. Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/node/tests/request-unknown-keys.test.ts::synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares"
+test = "bindings/node/tests/acoustic.test.ts::throws a RangeError for invalid geometry"
+
+[[entry]]
+kind = "function"
+old = "roomMorph"
+changed = "Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default."
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/acoustic.test.ts::enables air absorption by default in both room morphs"
+
+[[entry]]
+kind = "function"
+old = "roomMorphStereo"
+changed = "Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. Omitted receiverSpacingM is up to 0.5 m, reduced to keep both receivers in the room. Catch RangeError naming receiverSpacingM when the pair from an explicit spacing falls outside the room. The equivalent 1.x call raised SonareError InvalidParameter."
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/acoustic.test.ts::renders with an omitted spacing where the default pair would leave the room"
 
 [[entry]]
 kind = "function"
@@ -9179,6 +9338,14 @@ changed = "removes `nFeatures`; removes `nFrames`; `init` is now `NmfInit` (was 
 domain = "effects"
 rule = "matrix-2d"
 test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "DecomposeNotePitchRequest"
+changed = "Omit voiced or use undefined instead of passing null."
+domain = "effects"
+rule = "input-types"
+test = "bindings/node/tests/surface/effects-notes.test.ts::DecomposeNotePitchRequest.voiced is optional and non-nullable"
 
 [[entry]]
 kind = "type"
@@ -9278,6 +9445,14 @@ old = "RoomGeometryFromEstimateOptions"
 removed = "Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object."
 domain = "effects"
 rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryEstimate"
+changed = "Handle undefined in heightM, lengthM, widthM."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::RoomGeometryEstimate migration: unmeasured room dimensions can be omitted"
 
 [[entry]]
 kind = "type"
@@ -9565,10 +9740,10 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "renderNotes"
-changed = "one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError"
+changed = "one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError. A malformed note element raises TypeError naming notes[i].<field> instead of coded InvalidParameter."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+test = "bindings/node/tests/note-objects.test.ts::rejects a note that omits a sample bound the type declares mandatory"
 
 [[entry]]
 kind = "function"
@@ -9621,10 +9796,10 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed p
 [[entry]]
 kind = "method"
 old = "Audio.hpss"
-changed = "hpss(options?: Omit<HpssRequest,'samples'|'sampleRate'>)"
+changed = "hpss(options?: Omit<HpssRequest,'samples'|'sampleRate'>). An out-of-domain kernel raises RangeError instead of SonareError InvalidParameter."
 domain = "core"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+test = "bindings/node/tests/hpss-kernel-ceiling.test.ts::Audio.hpss refuses a kernel above the ceiling with a RangeError"
 
 [[entry]]
 kind = "method"
@@ -9727,10 +9902,10 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "ExtractNotesRequest"
-changed = "declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`)"
+changed = "declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`). Omit voicedProb or use undefined instead of passing null."
 domain = "effects"
 rule = "type-names"
-test = "bindings/node/tests/surface/effects-notes.test.ts::refuses a removed note-request name"
+test = "bindings/node/tests/surface/effects-notes.test.ts::ExtractNotesRequest voicing fields are optional and non-nullable"
 
 [[entry]]
 kind = "type"
@@ -9821,10 +9996,10 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "RenderNotesRequest"
-changed = "`voiced` is now `VoicedFlags` (was `VoicedFlags | null`)"
+changed = "`voiced` is now `VoicedFlags` (was `VoicedFlags | null`). Omit voiced or use undefined instead of passing null."
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+test = "bindings/node/tests/surface/effects-notes.test.ts::RenderNotesRequest.voiced is optional and non-nullable"
 
 [[entry]]
 kind = "type"
@@ -9882,6 +10057,22 @@ changed = "optional -> required (no default)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairAnalysis"
+changed = "Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::MasteringRepairAnalysis migration: absent detector reports can be omitted"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairSamplesRequest"
+changed = "Supply sampleRate explicitly; omission no longer uses a default."
+domain = "effects"
+rule = "input-types"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate in the shared request type"
 
 [[entry]]
 kind = "field"
@@ -10012,6 +10203,22 @@ changed = "number[] -> Float32Array"
 domain = "effects"
 rule = "type-names"
 test = "bindings/node/tests/surface/effects-repair.test.ts::carry Float32Array detection arrays"
+
+[[entry]]
+kind = "type"
+old = "NoiseDetection"
+changed = "Handle undefined in floorDbfs."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::NoiseDetection migration: a missing floor can be omitted"
+
+[[entry]]
+kind = "type"
+old = "ReverbDetection"
+changed = "Handle undefined in latePredictability."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::ReverbDetection migration: the unrun WPE metric can be omitted"
 
 [[entry]]
 kind = "field"
@@ -10721,6 +10928,22 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses th
 
 [[entry]]
 kind = "type"
+old = "RealtimeVoiceChangerPreset"
+changed = "Use schemaVersion 4 in place of 1."
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/voice_changer_pod.test.ts::uses schema version four on preset documents"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerPresetMetadata"
+changed = "Use schemaVersion 4 in place of 1."
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/voice_changer_pod.test.ts::uses schema version four in preset metadata"
+
+[[entry]]
+kind = "type"
 old = "RealtimeVoiceChangerOptions"
 changed = "removes `channels`; removes `preset`; adds `config?: RealtimeVoiceChangerConfigInput`; adds `numChannels: 1 | 2` (required)"
 domain = "effects"
@@ -10909,6 +11132,14 @@ rule = "getters"
 
 [[entry]]
 kind = "method"
+old = "Project.rehydrateVocalEdits"
+changed = "Move the former positional cancellation predicate into the second argument { cancel }."
+domain = "project"
+rule = "input-types"
+test = "bindings/node/tests/surface/project.test.ts::Project.rehydrateVocalEdits takes cancellation in an options object"
+
+[[entry]]
+kind = "method"
 old = "Project.trackCount"
 removed = "Call tracks() and use the length of the returned array."
 domain = "project"
@@ -11093,6 +11324,22 @@ rule = "one-positional-form"
 test = "bindings/node/tests/surface/project.test.ts::sets clip loop, source audio and source metadata"
 
 [[entry]]
+kind = "type"
+old = "ProjectMarker"
+changed = "Read kind as ProjectMarkerKind and copy the record before editing. Check name for undefined before using it and copy the record before editing the field."
+domain = "project"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::ProjectMarker migration: unnamed markers omit name and use a named kind"
+
+[[entry]]
+kind = "type"
+old = "ProjectLoopMode"
+changed = "Pass off or loop in place of numeric ordinals."
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::ProjectLoopMode uses names rather than numeric ordinals"
+
+[[entry]]
 kind = "method"
 old = "Project.setSourceAudio"
 changed = "takes one { sourceId, channels, sampleRate } object with planar channels"
@@ -11212,6 +11459,22 @@ rule = "string-closed-sets"
 test = "bindings/node/tests/surface/project.test.ts::refuses an ordinal with TypeError"
 
 [[entry]]
+kind = "type"
+old = "ProjectTrackKind"
+changed = "Pass audio, midi or aux in place of numeric ordinals."
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::ProjectTrackKind is a named token set"
+
+[[entry]]
+kind = "type"
+old = "ProjectTrack"
+changed = "Read kind as ProjectTrackKind and copy the record before editing."
+domain = "project"
+rule = "typed-results"
+test = "bindings/node/tests/project.test.ts::exposes the track kind as a token in a readonly record"
+
+[[entry]]
 kind = "method"
 old = "Project.setTrackKind"
 changed = "kind is a name; a number is a TypeError"
@@ -11285,10 +11548,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.lastBounceCompileResult"
-changed = "returns { diagnostics } only"
+changed = "returns { diagnostics } only. Check for undefined when the most recent bounce has no compile result, including before the first bounce."
 domain = "project"
 rule = "typed-results"
-test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+test = "bindings/node/tests/project.test.ts::reports no last bounce compile result on a project no bounce has run on"
 
 [[entry]]
 kind = "method"
@@ -11304,6 +11567,14 @@ old = "ProjectSource.channelCount"
 new = "ProjectSource.numChannels"
 domain = "project"
 rule = "num-channels"
+
+[[entry]]
+kind = "type"
+old = "ProjectSource"
+changed = "Check contentHash for undefined before using it and copy the record before editing the field. Check externalStemRole for undefined before using it and copy the record before editing the field. Read kind as ProjectSourceKind and copy the record before editing."
+domain = "project"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::ProjectSource migration: absent metadata is omitted and source kind is named"
 
 [[entry]]
 kind = "field"
@@ -11332,6 +11603,14 @@ old = "ExternalSeparatedStem.planarSamples"
 new = "ExternalSeparatedStem.channels"
 domain = "project"
 rule = "planar-channels"
+
+[[entry]]
+kind = "type"
+old = "ExternalSeparatedStem"
+changed = "Pass mono or stereo instead of numeric channel-layout ordinals."
+domain = "project"
+rule = "input-types"
+test = "bindings/node/tests/surface/project.test.ts::ExternalSeparatedStem uses channel names and named layout tokens"
 
 [[entry]]
 kind = "field"
@@ -11432,6 +11711,22 @@ to = "ProjectClipFadeRequest"
 domain = "project"
 rule = "type-names"
 test = "bindings/node/tests/surface/project.test.ts::fadeInPpq: 1, fadeOutPpq: 1"
+
+[[entry]]
+kind = "type"
+old = "ProjectClip"
+changed = "Check loopLengthPpq for undefined before using it and copy the record before editing the field. Read loopMode as ProjectLoopMode and copy the record before editing. Read sourceKind as ProjectSourceKind and copy the record before editing."
+domain = "project"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::ProjectClip migration: whole-clip loop length is absent and tokens stay named"
+
+[[entry]]
+kind = "type"
+old = "ProjectDiagnostic"
+changed = "Read code as ProjectDiagnosticCode and copy the record before editing. Read severity as ProjectDiagnosticSeverity and copy the record before editing. Check targetId for undefined before using it and copy the record before editing the field."
+domain = "project"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::ProjectDiagnostic migration: no target id is represented by omission"
 
 [[entry]]
 kind = "export"
@@ -12447,6 +12742,14 @@ rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
 
 [[entry]]
+kind = "type"
+old = "MasteringLoudnessSummary"
+changed = "Handle undefined in maxMomentaryLufs, maxShortTermLufs."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::MasteringLoudnessSummary migration: short-signal windows can be omitted"
+
+[[entry]]
 kind = "field"
 old = "MasteringOptions.ceilingDb"
 to = "MasteringNormalizeLoudnessOptions.ceilingDbtp"
@@ -12773,6 +13076,14 @@ rule = "channel-planes"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::keeps unmeasured planes optional in the meter array types"
 
 [[entry]]
+kind = "type"
+old = "MixMeterSnapshot"
+changed = "Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::MixMeterSnapshot migration: unmeasured scalar fields can be omitted"
+
+[[entry]]
 kind = "field"
 old = "MixMeterSnapshot.peakDbL"
 removed = "read peakDb[0]"
@@ -13052,6 +13363,14 @@ changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
+
+[[entry]]
+kind = "type"
+old = "StreamingLoudnessGainResult"
+changed = "Handle undefined in loudnessStaticGainDb."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::StreamingLoudnessGainResult migration: an unmeasured gain can be omitted"
 
 [[entry]]
 kind = "field"
@@ -13508,6 +13827,14 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 
 [[entry]]
 kind = "method"
+old = "StreamingEqualizer.magnitudeResponse"
+changed = "Pass lowerCamel placement tokens such as left in place of Left."
+domain = "mastering"
+rule = "input-types"
+test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.magnitudeResponse takes an optional named placement token"
+
+[[entry]]
+kind = "method"
 old = "StreamingEqualizer.latencySamples"
 changed = "readonly getter latencySamples: number"
 domain = "mastering"
@@ -13565,9 +13892,17 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.prepare"
-removed = "the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them"
+removed = "the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them. Pass an integer sampleRate to the constructor. A fractional rate raises RangeError instead of preparing successfully."
 domain = "mastering"
 rule = "construction"
+
+[[entry]]
+kind = "class"
+old = "StreamingMasteringChain"
+changed = "Pass an explicit StreamingMasteringChainConfig to the constructor."
+domain = "mastering"
+rule = "input-types"
+test = "bindings/node/tests/surface/mastering-streaming.test.ts::requires an explicit StreamingMasteringChainConfig in the constructor type"
 
 [[entry]]
 kind = "type"
@@ -14222,6 +14557,14 @@ changed = "takes the engine mode name only; an ordinal is a TypeError"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/node/tests/synth-patch.test.ts::describes each engine section"
+
+[[entry]]
+kind = "type"
+old = "SynthParamInfo"
+changed = "Handle the added dBTP unit where code exhaustively handles the unit union."
+domain = "engine"
+rule = "typed-results"
+test = "bindings/node/tests/synth-patch.test.ts::includes dBTP in the synth parameter unit vocabulary"
 
 [[entry]]
 kind = "field"
@@ -14932,6 +15275,14 @@ rule = "absent-not-sentinel"
 test = "bindings/node/tests/chord-annotation.test.ts::reports a slash bass only when it differs from the root"
 
 [[entry]]
+kind = "type"
+old = "ChordSymbolFields"
+changed = "Use a ProjectChordQuality token in place of a numeric quality."
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/node/tests/chord_functions.test.ts::exposes a chord symbol quality token instead of an ordinal"
+
+[[entry]]
 kind = "field"
 old = "EngineExternalMidiEvent.destinationId"
 to = "ExternalMidiEvent.destinationId"
@@ -15120,6 +15471,14 @@ rule = "construction"
 domain = "engine"
 
 [[entry]]
+kind = "type"
+old = "EngineClip"
+changed = "Pass a ClipPageProvider instance; bare IDs and structural { id } objects are no longer accepted."
+domain = "engine"
+rule = "input-types"
+test = "bindings/node/tests/surface/engine.test.ts::EngineClip.pageProvider requires a ClipPageProvider instance"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.createFileClipPageProvider"
 removed = "new FileClipPageProvider({ path, ... }) creates the provider"
@@ -15218,6 +15577,14 @@ changed = "T | null -> number: `-Infinity` for silence or when nothing passes th
 domain = "mastering"
 rule = "silence-is-infinite"
 test = "bindings/node/tests/result-absence-types.test.ts::a level that is -Infinity for silence is never absent"
+
+[[entry]]
+kind = "type"
+old = "MasteringStreamingPreviewPlatform"
+changed = "Handle undefined in normalizationGainDb."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::MasteringStreamingPreviewPlatform migration: unmeasured gain can be omitted"
 
 [[entry]]
 kind = "field"
@@ -15616,12 +15983,36 @@ rule = "string-closed-sets"
 test = "bindings/node/tests/basic_engine_mixer.test.ts::takes the CC binding kind as a token and refuses an ordinal"
 
 [[entry]]
+kind = "type"
+old = "ProjectMidiCcBinding"
+changed = "Use controlChange7, controlChange14, rpn and nrpn in place of numeric kind ordinals."
+domain = "project"
+rule = "input-types"
+test = "bindings/node/tests/surface/engine.test.ts::ProjectMidiCcBinding uses named controller-kind tokens"
+
+[[entry]]
 kind = "method"
 old = "PlaybackRenderer.setConfig"
 changed = "config is a PlaybackRendererConfig object only; a JSON string is a TypeError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/node/tests/playback.test.ts::and a JSON string config"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.processPlanar"
+changed = "An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/playback.test.ts::rejects an unsupported input channel count under input.layout \"auto\""
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.renderOffline"
+changed = "An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/playback.test.ts::refuses a mismatched channel count and non-finite input as a RangeError"
 
 [[entry]]
 kind = "field"
@@ -15744,6 +16135,14 @@ old = "CapabilityCatalogChain.aliases"
 removed = "the catalog lists no other chain spellings; every chain key has exactly one"
 domain = "core"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogPresets"
+changed = "Result records expose readonly fields or arrays. Copy the record or array before mutating it. Affected types: Capabilities, CapabilityCatalog, CapabilityCatalogChain, CapabilityCatalogChainList, CapabilityCatalogChainStage, CapabilityCatalogPresets, ChordSymbolFields, EngineBounceResult, MasteringInsertParamChoice, MasteringInsertParamDependency, MasteringInsertSlot, MasteringInsertTiming, ProjectChordSymbol, ProjectClip, ProjectDiagnostic, ProjectMarker, ProjectSource, ProjectTempoCandidate, ProjectTrack, VocalStateToken."
+domain = "core"
+rule = "individual"
+test = "bindings/node/tests/shared-type-shapes.test.ts::CapabilityCatalogPresets migration: readonly records and arrays require copies"
 
 [[entry]]
 kind = "field"
@@ -16078,6 +16477,14 @@ domain = "engine"
 rule = "config-keys"
 
 [[entry]]
+kind = "type"
+old = "PlaybackTargetConfig"
+changed = "Use left, right, center, leftSurround, rightSurround, leftSideSurround and rightSideSurround as speaker keys."
+domain = "engine"
+rule = "input-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::PlaybackTargetConfig uses speaker-role names as keys"
+
+[[entry]]
 kind = "field"
 old = "PlaybackUpmixConfig.center_width"
 new = "PlaybackUpmixConfig.centerWidth"
@@ -16175,10 +16582,10 @@ test = "bindings/node/tests/mixing_assistant.test.ts::takes one or two channels 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfig"
-changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError. Set denoise.enabled in its configuration object in place of a bare denoise boolean."
 domain = "mastering"
 rule = "config-keys"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::the core refuses %s as an argument"
+test = "bindings/node/tests/surface/mastering-chain.test.ts::MasteringChainConfig uses a nested denoise object and closed token fields"
 
 [[entry]]
 kind = "field"
@@ -16412,10 +16819,10 @@ test = "bindings/node/tests/audio-facade-delegation.test.ts::refuses a direct co
 [[entry]]
 kind = "method"
 old = "StreamingRetune.setConfig"
-changed = "the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix)"
+changed = "the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). Finite out-of-domain pitch and mix values raise RangeError. A grain outside the supported multiples also raises RangeError. The old configuration clamped controls and rounded the effective grain."
 domain = "effects"
 rule = "individual"
-test = "bindings/node/tests/streaming-retune.test.ts::refuses an unknown config key by name on the constructor and setConfig"
+test = "bindings/node/tests/streaming-retune.test.ts::refuses out-of-range retune controls and keeps the current settings"
 
 [[entry]]
 kind = "field"
@@ -19023,11 +19430,27 @@ domain = "engine"
 rule = "channel-planes"
 
 [[entry]]
+kind = "type"
+old = "EngineMeterTelemetry"
+changed = "Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs."
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::EngineMeterTelemetry migration: unmeasured scalar fields can be omitted"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.drainMeterTelemetryWide"
 removed = "use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane"
 domain = "engine"
 rule = "channel-planes"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.drainExternalMidi"
+changed = "Read ExternalMidiEvent rows and handle an absent destinationId for broadcast events."
+domain = "engine"
+rule = "typed-results"
+test = "bindings/node/tests/engine-midi.test.ts::drains byte arrays and permits broadcast events without a destination"
 
 [[entry]]
 kind = "field"

@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   MasteringRepairDeclickResult,
   MasteringRepairDenoiseClassicalResult,
+  MasteringRepairSamplesRequest,
   MasteringRepairStage,
   MasteringRepairTrimSilenceResult,
   TrimRange,
@@ -57,6 +58,18 @@ function expectClose(a: ArrayLike<number>, b: ArrayLike<number>, tol = 1e-5): vo
 
 const left = signal(440);
 const right = signal(330);
+
+describe('MasteringRepairSamplesRequest', () => {
+  it('requires sampleRate in the shared request type', () => {
+    expectTypeOf<MasteringRepairSamplesRequest['sampleRate']>().toEqualTypeOf<number>();
+    const missingRate = () => {
+      // @ts-expect-error sampleRate is required for every repair request
+      const request: MasteringRepairSamplesRequest = { samples: left };
+      return request;
+    };
+    expect(typeof missingRate).toBe('function');
+  });
+});
 
 /** Mono calls with the options their tiny call needs. */
 const MONO: ReadonlyArray<[string, Record<string, unknown>]> = [

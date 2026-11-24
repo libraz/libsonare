@@ -213,6 +213,21 @@ describe('StreamingRetune grain', () => {
     });
   });
 
+  it('refuses out-of-range retune controls and keeps the current settings', () => {
+    withRetune({ pitchSemitones: 3, mix: 0.5, grainSizeSamples: 512 }, (retune) => {
+      const before = retune.config();
+      for (const config of [
+        { pitchSemitones: 25 },
+        { mix: 1.1 },
+        { mix: Number.POSITIVE_INFINITY },
+        { grainSizeSamples: 513 },
+      ]) {
+        expect(() => retune.setConfig(config)).toThrow(RangeError);
+        expect(retune.config()).toEqual(before);
+      }
+    });
+  });
+
   it('refuses a grain of 0 with the automatic-grain hint', () => {
     expect(() => new StreamingRetune({ grainSizeSamples: 0 })).toThrow(
       new RangeError(

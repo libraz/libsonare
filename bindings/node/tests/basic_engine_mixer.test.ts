@@ -55,7 +55,7 @@ describe('RealtimeEngine', () => {
       expect(Array.isArray(plain)).toBe(true);
       expect((plain as unknown as { monitor?: unknown }).monitor).toBeUndefined();
       expect(plain[0][0]).toBeCloseTo(0.25);
-      const off = engine.process(planes, { withMonitor: false } as never);
+      const off = engine.process(planes, { withMonitor: false });
       expect(Array.isArray(off)).toBe(true);
       expect(off).toHaveLength(2);
       expect(() => engine.process(planes, { withMonitor: 1 } as never)).toThrow(

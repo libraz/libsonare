@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractPercussiveEvents, hpss, isSonareError } from '../src/index.js';
+import { Audio, extractPercussiveEvents, hpss, isSonareError } from '../src/index.js';
 
 const sampleRate = 22050;
 
@@ -158,6 +158,15 @@ const entries = [
 ];
 
 describe('HPSS kernel ceiling', () => {
+  it('Audio.hpss refuses a kernel above the ceiling with a RangeError', () => {
+    const audio = Audio.fromBuffer(tone, sampleRate);
+    try {
+      expect(() => audio.hpss(kernels('harmonic', FIRST_ABOVE_CEILING))).toThrow(RangeError);
+    } finally {
+      audio.destroy();
+    }
+  });
+
   for (const entry of entries) {
     for (const direction of directions) {
       for (const kernel of [INT_MAX, FIRST_ABOVE_CEILING]) {

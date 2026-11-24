@@ -463,10 +463,13 @@ export function phaseVocoder(...args: unknown[]): Float32Array {
 }
 
 /** Generate a sine tone. */
-export function tone(request: ToneRequest): Float32Array;
+export function tone(request?: ToneRequest): Float32Array;
 export function tone(...args: unknown[]): Float32Array {
   return withEntry('tone', () => {
-    const r = requestOnly<ToneRequest>('tone', args);
+    const r = requestOnly<ToneRequest>(
+      'tone',
+      args.length <= 1 && args[0] === undefined ? [{}] : args,
+    );
     const sampleRate = r.sampleRate ?? 22050;
     const frequencyHz = r.frequencyHz ?? 440;
     const durationSec = r.durationSec ?? 1;
@@ -476,10 +479,13 @@ export function tone(...args: unknown[]): Float32Array {
 }
 
 /** Generate an exponential (default) or linear chirp. */
-export function chirp(request: ChirpRequest): Float32Array;
+export function chirp(request?: ChirpRequest): Float32Array;
 export function chirp(...args: unknown[]): Float32Array {
   return withEntry('chirp', () => {
-    const r = requestOnly<ChirpRequest>('chirp', args);
+    const r = requestOnly<ChirpRequest>(
+      'chirp',
+      args.length <= 1 && args[0] === undefined ? [{}] : args,
+    );
     const sampleRate = r.sampleRate ?? 22050;
     const fminHz = r.fminHz ?? 440;
     const fmaxHz = r.fmaxHz ?? 880;

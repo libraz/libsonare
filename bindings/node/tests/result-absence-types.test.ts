@@ -1,42 +1,64 @@
 /** A value a result cannot give is an omitted field: optional, never `null`. */
 
-import { describe, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AnalysisDynamics,
+  AnalysisResult,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   DecomposeNotePitchRequest,
   DynamicsResult,
+  EngineMeterTelemetry,
   ExtractNotesRequest,
+  LufsResult,
   MasteringAssistantProfile,
   MasteringAudioProfileLoudness,
   MasteringInsertParamChoice,
   MasteringInsertParamInfo,
   MasteringInsertParamUnit,
   MasteringInsertSlot,
+  MasteringLoudnessSummary,
   MasteringPresetCatalogEntry,
   MasteringProcessorCatalogEntry,
   MasteringRealtimeCost,
+  MasteringRepairAnalysis,
   MasteringStreamingPreviewPlatform,
   MatchReferenceLoudnessResult,
   MatchTonalBalanceBand,
   MergeNotesRequest,
   MixAssistantTrackProfile,
+  MixMeterSnapshot,
   MixMonoRisk,
+  NoiseDetection,
   NoteSegmentsRequest,
   PitchCorrectOptions,
   PitchCorrectTimevaryingRequest,
+  ProjectClip,
   ProjectCompileResult,
+  ProjectDiagnostic,
+  ProjectDiagnosticCode,
+  ProjectDiagnosticSeverity,
+  ProjectLoopMode,
+  ProjectMarker,
+  ProjectMarkerKind,
+  ProjectSource,
+  ProjectSourceKind,
   ProjectTimeline,
   RenderNotesRequest,
+  ReverbDetection,
   RoomEstimateResult,
+  RoomGeometryEstimate,
+  Section,
+  SectionType,
   SidechainCheck,
   SidechainRefusal,
   SplitNoteRequest,
   StereoMonoCompatBand,
   StereoMonoCompatCheckResult,
+  StreamingLoudnessGainResult,
   VoicedFlags,
 } from '../src/index.js';
+import { Audio } from '../src/index.js';
 
 describe('result records type an unmeasured value as an absent field', () => {
   it('the loudness family', () => {
@@ -121,6 +143,175 @@ describe('result records type an unmeasured value as an absent field', () => {
   it('the engine and project checks', () => {
     expectTypeOf<SidechainCheck['reason']>().toEqualTypeOf<SidechainRefusal | undefined>();
     expectTypeOf<ProjectCompileResult['timeline']>().toEqualTypeOf<ProjectTimeline | undefined>();
+  });
+
+  it('AnalysisDynamics migration: dynamicRangeDb and crestFactor can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<AnalysisDynamics, 'dynamicRangeDb' | 'crestFactor'>>();
+    expectTypeOf<AnalysisDynamics['dynamicRangeDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<AnalysisDynamics['crestFactor']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('AnalysisResult migration: section positions and optional timbre measures', () => {
+    expectTypeOf<AnalysisResult['sections']>().toEqualTypeOf<Section[]>();
+    expectTypeOf<Section['startSec']>().toEqualTypeOf<number>();
+    expectTypeOf<Section['endSec']>().toEqualTypeOf<number>();
+    expectTypeOf<Section['type']>().toEqualTypeOf<SectionType>();
+    expectTypeOf<'start' extends keyof Section ? true : false>().toEqualTypeOf<false>();
+    expectTypeOf<'end' extends keyof Section ? true : false>().toEqualTypeOf<false>();
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<
+        AnalysisResult['timbre'],
+        'brightness' | 'warmth' | 'density' | 'roughness' | 'complexity'
+      >
+    >();
+    expectTypeOf<AnalysisResult['timbre']['brightness']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<AnalysisResult['timbre']['warmth']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<AnalysisResult['timbre']['density']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<AnalysisResult['timbre']['roughness']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<AnalysisResult['timbre']['complexity']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('Audio.crestFactorDb migration: silence returns an absent measurement', () => {
+    expectTypeOf<ReturnType<Audio['crestFactorDb']>>().toEqualTypeOf<number | undefined>();
+    const audio = Audio.fromBuffer(new Float32Array(256), 22050);
+    try {
+      expect(audio.crestFactorDb()).toBeUndefined();
+    } finally {
+      audio.destroy();
+    }
+  });
+
+  it('DynamicsResult migration: dynamicRangeDb and crestFactor can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<DynamicsResult, 'dynamicRangeDb' | 'crestFactor'>>();
+    expectTypeOf<DynamicsResult['dynamicRangeDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<DynamicsResult['crestFactor']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('EngineMeterTelemetry migration: unmeasured scalar fields can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<
+        EngineMeterTelemetry,
+        'correlation' | 'integratedLufs' | 'momentaryLufs' | 'monoCompatWidth' | 'shortTermLufs'
+      >
+    >();
+    expectTypeOf<EngineMeterTelemetry['correlation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<EngineMeterTelemetry['integratedLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<EngineMeterTelemetry['momentaryLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<EngineMeterTelemetry['monoCompatWidth']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<EngineMeterTelemetry['shortTermLufs']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('LufsResult migration: short-signal windows can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<LufsResult, 'maxMomentaryLufs' | 'maxShortTermLufs' | 'momentaryLufs' | 'shortTermLufs'>
+    >();
+    expectTypeOf<LufsResult['maxMomentaryLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<LufsResult['maxShortTermLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<LufsResult['momentaryLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<LufsResult['shortTermLufs']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('MasteringLoudnessSummary migration: short-signal windows can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<MasteringLoudnessSummary, 'maxMomentaryLufs' | 'maxShortTermLufs'>
+    >();
+    expectTypeOf<MasteringLoudnessSummary['maxMomentaryLufs']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringLoudnessSummary['maxShortTermLufs']>().toEqualTypeOf<
+      number | undefined
+    >();
+  });
+
+  it('MasteringRepairAnalysis migration: absent detector reports can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<MasteringRepairAnalysis, 'channels' | 'defects'>>();
+    expectTypeOf<MasteringRepairAnalysis['channels']>().toEqualTypeOf<
+      NonNullable<MasteringRepairAnalysis['channels']> | undefined
+    >();
+    expectTypeOf<MasteringRepairAnalysis['defects']>().toEqualTypeOf<
+      NonNullable<MasteringRepairAnalysis['defects']> | undefined
+    >();
+  });
+
+  it('MasteringStreamingPreviewPlatform migration: unmeasured gain can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<MasteringStreamingPreviewPlatform, 'normalizationGainDb'>
+    >();
+    expectTypeOf<MasteringStreamingPreviewPlatform['normalizationGainDb']>().toEqualTypeOf<
+      number | undefined
+    >();
+  });
+
+  it('MixMeterSnapshot migration: unmeasured scalar fields can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<
+        MixMeterSnapshot,
+        'correlation' | 'integratedLufs' | 'momentaryLufs' | 'monoCompatWidth' | 'shortTermLufs'
+      >
+    >();
+    expectTypeOf<MixMeterSnapshot['correlation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixMeterSnapshot['integratedLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixMeterSnapshot['momentaryLufs']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixMeterSnapshot['monoCompatWidth']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixMeterSnapshot['shortTermLufs']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('NoiseDetection migration: a missing floor can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<NoiseDetection, 'floorDbfs'>>();
+    expectTypeOf<NoiseDetection['floorDbfs']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('ProjectClip migration: whole-clip loop length is absent and tokens stay named', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<ProjectClip, 'loopLengthPpq'>>();
+    expectTypeOf<ProjectClip['loopLengthPpq']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<ProjectClip['loopMode']>().toEqualTypeOf<ProjectLoopMode>();
+    expectTypeOf<ProjectClip['sourceKind']>().toEqualTypeOf<ProjectSourceKind>();
+    expectTypeOf<ProjectLoopMode>().toEqualTypeOf<'off' | 'loop'>();
+    expectTypeOf<ProjectSourceKind>().toEqualTypeOf<'audio' | 'midi'>();
+  });
+
+  it('ProjectDiagnostic migration: no target id is represented by omission', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<ProjectDiagnostic, 'targetId'>>();
+    expectTypeOf<ProjectDiagnostic['targetId']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<ProjectDiagnostic['code']>().toEqualTypeOf<ProjectDiagnosticCode>();
+    expectTypeOf<ProjectDiagnostic['severity']>().toEqualTypeOf<ProjectDiagnosticSeverity>();
+  });
+
+  it('ProjectMarker migration: unnamed markers omit name and use a named kind', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<ProjectMarker, 'name'>>();
+    expectTypeOf<ProjectMarker['name']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ProjectMarker['kind']>().toEqualTypeOf<ProjectMarkerKind>();
+    expectTypeOf<ProjectMarkerKind>().toEqualTypeOf<
+      'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature'
+    >();
+  });
+
+  it('ProjectSource migration: absent metadata is omitted and source kind is named', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<ProjectSource, 'contentHash' | 'externalStemRole'>>();
+    expectTypeOf<ProjectSource['contentHash']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ProjectSource['externalStemRole']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ProjectSource['kind']>().toEqualTypeOf<ProjectSourceKind>();
+  });
+
+  it('ReverbDetection migration: the unrun WPE metric can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<ReverbDetection, 'latePredictability'>>();
+    expectTypeOf<ReverbDetection['latePredictability']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('RoomGeometryEstimate migration: unmeasured room dimensions can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<RoomGeometryEstimate, 'heightM' | 'lengthM' | 'widthM'>
+    >();
+    expectTypeOf<RoomGeometryEstimate['heightM']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RoomGeometryEstimate['lengthM']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RoomGeometryEstimate['widthM']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('StreamingLoudnessGainResult migration: an unmeasured gain can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<Pick<StreamingLoudnessGainResult, 'loudnessStaticGainDb'>>();
+    expectTypeOf<StreamingLoudnessGainResult['loudnessStaticGainDb']>().toEqualTypeOf<
+      number | undefined
+    >();
   });
 });
 

@@ -60,7 +60,7 @@ describe('LiveSession native stub', () => {
   });
 
   it('refuses construction and enumeration with the coded platform reason', () => {
-    expectUnavailable(() => new LiveSession({} as never, {}), 'LiveSession');
+    expectUnavailable(() => new LiveSession({ engine: {} as never }), 'LiveSession');
     expectUnavailable(() => LiveSession.audioDevices(), 'LiveSession.audioDevices');
     expectUnavailable(() => LiveSession.midiSources(), 'LiveSession.midiSources');
   });

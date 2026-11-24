@@ -532,12 +532,6 @@ export interface VocalRenderResult {
   limitedCorrectionFrames: number;
 }
 
-/** Exported session state. */
-export interface VocalStateBytes {
-  /** The state bytes. */
-  data: Uint8Array;
-}
-
 /** Progress of a {@link VocalRenderJob} step. */
 export interface VocalJobProgress {
   /** True when no further work remains. */

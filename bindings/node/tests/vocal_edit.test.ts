@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   capabilities,
   createVocalEditSession,
@@ -76,6 +76,12 @@ function create(): VocalEditSession {
 }
 
 describe('Node vocal edit facade', () => {
+  it('keeps the exported session state shape as a byte array', () => {
+    // @ts-expect-error The state wrapper type is not part of the public API.
+    expectTypeOf<import('../src/index.js').VocalStateBytes>().toBeNever();
+    expectTypeOf<ReturnType<VocalEditSession['exportState']>>().toEqualTypeOf<Uint8Array>();
+  });
+
   it('reports the linked vocal-edit surface and its ABI version', () => {
     expect(capabilities().features.vocalEdit).toBe(true);
     expect(Number.isInteger(vocalEditAbiVersion())).toBe(true);
@@ -482,6 +488,7 @@ describe('Node vocal edit facade', () => {
     const source = sine();
     const original = create();
     const state = original.exportState();
+    expectTypeOf(state).toEqualTypeOf<Uint8Array>();
     original.destroy();
     expect(() =>
       restoreVocalEditSession({
