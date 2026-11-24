@@ -12,6 +12,7 @@ import {
   masteringInsertParamNames,
   masteringInsertTiming,
 } from '../src/index.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 const RENAMED: readonly (readonly [MasteringInsertName, string, string])[] = [
   ['effects.reverb.room', 'maxSeconds', 'maxSec'],
@@ -111,7 +112,9 @@ describe('insert key spellings', () => {
     ).toThrow(
       expect.objectContaining({
         name: 'SonareError',
-        message: 'masteringChainConfigFromJson: unknown key params.dynamics.deesser.bandpassQ',
+        message: chainUnknownKeyText(
+          'masteringChainConfigFromJson: unknown key params.dynamics.deesser.bandpassQ',
+        ),
       }),
     );
   });

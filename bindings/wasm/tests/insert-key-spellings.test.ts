@@ -13,6 +13,7 @@ import {
   masteringInsertParamNames,
   masteringInsertTiming,
 } from '../dist/index.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 await init();
 
@@ -100,7 +101,9 @@ describe('insert key spellings', () => {
     ).toThrow(
       expect.objectContaining({
         name: 'SonareError',
-        message: 'masteringChainConfigFromJson: unknown key params.dynamics.deesser.bandpassQ',
+        message: chainUnknownKeyText(
+          'masteringChainConfigFromJson: unknown key params.dynamics.deesser.bandpassQ',
+        ),
       }),
     );
   });

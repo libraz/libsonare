@@ -6,6 +6,7 @@ import {
   StreamingMasteringChain,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
 const native = addon as any;
@@ -176,7 +177,7 @@ describe('typed multiband crossover + bands', () => {
       // The whole text: an undeclared key never points at its successor.
       expect.objectContaining({
         name: 'TypeError',
-        message: `masterAudio: unknown key overrides.${P}.${key}`,
+        message: chainUnknownKeyText(`masterAudio: unknown key overrides.${P}.${key}`),
       }),
     );
   });

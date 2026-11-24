@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 
 import numpy as np
 
@@ -10,7 +11,7 @@ import libsonare
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
-from ._helpers import raises_coded
+from ._helpers import chain_unknown_key_text, raises_coded
 
 
 def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
@@ -401,7 +402,8 @@ def test_streaming_mastering_chain_refuses_a_renamed_key_as_any_other_unknown_ke
 
     with pytest.raises(
         SonareError,
-        match=r"unknown key config\.dynamics\.deesser\.bandpassQ$",
+        match=re.escape(chain_unknown_key_text("unknown key config.dynamics.deesser.bandpassQ"))
+        + "$",
     ):
         StreamingMasteringChain(
             {"dynamics": {"deesser": {"enabled": True, "bandpassQ": 2.0}}},
@@ -645,6 +647,9 @@ _CHAIN_CONFIG_CALLS = {
 }
 
 
+# The accepted-key list a chain reader appends to its unknown-key refusal, as a pattern.
+_CHAIN_KEYS_TAIL = re.escape(chain_unknown_key_text("")) + "$"
+
 _CHAIN_CONTENT_REFUSALS = {
     "duplicate_path": (
         {"eq": {"tilt": {"tiltDb": 1.0}}, "eq.tilt.tiltDb": 1.0},
@@ -664,7 +669,7 @@ _CHAIN_CONTENT_REFUSALS = {
     ),
     "earlier_true_peak_ceiling_spelling": (
         {"loudness": {"ceilingDb": -1.0}},
-        r"unknown key {root}\.loudness\.ceilingDb$",
+        r"unknown key {root}\.loudness\.ceilingDb" + _CHAIN_KEYS_TAIL,
     ),
 }
 
@@ -685,7 +690,7 @@ def test_chain_config_content_is_refused_by_the_core_naming_the_path(
     config, message = _CHAIN_CONTENT_REFUSALS[refusal]
     # A per-call bag is an argument, so it is refused under the caller's own name.
     root = "config" if name.lower().startswith("streaming") else "overrides"
-    with raises_coded(libsonare.ErrorCode.INVALID_PARAMETER, match=message.format(root=root)):
+    with raises_coded(libsonare.ErrorCode.INVALID_PARAMETER, match=message.replace("{root}", root)):
         _CHAIN_CONFIG_CALLS[name](config)
 
 

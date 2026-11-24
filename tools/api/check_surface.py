@@ -1616,7 +1616,8 @@ _CATALOG_UNIT_WORDS = {
 
 
 def _name_unit(name: str) -> str | None:
-    s = snake(name.rstrip("0123456789")).rstrip("_")
+    # A list key's embedded `{i}` is the element index, not part of the name.
+    s = snake(name.replace("{i}", "").rstrip("0123456789")).rstrip("_")
     return next(
         (u for u in sorted(_UNITS, key=len, reverse=True) if s == u or s.endswith("_" + u)), None
     )

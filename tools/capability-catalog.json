@@ -18,6 +18,13 @@
         "maxItems": 64,
         "minItems": 2,
         "processor": "dynamics.compressor"
+      },
+      {
+        "form": null,
+        "key": "dynamics.multibandComp.cutoff{i}Hz",
+        "maxItems": 63,
+        "minItems": 1,
+        "processor": null
       }
     ],
     "params": [
@@ -170,6 +177,26 @@
         "uiMax": null,
         "uiMin": null,
         "unit": null
+      },
+      {
+        "choices": null,
+        "coupledWith": [],
+        "default": null,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": 0,
+        "minExclusive": true,
+        "name": "dynamics.multibandComp.cutoff{i}Hz",
+        "rtSafe": false,
+        "scale": "log",
+        "slot": null,
+        "type": "number",
+        "uiMax": 20000,
+        "uiMin": 20,
+        "unit": "Hz"
       },
       {
         "choices": null,

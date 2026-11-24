@@ -14,6 +14,7 @@ import {
   masteringPresetNames,
   masteringPresetParams,
 } from '../dist/index.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 await init();
 
@@ -100,17 +101,19 @@ describe('masteringChainConfigFromJson', () => {
     [
       'an unknown key',
       '{"version":2,"params":{"loudness.bogusKey":1}}',
-      'masteringChainConfigFromJson: unknown key params.loudness.bogusKey',
+      chainUnknownKeyText('masteringChainConfigFromJson: unknown key params.loudness.bogusKey'),
     ],
     [
       'a retired key, as any other unknown key',
       '{"version":2,"params":{"eq.tiltDb":1}}',
-      'masteringChainConfigFromJson: unknown key params.eq.tiltDb',
+      chainUnknownKeyText('masteringChainConfigFromJson: unknown key params.eq.tiltDb'),
     ],
     [
       'a linear declip threshold, as any other unknown key',
       '{"params":{"repair.declip.clipThreshold":0.5}}',
-      'masteringChainConfigFromJson: unknown key params.repair.declip.clipThreshold',
+      chainUnknownKeyText(
+        'masteringChainConfigFromJson: unknown key params.repair.declip.clipThreshold',
+      ),
     ],
   ])('refuses %s as InvalidFormat', (_label, document, message) => {
     const error = refusal(() => masteringChainConfigFromJson(document));

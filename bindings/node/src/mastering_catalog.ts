@@ -42,8 +42,8 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  * {@link MasteringChainConfig}, which {@link masterAudio} takes as `overrides`.
  *
  * The library's own parser validates the document, so a key or token outside
- * the current spelling is refused rather than read. Retired keys are refused
- * with a message naming their current spelling. This is the one entry that
+ * the current spelling is refused rather than read. A retired key is refused
+ * like any other unknown key, with the sorted list of accepted keys. This is the one entry that
  * takes a chain configuration as JSON; every other call takes the object.
  *
  * @param document - Chain configuration document as JSON:

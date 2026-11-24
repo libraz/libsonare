@@ -15,6 +15,7 @@ import {
   StreamingMasteringChain,
 } from '../src/index.js';
 import { getSonareModule } from '../src/module_state.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from(
@@ -126,7 +127,9 @@ describe('masterAudio overrides in nested, flat and mixed spelling', () => {
         preset: 'pop',
         overrides: { 'loudness.targetLufz': -14 } as MasteringChainConfigInput,
       }),
-    ).toThrow(new TypeError('masterAudio: unknown key overrides.loudness.targetLufz'));
+    ).toThrow(
+      new TypeError(chainUnknownKeyText('masterAudio: unknown key overrides.loudness.targetLufz')),
+    );
   });
 
   it("takes a saved chain document's params as written, multibandComp object included", () => {

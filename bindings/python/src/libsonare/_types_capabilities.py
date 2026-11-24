@@ -517,12 +517,13 @@ class CapabilityCatalogChainStage:
 class CapabilityCatalogChainList:
     """An indexed chain list.
 
-    ``<key>.<i>`` is the chain parameter ``key`` when ``processor`` is ``None``;
-    otherwise ``<key>.<i>.<field>`` is that processor's ``field``.
+    An element appends ``.<i>`` to ``key``, or puts the index in place of the ``{i}``
+    a key embeds. With ``processor`` ``None`` the element is the chain parameter named
+    ``key``; otherwise ``<element>.<field>`` is that processor's ``field``.
     """
 
     key: str
-    """Chain key of the list."""
+    """List key: the index is appended, or substituted for an embedded ``{i}``."""
     processor: str | None
     """Processor id of each item, or ``None`` for a list of numbers."""
     form: Literal["offline"] | None

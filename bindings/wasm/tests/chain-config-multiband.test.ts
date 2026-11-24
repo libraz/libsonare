@@ -7,6 +7,7 @@ import {
   StreamingMasteringChain,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
+import { chainUnknownKeyText } from './_helpers.js';
 
 const sampleRate = 22_050;
 const frames = sampleRate / 2;
@@ -169,7 +170,7 @@ describe('typed multiband crossover + bands', () => {
       // The whole text: an undeclared key never points at its successor.
       expect.objectContaining({
         name: 'TypeError',
-        message: `masterAudio: unknown key overrides.${MB}.${key}`,
+        message: chainUnknownKeyText(`masterAudio: unknown key overrides.${MB}.${key}`),
       }),
     );
   });

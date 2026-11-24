@@ -6,6 +6,7 @@ import {
   streamingLoudnessGain,
   streamingLoudnessGainStereo,
 } from '../src/index.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 const SR = 48000;
 
@@ -133,6 +134,8 @@ describe('streamingLoudnessGain', () => {
         sampleRate: SR,
         config: { 'no.such.key': 1 } as never,
       }),
-    ).toThrow(new TypeError('streamingLoudnessGain: unknown key config.no.such.key'));
+    ).toThrow(
+      new TypeError(chainUnknownKeyText('streamingLoudnessGain: unknown key config.no.such.key')),
+    );
   });
 });

@@ -123,7 +123,7 @@
       }
     },
     "chain": {
-      "description": "The flat mastering chain keys. A key resolves through a chain-only descriptor (params), then a list element (lists: `<key>.<i>` is the descriptor named `key` when processor is null, `<key>.<i>.<field>` is the processor's `field` otherwise), then the longest stage prefix (stages: `<prefix>.<leaf>` is the processor's `leaf`). A list index is decimal with no leading zero.",
+      "description": "The flat mastering chain keys. A key resolves through a chain-only descriptor (params), then a list element (lists: an element appends `.<i>` to `key` or puts the index in place of the `{i}` a key embeds; it is the descriptor named `key` when processor is null, and `<element>.<field>` is the processor's `field` otherwise), then the longest stage prefix (stages: `<prefix>.<leaf>` is the processor's `leaf`). A list index is decimal with no leading zero.",
       "type": "object",
       "additionalProperties": false,
       "required": ["stages", "lists", "params"],

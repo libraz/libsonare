@@ -5,7 +5,7 @@
 title = "Upgrading from 1.10 to 2.0.0"
 
 intro = [
-  "2.0.0 changes the public interface of every binding, the C ABI and both command-line front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, flag or token is refused under its old name, and a JSON document written by 1.10 that uses a removed key or token is refused with `InvalidFormat` naming the current spelling. Nothing converts an old document on load.",
+  "2.0.0 changes the public interface of every binding, the C ABI and both command-line front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, flag or token is refused under its old name, and a JSON document written by 1.10 that uses a removed key or token is refused with `InvalidFormat`: an unknown key's refusal lists the accepted keys, and a renamed processor id, preset or enum token names its current spelling. Nothing converts an old document on load.",
   "The guide has one section per surface, and inside it one section per area of the library. Each area groups its changes by the convention behind them: the heading states the convention, and the table lists every affected name. The left column is the 1.x name; the right column is the 2.0.0 name when only the name changed, `removed:` and what to use instead (or `removed, no replacement:` and why), or the change a caller has to make when the name stays. The conventions themselves, with a before and after for each, close the guide.",
 ]
 

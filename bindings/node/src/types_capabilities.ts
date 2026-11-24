@@ -437,11 +437,12 @@ export interface CapabilityCatalogChainStage {
 }
 
 /**
- * An indexed chain list. `<key>.<i>` is the chain parameter `key` when
- * `processor` is absent; otherwise `<key>.<i>.<field>` is that processor's `field`.
+ * An indexed chain list. An element appends `.<i>` to `key`, or puts the index in
+ * place of the `{i}` a key embeds. With `processor` absent the element is the chain
+ * parameter named `key`; otherwise `<element>.<field>` is that processor's `field`.
  */
 export interface CapabilityCatalogChainList {
-  /** Key the item index is appended to. */
+  /** List key: the index is appended, or substituted for an embedded `{i}`. */
   readonly key: string;
   /** Catalog processor id whose parameters each item carries; absent for a list of numbers. */
   readonly processor?: string;

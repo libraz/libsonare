@@ -25,6 +25,7 @@ import {
   masteringStreamingPreview,
   normalize,
 } from '../src/index.js';
+import { chainUnknownKeyText } from './_helpers.js';
 
 const sampleRate = 22050;
 
@@ -135,7 +136,9 @@ describe('mastering request-object compatibility', () => {
         preset: 'pop',
         overrides: { loudness: { nope: 1 } } as never,
       }),
-    ).toThrow(/^masterAudio: unknown key overrides\.loudness\.nope$/);
+    ).toThrow(
+      new TypeError(chainUnknownKeyText('masterAudio: unknown key overrides.loudness.nope')),
+    );
   });
 
   it('masterAudioStereo takes a request object only', () => {

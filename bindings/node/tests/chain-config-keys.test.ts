@@ -112,13 +112,21 @@ const widerUsed = new Set<string>();
 const generatedParams = (id: string): ts.Type =>
   memberType(exportedType('MasteringProcessorParamMap'), id);
 
+/** Chain list keys embedding `{i}`: a flat spelling of list elements, never a nested member. */
+const patternListKeys = new Set(
+  catalog.chain.lists.filter((l) => l.key.includes('{i}')).map((l) => l.key),
+);
+
 /** Direct members of the object at @p path whose type disagrees with its catalog chain parameter. */
 function catalogMismatches(path: readonly string[]): string[] {
   const prefix = path.join('.');
   const type = typeAt(path);
   return catalog.chain.params
     .filter(
-      (p) => p.name.startsWith(`${prefix}.`) && !p.name.slice(prefix.length + 1).includes('.'),
+      (p) =>
+        p.name.startsWith(`${prefix}.`) &&
+        !p.name.slice(prefix.length + 1).includes('.') &&
+        !patternListKeys.has(p.name),
     )
     .filter((p) => {
       const ours = memberType(type, p.name.slice(prefix.length + 1));

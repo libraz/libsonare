@@ -1558,6 +1558,8 @@ class CatalogUnitSuffix(CheckerCase):
             "slopeDbOct": ("dBPerOct", False),
             "slopeDbPerOct": ("dBPerOct", True),
             "fadeSec": ("s", False),
+            "cutoff{i}Hz": ("Hz", False),
+            "cutoff{i}": ("Hz", True),
             "ratio": ("ratio", False),
             "mixDb": ("none", True),
             "enabled": (None, False),

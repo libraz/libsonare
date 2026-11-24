@@ -23,7 +23,7 @@ from libsonare import (
 )
 from libsonare._mastering_offline import _enum_value, _flatten_chain_config, _nest_chain_config
 
-from ._helpers import LIB_AVAILABLE, raises_coded, sine
+from ._helpers import LIB_AVAILABLE, chain_unknown_key_text, raises_coded, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -229,6 +229,6 @@ def test_multiband_shorthand_keys_are_refused_as_any_other_unknown_key(
     """The three-band shorthand is gone; the refusal never points at a successor."""
     with raises_coded(
         ErrorCode.INVALID_PARAMETER,
-        match=r"unknown key " + re.escape(f"overrides.{MB}.{retired}") + r"$",
+        match=re.escape(chain_unknown_key_text(f"unknown key overrides.{MB}.{retired}")) + "$",
     ):
         master_audio(LEFT, SR, overrides={"dynamics": {"multibandComp": config}})
