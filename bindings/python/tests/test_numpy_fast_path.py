@@ -453,10 +453,11 @@ def test_int_apis_declare_int_samples() -> None:
                         marshalled.add((func.name, arg.id))
 
     stub = ast.parse((package / "analyzer.pyi").read_text(encoding="utf-8"))
+    runtime = ast.parse((package / "_runtime.py").read_text(encoding="utf-8"))
 
     alias = next(
         node
-        for node in stub.body
+        for node in runtime.body
         if isinstance(node, ast.AnnAssign)
         and isinstance(node.target, ast.Name)
         and node.target.id == "IntSamples"

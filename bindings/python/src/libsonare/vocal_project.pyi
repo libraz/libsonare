@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias
 
 from numpy.typing import NDArray
@@ -10,17 +11,13 @@ from .vocal_edit import VocalReason, VocalStateToken
 
 ProjectVocalRehydrateStatus: TypeAlias = Literal["rehydrated", "alreadyReady", "unresolved"]
 
+@dataclass(frozen=True, slots=True)
 class ProjectVocalOriginalSource:
     source_id: int
     mono: Sequence[float] | NDArray[Any]
     sample_rate: int
-    def __init__(
-        self,
-        source_id: int,
-        mono: Sequence[float] | NDArray[Any],
-        sample_rate: int,
-    ) -> None: ...
 
+@dataclass(frozen=True, slots=True)
 class ProjectVocalEditApplyResult:
     clip_id: int
     take_id: int | None
@@ -30,18 +27,8 @@ class ProjectVocalEditApplyResult:
     profile_id: int
     derived_source_sha256: bytes
     sidecar_key: str
-    def __init__(
-        self,
-        clip_id: int,
-        take_id: int | None,
-        original_source_id: int,
-        derived_source_id: int,
-        committed_revision: int,
-        profile_id: int,
-        derived_source_sha256: bytes,
-        sidecar_key: str,
-    ) -> None: ...
 
+@dataclass(frozen=True, slots=True)
 class ProjectVocalEditDependency:
     clip_id: int
     take_id: int | None
@@ -57,38 +44,14 @@ class ProjectVocalEditDependency:
     derived_pcm_available: bool
     reason: VocalReason
     sidecar_key: str
-    def __init__(
-        self,
-        clip_id: int,
-        take_id: int | None,
-        original_source_id: int,
-        derived_source_id: int,
-        source_sample_rate: int,
-        profile_id: int,
-        source_sample_count: int,
-        committed_revision: int,
-        original_source_sha256: bytes,
-        derived_source_sha256: bytes,
-        original_pcm_available: bool,
-        derived_pcm_available: bool,
-        reason: VocalReason,
-        sidecar_key: str,
-    ) -> None: ...
 
+@dataclass(frozen=True, slots=True)
 class ProjectVocalRehydrateItem:
     clip_id: int
     take_id: int | None
     derived_source_id: int
     status: ProjectVocalRehydrateStatus
     reason: VocalReason
-    def __init__(
-        self,
-        clip_id: int,
-        take_id: int | None,
-        derived_source_id: int,
-        status: ProjectVocalRehydrateStatus,
-        reason: VocalReason,
-    ) -> None: ...
 
 def _apply_project_vocal_edit(
     project: Project,

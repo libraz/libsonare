@@ -12,7 +12,7 @@ import math
 import operator
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from typing import Any, SupportsIndex, TypeGuard, TypeVar, cast, get_args
+from typing import Any, SupportsIndex, TypeAlias, TypeGuard, TypeVar, cast, get_args
 
 import numpy as np
 
@@ -962,8 +962,12 @@ def _reject_unrepresentable_int32(values: np.ndarray, name: str) -> None:
         )
 
 
+IntSamples: TypeAlias = Sequence[int] | list[int] | np.ndarray[Any, Any]
+"""Integer samples or flags: a sequence of ints, or an integer NumPy array."""
+
+
 def _to_c_int_array(
-    values: Sequence[int] | list[int], name: str = "values"
+    values: IntSamples, name: str = "values"
 ) -> tuple[ctypes.Array[ctypes.c_int32], int]:
     # Bulk-marshal via NumPy's vectorised C path instead of `(c_int32*N)(*seq)`,
     # which unpacks every element through Python varargs (mirrors the

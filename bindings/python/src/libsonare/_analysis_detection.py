@@ -100,8 +100,9 @@ def detect_bpm(
         or nothing periodic). For confidence, use :func:`analyze`.
 
     Raises:
-        SonareValueError: If the range is non-finite, non-positive or inverted.
-        RuntimeError: If detection fails.
+        SonareValueError: If an argument is out of range, including a non-finite,
+            non-positive or inverted tempo range.
+        SonareError: If the library reports another failure, with its error code.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -208,7 +209,8 @@ def detect_key(
         measured, in cents.
 
     Raises:
-        RuntimeError: If detection fails.
+        SonareValueError: If an argument is outside its supported domain.
+        SonareError: If the library reports another failure, with its error code.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -325,7 +327,8 @@ def detect_beats(
         A float32 array of beat times in seconds.
 
     Raises:
-        RuntimeError: If detection fails.
+        SonareValueError: If an argument is outside its supported domain.
+        SonareError: If the library reports another failure, with its error code.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -396,7 +399,8 @@ def detect_onsets(
         A float32 array of onset times in seconds.
 
     Raises:
-        RuntimeError: If detection fails.
+        SonareValueError: If an argument is outside its supported domain.
+        SonareError: If the library reports another failure, with its error code.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

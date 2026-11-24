@@ -114,10 +114,9 @@ def mastering_repair_denoise_classical(
         samples, the same length as the input, and the pass's report.
 
     Raises:
-        SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved.
-        RuntimeError: If the C call rejects the request (e.g. non-power-of-two
-        ``n_fft``, ``hop_length`` below 1, or ``hop_length`` above
-        ``n_fft // 2``).
+        SonareValueError: If ``mode`` or ``noise_estimator`` cannot be resolved, or
+            ``n_fft`` or ``hop_length`` is outside its supported domain.
+        SonareError: If the library reports another failure, with its error code.
     """
     n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     # Narrowed, not int()-coerced: int() takes 256.7 as 256, a hop nobody asked for.

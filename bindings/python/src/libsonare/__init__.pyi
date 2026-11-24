@@ -7,6 +7,7 @@ from ._live import LiveAudioDevice as LiveAudioDevice
 from ._live import LiveMidiDevice as LiveMidiDevice
 from ._live import LiveSession as LiveSession
 from ._live import LiveSessionStatus as LiveSessionStatus
+from ._mixing import StripRef as StripRef
 from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
 from ._playback import PlaybackRenderer as PlaybackRenderer
@@ -161,6 +162,13 @@ from ._runtime import ErrorCodeName as ErrorCodeName
 from ._runtime import ErrorReason as ErrorReason
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
+from ._types_engine import PlanarChannels as PlanarChannels
+from ._types_mastering import MasteringAssistantParams as MasteringAssistantParams
+from ._types_mastering import MasteringParams as MasteringParams
+from ._types_mastering import MasteringParamValue as MasteringParamValue
+from ._types_mastering import MasteringPreset as MasteringPreset
+from ._types_mastering import MasteringSoloParams as MasteringSoloParams
+from ._types_mastering import SoloProcessor as SoloProcessor
 from .analyzer import AssignNoteTargetsResult as AssignNoteTargetsResult
 from .analyzer import (
     BiquadFilterType as BiquadFilterType,
@@ -170,11 +178,6 @@ from .analyzer import DecomposeResult as DecomposeResult
 from .analyzer import DecomposeStemsLinkedResult as DecomposeStemsLinkedResult
 from .analyzer import DecomposeStemsResult as DecomposeStemsResult
 from .analyzer import FormantMode as FormantMode
-from .analyzer import MasteringAssistantParams as MasteringAssistantParams
-from .analyzer import MasteringParams as MasteringParams
-from .analyzer import MasteringParamValue as MasteringParamValue
-from .analyzer import MasteringPreset as MasteringPreset
-from .analyzer import MasteringSoloParams as MasteringSoloParams
 from .analyzer import MidiRelease as MidiRelease
 from .analyzer import (
     Mixer as Mixer,
@@ -210,7 +213,6 @@ from .analyzer import PitchCorrectionMode as PitchCorrectionMode
 from .analyzer import (
     PitchDecompositionResult as PitchDecompositionResult,
 )
-from .analyzer import PlanarChannels as PlanarChannels
 from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,
 )
@@ -225,7 +227,6 @@ from .analyzer import ScaleKind as ScaleKind
 from .analyzer import (
     SilenceCommonReport as SilenceCommonReport,
 )
-from .analyzer import SoloProcessor as SoloProcessor
 from .analyzer import (
     SpectralRegionOp as SpectralRegionOp,
 )
@@ -241,7 +242,6 @@ from .analyzer import (
 from .analyzer import (
     StreamingRetune as StreamingRetune,
 )
-from .analyzer import StripRef as StripRef
 from .analyzer import (
     TranscribeResult as TranscribeResult,
 )

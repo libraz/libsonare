@@ -256,9 +256,10 @@ def analyze(
         - ``form`` (``str``) — overall form classification
 
     Raises:
-        SonareValueError: If ``meter_candidate_numerators`` holds more entries
-            than the native array can carry.
-        RuntimeError: If analysis fails.
+        SonareValueError: If an argument is outside its supported domain, including
+            a ``meter_candidate_numerators`` list that exceeds the native limit.
+        SonareError: If analysis is cancelled or the library reports another
+            failure, with its error code.
     """
     # Built before the library is touched, so an over-long numerator list is
     # refused whichever entry point runs below.

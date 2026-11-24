@@ -55,7 +55,12 @@ MasteringPreset: TypeAlias = Literal[
     "voiceMemo",
     "shellac78",
 ]
-"""A mastering preset name, as :func:`mastering_preset_names` lists them."""
+"""A mastering preset name, as :func:`mastering_preset_names` lists them.
+
+The restoration presets' repair stages can mistake a steady tone (a calibration
+tone, a drone, a long held note) for noise and pull it down by the configured
+reduction depth; check for sustained musical tones before applying one.
+"""
 
 # BEGIN GENERATED SoloProcessor (make processor-types)
 # Every processor name mastering_processor_names() can return, and therefore

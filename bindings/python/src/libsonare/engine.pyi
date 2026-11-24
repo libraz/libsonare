@@ -7,6 +7,7 @@ import numpy as np
 
 from ._engine_pages import ClipPageProvider as ClipPageProvider
 from ._engine_pages import FileClipPageProvider as FileClipPageProvider
+from ._mixing import StripRef
 from ._project import (
     Articulation,
     BuiltinSynthConfig,
@@ -21,8 +22,7 @@ from ._project import (
     Sf2InstrumentConfig,
     SynthPatch,
 )
-from ._types_engine import PlanarChannels as PlanarChannels
-from .analyzer import StripRef
+from ._types_engine import PlanarChannels
 from .types import (
     AutomationPoint,
     CapturePunch,
@@ -410,6 +410,10 @@ class RealtimeEngine:
     ) -> EngineProcessWithMonitorResult:
         """Render one block and return the program planes and the monitor planes."""
         ...
+    @overload
+    def process(
+        self, channels: PlanarChannels, *, with_monitor: bool
+    ) -> list[np.ndarray] | EngineProcessWithMonitorResult: ...
     def render_offline(
         self,
         channels: PlanarChannels,

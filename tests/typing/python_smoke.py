@@ -8,7 +8,7 @@ import numpy as np
 samples = [0.0, 0.1, -0.1, 0.0]
 ir_samples = [1.0, 0.5, 0.25, 0.125, 0.0]
 
-bpm: float = libsonare.detect_bpm(samples, sample_rate=22050)
+bpm = libsonare.detect_bpm(samples, sample_rate=22050)
 downbeats: np.ndarray[Any, Any] = libsonare.detect_downbeats(samples, sample_rate=22050)
 key: libsonare.Key = libsonare.detect_key(
     samples,
@@ -55,7 +55,7 @@ project = libsonare.Project()
 project.set_assist_sidecar("python-smoke", b"payload")
 assist_sidecars: list[libsonare.AssistSidecar] = project.assist_sidecars()
 
-assert_type(bpm, float)
+assert_type(bpm, float | None)
 assert_type(downbeats, np.ndarray[Any, Any])
 assert_type(key.short_name, str)
 assert_type(key_candidates[0].correlation, float)
@@ -99,6 +99,13 @@ voice_config = libsonare.RealtimeVoiceChangerConfig(wet_mix=0.5, formant_mode="a
 assert_type(voice_config.wet_mix, float)
 libsonare.RealtimeVoiceChangerConfig(wet_mixx=0.5)  # type: ignore[call-arg]
 libsonare.RealtimeVoiceChangerConfig(formant_mode="neutral")  # type: ignore[arg-type]
+
+
+def _frozen_result_fields(
+    decoded: libsonare.DecodedChannels, source: libsonare.ProjectVocalOriginalSource
+) -> None:
+    decoded.sample_rate = 48000  # type: ignore[misc]
+    source.source_id = 1  # type: ignore[misc]
 
 
 def _retune_block(retune: libsonare.StreamingRetune, block: np.ndarray[Any, Any]) -> None:

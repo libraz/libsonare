@@ -5,7 +5,7 @@ import numpy as np
 
 from .types import MixAssistantResult
 
-FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
+_FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 
 # The assistant's own option table, declared because the CLI reads it rather
 # than restating the accepted set: a stub that omits it makes the import an
@@ -15,7 +15,7 @@ _INTEGER_PARAMS: frozenset[str]
 
 class MixAssistantTrack(NamedTuple):
     id: str
-    channels: Sequence[FloatSamples]
+    channels: list[_FloatSamples] | tuple[_FloatSamples] | tuple[_FloatSamples, _FloatSamples]
     name: str | None = None
     sample_rate: int | None = None
 

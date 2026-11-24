@@ -53,7 +53,7 @@ from ._result_records import _result_to_json_dict
 from ._runtime import _mapping_keys
 
 if TYPE_CHECKING:
-    from .analyzer import MasteringPreset, SoloProcessor
+    from ._types_mastering import MasteringPreset, SoloProcessor
     from .types import StreamingPlatform
 
 

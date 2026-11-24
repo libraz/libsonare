@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DECLARATIONS = (
     ROOT / "bindings/node/src/types_mastering.ts",
     ROOT / "bindings/wasm/src/public_types_mastering.ts",
-    ROOT / "bindings/python/src/libsonare/analyzer.pyi",
+    ROOT / "bindings/python/src/libsonare/_types_mastering.py",
 )
 
 _TS_ARRAY = re.compile(r"export const SOLO_PROCESSORS = \[(.*?)\] as const;", re.DOTALL)
@@ -39,8 +39,8 @@ def _typescript_names(path: Path) -> list[str]:
     return _TS_STRING.findall(match.group(1))
 
 
-def _stub_names(path: Path) -> list[str]:
-    """Return the ``Literal`` members of the ``SoloProcessor`` alias in a stub."""
+def _python_names(path: Path) -> list[str]:
+    """Return the ``Literal`` members of the ``SoloProcessor`` alias in a Python module."""
     module = ast.parse(path.read_text(encoding="utf-8"))
     for node in module.body:
         if not isinstance(node, ast.AnnAssign):
@@ -60,7 +60,7 @@ def _stub_names(path: Path) -> list[str]:
 
 
 def _declared_names(path: Path) -> list[str]:
-    return _stub_names(path) if path.suffix == ".pyi" else _typescript_names(path)
+    return _typescript_names(path) if path.suffix == ".ts" else _python_names(path)
 
 
 def _runtime_names() -> set[str]:

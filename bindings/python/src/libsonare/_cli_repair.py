@@ -28,7 +28,7 @@ from ._mastering_offline import _chain_config_paths, _check_chain_document, _nes
 from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
-    from .analyzer import MasteringPreset
+    from ._types_mastering import MasteringPreset
     from .types import AudioDefects
 
 

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+import ctypes
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
 
+from ._types_mastering import MasteringPreset, SoloProcessor
 from .analyzer import (
-    MasteringPreset,
-    MasteringSoloParams,
     NormalizeMode,
     RealtimeVoiceChangerConfig,
     RealtimeVoiceChangerPreset,
-    SoloProcessor,
 )
 from .types import (
     AcousticResult,
@@ -45,10 +45,10 @@ from .types import (
     VoicePresetId,
 )
 
+@dataclass(frozen=True, slots=True, eq=False)
 class DecodedChannels:
     sample_rate: int
     channels: np.ndarray
-    def __init__(self, sample_rate: int, channels: np.ndarray) -> None: ...
 
 def decode_channels(data: bytes) -> DecodedChannels: ...
 def read_audio_tags(data: bytes) -> dict[str, str]: ...
@@ -70,12 +70,13 @@ def downmix(
 ) -> np.ndarray: ...
 
 class Audio:
+    def __init__(self, handle: ctypes.c_void_p, lib: ctypes.CDLL) -> None: ...
     @classmethod
     def from_file(cls, path: str, channel_index: int | None = None) -> Audio: ...
     @classmethod
     def file_num_channels(cls, path: str) -> int: ...
     @classmethod
-    def from_buffer(cls, samples: Sequence[float] | list[float], sample_rate: int) -> Audio: ...
+    def from_buffer(cls, samples: Sequence[float] | np.ndarray, sample_rate: int) -> Audio: ...
     @classmethod
     def from_memory(cls, data: bytes) -> Audio: ...
     @property
@@ -232,7 +233,9 @@ class Audio:
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult: ...
     def mastering_apply_processor(
-        self, processor: SoloProcessor, params: MasteringSoloParams | None = None
+        self,
+        processor: SoloProcessor,
+        params: Mapping[str, float | int | bool | str] | None = None,
     ) -> MasteringResult: ...
     def master_audio(
         self,

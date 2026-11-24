@@ -467,9 +467,7 @@ def mixing_assistant_source_class_names() -> list[str]:
     track's ``name``.
 
     Raises:
-        RuntimeError: If the library was built without the mixing assistant.
-            The entry point exists in such a build and answers with an empty
-            list, which is the one answer that cannot be a real taxonomy.
+        SonareError: If the library was built without the mixing assistant (``NotSupported``).
     """
     lib = _get_lib()
     names = _joined_names(

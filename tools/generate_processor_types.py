@@ -284,11 +284,6 @@ TARGETS = (
     Target(REPO_ROOT / "bindings/node/src/types_mastering.ts", "//", TYPESCRIPT_BLOCKS),
     Target(REPO_ROOT / "bindings/wasm/src/public_types_mastering.ts", "//", TYPESCRIPT_BLOCKS),
     Target(
-        REPO_ROOT / "bindings/python/src/libsonare/analyzer.pyi",
-        "#",
-        (Block("SoloProcessor", render_solo_pyi),),
-    ),
-    Target(
         REPO_ROOT / "bindings/python/src/libsonare/_types_mastering.py",
         "#",
         (Block("SoloProcessor", render_solo_pyi),),

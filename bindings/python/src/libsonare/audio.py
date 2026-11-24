@@ -469,11 +469,10 @@ class Audio:
                 default) to downmix every channel.
 
         Raises:
-            SonareValueError: If ``channel_index`` is negative.
-            RuntimeError: If the file does not exist, is too large, or has an
-                unsupported format. The error message includes the offending
-                extension and a copy-pasteable ``ffmpeg`` conversion hint.
-            SonareError: If ``channel_index`` names no channel the file has.
+            SonareValueError: If ``channel_index`` is outside the source channel range or
+                the file exceeds the supported size.
+            SonareError: If the file cannot be opened (``FileNotFound``) or decoded
+                (``DecodeFailed``, ``InvalidFormat``, or ``NotSupported``).
         """
         lib = _get_lib()
         handle = ctypes.c_void_p()
@@ -604,7 +603,7 @@ class Audio:
         stays valid after the :class:`Audio` handle is closed.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         handle = self._require_handle()
         ptr = self._lib.sonare_audio_data(handle)
@@ -619,7 +618,7 @@ class Audio:
         """Return the number of audio samples.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         return int(self._lib.sonare_audio_length(self._require_handle()))
 
@@ -628,7 +627,7 @@ class Audio:
         """Return the sample rate in Hz.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         return int(self._lib.sonare_audio_sample_rate(self._require_handle()))
 
@@ -637,7 +636,7 @@ class Audio:
         """Return the audio duration in seconds.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         return float(self._lib.sonare_audio_duration_sec(self._require_handle()))
 
@@ -663,7 +662,7 @@ class Audio:
 
         Raises:
             SonareValueError: If the range is non-finite, non-positive or inverted.
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         return _measured(
             self._audio_float(
@@ -755,7 +754,8 @@ class Audio:
             :func:`libsonare.analyze` instead — one call returns all of them.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareValueError: If the tempo range is non-finite, non-positive or inverted.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         handle = self._require_handle()
         with _out_float_array(self._lib) as (out_times, out_count):
@@ -784,7 +784,7 @@ class Audio:
             of them.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         handle = self._require_handle()
         with _out_float_array(self._lib) as (out_times, out_count):
@@ -799,7 +799,7 @@ class Audio:
         """Detect onset times in seconds as a float32 array.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         handle = self._require_handle()
         out_times = ctypes.POINTER(ctypes.c_float)()
@@ -831,7 +831,8 @@ class Audio:
         ``bpm`` is ``None`` when no tempo is measured.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareValueError: If an analysis argument is outside its supported domain.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         from ._analysis_reports import analyze as _analyze
 
@@ -1566,7 +1567,8 @@ class Audio:
         function over :attr:`data`.
 
         Raises:
-            RuntimeError: If the audio has been closed.
+            SonareValueError: If the frame position or spectrum settings are outside their domain.
+            SonareError: If the audio is closed (``InvalidState``, reason ``releasedHandle``).
         """
         from ._ffi import SonareSpectrumResult
 
