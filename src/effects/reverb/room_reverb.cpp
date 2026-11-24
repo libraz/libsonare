@@ -9,7 +9,6 @@
 #include "effects/common/room_field_checks.h"
 #include "util/constants.h"
 #include "util/exception.h"
-#include "util/parameter_checks.h"
 
 namespace sonare::effects::reverb {
 
@@ -27,16 +26,20 @@ sonare::acoustic::RirSynthConfig rir_config_from(const RoomReverbConfig& config)
   return rc;
 }
 
+float receiver_spacing(const RoomReverbConfig& config) {
+  return config.receiver_spacing_m.value_or(sonare::acoustic::default_receiver_spacing(
+      config.dims, sonare::acoustic::SourceListener{config.source, config.listener}));
+}
+
 }  // namespace
 
 RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout layout)
     : config_(config), layout_(layout) {
-  // uniform_shoebox clamps rather than validates, so an out-of-range absorption
-  // would reach validate_shoebox already inside the range and be accepted as a
-  // different room. The insert factory rejects the same value; so does the C
-  // entry point.
-  util::check::in_range(config_.absorption, 0.0, 1.0, "absorption");
-  sonare::acoustic::validate_material_coefficient(config_.absorption, "absorption");
+  if (layout_ == sonare::acoustic::ReceiverLayout::Mono) {
+    common::check_receiver_spacing_absent_for_mono(config_.receiver_spacing_m,
+                                                   "receiver_spacing_m");
+  }
+
   const sonare::acoustic::ShoeboxRoom room =
       sonare::acoustic::uniform_shoebox(config_.dims, config_.absorption);
   const common::RoomMemberPaths paths{"dims", "source", "listener"};
@@ -54,14 +57,10 @@ RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout
   SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
                    sonare::acoustic::first_error_text(synthesis));
   if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
+    config_.supplied.receiver_spacing = config_.receiver_spacing_m.has_value();
     common::check_receiver_pair(room,
                                 sonare::acoustic::SourceListener{config_.source, config_.listener},
-                                config_.receiver_spacing_m, paths, config_.supplied);
-    const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
-        room, sonare::acoustic::SourceListener{config_.source, config_.listener},
-        config_.receiver_spacing_m);
-    SONARE_CHECK_MSG(!has_error(pair), ErrorCode::InvalidParameter,
-                     sonare::acoustic::first_error_text(pair));
+                                receiver_spacing(config_), paths, config_.supplied);
   }
 
   // Honour the configured mix at construction (sibling reverbs do the same).
@@ -90,7 +89,7 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   RirPairResult pair;
   const bool with_pair = layout_ == ReceiverLayout::MonoAndPair;
   if (with_pair) {
-    pair = synthesize_rir_pair(room, placement, config_.receiver_spacing_m, sr, rc);
+    pair = synthesize_rir_pair(room, placement, receiver_spacing(config_), sr, rc);
     SONARE_CHECK_MSG(!has_error(pair.diagnostics), ErrorCode::InvalidParameter,
                      first_error_text(pair.diagnostics));
   }

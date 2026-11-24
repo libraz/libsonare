@@ -18,6 +18,11 @@ enum class NormType {
   Power,  ///< sum(x^2)
 };
 
+/// @brief Refuse a normalization mode that is not one of the declared modes.
+/// @param norm Normalization mode to validate
+/// @throw SonareException with InvalidParameter and subject `norm` when the value is unknown.
+void validate_norm_type(NormType norm);
+
 /// @brief Normalize a 1-D array in place into a new vector.
 /// @param x Input data
 /// @param n Length of x

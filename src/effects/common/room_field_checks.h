@@ -7,6 +7,7 @@
 
 #include <array>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,10 +40,6 @@ inline constexpr util::check::NumericDomain kAirTemperatureCDomain =
 /// @brief What AirAbsorption::humidity_percent accepts.
 inline constexpr util::check::NumericDomain kAirHumidityPercentDomain =
     util::check::real_domain(0.0, 100.0);
-/// @brief What a receiver spacing accepts.
-inline constexpr util::check::NumericDomain kReceiverSpacingDomain =
-    util::check::real_domain(0.0, false, ::sonare::acoustic::kMaxReceiverSpacingM, true);
-
 /// Config member paths of the three geometry members a room config holds.
 struct RoomMemberPaths {
   std::string dims;      ///< RoomDimensions member, e.g. "dims"
@@ -90,6 +87,15 @@ inline void check_rir_synth_config(const ::sonare::acoustic::RirSynthConfig& con
   }
 }
 
+/// Refuses a receiver spacing supplied to a mono layout.
+inline void check_receiver_spacing_absent_for_mono(const std::optional<float>& spacing_m,
+                                                   const char* subject) {
+  if (spacing_m) {
+    ::sonare::util::check::refuse_relation(
+        {subject}, ::sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation);
+  }
+}
+
 /// Refuses a receiver spacing outside (0, kMaxReceiverSpacingM], then a spacing that puts either
 /// receiver outside the room, naming the plan-view coordinates of @p supplied beside the room.
 inline void check_receiver_pair(const ::sonare::acoustic::ShoeboxRoom& room,
@@ -104,7 +110,7 @@ inline void check_receiver_pair(const ::sonare::acoustic::ShoeboxRoom& room,
                        x ? room.dims.length : room.dims.width, false,
                        (paths.listener + (x ? ".x" : ".y")).c_str());
   }
-  check::within(spacing_m, kReceiverSpacingDomain, "receiver_spacing_m");
+  check::within(spacing_m, ::sonare::acoustic::kReceiverSpacingDomain, "receiver_spacing_m");
   const ::sonare::acoustic::ReceiverPair pair =
       ::sonare::acoustic::receiver_pair(placement, spacing_m);
   if (!::sonare::acoustic::point_inside_shoebox(room, pair.left) ||

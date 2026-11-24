@@ -5,6 +5,8 @@
 ///        a room impulse response from shoebox dimensions and uniform wall
 ///        absorption, then convolves the signal with it.
 
+#include <optional>
+
 #include "acoustic/geometry.h"
 #include "acoustic/late_reverb.h"      // AirAbsorption
 #include "acoustic/rir_synthesizer.h"  // ReceiverLayout
@@ -34,8 +36,8 @@ struct RoomReverbConfig {
   bool air_absorption_enabled = true;
   sonare::acoustic::AirAbsorption air{};
   /// Spacing (m) of the omnidirectional receiver pair centred on the listener, in (0, 4].
-  /// Read only by the stereo layout (`ReceiverLayout::MonoAndPair`).
-  float receiver_spacing_m = sonare::acoustic::kDefaultReceiverSpacingM;
+  /// An omitted spacing is fitted for MonoAndPair; Mono refuses one.
+  std::optional<float> receiver_spacing_m{};
   /// Which placement coordinates the caller gave; a refusal leaves the library-chosen ones out.
   sonare::acoustic::SuppliedPlacement supplied{};
 };

@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "metering/dynamic_range.h"
@@ -481,6 +482,37 @@ TEST_CASE("DynamicsAnalyzer bounds an oversize window before converting it",
     config.window_sec = window_sec;
     INFO("window_sec " << window_sec);
     CHECK_THROWS_AS(DynamicsAnalyzer(audio, config), SonareException);
+  }
+}
+
+TEST_CASE("DynamicsAnalyzer refuses hop_length outside its config domain",
+          "[dynamics_analyzer][config-domain]") {
+  const Audio audio = Audio::from_vector(std::vector<float>(1000, 0.5f), 1000);
+  for (const int hop_length : {0, -1}) {
+    DynamicsConfig config;
+    config.hop_length = hop_length;
+    bool refused = false;
+    try {
+      (void)DynamicsAnalyzer(audio, config);
+    } catch (const SonareParameterRefusal& error) {
+      refused = true;
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(error.subject() == "hop_length");
+      CHECK(std::string(error.what()) == "hop_length must be an integer in [1, 2147483647]");
+    } catch (const SonareException& error) {
+      refused = true;
+      CHECK(false);
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == "hop_length must be an integer in [1, 2147483647]");
+    }
+    CHECK(refused);
+  }
+
+  for (const int hop_length : {1, std::numeric_limits<int>::max()}) {
+    DynamicsConfig config;
+    config.window_sec = 0.1f;
+    config.hop_length = hop_length;
+    CHECK_NOTHROW(DynamicsAnalyzer(audio, config));
   }
 }
 

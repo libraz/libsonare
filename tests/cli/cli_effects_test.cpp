@@ -8,6 +8,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "feature/pitch.h"
+#include "util/refusal_predicates.h"
 
 TEST_CASE("CLI effect commands require an output destination", "[cli]") {
   // Offline-effect output contract: commands that render audio require -o and
@@ -227,12 +228,11 @@ TEST_CASE("CLI normalize preserves retained-layout error ordering", "[cli][ffmpe
       ContainsSubstring(
           "FFmpeg: interleaved decode does not support a channel layout change midstream"));
 
-  // An argv-decidable refusal is a usage error and wins over that deferred decode failure.
+  // Option validation still wins over that deferred decode failure.
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
-  REQUIRE(invalid_code == 2);
+  REQUIRE(invalid_code == 3);
   REQUIRE_THAT(invalid_message, ContainsSubstring("argument --mode: must be one of peak, rms"));
-  REQUIRE_THAT(invalid_message, !ContainsSubstring("FFmpeg"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
   cleanup();
 }
@@ -559,6 +559,31 @@ TEST_CASE("CLI room-morph keeps a two-channel input stereo", "[cli][acoustic]") 
                                              "--receiver-spacing 4.5");
   REQUIRE(bad_code != 0);
   REQUIRE_THAT(bad_output, ContainsSubstring("--receiver-spacing"));
+  std::remove(input.c_str());
+  std::remove(output.c_str());
+}
+
+TEST_CASE("CLI room-morph refuses receiver spacing on a mono input after loading",
+          "[cli][acoustic][room-placement-domain]") {
+  constexpr int kSampleRate = 48000;
+  const std::string input = unique_temp_path("_morph_mono_spacing_input.wav");
+  const std::string output = unique_temp_path("_morph_mono_spacing_output.wav");
+  save_wav(input, std::vector<float>(4800, 0.1f), kSampleRate);
+  const auto [code, message] = exec_command(CLI + " room-morph " + input + " -o " + output +
+                                            " --receiver-spacing 0.5 --max-sec 0.1 -q");
+  std::string expected = sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation;
+  expected.replace(expected.find("{0}"), 3, "--receiver-spacing");
+  CHECK(code == 3);
+  CHECK_THAT(message, ContainsSubstring(expected));
+  CHECK_FALSE(std::ifstream(output).good());
+
+  // A refusal naming another field passes through without the spacing respelling.
+  const auto [wet_code, wet_message] =
+      exec_command(CLI + " room-morph " + input + " -o " + output + " --wet 2 --max-sec 0.1 -q");
+  CHECK(wet_code == 3);
+  CHECK_THAT(wet_message, ContainsSubstring("wet must be finite and in [0, 1]"));
+  CHECK_THAT(wet_message, !ContainsSubstring("--receiver-spacing"));
+  CHECK_FALSE(std::ifstream(output).good());
   std::remove(input.c_str());
   std::remove(output.c_str());
 }

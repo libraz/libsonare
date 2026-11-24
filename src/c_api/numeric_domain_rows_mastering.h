@@ -4,6 +4,8 @@
 /// @brief Numeric-domain rows of the mastering, metering, streaming, inverse-feature, segment,
 ///        room and framing C entries.
 
+#include "acoustic/rir_synthesizer.h"
+#include "acoustic/room_model.h"
 #include "analysis/room_estimator.h"
 #include "c_api/editing_input_domains.h"
 #include "c_api/inverse_input_domains.h"
@@ -203,6 +205,7 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"mfcc_to_mel", "n_mfcc", sonare::kInverseMfccCountDomain, nullptr},
     {"pcen", "n_bins", kMatrixDimensionDomain, nullptr},
     {"pcen", "n_frames", kMatrixDimensionDomain, nullptr},
+    {"room_morph", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain, nullptr},
     {"room_morph", "config.air_humidity_percent",
      sonare::effects::common::kAirHumidityPercentDomain, nullptr},
     {"room_morph", "config.air_temperature_c", sonare::effects::common::kAirTemperatureCDomain,
@@ -215,6 +218,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"room_morph", "config.mixing_time_ms", sonare::effects::common::kRirMixingTimeMsDomain,
      nullptr},
     {"room_morph", "config.width_m", sonare::effects::common::kRoomDimensionDomain, nullptr},
+    {"room_morph_stereo", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain,
+     nullptr},
     {"room_morph_stereo", "config.air_humidity_percent",
      sonare::effects::common::kAirHumidityPercentDomain, nullptr},
     {"room_morph_stereo", "config.air_temperature_c",
@@ -229,8 +234,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"room_morph_stereo", "config.max_sec", sonare::effects::common::kRirMaxSecondsDomain, nullptr},
     {"room_morph_stereo", "config.mixing_time_ms", sonare::effects::common::kRirMixingTimeMsDomain,
      nullptr},
-    {"room_morph_stereo", "config.receiver_spacing_m",
-     sonare::effects::common::kReceiverSpacingDomain, nullptr},
+    {"room_morph_stereo", "config.receiver_spacing_m", sonare::acoustic::kReceiverSpacingDomain,
+     nullptr},
     {"room_morph_stereo", "config.width_m", sonare::effects::common::kRoomDimensionDomain, nullptr},
     {"segment_agglomerative", "cols", kSegmentMatrixExtentDomain, nullptr},
     {"segment_agglomerative", "k", kAgglomerativeClusterCountDomain, nullptr},
@@ -267,6 +272,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"stream_analyzer_create", "config.sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"streaming_mastering_chain_prepare", "num_channels",
      sonare::mastering::api::kStreamingChainChannelCountDomain, nullptr},
+    {"synthesize_rir", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain,
+     nullptr},
     {"synthesize_rir", "config.crossfade_ms", sonare::effects::common::kRirCrossfadeMsDomain,
      nullptr},
     {"synthesize_rir", "config.ism_order", sonare::effects::common::kRirIsmOrderDomain, nullptr},

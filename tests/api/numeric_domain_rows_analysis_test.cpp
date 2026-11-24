@@ -783,6 +783,17 @@ SonareError probe_griffin_lim(const std::string& param, double value) {
                        out);
 }
 
+SonareError probe_resample(const std::string& param, double value) {
+  int sample_rate = kAnalysisRate;
+  int target_sample_rate = kAnalysisRate;
+  if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
+  if (is_param(param, "target_sample_rate")) target_sample_rate = static_cast<int>(value);
+  float* out = nullptr;
+  size_t out_length = 0;
+  return finish_floats(
+      sonare_resample(nullptr, 0, sample_rate, target_sample_rate, &out, &out_length), out);
+}
+
 SonareError probe_tone(const std::string& param, double value) {
   int sample_rate = kAnalysisRate;
   if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
@@ -793,10 +804,15 @@ SonareError probe_tone(const std::string& param, double value) {
 
 SonareError probe_chirp(const std::string& param, double value) {
   int sample_rate = kAnalysisRate;
+  float fmin_hz = 220.0f;
+  float fmax_hz = 880.0f;
   if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
+  if (is_param(param, "fmin_hz")) fmin_hz = static_cast<float>(value);
+  if (is_param(param, "fmax_hz")) fmax_hz = static_cast<float>(value);
   float* out = nullptr;
   size_t out_length = 0;
-  return finish_floats(sonare_chirp(220.0f, 880.0f, sample_rate, 0.1f, 1, &out, &out_length), out);
+  return finish_floats(sonare_chirp(fmin_hz, fmax_hz, sample_rate, 0.1f, 1, &out, &out_length),
+                       out);
 }
 
 SonareError probe_clicks(const std::string& param, double value) {
@@ -1070,6 +1086,7 @@ const std::map<std::string, Probe>& probes() {
       {"tempogram_ratio", probe_tempogram_ratio},
       {"nnls_chroma", probe_nnls_chroma},
       {"griffin_lim", probe_griffin_lim},
+      {"resample", probe_resample},
       {"tone", probe_tone},
       {"chirp", probe_chirp},
       {"clicks", probe_clicks},

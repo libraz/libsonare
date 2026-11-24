@@ -18,6 +18,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/refusal_predicates.h"
 
 using sonare::Audio;
 using sonare::ErrorCode;
@@ -200,6 +201,21 @@ TEST_CASE("RoomReverb rejects a negative image-source order at construction",
   REQUIRE(rejects_at_construction(config));
 }
 
+TEST_CASE("RoomReverb refuses explicit receiver spacing for a mono layout",
+          "[effects][reverb][acoustic][room-placement-domain]") {
+  RoomReverbConfig config = valid_config();
+  config.receiver_spacing_m = 0.5f;
+  try {
+    RoomReverb reverb(config, sonare::acoustic::ReceiverLayout::Mono);
+    FAIL("mono RoomReverb accepted explicit receiver spacing");
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    CHECK(refusal.code() == ErrorCode::InvalidParameter);
+    CHECK(refusal.predicate() ==
+          sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation);
+    CHECK(std::string(refusal.what()) == "receiver_spacing_m must be omitted for a mono layout");
+  }
+}
+
 TEST_CASE("an accepted RoomReverb is never a silent dry passthrough",
           "[effects][reverb][acoustic]") {
   // Every config the constructor accepts must synthesize a usable IR: an empty
@@ -358,16 +374,18 @@ TEST_CASE("a stereo RoomReverb decorrelates its reverberation above 1 kHz",
 
 TEST_CASE("RoomReverb refuses a receiver pair that leaves the room at construction",
           "[effects][reverb][acoustic][stereo][numeric]") {
-  RoomReverbConfig config = reference_stereo_config();
+  RoomReverbConfig config = valid_config();
   config.listener = {6.0f, 0.1f, 1.5f};  // 0.1 m from the y = 0 wall
+  RoomReverbConfig spaced = config;
+  spaced.receiver_spacing_m = 0.5f;
   try {
-    RoomReverb reverb(config);
+    RoomReverb reverb(spaced);
     FAIL("a receiver outside the room was accepted");
   } catch (const sonare::SonareParameterRefusal& error) {
     REQUIRE(error.code() == ErrorCode::InvalidParameter);
     const std::vector<std::string>& subjects = error.subjects();
     REQUIRE(std::find(subjects.begin(), subjects.end(), "receiver_spacing_m") != subjects.end());
   }
-  // The mono layout never places the pair, so the same listener is accepted there.
+  // The mono layout never places a pair, so an omitted spacing accepts the listener.
   REQUIRE_NOTHROW(RoomReverb(config, sonare::acoustic::ReceiverLayout::Mono));
 }

@@ -619,11 +619,10 @@ std::vector<Diagnostic> validate_receiver_pair(const ShoeboxRoom& room,
                                                const SourceListener& placement, float spacing_m,
                                                const char* spacing_name) {
   std::vector<Diagnostic> diagnostics;
-  if (!numeric::finite(spacing_m) || !(spacing_m > 0.0f) || spacing_m > kMaxReceiverSpacingM) {
+  if (!util::check::in_domain(spacing_m, kReceiverSpacingDomain)) {
     diagnostics.push_back(
         {Diagnostic::Severity::Error, "acoustic.receiver_spacing_out_of_range",
-         std::string(spacing_name) + " " +
-             util::refusal::interval_predicate(0.0, false, kMaxReceiverSpacingM, true)});
+         std::string(spacing_name) + " " + util::check::domain_predicate(kReceiverSpacingDomain)});
     return diagnostics;
   }
   const ReceiverPair pair = receiver_pair(placement, spacing_m);

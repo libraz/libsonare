@@ -235,7 +235,7 @@ typedef struct {
   float air_humidity_percent;  ///< Relative humidity in percent.
   /// Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. NaN means not given:
   /// 0.5 where that pair fits the room around the listener, else the largest spacing that
-  /// fits. Ignored and not validated by sonare_room_morph.
+  /// fits. sonare_room_morph refuses a supplied spacing because the mono request has no pair.
   float receiver_spacing_m;
 } SonareRoomMorphConfig;
 

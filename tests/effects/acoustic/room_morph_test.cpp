@@ -7,13 +7,23 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
 #include "util/constants.h"
+#include "util/exception.h"
+#include "util/refusal_predicates.h"
 
 namespace {
+
+std::string render_relation(const char* relation, const std::string& subject) {
+  std::string rendered(relation);
+  const std::string::size_type marker = rendered.find("{0}");
+  rendered.replace(marker, 3, subject);
+  return rendered;
+}
 
 using sonare::acoustic::Material;
 using sonare::acoustic::ShoeboxRoom;
@@ -121,5 +131,25 @@ TEST_CASE("room morph suppressor re-entry starts at unity after bypass", "[bound
     CAPTURE(sample_rate);
     REQUIRE(peak(continuous, 256) > 0.05f);
     REQUIRE(difference(subject, continuous, 256) <= 2.0e-5f);
+  }
+}
+
+TEST_CASE("mono RoomMorphProcessor refuses supplied receiver spacing",
+          "[acoustic][room_morph][room-placement-domain]") {
+  RoomMorphConfig omitted = config();
+  CHECK_NOTHROW(RoomMorphProcessor(omitted, sonare::acoustic::ReceiverLayout::Mono));
+
+  RoomMorphConfig explicit_default = omitted;
+  explicit_default.receiver_spacing_m = 0.5f;
+  try {
+    RoomMorphProcessor processor(explicit_default, sonare::acoustic::ReceiverLayout::Mono);
+    FAIL("mono processor accepted a supplied receiver spacing");
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    CHECK(refusal.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(refusal.predicate() ==
+          sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation);
+    CHECK(std::string(refusal.what()) ==
+          render_relation(sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation,
+                          "receiver_spacing_m"));
   }
 }

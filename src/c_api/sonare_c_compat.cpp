@@ -322,11 +322,7 @@ SonareError sonare_vector_normalize(const float* values, size_t length, SonareNo
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err = run_validation([&] {
         refuse_invalid_buffer("values", "length", values, length, true);
-        util::check::one_of(
-            static_cast<int>(norm),
-            std::array<int, 4>{static_cast<int>(NormType::Inf), static_cast<int>(NormType::L1),
-                               static_cast<int>(NormType::L2), static_cast<int>(NormType::Power)},
-            "norm");
+        validate_norm_type(static_cast<NormType>(norm));
       });
       err != SONARE_OK) {
     return err;

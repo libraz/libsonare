@@ -6,6 +6,7 @@
 
 #include "sonare_cli.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 int cmd_mel(const CliArgs& args, const Audio& audio) {
   MelConfig config;
@@ -688,7 +689,7 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   const sonare::acoustic::ResolvedRoomPlacement resolved =
       sonare::acoustic::resolve_room_placement(cfg.target.dims, request);
   cfg.placement = resolved.placement;
-  cfg.receiver_spacing_m = resolved.receiver_spacing_m;
+  cfg.receiver_spacing_m = request.receiver_spacing_m;
   cfg.supplied = resolved.supplied;
   cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
   cfg.wet = args.get_float("wet", cfg.wet);
@@ -709,13 +710,26 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   StereoPlanes planes;
   sonare::effects::acoustic::RoomMorphStereoResult stereo_morph;
   sonare::effects::acoustic::RoomMorphResult mono_morph;
-  if (stereo) {
-    planes = load_stereo_planes(args, audio);
-    const int rate = audio.sample_rate();
-    stereo_morph = sonare::effects::acoustic::room_morph_stereo(
-        Audio::from_vector(planes.left, rate), Audio::from_vector(planes.right, rate), cfg);
-  } else {
-    mono_morph = sonare::effects::acoustic::room_morph(audio, cfg);
+  try {
+    if (stereo) {
+      planes = load_stereo_planes(args, audio);
+      const int rate = audio.sample_rate();
+      stereo_morph = sonare::effects::acoustic::room_morph_stereo(
+          Audio::from_vector(planes.left, rate), Audio::from_vector(planes.right, rate), cfg);
+    } else {
+      mono_morph = sonare::effects::acoustic::room_morph(audio, cfg);
+    }
+  } catch (const SonareParameterRefusal& refusal) {
+    if (std::find(refusal.subjects().begin(), refusal.subjects().end(), "receiver_spacing_m") ==
+        refusal.subjects().end()) {
+      throw;
+    }
+    throw refusal.respelled(
+        refusal.code(),
+        [](const std::string& subject) {
+          return subject == "receiver_spacing_m" ? std::string("--receiver-spacing") : subject;
+        },
+        true);
   }
   const auto& diagnostics = stereo ? stereo_morph.diagnostics : mono_morph.diagnostics;
   // The same loop synthesize-rir runs, for the same reason: a warning describes a

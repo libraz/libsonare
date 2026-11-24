@@ -175,19 +175,19 @@ std::vector<float> resample_impulse_response(const float* samples, size_t size, 
   return result;
 }
 
-Audio resample(const Audio& audio, int target_sr) {
+Audio resample(const Audio& audio, int target_sample_rate) {
   if (audio.empty()) {
-    util::check::integer_within(target_sr, kRawResampleRateDomain, "target_sample_rate");
-    return Audio::from_buffer(nullptr, 0, target_sr);
+    util::check::integer_within(target_sample_rate, kRawResampleRateDomain, "target_sample_rate");
+    return Audio::from_buffer(nullptr, 0, target_sample_rate);
   }
 
-  if (audio.sample_rate() == target_sr) {
+  if (audio.sample_rate() == target_sample_rate) {
     return audio;
   }
 
   std::vector<float> resampled =
-      resample(audio.data(), audio.size(), audio.sample_rate(), target_sr);
-  return Audio::from_vector(std::move(resampled), target_sr);
+      resample(audio.data(), audio.size(), audio.sample_rate(), target_sample_rate);
+  return Audio::from_vector(std::move(resampled), target_sample_rate);
 }
 
 }  // namespace sonare

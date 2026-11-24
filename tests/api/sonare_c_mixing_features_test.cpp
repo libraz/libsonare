@@ -645,6 +645,24 @@ TEST_CASE("sonare_griffin_lim reconstructs STFT magnitude", "[c_api][features]")
   sonare_free_floats(result);
 }
 
+TEST_CASE("C chirp refuses frequencies outside the selected sweep's domain", "[c_api][synthesis]") {
+  for (const bool linear : {false, true}) {
+    CAPTURE(linear);
+    float* out = nullptr;
+    size_t out_length = 9;
+    const float fmin_hz = linear ? 440.0f : 0.0f;
+    const float fmax_hz = linear ? 0.0f : 880.0f;
+    const SonareError result =
+        sonare_chirp(fmin_hz, fmax_hz, 22050, 0.1f, linear ? 1 : 0, &out, &out_length);
+    CHECK(result == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string(linear ? "fmax_hz" : "fmin_hz") + " must be finite and greater than 0");
+    CHECK(out == nullptr);
+    CHECK(out_length == 0);
+    if (out != nullptr) sonare_free_floats(out);
+  }
+}
+
 TEST_CASE("synthetic audio generators are available from the C API", "[c_api][features]") {
   float* out = nullptr;
   size_t out_length = 0;

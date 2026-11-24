@@ -12,12 +12,20 @@
 
 #include "acoustic/rir_synthesizer.h"
 #include "support/c_diagnostics.h"
+#include "util/refusal_predicates.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
 #include "support/alloc_guard.h"
 #endif
 
 namespace {
+
+std::string render_relation(const char* relation, const std::string& subject) {
+  std::string rendered(relation);
+  const std::string::size_type marker = rendered.find("{0}");
+  rendered.replace(marker, 3, subject);
+  return rendered;
+}
 
 using sonare_test::has_diagnostic_code;
 using sonare_test::last_diagnostics;
@@ -1545,12 +1553,16 @@ TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_ap
   wall.receiver_spacing_m = 0.5f;
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &wall, &out_left,
                                  &out_right, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  // The mono morph does not read the spacing, so the same placement still renders.
-  float* mono = nullptr;
-  size_t mono_length = 0;
+  // The mono morph refuses the pair-only setting rather than silently dropping it.
+  float* mono = input.data();
+  size_t mono_length = 99;
   CHECK(sonare_room_morph(input.data(), input.size(), 48000, &wall, &mono, &mono_length) ==
-        SONARE_OK);
-  sonare_free_floats(mono);
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mono == nullptr);
+  CHECK(mono_length == 0);
+  CHECK(std::string(sonare_last_error_message()) ==
+        render_relation(sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation,
+                        "config.receiver_spacing_m"));
 
   const SonareRoomMorphConfig cfg = stereo_morph_config();
   CHECK(sonare_room_morph_stereo(input.data(), nullptr, input.size(), 48000, &cfg, &out_left,
@@ -1564,6 +1576,76 @@ TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_ap
                                  nullptr, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out_left,
                                  &out_right, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare acoustic C API room morph validates wall absorption domain",
+          "[c_api][acoustic][absorption-domain]") {
+  std::vector<float> input(4800, 0.0f);
+  input[0] = 1.0f;
+  for (const float bad : {-0.01f, 1.01f}) {
+    CAPTURE(bad);
+    SonareRoomMorphConfig config = stereo_morph_config();
+    config.absorption = bad;
+    float* output = input.data();
+    size_t output_length = 99;
+    CHECK(sonare_room_morph(input.data(), input.size(), 48000, &config, &output, &output_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(output == nullptr);
+    CHECK(output_length == 0);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.absorption must be finite and in [0, 1]");
+  }
+
+  for (const float boundary : {0.0f, 1.0f}) {
+    CAPTURE(boundary);
+    SonareRoomMorphConfig config = stereo_morph_config();
+    config.absorption = boundary;
+    float* output = nullptr;
+    size_t output_length = 0;
+    REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &config, &output,
+                              &output_length) == SONARE_OK);
+    CHECK(output != nullptr);
+    CHECK(output_length > input.size());
+    sonare_free_floats(output);
+  }
+}
+
+TEST_CASE("sonare acoustic C API zeroes outputs for supplied mono receiver spacing",
+          "[c_api][acoustic][room-placement-domain]") {
+  std::vector<float> input(4800, 0.0f);
+  input[0] = 1.0f;
+  SonareRoomMorphConfig config = stereo_morph_config();
+  config.receiver_spacing_m = 0.5f;
+  float sentinel = 0.0f;
+  float* output = &sentinel;
+  size_t output_length = 99;
+  CHECK(sonare_room_morph(input.data(), input.size(), 48000, &config, &output, &output_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(output == nullptr);
+  CHECK(output_length == 0);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        render_relation(sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation,
+                        "config.receiver_spacing_m"));
+
+  SonareRoomMorphConfig omitted = stereo_morph_config();
+  output = nullptr;
+  output_length = 0;
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &omitted, &output, &output_length) ==
+          SONARE_OK);
+  CHECK(output != nullptr);
+  CHECK(output_length > input.size());
+  sonare_free_floats(output);
+
+  SonareRoomMorphConfig empty_input_config = stereo_morph_config();
+  output = &sentinel;
+  output_length = 99;
+  CHECK(sonare_room_morph(nullptr, 0, 48000, &empty_input_config, &output, &output_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(output == nullptr);
+  CHECK(output_length == 0);
+  CHECK(std::string(sonare_last_error_message()) == "samples must be a non-empty buffer");
 }
 
 TEST_CASE("sonare acoustic C API fits an omitted receiver spacing to the room",

@@ -406,3 +406,23 @@ TEST_CASE("uniform room rejects a bad absorption on every branch", "[acoustic][r
   scalar_in_range.absorption = 0.4f;
   REQUIRE_NOTHROW(make_uniform_room(dims, scalar_in_range));
 }
+
+TEST_CASE("uniform shoebox validates absorption before its physical clamp",
+          "[acoustic][room_model][absorption-domain]") {
+  const RoomDimensions dims{4.0f, 3.0f, 2.5f};
+  for (const float bad : {-0.01f, 1.01f}) {
+    CAPTURE(bad);
+    try {
+      (void)uniform_shoebox(dims, bad);
+      FAIL("out-of-domain absorption was clamped");
+    } catch (const SonareParameterRefusal& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == "absorption must be finite and in [0, 1]");
+    }
+  }
+
+  const ShoeboxRoom zero = uniform_shoebox(dims, 0.0f);
+  const ShoeboxRoom one = uniform_shoebox(dims, 1.0f);
+  CHECK(zero.walls[0].absorption[0] == 0.0f);
+  CHECK(one.walls[0].absorption[0] == sonare::acoustic::kMaxWallAbsorption);
+}

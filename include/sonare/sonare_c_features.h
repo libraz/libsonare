@@ -224,6 +224,9 @@ void sonare_free_melody_result(SonareMelodyResult* result);
 SonareError sonare_tone(float frequency_hz, int sample_rate, float duration_sec, float phase,
                         float amplitude, float** out, size_t* out_length);
 /// @brief Generates a linear or exponential chirp. Free @p out with sonare_free_floats.
+/// @param fmin_hz Finite starting frequency, at least 0 for a linear sweep and greater than 0
+///        for an exponential sweep.
+/// @param fmax_hz Finite ending frequency greater than 0.
 SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float duration_sec,
                          int linear, float** out, size_t* out_length);
 /// @brief Generates decaying sine clicks at times in seconds. Free @p out with sonare_free_floats.

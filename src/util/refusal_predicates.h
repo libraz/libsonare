@@ -187,6 +187,10 @@ inline constexpr const char* kMustNotBothBeAbsent = "{must_not_both_be_absent}";
 inline constexpr const char* kIsAbsent = "{is_absent}";    ///< "is NULL"
 inline constexpr const char* kIsPresent = "{is_present}";  ///< "is not NULL"
 
+/// @brief A receiver spacing must be absent for a mono layout.
+inline constexpr const char* kReceiverSpacingAbsentForMonoLayoutRelation =
+    "{0} must be omitted for a mono layout";
+
 /// @brief "must not be NULL", for a pointer the call reads or writes.
 inline constexpr const char* kNonNullPredicate = kMustBePresent;
 

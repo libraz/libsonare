@@ -15,6 +15,12 @@ namespace sonare {
 /// @brief What the sample rate of tone, chirp and clicks accepts: they produce audio, so the
 ///        audio sample-rate domain.
 inline constexpr util::check::NumericDomain kSynthesisSampleRateDomain = kAudioSampleRateDomain;
+/// @brief The finite linear chirp start frequencies, including 0 Hz.
+inline constexpr util::check::NumericDomain kChirpLinearMinHzDomain =
+    util::check::real_domain_above(0.0, true);
+/// @brief The finite positive frequencies accepted by chirp endpoints.
+inline constexpr util::check::NumericDomain kChirpPositiveFrequencyHzDomain =
+    util::check::real_domain_above(0.0, false);
 /// @brief What the output length of clicks accepts, in samples; 0 sizes it to the last click.
 inline constexpr util::check::NumericDomain kClicksLengthDomain = util::check::with_sentinel(
     util::check::integer_domain(0, static_cast<long long>(resource::kMaxOfflineAudioSamples)), 0);
@@ -52,8 +58,9 @@ Audio tone(float frequency, int sr = constants::kDefaultSampleRate,
 ///          time grid as `tone` (`t = i / sr`). Output samples are
 ///          `sin(phase)` so that an exponential sweep with `fmin == fmax`
 ///          collapses to a pure tone.
-/// @param fmin Initial frequency in Hz (must be > 0 for exponential sweep).
-/// @param fmax Final frequency in Hz (must share the sign of fmin for exp).
+/// @param fmin Initial frequency in Hz (finite and at least 0 for linear, greater than 0 for
+///        exponential sweeps).
+/// @param fmax Final frequency in Hz (finite and greater than 0).
 /// @param sr Sample rate (default 22050).
 /// @param duration Duration in seconds (default 1.0).
 /// @param linear If true (default), use a linear sweep, else exponential.

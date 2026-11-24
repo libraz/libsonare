@@ -3,6 +3,8 @@
 
 #include "core/resample.h"
 
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -55,6 +57,34 @@ TEST_CASE("resample names the refused sample rate", "[resample][refusal]") {
   CHECK_THROWS_WITH(resample(Audio(), 0), StartsWith("target_sample_rate "));
   CHECK_THROWS_WITH(resample_impulse_response(nullptr, 0, 44100, 0),
                     StartsWith("target_sample_rate "));
+}
+
+TEST_CASE("C resample enforces the public rate domain before the equal-rate shortcut",
+          "[resample][refusal][resample-domain]") {
+  const std::vector<float> samples(96, 0.25f);
+  const std::string message = "target_sample_rate must be an integer in [8000, 384000]";
+  for (const int target_sample_rate : {kMinAudioSampleRate - 1, kMaxAudioSampleRate + 1}) {
+    CAPTURE(target_sample_rate);
+    const Audio already_at_rate =
+        Audio::from_buffer(samples.data(), samples.size(), target_sample_rate);
+    CHECK(resample(already_at_rate, target_sample_rate).data() == already_at_rate.data());
+    CHECK(resample(Audio{}, target_sample_rate).sample_rate() == target_sample_rate);
+
+    float* out = nullptr;
+    size_t out_length = 1;
+    CHECK(sonare_resample(samples.data(), samples.size(), target_sample_rate, target_sample_rate,
+                          &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == message);
+    CHECK(out == nullptr);
+    CHECK(out_length == 0);
+  }
+
+  for (const int rate : {kMinAudioSampleRate, kMaxAudioSampleRate}) {
+    CAPTURE(rate);
+    CHECK(resample(Audio{}, rate).sample_rate() == rate);
+    const Audio already_at_rate = Audio::from_buffer(samples.data(), samples.size(), rate);
+    CHECK(resample(already_at_rate, rate).data() == already_at_rate.data());
+  }
 }
 
 TEST_CASE("resample rejects null samples for non-empty input", "[resample]") {

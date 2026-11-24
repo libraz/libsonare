@@ -22,6 +22,7 @@
 /// honest scope of a no-dereverb design.
 
 #include <array>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -85,8 +86,8 @@ struct RoomMorphConfig {
   bool air_absorption_enabled = true;
   sonare::acoustic::AirAbsorption air{};
   /// Spacing (m) of the omnidirectional receiver pair centred on the listener, in (0, 4].
-  /// Read only by the stereo layout (`ReceiverLayout::MonoAndPair`).
-  float receiver_spacing_m = sonare::acoustic::kDefaultReceiverSpacingM;
+  /// A supplied spacing is refused by the mono layout; omission is resolved for stereo.
+  std::optional<float> receiver_spacing_m{};
   /// Which placement coordinates the caller gave; a refusal leaves the library-chosen ones out.
   sonare::acoustic::SuppliedPlacement supplied{};
 };

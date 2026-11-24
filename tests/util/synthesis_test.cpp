@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "util/constants.h"
@@ -15,6 +16,23 @@
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using sonare::constants::kTwoPi;
+
+namespace {
+
+template <typename Operation>
+void require_chirp_refusal(Operation&& operation, const std::string& subject,
+                           const std::string& message) {
+  try {
+    operation();
+    FAIL_CHECK("expected chirp to refuse " << subject);
+  } catch (const SonareParameterRefusal& error) {
+    CHECK(error.code() == ErrorCode::InvalidParameter);
+    CHECK(error.subject() == subject);
+    CHECK(error.what() == message);
+  }
+}
+
+}  // namespace
 
 TEST_CASE("tone produces a sine of correct length and frequency", "[util][synthesis]") {
   const int sr = 22050;
@@ -61,6 +79,34 @@ TEST_CASE("chirp linear has growing instantaneous frequency", "[util][synthesis]
 
 TEST_CASE("chirp exponential requires positive endpoints", "[util][synthesis][edge]") {
   REQUIRE_THROWS_AS(chirp(0.0f, 1000.0f, 22050, 0.1f, /*linear=*/false), SonareException);
+}
+
+TEST_CASE("chirp refuses invalid endpoints before empty output", "[synthesis]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const auto check = [](float fmin, float fmax, float duration, bool linear,
+                        const std::string& subject, const std::string& message) {
+    require_chirp_refusal([&] { (void)chirp(fmin, fmax, 22050, duration, linear); }, subject,
+                          message);
+  };
+
+  check(-1.0f, 1000.0f, 0.1f, true, "fmin", "fmin must be finite and at least 0");
+  check(nan, 1000.0f, 0.1f, true, "fmin", "fmin must be finite and at least 0");
+  check(100.0f, 0.0f, 0.1f, true, "fmax", "fmax must be finite and greater than 0");
+  check(100.0f, inf, 0.1f, true, "fmax", "fmax must be finite and greater than 0");
+  check(0.0f, 1000.0f, 0.0f, false, "fmin", "fmin must be finite and greater than 0");
+  check(100.0f, 0.0f, 0.0f, false, "fmax", "fmax must be finite and greater than 0");
+}
+
+TEST_CASE("chirp accepts finite endpoints at its domain boundaries", "[synthesis]") {
+  const float smallest_positive = std::numeric_limits<float>::min();
+
+  CHECK(chirp(0.0f, smallest_positive, 22050, 0.01f, true).size() > 0);
+  CHECK(chirp(200.0f, 100.0f, 22050, 0.01f, true).size() > 0);
+  CHECK(chirp(100.0f, 100.0f, 22050, 0.01f, true).size() > 0);
+  CHECK(chirp(smallest_positive, smallest_positive, 22050, 0.01f, false).size() > 0);
+  CHECK(chirp(smallest_positive, 2.0f * smallest_positive, 22050, 0.01f, false).size() > 0);
+  CHECK(chirp(100.0f, 100.0f, 22050, 0.0f, false).empty());
 }
 
 TEST_CASE("clicks places clicks at expected positions", "[util][synthesis]") {

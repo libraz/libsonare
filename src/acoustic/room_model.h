@@ -14,6 +14,7 @@
 #include "acoustic/material.h"
 #include "acoustic/room_types.h"
 #include "core/diagnostic.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::acoustic {
 
@@ -51,6 +52,9 @@ struct SuppliedPlacement {
 
 /// @brief Default uniform wall absorption of a synthesized or morph-target room.
 inline constexpr float kDefaultWallAbsorption = 0.2f;
+/// The finite coefficient domain accepted for material absorption and scattering.
+inline constexpr util::check::NumericDomain kWallMaterialCoefficientDomain =
+    util::check::real_domain(0.0, 1.0);
 /// Largest shoebox dimension (m) the room model accepts: generous for any real room, yet small
 /// enough that wall areas, volume and their sums stay inside the finite float range.
 inline constexpr float kMaxRoomDimensionM = 1.0e4f;
@@ -113,9 +117,8 @@ struct WallMaterialRequest {
 /// @param field Option name quoted in the error message.
 /// @throws SonareException(InvalidParameter)
 /// @details Facades reject rather than clamp so the same mistake surfaces the
-///          same error everywhere. `uniform_shoebox` still clamps, because its
-///          clamp bounds an already-validated value away from the rigid-wall
-///          singularity rather than papering over a caller's typo.
+///          same error everywhere. `uniform_shoebox` validates the caller's
+///          value before clamping 1 to the physical rigid-wall limit.
 void validate_material_coefficient(float value, const char* field);
 
 /// @brief `validate_material_coefficient` over an array, plus the band-count cap.

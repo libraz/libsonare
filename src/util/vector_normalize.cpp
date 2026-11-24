@@ -4,15 +4,21 @@
 #include "util/vector_normalize.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
 namespace {
+
+constexpr std::array<int, 4> kNormTypeOrdinals = {
+    static_cast<int>(NormType::Inf), static_cast<int>(NormType::L1), static_cast<int>(NormType::L2),
+    static_cast<int>(NormType::Power)};
 
 float compute_norm(const float* x, std::size_t n, NormType type) {
   switch (type) {
@@ -78,10 +84,15 @@ void block_column_norms(const float* x, int rows, int cols, int c0, int n, NormT
 
 }  // namespace
 
+void validate_norm_type(NormType norm) {
+  util::check::one_of(static_cast<int>(norm), kNormTypeOrdinals, "norm");
+}
+
 std::vector<float> normalize(const float* x, std::size_t n, NormType norm, float threshold) {
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
+  validate_norm_type(norm);
   // A null pointer with zero length is a valid empty transform, but forming
   // the iterator pair [nullptr, nullptr) is not a defined C++ range.
   if (n == 0) return {};
@@ -112,6 +123,7 @@ std::vector<float> normalize_matrix(const float* x, int rows, int cols, int axis
   if (axis != 0 && axis != 1) {
     throw SonareException(ErrorCode::InvalidParameter, "axis must be 0 or 1");
   }
+  validate_norm_type(norm);
   // See normalize(): do not construct an iterator range from a null pointer
   // when the matrix has no elements.
   if (total == 0) return {};

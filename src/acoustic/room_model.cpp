@@ -67,6 +67,7 @@ inline bool better_hit(float t, int fi, const MeshHit& best) noexcept {
 }  // namespace
 
 ShoeboxRoom uniform_shoebox(const RoomDimensions& dims, float absorption, float scattering) {
+  validate_material_coefficient(absorption, "absorption");
   ShoeboxRoom room;
   room.dims = dims;
   const Material wall =
@@ -76,10 +77,7 @@ ShoeboxRoom uniform_shoebox(const RoomDimensions& dims, float absorption, float 
 }
 
 void validate_material_coefficient(float value, const char* field) {
-  if (!std::isfinite(value) || value < 0.0f || value > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(field) + " must be within [0, 1]");
-  }
+  util::check::within(value, kWallMaterialCoefficientDomain, field);
 }
 
 void validate_material_bands(const std::vector<float>& values, const char* field) {

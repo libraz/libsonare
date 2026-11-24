@@ -19,6 +19,7 @@
 #include "acoustic/room_model.h"
 #include "core/audio.h"
 #include "core/diagnostic.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::acoustic {
 
@@ -27,6 +28,9 @@ inline constexpr float kMaxRirMixingTimeMs = 10000.0f;
 inline constexpr float kMaxRirCrossfadeMs = 1000.0f;
 /// Largest receiver-pair spacing (m) `validate_receiver_pair` accepts.
 inline constexpr float kMaxReceiverSpacingM = 4.0f;
+/// Receiver-pair spacing accepts finite values in (0, kMaxReceiverSpacingM].
+inline constexpr util::check::NumericDomain kReceiverSpacingDomain =
+    util::check::real_domain(0.0, false, kMaxReceiverSpacingM, true);
 /// Receiver-pair spacing (m) wherever the pair fits inside the room.
 inline constexpr float kDefaultReceiverSpacingM = 0.5f;
 

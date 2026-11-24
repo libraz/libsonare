@@ -53,6 +53,9 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
 }
 
 Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
+  util::check::within(fmin, linear ? kChirpLinearMinHzDomain : kChirpPositiveFrequencyHzDomain,
+                      "fmin");
+  util::check::within(fmax, kChirpPositiveFrequencyHzDomain, "fmax");
   util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sample_rate");
   // See tone(): NaN/Inf duration must be rejected before the size_t cast.
   util::check::at_least(duration, 0.0, "duration");
@@ -78,8 +81,6 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
     // Exponential / logarithmic sweep:
     //   f(t) = f0 * (f1/f0) ** (t/d)
     //   phase(t) = 2*pi * f0 * d / ln(f1/f0) * ((f1/f0)**(t/d) - 1)
-    util::check::greater_than(f0, 0.0, "fmin");
-    util::check::greater_than(f1, 0.0, "fmax");
     const double ratio = f1 / f0;
     if (std::abs(ratio - 1.0) < 1e-12) {
       // Degenerate: pure tone at f0.

@@ -76,10 +76,10 @@ void check_wall_material(const Config& config) {
     check::non_null_when_count(values, count, name, count_name.c_str());
     for (size_t i = 0; i < count; ++i) {
       const std::string element = std::string(name) + "[" + std::to_string(i) + "]";
-      check::in_range(values[i], 0.0, 1.0, element.c_str());
+      sonare::acoustic::validate_material_coefficient(values[i], element.c_str());
     }
   };
-  check::in_range(config.absorption, 0.0, 1.0, "config.absorption");
+  sonare::acoustic::validate_material_coefficient(config.absorption, "config.absorption");
   bands(config.band_absorption, config.band_absorption_count, "config.band_absorption",
         "config.band_absorption_count");
   bands(config.band_scattering, config.band_scattering_count, "config.band_scattering",
@@ -463,8 +463,9 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   // The core rejects an implausible climate by throwing, mapped to INVALID_PARAMETER.
   cfg.air.temperature_c = config.air_temperature_c;
   cfg.air.humidity_percent = config.air_humidity_percent;
-  // Read by the stereo entry only; the mono morph neither validates nor uses it.
-  cfg.receiver_spacing_m = resolved.receiver_spacing_m;
+  // Preserve omission through the C++ core; mono refuses a supplied spacing,
+  // while stereo resolves an omission to its placement-aware default.
+  if (!std::isnan(config.receiver_spacing_m)) cfg.receiver_spacing_m = config.receiver_spacing_m;
   return cfg;
 }
 

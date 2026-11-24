@@ -71,6 +71,15 @@ void process_blocks(RoomMorphProcessor& processor, float* const* channels, int n
     processor.process(blk, num_channels, nn);
   }
 }
+
+void check_mono_receiver_spacing(const RoomMorphConfig& config) {
+  common::check_receiver_spacing_absent_for_mono(config.receiver_spacing_m, "receiver_spacing_m");
+}
+
+float stereo_receiver_spacing(const RoomMorphConfig& config) {
+  return config.receiver_spacing_m.value_or(
+      sonare::acoustic::default_receiver_spacing(config.target.dims, config.placement));
+}
 }  // namespace
 
 void validate_room_morph_config(const RoomMorphConfig& config,
@@ -99,13 +108,13 @@ RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,
                                        sonare::acoustic::ReceiverLayout layout)
     : config_(std::move(config)), layout_(layout) {
   validate_room_morph_config(config_);
-  if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
-    common::check_receiver_pair(config_.target, config_.placement, config_.receiver_spacing_m,
-                                kMorphPaths, config_.supplied);
-    const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
-        config_.target, config_.placement, config_.receiver_spacing_m);
-    SONARE_CHECK_MSG(!has_error(pair), ErrorCode::InvalidParameter,
-                     sonare::acoustic::first_error_text(pair));
+  if (layout_ == sonare::acoustic::ReceiverLayout::Mono) {
+    check_mono_receiver_spacing(config_);
+  } else {
+    const float spacing_m = stereo_receiver_spacing(config_);
+    config_.supplied.receiver_spacing = config_.receiver_spacing_m.has_value();
+    common::check_receiver_pair(config_.target, config_.placement, spacing_m, kMorphPaths,
+                                config_.supplied);
   }
 }
 
@@ -132,8 +141,8 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   RirPairResult pair;
   const bool with_pair = layout_ == ReceiverLayout::MonoAndPair;
   if (with_pair) {
-    pair =
-        synthesize_rir_pair(config_.target, config_.placement, config_.receiver_spacing_m, sr, rc);
+    const float spacing_m = stereo_receiver_spacing(config_);
+    pair = synthesize_rir_pair(config_.target, config_.placement, spacing_m, sr, rc);
     SONARE_CHECK_MSG(!has_error(pair.diagnostics), ErrorCode::InvalidParameter,
                      first_error_text(pair.diagnostics));
     append_new_diagnostic_codes(diagnostics_, pair.diagnostics);
@@ -253,13 +262,11 @@ std::vector<rt::ParamDescriptor> RoomMorphProcessor::parameter_descriptors() con
 }
 
 RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config) {
-  validate_room_morph_config(config);
+  RoomMorphProcessor processor(config, sonare::acoustic::ReceiverLayout::Mono);
   if (recording.empty()) {
     return {recording, {}};
   }
   const int sr = recording.sample_rate();
-
-  RoomMorphProcessor processor(config, sonare::acoustic::ReceiverLayout::Mono);
   processor.prepare(static_cast<double>(sr), kBlock);
 
   const int tail = processor.tail_samples();

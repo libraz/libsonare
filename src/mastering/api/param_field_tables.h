@@ -75,7 +75,7 @@ template <typename Aggregate>
 struct AnyField {
   template <typename Field,
             typename = std::enable_if_t<!std::is_same_v<Aggregate, std::decay_t<Field>>>>
-  constexpr operator Field() const noexcept;
+  operator Field() const noexcept;
 };
 
 template <typename Aggregate, typename Indices, typename = void>

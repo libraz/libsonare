@@ -11,13 +11,14 @@ namespace sonare {
 
 /// @brief Resamples audio to a target sample rate.
 /// @param audio Input audio
-/// @param target_sr Target sample rate in Hz
-/// @return Resampled audio at target sample rate. A call already at @p target_sr
+/// @param target_sample_rate Positive target sample rate in Hz for an already-admitted stream.
+/// @return Resampled audio at target sample rate. A call already at @p target_sample_rate
 ///         returns a view sharing @p audio's buffer rather than a duplicate, so
 ///         it costs no allocation and keeps that buffer alive for as long as the
 ///         result lives. The buffer is immutable, so sharing it is unobservable
 ///         apart from that lifetime.
-Audio resample(const Audio& audio, int target_sr);
+/// @throws SonareException with ErrorCode::InvalidParameter for an unsupported target rate.
+Audio resample(const Audio& audio, int target_sample_rate);
 
 /// @brief Resamples raw samples to a target sample rate.
 /// @details Internal engine; untrusted input goes through resample_checked.

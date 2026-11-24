@@ -10,7 +10,6 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
-#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -24,7 +23,7 @@ constexpr float kCompressedCrestFactorDb = 8.0f;
 DynamicsAnalyzer::DynamicsAnalyzer(const Audio& audio, const DynamicsConfig& config)
     : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  util::check::greater_than(config.window_sec, 0.0, "window_sec");
+  validate_dynamics_config(config);
   analyze(audio);
 }
 
@@ -59,7 +58,7 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   // Sized in double and compared with the buffer before any cast; floored at one sample so a
   // tiny window cannot produce a 0/0 NaN in the per-window RMS.
   const double requested_window = std::floor(static_cast<double>(config_.window_sec) * sr);
-  int hop_length = std::max(1, config_.hop_length);
+  int hop_length = config_.hop_length;
 
   // When the configured window is longer than the whole signal (short one-shots,
   // drum hits, brief SFX), fall back to sub-windows that fit inside the buffer so

@@ -7,10 +7,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "support/rate_material.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -177,6 +180,25 @@ Audio create_six_beat_pattern(float bpm, float subdivision_amplitude, int sr = 2
   return Audio::from_vector(std::move(samples), sr);
 }
 
+template <typename Callable>
+void require_rhythm_refusal(Callable&& call, const std::vector<std::string>& subjects,
+                            const std::string& text) {
+  try {
+    call();
+  } catch (const SonareParameterRefusal& error) {
+    CHECK(error.code() == ErrorCode::InvalidParameter);
+    CHECK(error.subjects() == subjects);
+    CHECK(std::string(error.what()) == text);
+    return;
+  } catch (const SonareException& error) {
+    CHECK(false);
+    CHECK(error.code() == ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()) == text);
+    return;
+  }
+  CHECK(false);
+}
+
 /// @brief Creates a click track whose first beat of every bar is accented.
 Audio create_accented_pattern(float bpm, int beats_per_bar, int sr = 22050,
                               float duration = 10.0f) {
@@ -261,6 +283,33 @@ TEST_CASE("RhythmAnalyzer basic", "[rhythm_analyzer]") {
   REQUIRE(features.pattern_regularity <= 1.0f);
   REQUIRE(features.tempo_stability >= 0.0f);
   REQUIRE(features.tempo_stability <= 1.0f);
+}
+
+TEST_CASE("RhythmAnalyzer refuses invalid tempo configuration by its field",
+          "[rhythm_analyzer][config-domain]") {
+  const Audio audio = create_click_track(120.0f, 22050, 0.5f);
+
+  RhythmConfig bad_min;
+  bad_min.bpm_min = 0.0f;
+  require_rhythm_refusal([&] { (void)RhythmAnalyzer(audio, bad_min); }, {"bpm_min"},
+                         "bpm_min must be finite and greater than 0");
+
+  RhythmConfig bad_max;
+  bad_max.bpm_min = 60.0f;
+  bad_max.bpm_max = 60.0f;
+  require_rhythm_refusal([&] { (void)RhythmAnalyzer(audio, bad_max); }, {"bpm_max", "bpm_min"},
+                         "bpm_max must be finite and greater than bpm_min");
+
+  RhythmConfig bad_start;
+  bad_start.start_bpm = 0.0f;
+  require_rhythm_refusal([&] { (void)RhythmAnalyzer(audio, bad_start); }, {"start_bpm"},
+                         "start_bpm must be finite and greater than 0");
+
+  RhythmConfig at_boundary;
+  at_boundary.bpm_min = 60.0f;
+  at_boundary.bpm_max = std::nextafter(60.0f, std::numeric_limits<float>::infinity());
+  at_boundary.start_bpm = 60.0f;
+  CHECK_NOTHROW(RhythmAnalyzer(audio, at_boundary));
 }
 
 TEST_CASE("RhythmAnalyzer time signature 4/4", "[rhythm_analyzer]") {

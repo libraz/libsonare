@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -79,6 +80,44 @@ TEST_CASE("normalize raw empty inputs accept null pointers", "[util][normalize][
   REQUIRE(normalize_matrix(nullptr, 4, 0, 0).empty());
   REQUIRE_THROWS_AS(normalize(nullptr, 1), SonareException);
   REQUIRE_THROWS_AS(normalize_matrix(nullptr, 1, 1, 1), SonareException);
+}
+
+TEST_CASE("normalize validates the shared norm domain at each ingress",
+          "[util][normalize][norm-domain]") {
+  const std::string expected = "norm must be one of 0, 1, 2, 3";
+  for (int ordinal : {-1, 4}) {
+    CAPTURE(ordinal);
+    try {
+      (void)normalize(nullptr, 0, static_cast<NormType>(ordinal));
+      FAIL("normalize accepted an unknown norm ordinal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == expected);
+    }
+    try {
+      (void)normalize_matrix(nullptr, 0, 4, 1, static_cast<NormType>(ordinal));
+      FAIL("normalize_matrix accepted an unknown norm ordinal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == expected);
+    }
+  }
+
+  const std::vector<float> values{3.0f, -4.0f};
+  const auto inf = normalize(values, NormType::Inf);
+  CHECK_THAT(inf[0], WithinAbs(0.75f, 1e-6f));
+  CHECK_THAT(inf[1], WithinAbs(-1.0f, 1e-6f));
+  const auto power = normalize(values, NormType::Power);
+  CHECK_THAT(power[0], WithinAbs(3.0f / 25.0f, 1e-6f));
+  CHECK_THAT(power[1], WithinAbs(-4.0f / 25.0f, 1e-6f));
+
+  const float matrix[] = {3.0f, -4.0f};
+  const auto matrix_inf = normalize_matrix(matrix, 1, 2, 1, NormType::Inf);
+  CHECK_THAT(matrix_inf[0], WithinAbs(0.75f, 1e-6f));
+  CHECK_THAT(matrix_inf[1], WithinAbs(-1.0f, 1e-6f));
+  const auto matrix_power = normalize_matrix(matrix, 1, 2, 1, NormType::Power);
+  CHECK_THAT(matrix_power[0], WithinAbs(3.0f / 25.0f, 1e-6f));
+  CHECK_THAT(matrix_power[1], WithinAbs(-4.0f / 25.0f, 1e-6f));
 }
 
 TEST_CASE("vector normalize matches librosa (Inf/L1/L2)", "[librosa][util][normalize]") {

@@ -20,6 +20,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 using namespace sonare;
 using namespace sonare::effects::acoustic;
@@ -30,6 +31,13 @@ using sonare::acoustic::synthesize_rir;
 using sonare::acoustic::uniform_material;
 
 namespace {
+
+std::string render_relation(const char* relation, const std::string& subject) {
+  std::string rendered(relation);
+  const std::string::size_type marker = rendered.find("{0}");
+  rendered.replace(marker, 3, subject);
+  return rendered;
+}
 
 ShoeboxRoom uniform_room(float length, float width, float height, float absorption) {
   ShoeboxRoom room;
@@ -84,7 +92,6 @@ RoomMorphConfig reference_stereo_config() {
   cfg.seed = 1u;
   cfg.wet = 1.0f;
   cfg.source_tail_suppression = 0.0f;
-  cfg.receiver_spacing_m = 0.5f;
   return cfg;
 }
 
@@ -621,8 +628,32 @@ TEST_CASE("room_morph_stereo refuses mismatched channels and an invalid receiver
   RoomMorphConfig wide = cfg;
   wide.receiver_spacing_m = 4.5f;
   REQUIRE(refuses([&] { room_morph_stereo(a, a, wide); }));
-  // The mono entry point never reads the pair spacing.
-  REQUIRE_NOTHROW(room_morph(a, wide));
+  // The mono entry point refuses a pair-only value instead of silently dropping it.
+  REQUIRE(refuses([&] { room_morph(a, wide); }));
+}
+
+TEST_CASE("room_morph mono refuses an explicit receiver spacing, including its former default",
+          "[effects][acoustic][room_morph][room-placement-domain]") {
+  const Audio empty = Audio::from_vector({}, kStereoRate);
+  RoomMorphConfig omitted;
+  const RoomMorphConfig reference = reference_stereo_config();
+  omitted.target = reference.target;
+  omitted.placement = reference.placement;
+  CHECK_NOTHROW(room_morph(empty, omitted));
+
+  RoomMorphConfig explicit_default = omitted;
+  explicit_default.receiver_spacing_m = 0.5f;
+  try {
+    (void)room_morph(empty, explicit_default);
+    FAIL("mono room morph accepted a supplied receiver spacing");
+  } catch (const SonareParameterRefusal& refusal) {
+    CHECK(refusal.code() == ErrorCode::InvalidParameter);
+    CHECK(refusal.predicate() ==
+          sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation);
+    CHECK(std::string(refusal.what()) ==
+          render_relation(sonare::util::refusal::kReceiverSpacingAbsentForMonoLayoutRelation,
+                          "receiver_spacing_m"));
+  }
 }
 
 TEST_CASE("a room morph geometry refusal renders in the JS request's flat keys",

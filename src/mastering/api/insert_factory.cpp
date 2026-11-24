@@ -959,7 +959,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
         read_room_placement(params, config.dims, points);
     config.source = placement.placement.source;
     config.listener = placement.placement.listener;
-    config.receiver_spacing_m = placement.receiver_spacing_m;
+    // Preserve omission so RoomReverb fits a receiver pair for this placement.
+    if (placement.supplied.receiver_spacing)
+      config.receiver_spacing_m = placement.receiver_spacing_m;
     config.supplied = placement.supplied;
     return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
@@ -997,7 +999,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     const sonare::acoustic::ResolvedRoomPlacement placement =
         read_room_placement(params, config.target.dims, points);
     config.placement = placement.placement;
-    config.receiver_spacing_m = placement.receiver_spacing_m;
+    // Preserve omission so RoomMorph can resolve a fit instead of treating it as caller input.
+    if (placement.supplied.receiver_spacing)
+      config.receiver_spacing_m = placement.receiver_spacing_m;
     config.supplied = placement.supplied;
     return make<effects::acoustic::RoomMorphProcessor>(
         config, sonare::acoustic::ReceiverLayout::MonoAndPair);

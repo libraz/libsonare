@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/api/named_processor.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/match/ab_switcher.h"
@@ -867,4 +868,32 @@ TEST_CASE("ReferenceLoudness reports a silent source's gain as not measured",
   const auto result = reference_loudness(silence, sine_audio(1000.0f, 0.2f));
   CHECK((std::isinf(result.source_lufs) && result.source_lufs < 0.0f));
   CHECK(std::isnan(result.gain_to_match_db));
+}
+
+TEST_CASE("Mastering match preserves the calling entry's sample-rate domain",
+          "[mastering][match][resample-domain]") {
+  constexpr int kRate = kMinAudioSampleRate - 1;
+  const Audio source = sine_audio(440.0f, 0.25f, kRate);
+  const Audio reference = sine_audio(440.0f, 0.5f, kRate);
+
+  SECTION("A/B matching accepts audio already at the source rate") {
+    const auto matched = ab_match_loudness(reference, source);
+    CHECK(matched.b.sample_rate() == kRate);
+    CHECK(matched.b.size() == source.size());
+  }
+
+  SECTION("Match EQ accepts audio already at the source rate") {
+    sonare::mastering::eq::EqualizerProcessor eq;
+    eq.prepare(kMinAudioSampleRate, 512, 1);
+    MatchEqConfig config;
+    config.max_frequency_hz = 3000.0f;
+    REQUIRE_NOTHROW(configure_equalizer_from_audio(eq, source, reference, config));
+  }
+
+  SECTION("A named pair processor refuses rates outside its buffer input domain") {
+    REQUIRE_THROWS_WITH(
+        sonare::mastering::api::apply_named_pair_processor("match.abCrossfade", source.data(),
+                                                           reference.data(), source.size(), kRate),
+        "sample_rate must be an integer in [8000, 384000]");
+  }
 }

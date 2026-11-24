@@ -22,6 +22,7 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
       config_(config),
       sr_(audio.sample_rate()),
       hop_length_(config.hop_length) {
+  validate_rhythm_config(config);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Create beat analyzer

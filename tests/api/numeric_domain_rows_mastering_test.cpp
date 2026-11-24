@@ -490,6 +490,7 @@ SonareError probe_estimate_room(const std::string& param, double value) {
 template <typename RoomConfig>
 void set_room_field(RoomConfig& config, const std::string& param, double value) {
   const auto f = static_cast<float>(value);
+  if (is_param(param, "config.absorption")) config.absorption = f;
   if (is_param(param, "config.ism_order")) config.ism_order = as_int(value);
   if (is_param(param, "config.length_m")) config.length_m = f;
   if (is_param(param, "config.width_m")) config.width_m = f;

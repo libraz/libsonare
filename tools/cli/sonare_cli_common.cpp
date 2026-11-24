@@ -706,10 +706,7 @@ int cmd_peak_pick(const CliArgs& args, const Audio&) {
 int cmd_vector_normalize(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
   const int norm_type = args.get_int("norm-type", static_cast<int>(NormType::Inf));
-  NormType norm = NormType::Inf;
-  if (norm_type == 1) norm = NormType::L1;
-  if (norm_type == 2) norm = NormType::L2;
-  if (norm_type == 3) norm = NormType::Power;
+  const NormType norm = static_cast<NormType>(norm_type);
   print_float_values(args, args.has("threshold")
                                ? normalize(values, norm, args.get_float("threshold", 0.0f))
                                : normalize(values, norm));
