@@ -14,6 +14,14 @@ import type {
 import { codedError, refuse, refuseType } from '../internal/entry.js';
 import { eqBandJson } from '../internal/eq_band_json.js';
 import { packMidi2ProgramRequest } from '../internal/midi_program_pack.js';
+import {
+  assertMidiBankShape,
+  assertMidiByteShape,
+  assertMidiNumberShapes,
+  assertMidiTimingShape,
+  assertMidiTrackIdShape,
+  assertMidiWordListShapes,
+} from '../internal/midi_shape.js';
 import { boundedUmpWords } from '../internal/ump_events.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { SurroundPan } from '../public_types.js';
@@ -492,6 +500,14 @@ export function pushMidiNoteOn(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['note', note],
+    ['velocity', velocity],
+  ]);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiNoteOn', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
@@ -516,6 +532,14 @@ export function pushMidiNoteOff(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['note', note],
+    ['velocity', velocity],
+  ]);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiNoteOff', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
@@ -540,6 +564,14 @@ export function pushMidiCc(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['controller', controller],
+    ['value', value],
+  ]);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiCc', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
@@ -563,6 +595,13 @@ export function pushMidiPitchBend(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['bend14', bend14],
+  ]);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiPitchBend', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
@@ -586,6 +625,13 @@ export function pushMidiChannelPressure(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['pressure', pressure],
+  ]);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming(
     'SonareEngine.pushMidiChannelPressure',
     renderFrame,
@@ -614,6 +660,14 @@ export function pushMidiPolyPressure(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['note', note],
+    ['pressure', pressure],
+  ]);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiPolyPressure', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiPolyPressure(
@@ -642,6 +696,9 @@ export function pushMidiUmp(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiWordListShapes(umpWords);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiUmp', renderFrame, options);
   // A copy, so a caller reusing its buffer cannot change what was posted; the
   // offline engine refuses anything that is not a word array before the post.
@@ -677,6 +734,14 @@ export function pushMidiProgram(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiNumberShapes([
+    ['group', group],
+    ['channel', channel],
+    ['program', program],
+  ]);
+  assertMidiBankShape(bank);
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiProgram', renderFrame, options);
   const words = packMidi2ProgramRequest('pushMidiProgram', group, channel, program, bank);
   postMidiUmp(ctx, trackId, words, renderFrame, timing);
@@ -825,6 +890,9 @@ export function pushMidiSysex(
   renderFrame: number | undefined,
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  assertMidiTrackIdShape(trackId);
+  assertMidiByteShape(data, 'data');
+  assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiSysex', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiSysex(destinationId, data, renderFrame);

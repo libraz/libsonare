@@ -6,6 +6,7 @@ import {
   midiCcLearn,
   midiCcToBreakpoint,
   midiParamToCc,
+  midiRouteEvents,
   RealtimeEngine,
 } from '../dist/index.js';
 
@@ -46,13 +47,28 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     expect(() =>
       midiCcToBreakpoint({
         bindings: [good],
-        event: { ppq: 0, word0: 0x30000000, word1: 0, sysex: new Uint8Array([0xf0, 0xf7]) },
+        event: {
+          ppq: 0,
+          word0: 0x30000000,
+          word1: 0,
+          sysex: Uint8Array.of(0x11, 0xf0, 0x00, 0x7d, 0xf7, 0x22).subarray(1, 5),
+        },
       }),
     ).toThrow(
       expect.objectContaining({
         code: ErrorCode.NotSupported,
         message: 'midiCcToBreakpoint: MIDI CC conversion does not support SysEx events',
       }),
+    );
+
+    const wrongShape = () =>
+      midiCcToBreakpoint({
+        bindings: [{ ...good, ccLsbNumber: 128 }],
+        event: { ppq: 0, word0: 0x30000000, sysex: [0xf0, 0x00, 0xf7] as never },
+      });
+    expect(wrongShape).toThrow(TypeError);
+    expect(wrongShape).toThrow(
+      new TypeError('midiCcToBreakpoint: event.sysex must be a Uint8Array'),
     );
   });
 
@@ -172,4 +188,79 @@ it('learn ignores valid SysEx and names a payload on a channel event', () => {
   const invalid = () => midiCcLearn({ events: [{ ...start, sysex: bytes }, end], paramId: 1 });
   expect(invalid).toThrow(RangeError);
   expect(invalid).toThrow(/events\[0\]\.sysex/);
+});
+
+it('refuses a wrong SysEx payload shape before a CC domain error', () => {
+  const event = { ppq: 0, word0: 0x30000000, sysex: [0xf0, 0x00, 0xf7] as never };
+  const learn = () => midiCcLearn({ events: [event], paramId: 1, minMovement: 128 });
+  const learnList = () =>
+    midiCcLearn({ events: [{ ppq: 0, word0: 4294967296 }, event], paramId: 1 });
+  for (const [run, message] of [
+    [learn, 'midiCcLearn: events[0].sysex must be a Uint8Array'],
+    [learnList, 'midiCcLearn: events[1].sysex must be a Uint8Array'],
+  ] as const) {
+    expect(run).toThrow(TypeError);
+    expect(run).toThrow(new TypeError(message));
+  }
+});
+
+it('preflights every CC request shape before any numeric domain', () => {
+  const source = Uint8Array.of(0x11, 0xf0, 0x00, 0x7d, 0xf7, 0x22);
+  const sysex = source.subarray(1, 5);
+  const copied = midiRouteEvents({ events: [{ ppq: 0, word0: 0x30000000, sysex }] });
+  source.fill(0);
+  expect(copied.events[0]?.sysex).toEqual(Uint8Array.of(0xf0, 0x00, 0x7d, 0xf7));
+
+  const malformedEvent = {
+    ppq: 0,
+    word0: 0x30000000,
+    word1: 'wrong',
+    sysex: [0xf0, 0xf7],
+  } as never;
+
+  expect(() =>
+    midiCcLearn({
+      events: [{ ppq: 0, word0: 4294967296 }, malformedEvent],
+      paramId: 1,
+    }),
+  ).toThrow(new TypeError('midiCcLearn: events[1].word1 must be a number'));
+  expect(() => midiCcLearn({ events: [], paramId: 0, minValue: 'wrong' as never })).toThrow(
+    new TypeError('midiCcLearn: minValue must be a number'),
+  );
+
+  expect(() =>
+    midiCcToBreakpoint({
+      bindings: [{ ccNumber: 7, paramId: 1, ccLsbNumber: 128 } as never],
+      event: malformedEvent,
+    }),
+  ).toThrow(new TypeError('midiCcToBreakpoint: event.word1 must be a number'));
+  expect(() =>
+    midiParamToCc({
+      bindings: [{ ccNumber: 7, paramId: 1, ccLsbNumber: 128 }],
+      paramId: 1,
+      unitValue: 'wrong' as never,
+      group: 0,
+    }),
+  ).toThrow(new TypeError('midiParamToCc: unitValue must be a number'));
+  expect(() =>
+    midiRouteEvents({
+      events: [{ ppq: 0, word0: 4294967296 }],
+      filterGroup: 'wrong' as never,
+    }),
+  ).toThrow(new TypeError('midiRouteEvents: filterGroup must be a number'));
+
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+  try {
+    expect(() => engine.bindMidiCc({ ccNumber: 200, paramId: 'wrong' } as never)).toThrow(
+      new TypeError('RealtimeEngine.bindMidiCc: paramId must be a number'),
+    );
+    const native = (engine as unknown as { native: { bindMidiCc: (binding: unknown) => void } })
+      .native;
+    expect(() => native.bindMidiCc({ ccNumber: 200, paramId: 'wrong' })).toThrow(TypeError);
+    expect(() => native.bindMidiCc({ ccNumber: 200, paramId: 'wrong' })).toThrow(
+      /paramId must be a number/,
+    );
+  } finally {
+    engine.destroy();
+  }
 });

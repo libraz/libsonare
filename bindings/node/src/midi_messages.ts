@@ -1,5 +1,9 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
-import { assertMidiCcBindingListBytes } from './internal/midi_cc_binding.js';
+import {
+  assertBankShape,
+  assertMidiShapeFields,
+  type MidiShapeField,
+} from './internal/midi_shape.js';
 import {
   midi2Byte,
   midi2Event,
@@ -89,8 +93,17 @@ function readRequest<
 >(
   requestName: N,
   request: T & Parameters<typeof requestObject<T, N>>[1],
+  fields: readonly MidiShapeField[] = [],
+  checkNested?: (record: T) => void,
 ): { record: T; ppq: number; group: number; channel: number } {
   const record = requestObject<T, N>(requestName, request, 'request', true);
+  assertMidiShapeFields(record as Record<string, unknown>, [
+    { name: 'ppq', shape: 'number' },
+    { name: 'group', shape: 'integer' },
+    { name: 'channel', shape: 'integer' },
+    ...fields,
+  ]);
+  checkNested?.(record);
   return {
     record,
     ppq: requireNumber(record.ppq, 'ppq'),
@@ -100,9 +113,7 @@ function readRequest<
 }
 
 function readBank(bank: unknown): { msb: number; lsb: number } {
-  if (typeof bank !== 'object' || bank === null) {
-    throw refuseType(`bank must be an object`);
-  }
+  assertBankShape(bank);
   const { msb, lsb } = bank as MidiBank;
   return {
     msb: boundedInt(msb, 'bank.msb', 127),
@@ -120,7 +131,10 @@ function readBank(bank: unknown): { msb: number; lsb: number } {
 export function midiNoteOn(request: MidiNoteOnRequest): ProjectMidiEvent {
   return withEntry('midiNoteOn', () => {
     const fn = 'midiNoteOn';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'velocity', shape: 'integer' },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const velocity = boundedInt(record.velocity, 'velocity', 127);
     return midi1Event(ppq, group, 0x9, channel, note, velocity);
@@ -137,7 +151,10 @@ export function midiNoteOn(request: MidiNoteOnRequest): ProjectMidiEvent {
 export function midiNoteOff(request: MidiNoteOffRequest): ProjectMidiEvent {
   return withEntry('midiNoteOff', () => {
     const fn = 'midiNoteOff';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'velocity', shape: 'integer', optional: true },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const velocity = isAbsent(record.velocity) ? 0 : boundedInt(record.velocity, 'velocity', 127);
     return midi1Event(ppq, group, 0x8, channel, note, velocity);
@@ -154,7 +171,10 @@ export function midiNoteOff(request: MidiNoteOffRequest): ProjectMidiEvent {
 export function midiCc(request: MidiCcRequest): ProjectMidiEvent {
   return withEntry('midiCc', () => {
     const fn = 'midiCc';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'controller', shape: 'integer' },
+      { name: 'value', shape: 'integer' },
+    ]);
     const controller = boundedInt(record.controller, 'controller', 127);
     const value = boundedInt(record.value, 'value', 127);
     return midi1Event(ppq, group, 0xb, channel, controller, value);
@@ -171,7 +191,10 @@ export function midiCc(request: MidiCcRequest): ProjectMidiEvent {
 export function midiPolyPressure(request: MidiPolyPressureRequest): ProjectMidiEvent {
   return withEntry('midiPolyPressure', () => {
     const fn = 'midiPolyPressure';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'pressure', shape: 'integer' },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const pressure = boundedInt(record.pressure, 'pressure', 127);
     return midi1Event(ppq, group, 0xa, channel, note, pressure);
@@ -188,7 +211,9 @@ export function midiPolyPressure(request: MidiPolyPressureRequest): ProjectMidiE
 export function midiProgram(request: MidiProgramRequest): ProjectMidiEvent {
   return withEntry('midiProgram', () => {
     const fn = 'midiProgram';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'program', shape: 'integer' },
+    ]);
     const program = boundedInt(record.program, 'program', 127);
     return midi1Event(ppq, group, 0xc, channel, program, 0);
   });
@@ -204,7 +229,9 @@ export function midiProgram(request: MidiProgramRequest): ProjectMidiEvent {
 export function midiChannelPressure(request: MidiChannelPressureRequest): ProjectMidiEvent {
   return withEntry('midiChannelPressure', () => {
     const fn = 'midiChannelPressure';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'pressure', shape: 'integer' },
+    ]);
     const pressure = boundedInt(record.pressure, 'pressure', 127);
     return midi1Event(ppq, group, 0xd, channel, pressure, 0);
   });
@@ -220,7 +247,9 @@ export function midiChannelPressure(request: MidiChannelPressureRequest): Projec
 export function midiPitchBend(request: MidiPitchBendRequest): ProjectMidiEvent {
   return withEntry('midiPitchBend', () => {
     const fn = 'midiPitchBend';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'bend', shape: 'integer' },
+    ]);
     const bend = boundedInt(record.bend, 'bend', 16383);
     assertBoundedInteger(bend, 'bend', 0, 0x3fff);
     return midi1Event(ppq, group, 0xe, channel, bend & 0x7f, bend >> 7);
@@ -237,7 +266,12 @@ export function midiPitchBend(request: MidiPitchBendRequest): ProjectMidiEvent {
 export function midi2NoteOn(request: Midi2NoteOnRequest): ProjectMidiEvent {
   return withEntry('midi2NoteOn', () => {
     const fn = 'midi2NoteOn';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'velocity16', shape: 'integer' },
+      { name: 'attributeType', shape: 'integer', optional: true },
+      { name: 'attributeData', shape: 'integer', optional: true },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const vel = midi2U16(record.velocity16, 'velocity16');
     const type = isAbsent(record.attributeType)
@@ -260,7 +294,10 @@ export function midi2NoteOn(request: Midi2NoteOnRequest): ProjectMidiEvent {
 export function midi2NoteOff(request: Midi2NoteOffRequest): ProjectMidiEvent {
   return withEntry('midi2NoteOff', () => {
     const fn = 'midi2NoteOff';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'velocity16', shape: 'integer', optional: true },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const vel = isAbsent(record.velocity16) ? 0 : midi2U16(record.velocity16, 'velocity16');
     return midi2Event(ppq, group, 0x8, channel, note, 0, (vel << 16) >>> 0);
@@ -277,7 +314,10 @@ export function midi2NoteOff(request: Midi2NoteOffRequest): ProjectMidiEvent {
 export function midi2Cc(request: Midi2CcRequest): ProjectMidiEvent {
   return withEntry('midi2Cc', () => {
     const fn = 'midi2Cc';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'controller', shape: 'integer' },
+      { name: 'value32', shape: 'integer' },
+    ]);
     const controller = boundedInt(record.controller, 'controller', 127);
     const value = midi2U32(record.value32, 'value32');
     return midi2Event(ppq, group, 0xb, channel, controller, 0, value);
@@ -294,7 +334,10 @@ export function midi2Cc(request: Midi2CcRequest): ProjectMidiEvent {
 export function midi2PolyPressure(request: Midi2PolyPressureRequest): ProjectMidiEvent {
   return withEntry('midi2PolyPressure', () => {
     const fn = 'midi2PolyPressure';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'pressure32', shape: 'integer' },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const pressure = midi2U32(record.pressure32, 'pressure32');
     return midi2Event(ppq, group, 0xa, channel, note, 0, pressure);
@@ -311,7 +354,9 @@ export function midi2PolyPressure(request: Midi2PolyPressureRequest): ProjectMid
 export function midi2ChannelPressure(request: Midi2ChannelPressureRequest): ProjectMidiEvent {
   return withEntry('midi2ChannelPressure', () => {
     const fn = 'midi2ChannelPressure';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'pressure32', shape: 'integer' },
+    ]);
     const pressure = midi2U32(record.pressure32, 'pressure32');
     return midi2Event(ppq, group, 0xd, channel, 0, 0, pressure);
   });
@@ -327,7 +372,9 @@ export function midi2ChannelPressure(request: Midi2ChannelPressureRequest): Proj
 export function midi2PitchBend(request: Midi2PitchBendRequest): ProjectMidiEvent {
   return withEntry('midi2PitchBend', () => {
     const fn = 'midi2PitchBend';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'bend32', shape: 'integer' },
+    ]);
     const bend = midi2U32(record.bend32, 'bend32');
     return midi2Event(ppq, group, 0xe, channel, 0, 0, bend);
   });
@@ -344,7 +391,15 @@ export function midi2PitchBend(request: Midi2PitchBendRequest): ProjectMidiEvent
 export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
   return withEntry('midi2Program', () => {
     const fn = 'midi2Program';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(
+      fn,
+      request,
+      [
+        { name: 'program', shape: 'integer' },
+        { name: 'bank', shape: 'object', optional: true },
+      ],
+      (record) => assertBankShape(record.bank, true),
+    );
     const program = programArg(record.program, 'program', 127);
     const bank = isAbsent(record.bank) ? { msb: 0, lsb: 0 } : readBank(record.bank);
     const { msb, lsb } = bank;
@@ -358,7 +413,11 @@ function midi2Controller(
   request: Midi2RegisteredControllerRequest,
   opcode: number,
 ): ProjectMidiEvent {
-  const { record, ppq, group, channel } = readRequest(requestName, request);
+  const { record, ppq, group, channel } = readRequest(requestName, request, [
+    { name: 'bank', shape: 'integer' },
+    { name: 'index', shape: 'integer' },
+    { name: 'value32', shape: 'integer' },
+  ]);
   const bank = boundedInt(record.bank, 'bank', 127);
   const index = boundedInt(record.index, 'index', 127);
   const value = midi2U32(record.value32, 'value32');
@@ -400,7 +459,11 @@ function midi2RelativeController(
   request: Midi2RelativeRegisteredControllerRequest,
   opcode: number,
 ): ProjectMidiEvent {
-  const { record, ppq, group, channel } = readRequest(requestName, request);
+  const { record, ppq, group, channel } = readRequest(requestName, request, [
+    { name: 'bank', shape: 'integer' },
+    { name: 'index', shape: 'integer' },
+    { name: 'delta32', shape: 'integer' },
+  ]);
   const bank = boundedInt(record.bank, 'bank', 127);
   const index = boundedInt(record.index, 'index', 127);
   const delta = midi2I32(record.delta32, 'delta32');
@@ -442,7 +505,11 @@ function midi2PerNoteController(
   request: Midi2RegisteredPerNoteControllerRequest,
   opcode: number,
 ): ProjectMidiEvent {
-  const { record, ppq, group, channel } = readRequest(requestName, request);
+  const { record, ppq, group, channel } = readRequest(requestName, request, [
+    { name: 'note', shape: 'integer' },
+    { name: 'index', shape: 'integer' },
+    { name: 'value32', shape: 'integer' },
+  ]);
   const note = boundedInt(record.note, 'note', 127);
   const index = midi2Byte(record.index, 'index');
   const value = midi2U32(record.value32, 'value32');
@@ -489,7 +556,10 @@ export function midi2AssignablePerNoteController(
 export function midi2PerNotePitchBend(request: Midi2PerNotePitchBendRequest): ProjectMidiEvent {
   return withEntry('midi2PerNotePitchBend', () => {
     const fn = 'midi2PerNotePitchBend';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'bend32', shape: 'integer' },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const bend = midi2U32(record.bend32, 'bend32');
     return midi2Event(ppq, group, 0x6, channel, note, 0, bend);
@@ -508,7 +578,11 @@ export function midi2PerNotePitchBend(request: Midi2PerNotePitchBendRequest): Pr
 export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): ProjectMidiEvent {
   return withEntry('midi2PerNoteManagement', () => {
     const fn = 'midi2PerNoteManagement';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(fn, request, [
+      { name: 'note', shape: 'integer' },
+      { name: 'detach', shape: 'boolean', optional: true },
+      { name: 'reset', shape: 'boolean', optional: true },
+    ]);
     const note = boundedInt(record.note, 'note', 127);
     const detach = optionalFlag(record.detach, 'detach');
     const reset = optionalFlag(record.reset, 'reset');
@@ -527,7 +601,15 @@ export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): 
 export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEvent[] {
   return withEntry('midiBankProgram', () => {
     const fn = 'midiBankProgram';
-    const { record, ppq, group, channel } = readRequest(fn, request);
+    const { record, ppq, group, channel } = readRequest(
+      fn,
+      request,
+      [
+        { name: 'program', shape: 'integer' },
+        { name: 'bank', shape: 'object' },
+      ],
+      (record) => assertBankShape(record.bank),
+    );
     const program = boundedInt(record.program, 'program', 127);
     const bank = readBank(record.bank);
     return addon.midiBankProgram(ppq, group, channel, bank.msb, bank.lsb, program);
@@ -546,13 +628,12 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
   return withEntry('midiParamToCc', () => {
     const fn = 'midiParamToCc';
     const record = requestObject(fn, request, 'request', true);
-    assertMidiCcBindingListBytes(record.bindings);
     return addon.midiParamToCc(
       record.bindings,
-      requireNumber(record.paramId, 'paramId'),
-      requireNumber(record.unitValue, 'unitValue'),
-      requireNumber(record.group, 'group'),
-      isAbsent(record.ppq) ? 0 : requireNumber(record.ppq, 'ppq'),
+      record.paramId,
+      record.unitValue,
+      record.group,
+      record.ppq ?? 0,
     );
   });
 }
@@ -915,6 +996,7 @@ export function midiCcLearn(
  *
  * @param request - Bindings to search and the CC event to convert
  * @returns The breakpoint, or `null` when no binding matches
+ *   A valid SysEx event is refused as NotSupported.
  * @throws TypeError for a non-object request or an unknown field
  */
 export function midiCcToBreakpoint(
@@ -922,7 +1004,6 @@ export function midiCcToBreakpoint(
 ): ProjectAutomationPoint | null {
   return withEntry('midiCcToBreakpoint', () => {
     const r = requestObject('midiCcToBreakpoint', request, 'request', true);
-    assertMidiCcBindingListBytes(r.bindings);
     const native = addon.midiCcToBreakpoint(r.bindings, r.event) as {
       ppq: number;
       value: number;

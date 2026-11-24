@@ -107,6 +107,7 @@ sonare::midi::NoteTracking* wasmNoteTrackingField(sonare::midi::ControllerProfil
 
 void RealtimeEngineWasm::bindMidiCc(val object) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  requireCcBindingShape(object, "");
   sonare::midi::CcBinding binding{};
   binding.cc_number = domainNumberFromVal<uint8_t>(object["ccNumber"], "ccNumber",
                                                    sonare_c_detail::kMidiDataByteDomain);

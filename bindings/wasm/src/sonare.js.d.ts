@@ -2083,13 +2083,16 @@ export interface SonareModule {
   ) => unknown;
   midiRouteEvents: (events: readonly unknown[], config: unknown) => unknown;
   midiCcLearn: (
-    events: readonly unknown[],
+    events: ReadonlyArray<import('./project_types.js').ProjectMidiEvent>,
     paramId: number,
     minValue: number,
     maxValue: number,
     minMovement: number,
   ) => (import('./project_types.js').ProjectMidiCcBinding & { consume: boolean }) | null;
-  midiCcToBreakpoint: (bindings: readonly unknown[], event: unknown) => unknown;
+  midiCcToBreakpoint: (
+    bindings: readonly unknown[],
+    event: import('./project_types.js').ProjectMidiEvent,
+  ) => unknown;
   midiParamToCc: (
     bindings: readonly unknown[],
     paramId: number,

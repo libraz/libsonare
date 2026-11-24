@@ -203,6 +203,18 @@ describe('RealtimeEngine transport and state reads', () => {
     });
   });
 
+  it('preserves explicitly supplied zero fifths as C major', () => {
+    withEngine((engine) => {
+      engine.setMarkers([{ id: 1, ppq: 0, kind: 'keySignature', keyFifths: 7 }]);
+      engine.setMarkers([{ id: 1, ppq: 0, kind: 'keySignature', keyFifths: 0, keyMinor: false }]);
+      expect(engine.marker(1)).toMatchObject({
+        kind: 'keySignature',
+        keyFifths: 0,
+        keyMinor: false,
+      });
+    });
+  });
+
   it('refuses out-of-domain fifths on a key signature without replacing the snapshot', () => {
     const check = (engine: RealtimeEngine) => {
       engine.setMarkers([{ id: 1, ppq: 1, kind: 'keySignature', keyFifths: 7 }]);

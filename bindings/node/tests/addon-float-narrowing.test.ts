@@ -1900,6 +1900,7 @@ const UNCONTROLLED_SITES = [
  */
 const BAILOUT_READER_SITES = new Set([
   'sonare_wrap_engine.cpp SetAutomationLane value',
+  'addon.cpp MidiParamToCc unitValue',
   'sonare_wrap_features.cpp NoteSegments frameRate',
   'features/conversion.cpp TimeToFrames time',
   'analysis/metering.cpp ParseScaleArgs midi',

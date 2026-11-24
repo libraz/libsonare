@@ -1394,7 +1394,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ],
       ['meteringSpectrum', 'Covered by metering-and-scale.test.ts.'],
       ['meteringSpectrumFrame', 'Covered by metering-and-scale.test.ts.'],
-      ['midiCcLearn', 'Covered by public-input-conformance.test.ts.'],
       ['midiCcToBreakpoint', 'Reads a binding array rather than an options bag.'],
       ['midiParamToCc', 'Reads a binding array rather than an options bag.'],
       ['readFramesI16', 'Needs a live StreamAnalyzer session.'],

@@ -13,6 +13,33 @@
 
 namespace {
 
+void requireLiveMidiNumberShape(const val& value, const std::string& subject) {
+  if (!value.isNumber()) throw WasmTypeError(subject + " must be a number");
+}
+
+void requireLiveMidiOptionalNumberShape(const val& value, const char* subject) {
+  if (!value.isUndefined()) requireLiveMidiNumberShape(value, subject);
+}
+
+void requireLiveMidiBooleanShape(const val& value, const char* subject) {
+  if (value.typeOf().as<std::string>() != "boolean") {
+    throw WasmTypeError(std::string(subject) + " must be a boolean");
+  }
+}
+
+void requireLiveMidiWordListShape(const val& value) {
+  const size_t count = wasmArrayLength(value, "words");
+  for (size_t i = 0; i < count; ++i) {
+    requireLiveMidiNumberShape(value[i], "words[" + std::to_string(i) + "]");
+  }
+}
+
+void requireLiveMidiByteShape(const val& value, const char* subject) {
+  if (!isUint8ArrayView(value)) {
+    throw WasmTypeError(std::string(subject) + " must be a Uint8Array");
+  }
+}
+
 // Throws the live push argument refusal of midi/live_push_args.h as a RangeError
 // naming the JS function.
 void refuseLivePushArg(const char* error) {
@@ -212,32 +239,53 @@ void RealtimeEngineWasm::consumeExternalMidiScratch() {
 
 void RealtimeEngineWasm::pushMidiInputNoteOn(const val& group_val, const val& channel_val,
                                              const val& note_val, const val& velocity_val,
-                                             int64_t offset_in_block_samples) {
+                                             const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(note_val, "note");
+  requireLiveMidiNumberShape(velocity_val, "velocity");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int velocity = checkedIntFromVal(velocity_val, "velocity");
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
   pushMidiInputEvent(group, channel, note, velocity, offset_in_block_samples, true);
 }
 
 void RealtimeEngineWasm::pushMidiInputNoteOff(const val& group_val, const val& channel_val,
                                               const val& note_val, const val& velocity_val,
-                                              int64_t offset_in_block_samples) {
+                                              const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(note_val, "note");
+  requireLiveMidiNumberShape(velocity_val, "velocity");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int velocity = checkedIntFromVal(velocity_val, "velocity");
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
   pushMidiInputEvent(group, channel, note, velocity, offset_in_block_samples, false);
 }
 
 void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channel_val,
                                          const val& controller_val, const val& value_val,
-                                         int64_t offset_in_block_samples) {
+                                         const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(controller_val, "controller");
+  requireLiveMidiNumberShape(value_val, "value");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
 #if defined(SONARE_WITH_ARRANGEMENT)
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int controller = checkedIntFromVal(controller_val, "controller");
   const int value = checkedIntFromVal(value_val, "value");
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
   refuseLivePushArg(sonare::midi::live_push_cc_error(group, channel, controller, value));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_control_change(
                                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
@@ -248,7 +296,7 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
   (void)channel_val;
   (void)controller_val;
   (void)value_val;
-  (void)offset_in_block_samples;
+  (void)offset_in_block_samples_val;
   throwMidiEngineUnavailable();
 #endif
 }
@@ -268,12 +316,18 @@ void RealtimeEngineWasm::pushMidiInputUmpInternal(const sonare::midi::Ump& ump,
 
 void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val& channel_val,
                                                 const val& bend_val,
-                                                int64_t offset_in_block_samples) {
+                                                const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(bend_val, "bend14");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   // 14-bit, so the 7-bit check every sibling here uses would refuse most of the
   // range rather than narrow it.
   const int bend14 = checkedIntFromVal(bend_val, "bend14");
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
 #if defined(SONARE_WITH_ARRANGEMENT)
   refuseLivePushArg(sonare::midi::live_push_pitch_bend_error(group, channel, bend14));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_pitch_bend(static_cast<uint8_t>(group),
@@ -291,10 +345,16 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
 
 void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, const val& channel_val,
                                                       const val& pressure_val,
-                                                      int64_t offset_in_block_samples) {
+                                                      const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(pressure_val, "pressure");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
 #if defined(SONARE_WITH_ARRANGEMENT)
   refuseLivePushArg(sonare::midi::live_push_channel_pressure_error(group, channel, pressure));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_channel_pressure(
@@ -312,11 +372,18 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
 
 void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const val& channel_val,
                                                    const val& note_val, const val& pressure_val,
-                                                   int64_t offset_in_block_samples) {
+                                                   const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(note_val, "note");
+  requireLiveMidiNumberShape(pressure_val, "pressure");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
 #if defined(SONARE_WITH_ARRANGEMENT)
   refuseLivePushArg(sonare::midi::live_push_poly_pressure_error(group, channel, note, pressure));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_poly_pressure(
@@ -336,6 +403,12 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
 void RealtimeEngineWasm::pushMidiNoteOn(const val& destination_id_val, const val& group_val,
                                         const val& channel_val, const val& note_val,
                                         const val& velocity_val, const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(note_val, "note");
+  requireLiveMidiNumberShape(velocity_val, "velocity");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -348,6 +421,12 @@ void RealtimeEngineWasm::pushMidiNoteOn(const val& destination_id_val, const val
 void RealtimeEngineWasm::pushMidiNoteOff(const val& destination_id_val, const val& group_val,
                                          const val& channel_val, const val& note_val,
                                          const val& velocity_val, const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(note_val, "note");
+  requireLiveMidiNumberShape(velocity_val, "velocity");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -365,6 +444,12 @@ void RealtimeEngineWasm::pushMidiNoteOff(const val& destination_id_val, const va
 void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& group_val,
                                     const val& channel_val, const val& controller_val,
                                     const val& value_val, const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(controller_val, "controller");
+  requireLiveMidiNumberShape(value_val, "value");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -405,6 +490,9 @@ size_t umpWordsFromVal(const val& words_val, uint32_t (&words)[4]) {
 // through one kind-aware decoder.
 void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& words_val,
                                      const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiWordListShape(words_val);
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   uint32_t words[4] = {0, 0, 0, 0};
   const size_t count = umpWordsFromVal(words_val, words);
@@ -423,9 +511,14 @@ void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& w
 
 // Pushes one raw UMP of 1 to 4 words to the engine-owned MIDI input source.
 // Mirrors the C ABI sonare_engine_push_midi_input_ump.
-void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t offset_in_block_samples) {
+void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val,
+                                          const val& offset_in_block_samples_val) {
+  requireLiveMidiWordListShape(words_val);
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   uint32_t words[4] = {0, 0, 0, 0};
   const size_t count = umpWordsFromVal(words_val, words);
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, count)) {
     throw WasmRangeError(std::string(sonare::midi::kLivePushUmpShapeError));
@@ -443,6 +536,8 @@ void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t offset_i
 
 void RealtimeEngineWasm::pushMidiInputUmpAtRenderFrame(const val& words_val,
                                                        const val& render_frame_val) {
+  requireLiveMidiWordListShape(words_val);
+  requireLiveMidiNumberShape(render_frame_val, "renderFrame");
   uint32_t words[4] = {0, 0, 0, 0};
   const size_t count = umpWordsFromVal(words_val, words);
   const int64_t render_frame = checkedInt64FromVal(render_frame_val, "renderFrame");
@@ -514,6 +609,14 @@ void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const va
                                          const val& channel_val, const val& program_val,
                                          const val& bank_valid_val, const val& bank_msb_val,
                                          const val& bank_lsb_val, const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(program_val, "program");
+  requireLiveMidiBooleanShape(bank_valid_val, "bankValid");
+  if (!bank_msb_val.isUndefined()) requireLiveMidiNumberShape(bank_msb_val, "bankMsb");
+  if (!bank_lsb_val.isUndefined()) requireLiveMidiNumberShape(bank_lsb_val, "bankLsb");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
                                               bank_msb_val, bank_lsb_val);
@@ -542,9 +645,18 @@ void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const va
 void RealtimeEngineWasm::pushMidiInputProgram(const val& group_val, const val& channel_val,
                                               const val& program_val, const val& bank_valid_val,
                                               const val& bank_msb_val, const val& bank_lsb_val,
-                                              int64_t offset_in_block_samples) {
+                                              const val& offset_in_block_samples_val) {
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(program_val, "program");
+  requireLiveMidiBooleanShape(bank_valid_val, "bankValid");
+  if (!bank_msb_val.isUndefined()) requireLiveMidiNumberShape(bank_msb_val, "bankMsb");
+  if (!bank_lsb_val.isUndefined()) requireLiveMidiNumberShape(bank_lsb_val, "bankLsb");
+  requireLiveMidiNumberShape(offset_in_block_samples_val, "offsetInBlockSamples");
   const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
                                               bank_msb_val, bank_lsb_val);
+  const int64_t offset_in_block_samples =
+      checkedInt64FromVal(offset_in_block_samples_val, "offsetInBlockSamples");
 #if defined(SONARE_WITH_ARRANGEMENT)
   refuseLivePushArg(programArgError(args));
   pushMidiInputUmpInternal(
@@ -576,6 +688,11 @@ void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
 void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const val& group_val,
                                            const val& channel_val, const val& bend_val,
                                            const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(bend_val, "bend14");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -602,6 +719,11 @@ void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
                                                  const val& group_val, const val& channel_val,
                                                  const val& pressure_val,
                                                  const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(pressure_val, "pressure");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -628,6 +750,12 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
                                               const val& channel_val, const val& note_val,
                                               const val& pressure_val,
                                               const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiNumberShape(group_val, "group");
+  requireLiveMidiNumberShape(channel_val, "channel");
+  requireLiveMidiNumberShape(note_val, "note");
+  requireLiveMidiNumberShape(pressure_val, "pressure");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -660,12 +788,15 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
 // sonare_engine_push_midi_sysex.
 void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
                                        const val& render_frame_val) {
+  requireLiveMidiNumberShape(destination_id_val, "destinationId");
+  requireLiveMidiByteShape(data, "data");
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
-  // Distinguish the two rejection classes the C ABI reports (it bypasses the
-  // C-ABI translation unit here, so the mapping is reproduced): malformed or
-  // oversized requests and payloads the destination cannot prepare are a
-  // RangeError, while full payload slots or a full command queue are
+  // Distinguish the rejection classes the C ABI reports (this bypasses the
+  // C-ABI translation unit, so its codes are reproduced): malformed or
+  // oversized requests are RangeError, an unpreparable destination payload is
+  // InvalidParameter, and full payload slots or a full command queue are
   // transient OutOfMemory back-pressure. The ceiling is the engine's own
   // constant, not a copy of its value, so raising it moves this guard with it.
   constexpr size_t kMaxSysExBytes = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
@@ -676,8 +807,10 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
                                renderFrameFromVal(render_frame_val))) {
     switch (engine_.last_midi_sysex_push_status()) {
       case sonare::engine::MidiSysExPushStatus::kInvalidPayload:
+        throw WasmRangeError("data must contain a valid SysEx frame");
       case sonare::engine::MidiSysExPushStatus::kPreparationFailed:
-        throw WasmRangeError("the destination cannot prepare this SysEx");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "data must be a SysEx payload the destination accepts");
       default:
         throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                       "failed to queue MIDI SysEx command");
@@ -689,6 +822,7 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
 // @p render_frame (-1 = immediate). Mirrors the C ABI
 // sonare_engine_push_midi_panic.
 void RealtimeEngineWasm::pushMidiPanic(const val& render_frame_val) {
+  requireLiveMidiOptionalNumberShape(render_frame_val, "renderFrame");
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kMidiAllNotesOff;
   command.target_id = 0;

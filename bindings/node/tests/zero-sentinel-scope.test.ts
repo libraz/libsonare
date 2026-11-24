@@ -61,10 +61,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     '0 is the unassigned track id: the clip player returns on it rather than substituting a track of its own.',
   ],
   [
-    'addon.cpp:word1',
-    'The optional second word of a packed MIDI 1.0 event; 0 is the empty word an absent one reads as.',
-  ],
-  [
     'project/render.cpp:destinationId',
     'The C ABI documents the default MIDI destination as 0, so zero addresses a destination rather than standing in for an absent one.',
   ],

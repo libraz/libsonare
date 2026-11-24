@@ -123,6 +123,44 @@ describe('Sonare WASM live per-note expression', () => {
     });
   }
 
+  it('preflights live push shapes before domain checks, including direct embind calls', () => {
+    withEngine((engine) => {
+      expect(() => engine.pushMidiInputNoteOn(16, '0' as never, 60, 100)).toThrow(
+        new TypeError('RealtimeEngine.pushMidiInputNoteOn: channel must be a number'),
+      );
+      const native = (
+        engine as unknown as {
+          native: {
+            pushMidiPitchBend: (
+              destinationId: number,
+              group: number,
+              channel: number,
+              bend14: number,
+              renderFrame: number,
+            ) => void;
+            pushMidiSysex: (destinationId: number, data: Uint8Array, renderFrame: number) => void;
+          };
+        }
+      ).native;
+      expect(() => native.pushMidiPitchBend(DESTINATION, 16, '0' as never, 8192, -1)).toThrow(
+        TypeError,
+      );
+      expect(() => native.pushMidiPitchBend(DESTINATION, 16, '0' as never, 8192, -1)).toThrow(
+        /channel must be a number/,
+      );
+
+      const byteArray = [0xf0, 0xf7] as never;
+      expect(() => native.pushMidiSysex(DESTINATION, byteArray, -2)).toThrow(TypeError);
+      expect(() => native.pushMidiSysex(DESTINATION, byteArray, -2)).toThrow(
+        /data must be a Uint8Array/,
+      );
+      // A correctly shaped byte view proceeds to the later render-frame domain check.
+      expect(() => native.pushMidiSysex(DESTINATION, Uint8Array.of(0xf0, 0xf7), -2)).toThrow(
+        /renderFrame/,
+      );
+    });
+  });
+
   it('refuses a value outside its dimension rather than narrowing it', () => {
     withEngine((engine) => {
       engine.setBuiltinInstrument(DESTINATION, {});

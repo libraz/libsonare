@@ -370,6 +370,30 @@ describe('SonareEngine live MIDI input timing options', () => {
 describe('SonareEngine track MIDI timing options', () => {
   setupWorklet();
 
+  it.each([
+    [
+      'track',
+      (engine: SonareEngine) => engine.pushMidiPitchBend(0, 0, '0' as never, 8192, -2),
+      'SonareEngine.pushMidiPitchBend',
+    ],
+    [
+      'live input',
+      (engine: SonareEngine) =>
+        engine.pushMidiInputPitchBend(0, '0' as never, 8192, undefined, { contextTimeSec: -2 }),
+      'SonareEngine.pushMidiInputPitchBend',
+    ],
+  ] as const)('checks %s MIDI shape before timing domains', async (_, push, entry) => {
+    const { engine, live, posted } = await bridgedEngine();
+    try {
+      posted.length = 0;
+      expect(() => push(engine)).toThrow(new TypeError(`${entry}: channel must be a number`));
+      expect(posted).toEqual([]);
+    } finally {
+      engine.destroy();
+      live.destroy();
+    }
+  });
+
   it('sends a context time instead of a render frame and pushes the offline mirror now', async () => {
     const { engine, live, posted } = await bridgedEngine();
     const offline = (engine as unknown as { offlineEngine: { pushMidiCc: () => void } })
@@ -525,7 +549,11 @@ describe('SonareEngine.pushMidiInputProgram', () => {
       expect(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 128, lsb: 0 })).toThrow(RangeError);
       expect(() =>
         engine.pushMidiInputProgram(0, 0, 0, { msb: 1, lsb: 0, valid: 1 } as never),
-      ).toThrow(unknownKeyError('SonareEngine.pushMidiInputProgram: unknown key valid'));
+      ).toThrow(
+        new TypeError(
+          'SonareEngine.pushMidiInputProgram: unknown key bank.valid (expected lsb, msb)',
+        ),
+      );
       expect(() =>
         engine.pushMidiInputProgram(0, 0, 0, undefined, 3, { contextTimeSec: 1 }),
       ).toThrow(/offsetInBlockSamples and contextTimeSec must not both be given/);

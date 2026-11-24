@@ -28,6 +28,11 @@ from ._project_model import (
     _midi_event_packed,
     _midi_event_to_c,
     _midi_events_to_c,
+    _pack_midi_events,
+    _require_midi_cc_bindings,
+    _require_midi_event,
+    _require_midi_events,
+    _require_midi_shapes,
     _validate_midi_event_ppq,
     _validate_midi_event_word,
 )
@@ -282,9 +287,16 @@ def midi_route_events(
     ``thru`` (1 = pass non-matching events through, default). A negative
     group or channel is refused rather than read as "any".
     """
-    lib = _get_lib()
-    c_in, n = _midi_events_to_c(events, "events")
+    event_rows = _require_midi_events(events, "events")
     cfg_map: Mapping[str, int | None] = config or {}
+    _require_midi_shapes(
+        ("filter_group", cfg_map.get("filter_group"), "optional_integer"),
+        ("filter_channel", cfg_map.get("filter_channel"), "optional_integer"),
+        ("remap_channel", cfg_map.get("remap_channel"), "optional_integer"),
+        ("thru", cfg_map.get("thru", 1), "index"),
+    )
+    c_in, n = _pack_midi_events(event_rows, "events")
+    lib = _get_lib()
     # The C ABI spells "any" / "no remap" as -1; only absence reaches it.
     cfg = SonareMidiRouteConfig(
         filter_group=_absent_or_in_range(cfg_map.get("filter_group"), "filter_group", 15, -1),
@@ -330,8 +342,15 @@ def midi_cc_learn(
     Returns ``None`` when no binding is learned (native
     ``SONARE_ERROR_INVALID_STATE``).
     """
+    event_rows = _require_midi_events(events, "events")
+    _require_midi_shapes(
+        ("param_id", param_id, "integer"),
+        ("min_value", min_value, "number"),
+        ("max_value", max_value, "number"),
+        ("min_movement", min_movement, "integer"),
+    )
+    c_in, n = _pack_midi_events(event_rows, "events")
     lib = _get_lib()
-    c_in, n = _midi_events_to_c(events, "events")
     out_binding = SonareMidiCcBinding()
     rc = lib.sonare_midi_cc_learn(
         c_in if n else None,
@@ -359,10 +378,13 @@ def midi_cc_to_breakpoint(
     ``SONARE_ERROR_INVALID_STATE``).
     The C call refuses a valid SysEx event as NotSupported.
     """
+    rows = _require_midi_cc_bindings(bindings, "bindings")
+    event = _require_midi_event(event, "event")
     lib = _get_lib()
-    rows = list(bindings)
     m = len(rows)
-    c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
+    c_bindings = (SonareMidiCcBinding * m)(
+        *[_cc_binding_to_c(binding, f"bindings[{i}]") for i, binding in enumerate(rows)]
+    )
     ev = _midi_event_to_c(event, "event")
     pt = SonareAutomationPoint()
     rc = lib.sonare_midi_cc_to_breakpoint(
@@ -390,10 +412,18 @@ def midi_param_to_cc(
 
     Returns ``None`` when ``param_id`` is not bound (native ``SONARE_ERROR_INVALID_STATE``).
     """
+    rows = _require_midi_cc_bindings(bindings, "bindings")
+    _require_midi_shapes(
+        ("param_id", param_id, "integer"),
+        ("unit_value", unit_value, "number"),
+        ("group", group, "integer"),
+        ("ppq", ppq, "real"),
+    )
     lib = _get_lib()
-    rows = list(bindings)
     m = len(rows)
-    c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
+    c_bindings = (SonareMidiCcBinding * m)(
+        *[_cc_binding_to_c(binding, f"bindings[{i}]") for i, binding in enumerate(rows)]
+    )
     out_event = SonareMidiEventPod()
     rc = lib.sonare_midi_param_to_cc(
         c_bindings if m else None,

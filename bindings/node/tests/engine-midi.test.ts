@@ -506,6 +506,53 @@ describe('live MIDI push argument and state rule', () => {
     }
   });
 
+  it('checks later live-push shapes before earlier domains and does not default required scalars', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      const pushInputNoteOn = engine.pushMidiInputNoteOn.bind(engine) as unknown as (
+        ...args: unknown[]
+      ) => void;
+      expect(() => pushInputNoteOn(300, 0, '60', 100)).toThrow(
+        new TypeError('RealtimeEngine.pushMidiInputNoteOn: note must be a number'),
+      );
+      // Before shape admission the omitted note reached the native byte reader as its zero fallback.
+      expect(() => pushInputNoteOn(0, 0, undefined, 100)).toThrow(
+        new TypeError('RealtimeEngine.pushMidiInputNoteOn: note must be a number'),
+      );
+      const native = (
+        engine as unknown as {
+          native: { pushMidiInputPitchBend: (...args: unknown[]) => void };
+        }
+      ).native;
+      expect(() => native.pushMidiInputPitchBend(0, 0, undefined, 0)).toThrow(
+        new TypeError('RealtimeEngine.pushMidiInputPitchBend: bend14 must be a number'),
+      );
+      engine.setMidiInputSource(0);
+      expect(() => engine.pushMidiInputNoteOff(0, 0, 60)).not.toThrow();
+      expect(() => engine.pushMidiNoteOff(0, 0, 0, 60)).not.toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('checks live UMP element shapes before word domains and render-frame domains', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      const pushUmp = engine.pushMidiUmp.bind(engine) as unknown as (...args: unknown[]) => void;
+      expect(() => pushUmp(0, [4294967296, 'bad'], -1)).toThrow(
+        new TypeError('RealtimeEngine.pushMidiUmp: words[1] must be a number'),
+      );
+      const pushSysex = engine.pushMidiSysex.bind(engine) as unknown as (
+        ...args: unknown[]
+      ) => void;
+      expect(() => pushSysex(0, [0xf0, 0xf7], -2)).toThrow(
+        new TypeError('RealtimeEngine.pushMidiSysex: data must be a Uint8Array'),
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+
   const inputPushes: [string, (engine: RealtimeEngine) => void][] = [
     ['pushMidiInputNoteOn', (e) => e.pushMidiInputNoteOn(0, 0, 60, 100)],
     ['pushMidiInputNoteOff', (e) => e.pushMidiInputNoteOff(0, 0, 60, 0)],

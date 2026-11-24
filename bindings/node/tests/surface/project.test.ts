@@ -261,6 +261,14 @@ describe('edits', () => {
         keyMinor: true,
       });
       expect(project.markers().find((m) => m.id === key)?.keyFifths).toBe(-3);
+      expect(
+        project.setMarker({ id: key, ppq: 4, kind: 'keySignature', keyFifths: 0, keyMinor: false }),
+      ).toBe(key);
+      expect(project.markers().find((m) => m.id === key)).toMatchObject({
+        kind: 'keySignature',
+        keyFifths: 0,
+        keyMinor: false,
+      });
       expect(project.setMarker({ id, ppq: 3, name: 'chorus' })).toBe(id);
       const zero = caught(() => project.setMarker({ id: 0, ppq: 1 }));
       expect(zero).toBeInstanceOf(RangeError);

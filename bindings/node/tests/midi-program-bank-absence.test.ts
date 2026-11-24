@@ -20,6 +20,18 @@ describe('Program Change bank absence', () => {
       expect(() => engine.pushMidiInputProgram(0, 0, 5, null as never)).toThrow(
         new TypeError(`RealtimeEngine.pushMidiInputProgram: ${TEXT}`),
       );
+      expect(() =>
+        engine.pushMidiInputProgram(0, 0, 5, { msb: 0, lsb: 0, extra: 1 } as never),
+      ).toThrow(
+        new TypeError(
+          'RealtimeEngine.pushMidiInputProgram: unknown key bank.extra (expected lsb, msb)',
+        ),
+      );
+      expect(() =>
+        engine.pushMidiProgram(DEST, 0, 0, 5, { msb: 0, lsb: 0, extra: 1 } as never),
+      ).toThrow(
+        new TypeError('RealtimeEngine.pushMidiProgram: unknown key bank.extra (expected lsb, msb)'),
+      );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, undefined, 0)).not.toThrow();
       expect(() => engine.pushMidiInputProgram(0, 0, 5)).not.toThrow();
     } finally {

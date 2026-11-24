@@ -27,24 +27,47 @@ inline std::array<const char*, 4> CcBindingKindNames() {
   return names;
 }
 
-/// @brief Read a binding descriptor; throws (and returns false) naming the offending field.
+/// @brief Check every binding field's type before any one of its domains is read.
+inline bool CcBindingShapeFromValue(Napi::Env env, const Napi::Value& value,
+                                    const std::string& at) {
+  if (!CheckNodeInputShape(env, value, at.empty() ? "binding" : at, NodeInputShape::kObject)) {
+    return false;
+  }
+  return PreflightNodeObjectShapes(env, value.As<Napi::Object>(),
+                                   {{"ccNumber", NodeInputShape::kInteger, false,
+                                     node_domain_type_text(sonare_c_detail::kMidiDataByteDomain)},
+                                    {"channel", NodeInputShape::kNumber, true},
+                                    {"kind", NodeInputShape::kString, true},
+                                    {"ccLsbNumber", NodeInputShape::kInteger, true},
+                                    {"selectorMsb", NodeInputShape::kInteger, true},
+                                    {"selectorLsb", NodeInputShape::kInteger, true},
+                                    {"paramId", NodeInputShape::kNumber, false},
+                                    {"minValue", NodeInputShape::kNumber, true},
+                                    {"maxValue", NodeInputShape::kNumber, true},
+                                    {"consume", NodeInputShape::kBoolean, true}},
+                                   at);
+}
+
+/// @brief Check every row's shape before any binding's domain is read.
+inline bool CcBindingListShapesFromArray(Napi::Env env, const Napi::Array& array,
+                                         const std::string& name = "bindings") {
+  const uint32_t count = node_list_length(array, name);
+  for (uint32_t i = 0; i < count; ++i) {
+    const std::string at = name + "[" + std::to_string(i) + "]";
+    const Napi::Value value = array.Get(i);
+    if (!CcBindingShapeFromValue(env, value, at)) return false;
+  }
+  return true;
+}
+
+/// @brief Read a binding descriptor after its full shape has been admitted.
 /// @param at The binding's place in a list (`bindings[2]`), prefixed to every field name, or
 ///   empty for a binding passed on its own.
 inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding* out,
                                 const std::string& at) {
+  if (!CcBindingShapeFromValue(env, object, at)) return false;
   const Napi::Value cc_number = object.Get("ccNumber");
   const Napi::Value param_id = object.Get("paramId");
-  if (!cc_number.IsNumber()) {
-    Napi::TypeError::New(env, node_element_field(at, "ccNumber") + " must be " +
-                                  node_domain_type_text(sonare_c_detail::kMidiDataByteDomain))
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  if (!param_id.IsNumber()) {
-    Napi::TypeError::New(env, node_element_field(at, "paramId") + " must be a number")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
   *out = SonareMidiCcBinding{};
   // The 14-bit kind's narrower [0, 31] is refused by the C ABI, which sees the kind.
   try {
@@ -60,16 +83,19 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
       IntInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL, at));
   out->kind =
       static_cast<uint8_t>(NamedSelectorProperty(object, "kind", CcBindingKindNames(), 0, at));
-  out->cc_lsb_number = MidiByteProperty(env, object, "ccLsbNumber", 0u, at);
-  out->selector_msb = MidiByteProperty(env, object, "selectorMsb", 0u, at);
-  out->selector_lsb = MidiByteProperty(env, object, "selectorLsb", 0u, at);
-  if (env.IsExceptionPending()) return false;
+  const auto& byte_domain = sonare_c_detail::kMidiDataByteDomain;
+  if (!OptionalDomainProperty(env, object, "ccLsbNumber", node_element_field(at, "ccLsbNumber"),
+                              byte_domain, &out->cc_lsb_number) ||
+      !OptionalDomainProperty(env, object, "selectorMsb", node_element_field(at, "selectorMsb"),
+                              byte_domain, &out->selector_msb) ||
+      !OptionalDomainProperty(env, object, "selectorLsb", node_element_field(at, "selectorLsb"),
+                              byte_domain, &out->selector_lsb)) {
+    return false;
+  }
   out->param_id = node_narrow_uint32(env, param_id, node_element_field(at, "paramId").c_str());
   out->min_value = FloatProperty(object, "minValue", 0.0f, at);
   out->max_value = FloatProperty(object, "maxValue", 1.0f, at);
-  if (env.IsExceptionPending()) return false;
   const bool consume = BoolProperty(object, "consume", false, at);
-  if (env.IsExceptionPending()) return false;
   out->consume = consume ? 1 : 0;
   return !env.IsExceptionPending();
 }

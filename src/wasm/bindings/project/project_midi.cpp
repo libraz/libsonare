@@ -5,8 +5,10 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <vector>
@@ -802,21 +804,107 @@ val js_midi_bank_program(const val& ppq_val, const val& group_val, const val& ch
   return out;
 }
 
+void check_midi_event_payload(const val& sysex, const std::string& subject);
+
+void requireMidiNumberShape(const val& value, const std::string& subject, bool optional = false) {
+  if (optional && (value.isUndefined() || value.isNull())) return;
+  if (!value.isNumber()) throw WasmTypeError(subject + " must be a number");
+}
+
+void requireMidiBooleanShape(const val& value, const std::string& subject, bool optional = false) {
+  if (optional && (value.isUndefined() || value.isNull())) return;
+  if (value.typeOf().as<std::string>() != "boolean") {
+    throw WasmTypeError(subject + " must be a boolean");
+  }
+}
+
+void requireKnownMidiObjectKeys(const val& object, std::initializer_list<const char*> allowed,
+                                const std::string& path) {
+  val keys = val::global("Object").call<val>("keys", object);
+  const unsigned length = keys["length"].as<unsigned>();
+  for (unsigned i = 0; i < length; ++i) {
+    const std::string key = keys[i].as<std::string>();
+    const bool known = std::any_of(allowed.begin(), allowed.end(),
+                                   [&](const char* candidate) { return key == candidate; });
+    if (!known) {
+      std::vector<std::string> accepted;
+      accepted.reserve(allowed.size());
+      for (const char* name : allowed) accepted.emplace_back(name);
+      throw WasmTypeError("unknown key " + (path.empty() ? key : path + "." + key) + " (expected " +
+                          sonare::util::json::schema::expected_keys(accepted) + ")");
+    }
+  }
+}
+
+void requireMidiEventShape(const val& event, const std::string& path) {
+  if (event.isNull() || event.isUndefined() || event.typeOf().as<std::string>() != "object" ||
+      val::global("Array").call<bool>("isArray", event)) {
+    throw WasmTypeError(path + " must be an object");
+  }
+  requireKnownMidiObjectKeys(event, {"ppq", "word0", "word1", "sysex"}, path);
+  requireMidiNumberShape(event["ppq"], elementField(path, "ppq"));
+  requireMidiNumberShape(event["word0"], elementField(path, "word0"));
+  requireMidiNumberShape(event["word1"], elementField(path, "word1"), true);
+  check_midi_event_payload(event["sysex"], elementField(path, "sysex"));
+}
+
+size_t requireMidiEventListShapes(const val& events, const char* subject) {
+  const size_t count = wasmArrayLength(events, subject);
+  for (size_t i = 0; i < count; ++i) {
+    requireMidiEventShape(events[i], elementAt(subject, i));
+  }
+  return count;
+}
+
+void requireMidiCcBindingShape(const val& object, const std::string& at) {
+  requireCcBindingShape(object, at);
+}
+
+size_t requireMidiCcBindingListShapes(const val& bindings) {
+  const size_t count = wasmArrayLength(bindings, "bindings");
+  for (size_t i = 0; i < count; ++i) {
+    requireMidiCcBindingShape(bindings[i], elementAt("bindings", i));
+  }
+  return count;
+}
+
+void requireMidiRouteConfigShapes(const val& config) {
+  if (config.isUndefined() || config.isNull()) return;
+  if (config.typeOf().as<std::string>() != "object" ||
+      val::global("Array").call<bool>("isArray", config)) {
+    throw WasmTypeError("config must be an object");
+  }
+  requireKnownMidiObjectKeys(config, {"filterGroup", "filterChannel", "remapChannel", "thru"},
+                             "config");
+  requireMidiNumberShape(config["filterGroup"], "filterGroup", true);
+  requireMidiNumberShape(config["filterChannel"], "filterChannel", true);
+  requireMidiNumberShape(config["remapChannel"], "remapChannel", true);
+  requireMidiBooleanShape(config["thru"], "thru", true);
+}
+
+void check_midi_event_payload(const val& sysex, const std::string& subject) {
+  if (!sysex.isUndefined() && !sysex.isNull() && !isUint8ArrayView(sysex)) {
+    throw WasmTypeError(subject + " must be a Uint8Array");
+  }
+}
+
+void copy_midi_event_payload(const val& sysex, std::vector<uint8_t>& storage,
+                             const std::string& subject, SonareMidiEventPod& out) {
+  if (sysex.isUndefined() || sysex.isNull()) return;
+  storage = uint8ArrayToVector(sysex, subject.c_str());
+  out.sysex = nonNullBytes(storage);
+  out.sysex_size = storage.size();
+}
+
 SonareMidiEventPod js_midi_event_from_val(val event, std::vector<uint8_t>& sysex_storage,
                                           const std::string& sysex_subject) {
   SonareMidiEventPod out{};
+  const val sysex = event["sysex"];
+  check_midi_event_payload(sysex, sysex_subject);
   out.ppq = numberFromVal(event["ppq"], "ppq");
   out.word0 = checkedWordFromVal(event["word0"], "word0");
   out.word1 = wordProperty(event, "word1", out.word1);
-  val sysex = event["sysex"];
-  if (!sysex.isUndefined() && !sysex.isNull()) {
-    if (!sysex.instanceof (val::global("Uint8Array"))) {
-      throw WasmTypeError(sysex_subject + " must be a Uint8Array");
-    }
-    sysex_storage = uint8ArrayToVector(sysex, sysex_subject.c_str());
-    out.sysex = nonNullBytes(sysex_storage);
-    out.sysex_size = sysex_storage.size();
-  }
+  copy_midi_event_payload(sysex, sysex_storage, sysex_subject, out);
   return out;
 }
 
@@ -875,13 +963,17 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
 
 val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_val,
                      const val& max_value_val, const val& min_movement_val) {
+  const size_t count = requireMidiEventListShapes(events, "events");
+  requireMidiNumberShape(param_id_val, "paramId");
+  requireMidiNumberShape(min_value_val, "minValue");
+  requireMidiNumberShape(max_value_val, "maxValue");
+  requireMidiNumberShape(min_movement_val, "minMovement");
   const uint32_t param_id = domainNumberFromVal<uint32_t>(
       param_id_val, "paramId", sonare_c_detail::kMidiTargetParamIdDomain);
   const float min_value = checkedFloatFromVal(min_value_val, "minValue");
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   const uint8_t min_movement = domainNumberFromVal<uint8_t>(min_movement_val, "minMovement",
                                                             sonare_c_detail::kMidiDataByteDomain);
-  const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   std::vector<std::vector<uint8_t>> sysex_storage(count);
   for (size_t i = 0; i < count; ++i) {
@@ -900,6 +992,8 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
 }
 
 val js_midi_cc_to_breakpoint(val bindings, val event) {
+  requireMidiCcBindingListShapes(bindings);
+  requireMidiEventShape(event, "event");
   std::vector<SonareMidiCcBinding> cc_bindings = js_cc_bindings_from_val(bindings);
   std::vector<uint8_t> sysex_storage;
   SonareMidiEventPod pod = js_midi_event_from_val(event, sysex_storage, "event.sysex");
@@ -924,6 +1018,11 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
 // refuse what neither can represent.
 val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, const val& group_val,
                         const val& ppq_val) {
+  requireMidiCcBindingListShapes(bindings);
+  requireMidiNumberShape(param_id, "paramId");
+  requireMidiNumberShape(unit_value_val, "unitValue");
+  requireMidiNumberShape(group_val, "group");
+  requireMidiNumberShape(ppq_val, "ppq");
   const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
   const uint32_t requested_param_id =
       domainNumberFromVal<uint32_t>(param_id, "paramId", sonare_c_detail::kMidiTargetParamIdDomain);
@@ -943,7 +1042,8 @@ val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, c
 }
 
 val js_midi_route_events(val events, val config) {
-  const size_t count = wasmArrayLength(events, "events");
+  const size_t count = requireMidiEventListShapes(events, "events");
+  requireMidiRouteConfigShapes(config);
   std::vector<SonareMidiEventPod> input(count);
   std::vector<std::vector<uint8_t>> sysex_storage(count);
   for (size_t i = 0; i < count; ++i) {
@@ -951,18 +1051,10 @@ val js_midi_route_events(val events, val config) {
     input[i].ppq = numberFromVal(entry["ppq"], "ppq");
     input[i].word0 = checkedWordFromVal(entry["word0"], "word0");
     input[i].word1 = wordProperty(entry, "word1", input[i].word1);
-    val sysex = entry["sysex"];
-    if (!sysex.isUndefined() && !sysex.isNull()) {
-      const std::string subject = "events[" + std::to_string(i) + "].sysex";
-      const bool is_uint8_array =
-          val::global("Uint8Array")["prototype"].call<bool>("isPrototypeOf", sysex);
-      if (!is_uint8_array) {
-        throw WasmTypeError(subject + " must be a Uint8Array");
-      }
-      sysex_storage[i] = uint8ArrayToVector(sysex, subject.c_str());
-      input[i].sysex = nonNullBytes(sysex_storage[i]);
-      input[i].sysex_size = sysex_storage[i].size();
-    }
+    const val sysex = entry["sysex"];
+    const std::string subject = "events[" + std::to_string(i) + "].sysex";
+    check_midi_event_payload(sysex, subject);
+    copy_midi_event_payload(sysex, sysex_storage[i], subject, input[i]);
   }
 
   SonareMidiRouteConfig route;

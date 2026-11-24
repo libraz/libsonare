@@ -967,7 +967,7 @@ export interface ProjectMidiEvent {
   word0: number;
   /** Second UMP word of the message. Default `0`. */
   word1?: number;
-  /** SysEx bytes for a Data64 event; copied when the list is set and read back as owned bytes. */
+  /** Owned SysEx bytes for a Data64 event. Embedded zeros are data. Omitted for channel-voice messages. */
   sysex?: Uint8Array;
 }
 

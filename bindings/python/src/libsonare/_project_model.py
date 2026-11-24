@@ -20,7 +20,7 @@ from __future__ import annotations
 import ctypes
 import math
 import numbers
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -28,6 +28,7 @@ from typing import (
     Literal,
     NotRequired,
     SupportsFloat,
+    SupportsIndex,
     TypeAlias,
     TypedDict,
     cast,
@@ -199,7 +200,6 @@ from ._runtime import (
     _get_lib,
     _joined_names,
     _ordinal_token,
-    _require_instance,
     _to_c_size_t,
     _token_ordinal,
     _utf8_arg,
@@ -564,7 +564,7 @@ class ProjectMidiEvent:
     word1: int = 0
     """Second UMP word of the message."""
     sysex: bytes | None = None
-    """Owned SysEx bytes for a Data64 message, or None for a channel-voice message."""
+    """Owned SysEx bytes for a Data64 event, including embedded zeros, or None without a payload."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -688,24 +688,93 @@ def _absent_or_in_range(value: object, name: str, upper: int, absent: int) -> in
     return value
 
 
-def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
-    """Marshal a :class:`MidiCcBinding` into C; any other value is a ``TypeError``.
+def _require_midi_shapes(*fields: tuple[str, object, str]) -> None:
+    """Check MIDI request shapes before any field's domain is narrowed."""
+    for name, value, kind in fields:
+        if kind == "integer":
+            valid = not isinstance(value, bool) and isinstance(value, (numbers.Real, SupportsIndex))
+            expected = "an integer"
+        elif kind == "optional_index_integer":
+            valid = value is None or (
+                not isinstance(value, bool) and isinstance(value, (numbers.Real, SupportsIndex))
+            )
+            expected = "an integer or None"
+        elif kind == "index":
+            valid = isinstance(value, SupportsIndex)
+            expected = "an integer"
+        elif kind == "float_conversion":
+            if isinstance(value, (str, bytes, bytearray, memoryview)):
+                float(value)
+                continue
+            valid = isinstance(value, (SupportsFloat, SupportsIndex))
+            expected = "a number"
+        elif kind == "optional_integer":
+            valid = value is None or (
+                not isinstance(value, bool) and isinstance(value, (int, float))
+            )
+            expected = "an integer or None"
+        elif kind == "number":
+            valid = not isinstance(value, bool) and isinstance(value, SupportsFloat)
+            expected = "a number"
+        elif kind == "real":
+            valid = not isinstance(value, bool) and isinstance(value, numbers.Real)
+            expected = "a number"
+        elif kind == "boolean":
+            valid = isinstance(value, (bool, np.bool_))
+            expected = "a bool"
+        elif kind == "string":
+            valid = isinstance(value, str)
+            expected = "a string"
+        elif kind == "bytes_like":
+            valid = isinstance(value, (bytes, bytearray, memoryview))
+            expected = "bytes, bytearray or memoryview"
+        else:
+            raise AssertionError(f"unknown MIDI shape kind: {kind}")
+        if not valid:
+            raise _refuse_type(f"{name} must be {expected}")
 
-    A ``None`` ``channel`` is the any-channel binding; the C ABI's ``0xFF``
-    spelling of it is refused as a value.
-    """
-    _require_instance(binding, MidiCcBinding, "binding")
+
+def _require_midi_cc_binding(binding: object, label: str) -> MidiCcBinding:
+    """Check every field's representation before any binding domain is read."""
+    if not isinstance(binding, MidiCcBinding):
+        raise _refuse_type(f"{label} must be a MidiCcBinding")
+    _require_midi_shapes(
+        (f"{label}.cc_number", binding.cc_number, "integer"),
+        (f"{label}.channel", binding.channel, "optional_integer"),
+        (f"{label}.kind", binding.kind, "string"),
+        (f"{label}.cc_lsb_number", binding.cc_lsb_number, "integer"),
+        (f"{label}.selector_msb", binding.selector_msb, "integer"),
+        (f"{label}.selector_lsb", binding.selector_lsb, "integer"),
+        (f"{label}.consume", binding.consume, "boolean"),
+        (f"{label}.param_id", binding.param_id, "index"),
+        (f"{label}.min_value", binding.min_value, "float_conversion"),
+        (f"{label}.max_value", binding.max_value, "float_conversion"),
+    )
+    return binding
+
+
+def _require_midi_cc_bindings(bindings: object, label: str) -> tuple[MidiCcBinding, ...]:
+    """Materialize a binding iterable and validate every record's shape first."""
+    if not isinstance(bindings, Iterable):
+        raise _refuse_type(f"{label} must be an iterable of MidiCcBinding")
+    rows = iter(bindings)
+    return tuple(_require_midi_cc_binding(row, f"{label}[{i}]") for i, row in enumerate(rows))
+
+
+def _cc_binding_to_c(binding: MidiCcBinding, label: str = "binding") -> SonareMidiCcBinding:
+    """Marshal a shape-checked MidiCcBinding into C under its caller's subject."""
+    binding = _require_midi_cc_binding(binding, label)
     # Controller numbers and selector bytes are 7-bit MIDI data, narrower than their uint8 fields.
     return SonareMidiCcBinding(
-        cc_number=_narrow_int(binding.cc_number, "binding.cc_number", 0, _MIDI_DATA_MAX),
-        channel=_absent_or_in_range(binding.channel, "channel", 15, 0xFF),
-        kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, "binding.kind"),
+        cc_number=_narrow_int(binding.cc_number, f"{label}.cc_number", 0, _MIDI_DATA_MAX),
+        channel=_absent_or_in_range(binding.channel, f"{label}.channel", 15, 0xFF),
+        kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, f"{label}.kind"),
         cc_lsb_number=_narrow_int(
-            binding.cc_lsb_number, "binding.cc_lsb_number", 0, _MIDI_DATA_MAX
+            binding.cc_lsb_number, f"{label}.cc_lsb_number", 0, _MIDI_DATA_MAX
         ),
-        selector_msb=_narrow_int(binding.selector_msb, "binding.selector_msb", 0, _MIDI_DATA_MAX),
-        selector_lsb=_narrow_int(binding.selector_lsb, "binding.selector_lsb", 0, _MIDI_DATA_MAX),
-        consume=_bool_flag(binding.consume, "binding.consume"),
+        selector_msb=_narrow_int(binding.selector_msb, f"{label}.selector_msb", 0, _MIDI_DATA_MAX),
+        selector_lsb=_narrow_int(binding.selector_lsb, f"{label}.selector_lsb", 0, _MIDI_DATA_MAX),
+        consume=_bool_flag(binding.consume, f"{label}.consume"),
         reserved=0,
         param_id=binding.param_id,
         min_value=float(binding.min_value),
@@ -858,12 +927,39 @@ def _midi_event_from_c(event: SonareMidiEventPod) -> ProjectMidiEvent:
     return ProjectMidiEvent(float(event.ppq), int(event.word0), int(event.word1), sysex)
 
 
-def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
-    """Validate one :class:`ProjectMidiEvent` and pack it for the C ABI."""
+def _require_midi_event(event: object, label: str) -> ProjectMidiEvent:
+    """Check a MIDI event's record and field shapes before narrowing any row."""
     if not isinstance(event, ProjectMidiEvent):
         raise _refuse_type(f"{label} must be a ProjectMidiEvent")
+    _require_midi_shapes(
+        (f"{label}.ppq", event.ppq, "real"),
+    )
+    _require_midi_event_word_shape(event.word0, f"{label}.word0")
+    _require_midi_event_word_shape(event.word1, f"{label}.word1")
     if event.sysex is not None and not isinstance(event.sysex, bytes):
         raise _refuse_type(f"{label}.sysex must be bytes or None")
+    return event
+
+
+def _require_midi_events(events: object, name: str) -> tuple[ProjectMidiEvent, ...]:
+    """Validate an event sequence and all event shapes before domain conversion."""
+    if isinstance(events, (str, bytes)) or not isinstance(events, Sequence):
+        raise _refuse_type(f"{name} must be a sequence of ProjectMidiEvent")
+    return tuple(_require_midi_event(event, f"{name}[{i}]") for i, event in enumerate(events))
+
+
+def _pack_midi_events(
+    rows: Sequence[ProjectMidiEvent], name: str
+) -> tuple[ctypes.Array[SonareMidiEventPod], int]:
+    """Narrow a shape-checked event sequence into its C POD array."""
+    c_events = (SonareMidiEventPod * len(rows))()
+    for i, event in enumerate(rows):
+        c_events[i] = _midi_event_to_c(event, f"{name}[{i}]")
+    return c_events, len(rows)
+
+
+def _midi_event_to_c(event: ProjectMidiEvent, label: str) -> SonareMidiEventPod:
+    """Pack a shape-checked project MIDI event for the C ABI."""
     sysex_pointer = None
     sysex_size = 0
     if event.sysex is not None:
@@ -881,19 +977,17 @@ def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
 
 
 def _midi_events_to_c(events: object, name: str) -> tuple[ctypes.Array[SonareMidiEventPod], int]:
-    """Pack a sequence of :class:`ProjectMidiEvent` records; a str or mapping is refused."""
-    if isinstance(events, (str, bytes)) or not isinstance(events, Sequence):
-        raise _refuse_type(f"{name} must be a sequence of ProjectMidiEvent")
-    rows = list(events)
-    c_events = (SonareMidiEventPod * len(rows))()
-    for i, event in enumerate(rows):
-        c_events[i] = _midi_event_to_c(event, f"{name}[{i}]")
-    return c_events, len(rows)
+    """Check every event shape and pack the sequence into C PODs."""
+    return _pack_midi_events(_require_midi_events(events, name), name)
+
+
+def _require_midi_event_word_shape(value: object, label: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise _refuse_type(f"{label} must be an integer in [0, 4294967295]")
 
 
 def _validate_midi_event_word(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise _refuse_type(f"{label} must be an integer in [0, 4294967295]")
+    _require_midi_event_word_shape(value, label)
     word = float(cast(SupportsFloat, value))
     if not math.isfinite(word) or not word.is_integer() or word < 0.0 or word > _UINT32_MAX:
         raise _refuse(f"{label} must be an integer in [0, 4294967295]")

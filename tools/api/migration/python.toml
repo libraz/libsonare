@@ -11284,11 +11284,9 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_to_breakpoint"
-changed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None. A valid SysEx event raises coded NotSupported. A nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)."
+removed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None. A valid SysEx event raises coded NotSupported. The payload is read as bytes, including embedded zeros. A wrongly typed payload is refused before CC domains. A nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)."
 domain = "project"
 rule = "midi-module-functions"
-test = "bindings/python/tests/test_project_midi.py::test_midi_cc_to_breakpoint_reports_valid_sysex_as_not_supported"
-to = "midi_cc_to_breakpoint"
 
 [[entry]]
 kind = "option"
@@ -11541,7 +11539,7 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_learn"
-removed = "call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError)"
+removed = "call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError). A wrongly typed payload is refused before numeric learn domains."
 domain = "project"
 rule = "midi-module-functions"
 
@@ -15285,3 +15283,11 @@ changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.
 domain = "mastering"
 rule = "individual"
 test = "bindings/python/tests/test_mastering_stereo_surface.py::test_stereo_log_band_params_name_the_caller_keys_and_keep_their_defaults"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.push_midi_sysex"
+changed = "pass bytes, bytearray or memoryview as data; a list or integer raises TypeError naming data (1.x coerced them to bytes)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_engine_midi.py::test_push_midi_sysex_rejects_non_buffer_inputs_before_earlier_domain"

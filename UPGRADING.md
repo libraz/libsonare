@@ -3681,6 +3681,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.scene_warnings` | unread insert parameters are refused at load time and no longer appear as warnings |
 | `Mixer.strip_by_id` | an unknown id raises SonareValueError instead of KeyError |
 | `Mixer` | a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError. The constructor takes keywords: Mixer(sample_rate=..., scene=<MixSceneDocument mapping>) builds from a scene, an omitted scene builds an empty mixer, a non-mapping scene raises TypeError (parse JSON text with json.loads or use Mixer.from_json); the handle form is gone |
+| `RealtimeEngine.push_midi_sysex` | pass bytes, bytearray or memoryview as data; a list or integer raises TypeError naming data (1.x coerced them to bytes) |
 | `RealtimeEngine.set_midi_fx` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.set_part_rig` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)'), as is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') |
 
@@ -4127,9 +4128,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.midi2_relative_registered_controller` | removed: call the module function midi2_relative_registered_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_bank_program` | removed: call the module function midi_bank_program, which returns a list of frozen ProjectMidiEvent records instead of tuples |
 | `Project.midi_cc_index_for_name` | removed: call the module function midi_cc_index_for_name |
-| `Project.midi_cc_learn` | removed: call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError) |
+| `Project.midi_cc_learn` | removed: call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError). A wrongly typed payload is refused before numeric learn domains. |
 | `Project.midi_cc_name` | removed: call the module function midi_cc_name |
-| `Project.midi_cc_to_breakpoint` | `midi_cc_to_breakpoint`: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None. A valid SysEx event raises coded NotSupported. A nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them). |
+| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None. A valid SysEx event raises coded NotSupported. The payload is read as bytes, including embedded zeros. A wrongly typed payload is refused before CC domains. A nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them). |
 | `Project.midi_cc` | removed: call the module function midi_cc, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_channel_pressure` | removed: call the module function midi_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_note_off` | removed: call the module function midi_note_off, which returns a frozen ProjectMidiEvent instead of a tuple |
@@ -7670,9 +7671,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
 | `Project.midiBankProgram` | removed: call the module function midiBankProgram |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
-| `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. |
+| `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. A wrongly typed payload is refused before numeric learn domains. |
 | `Project.midiCcName` | removed: call the module function midiCcName |
-| `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: call the module function midiCcToBreakpoint; a valid SysEx event now reaches the core and raises coded NotSupported. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
+| `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: call the module function midiCcToBreakpoint; a valid SysEx event now reaches the core and raises coded NotSupported. The payload is read as bytes, including embedded zeros. A wrongly typed payload is refused before CC domains. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
 | `Project.midiCc` | removed: call the module function midiCc |
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |
@@ -13422,9 +13423,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
 | `Project.midiBankProgram` | removed: call the module function midiBankProgram, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
-| `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. |
+| `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. A wrongly typed payload is refused before numeric learn domains. |
 | `Project.midiCcName` | removed: call the module function midiCcName |
-| `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: use the standalone midiCcToBreakpoint function; a valid SysEx event is refused as NotSupported (1.x rejected a Data64 word as InvalidParameter). A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
+| `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: use the standalone midiCcToBreakpoint function; a valid SysEx event is refused as NotSupported (1.x rejected a Data64 word as InvalidParameter). The payload is read as bytes, including embedded zeros. A wrongly typed payload is refused before CC domains. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
 | `Project.midiCc` | removed: call the module function midiCc |
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |

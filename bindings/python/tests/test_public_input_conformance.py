@@ -128,9 +128,8 @@ _MIDI_CC_BYTE_FIELDS: dict[str, tuple[ProjectMidiCcBindingKind, int]] = {
 }
 
 
-def _binding_field(case: dict[str, Any]) -> str:
-    field = _python_field(case)
-    return f"binding.{field}" if field in _MIDI_CC_BYTE_FIELDS else field
+def _binding_field(case: dict[str, Any], subject: str = "binding") -> str:
+    return f"{subject}.{_python_field(case)}"
 
 
 @pytest.mark.parametrize("field", sorted(_MIDI_CC_BYTE_FIELDS))
@@ -176,9 +175,10 @@ def test_midi_cc_to_breakpoint_byte_fields_follow_the_corpus(case: dict[str, Any
     if case["accepted"]:
         libsonare.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
     else:
+        field = _binding_field(case, "bindings[0]")
         with pytest.raises(
             SonareValueError,
-            match=rf"^\S+: {re.escape(_binding_field(case))} must be an integer in \[0, ",
+            match=rf"^\S+: {re.escape(field)} must be an integer in \[0, ",
         ):
             libsonare.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
 
@@ -188,9 +188,10 @@ def test_midi_param_to_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) ->
     if case["accepted"]:
         libsonare.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
     else:
+        field = _binding_field(case, "bindings[0]")
         with pytest.raises(
             SonareValueError,
-            match=rf"^\S+: {re.escape(_binding_field(case))} must be an integer in \[0, ",
+            match=rf"^\S+: {re.escape(field)} must be an integer in \[0, ",
         ):
             libsonare.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
 

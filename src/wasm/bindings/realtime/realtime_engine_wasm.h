@@ -165,13 +165,13 @@ class RealtimeEngineWasm {
   void consumeExternalMidiScratch();
   void pushMidiInputNoteOn(const emscripten::val& group_val, const emscripten::val& channel_val,
                            const emscripten::val& note_val, const emscripten::val& velocity_val,
-                           int64_t offset_in_block_samples);
+                           const emscripten::val& offset_in_block_samples_val);
   void pushMidiInputNoteOff(const emscripten::val& group_val, const emscripten::val& channel_val,
                             const emscripten::val& note_val, const emscripten::val& velocity_val,
-                            int64_t offset_in_block_samples);
+                            const emscripten::val& offset_in_block_samples_val);
   void pushMidiInputCc(const emscripten::val& group_val, const emscripten::val& channel_val,
                        const emscripten::val& controller_val, const emscripten::val& value_val,
-                       int64_t offset_in_block_samples);
+                       const emscripten::val& offset_in_block_samples_val);
   void pushMidiNoteOn(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                       const emscripten::val& channel_val, const emscripten::val& note_val,
                       const emscripten::val& velocity_val, const emscripten::val& render_frame_val);
@@ -180,16 +180,17 @@ class RealtimeEngineWasm {
                        const emscripten::val& velocity_val,
                        const emscripten::val& render_frame_val);
   void pushMidiInputPitchBend(const emscripten::val& group_val, const emscripten::val& channel_val,
-                              const emscripten::val& bend_val, int64_t offset_in_block_samples);
+                              const emscripten::val& bend_val,
+                              const emscripten::val& offset_in_block_samples_val);
   void pushMidiInputChannelPressure(const emscripten::val& group_val,
                                     const emscripten::val& channel_val,
                                     const emscripten::val& pressure_val,
-                                    int64_t offset_in_block_samples);
+                                    const emscripten::val& offset_in_block_samples_val);
   void pushMidiInputPolyPressure(const emscripten::val& group_val,
                                  const emscripten::val& channel_val,
                                  const emscripten::val& note_val,
                                  const emscripten::val& pressure_val,
-                                 int64_t offset_in_block_samples);
+                                 const emscripten::val& offset_in_block_samples_val);
   void pushMidiCc(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                   const emscripten::val& channel_val, const emscripten::val& controller_val,
                   const emscripten::val& value_val, const emscripten::val& render_frame_val);
@@ -206,7 +207,8 @@ class RealtimeEngineWasm {
                             const emscripten::val& render_frame_val);
   void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& words_val,
                    const emscripten::val& render_frame_val);
-  void pushMidiInputUmp(const emscripten::val& words_val, int64_t offset_in_block_samples);
+  void pushMidiInputUmp(const emscripten::val& words_val,
+                        const emscripten::val& offset_in_block_samples_val);
   void pushMidiInputUmpAtRenderFrame(const emscripten::val& words_val,
                                      const emscripten::val& render_frame_val);
   void pushMidiProgram(const emscripten::val& destination_id_val, const emscripten::val& group_val,
@@ -218,7 +220,8 @@ class RealtimeEngineWasm {
                             const emscripten::val& program_val,
                             const emscripten::val& bank_valid_val,
                             const emscripten::val& bank_msb_val,
-                            const emscripten::val& bank_lsb_val, int64_t offset_in_block_samples);
+                            const emscripten::val& bank_lsb_val,
+                            const emscripten::val& offset_in_block_samples_val);
   void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
                      const emscripten::val& render_frame_val);
   void pushMidiPanic(const emscripten::val& render_frame_val);

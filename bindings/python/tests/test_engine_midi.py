@@ -88,6 +88,20 @@ def test_an_engine_instrument_config_is_seeded_by_the_engines_own_init(
     assert passed == [(seeded[0], 0.5)]
 
 
+def test_engine_bind_midi_cc_checks_every_shape_before_domains() -> None:
+    binding = MidiCcBinding(
+        cc_number=128,
+        param_id=42,
+        max_value=object(),  # type: ignore[arg-type]
+    )
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        with pytest.raises(TypeError) as refused:
+            engine.bind_midi_cc(binding)
+        assert str(refused.value) == (
+            "RealtimeEngine.bind_midi_cc: binding.max_value must be a number"
+        )
+
+
 def test_engine_midi_cc_bindings() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=0, param_id=42))
@@ -286,9 +300,9 @@ def test_midi_cc_conversion_validates_but_ignores_consume(
     assert fake.conversion_consumes == [(1,), (0,), (1,), (0,)]
 
     invalid = MidiCcBinding(cc_number=7, param_id=5, consume=1)  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match=r"binding\.consume must be a bool"):
+    with pytest.raises(TypeError, match=r"bindings\[0\]\.consume must be a bool"):
         midi_cc_to_breakpoint([invalid], event)
-    with pytest.raises(TypeError, match=r"binding\.consume must be a bool"):
+    with pytest.raises(TypeError, match=r"bindings\[0\]\.consume must be a bool"):
         midi_param_to_cc([invalid], 5, 0.5, 0, ppq=3.0)
     assert fake.conversion_consumes == [(1,), (0,), (1,), (0,)]
 
@@ -891,6 +905,60 @@ _LIVE_INPUT_PUSHES = [
     ("push_midi_input_ump", ([0x40903C00, 0x80000000],)),
     ("push_midi_input_program", (0, 0, 5, True, 8, 0)),
 ]
+
+
+_LIVE_PUSH_SHAPE_BEFORE_DOMAIN = [
+    ("push_midi_cc", (0, 256, object(), 7, 64), "channel"),
+    ("push_midi_program", (0, 256, object(), 0, True, 0, 0), "channel"),
+    ("push_midi_input_note_on", (256, object(), 60, 100), "channel"),
+    ("push_midi_input_note_off", (256, object(), 60, 0), "channel"),
+    ("push_midi_input_cc", (256, object(), 7, 64), "channel"),
+    ("push_midi_input_pitch_bend", (256, object(), 8192), "channel"),
+    ("push_midi_input_channel_pressure", (256, object(), 64), "channel"),
+    ("push_midi_input_poly_pressure", (256, object(), 60, 64), "channel"),
+    ("push_midi_input_program", (256, object(), 0), "channel"),
+    ("push_midi_note_on", (0, 256, object(), 60, 100), "channel"),
+    ("push_midi_note_off", (0, 256, object(), 60, 0), "channel"),
+    ("push_midi_pitch_bend", (0, 256, object(), 8192), "channel"),
+    ("push_midi_channel_pressure", (0, 256, object(), 64), "channel"),
+    ("push_midi_poly_pressure", (0, 256, object(), 60, 64), "channel"),
+    ("push_midi_program", (0, 16, 0, 0, 0, 0, 0), "bank_valid"),
+    ("push_midi_ump", (2**32, [object()]), "words[0]"),
+    ("push_midi_input_ump", ([2**32, object()],), "words[1]"),
+]
+
+
+@pytest.mark.parametrize("method,args,field", _LIVE_PUSH_SHAPE_BEFORE_DOMAIN)
+def test_live_push_checks_shape_before_domain(method: str, args: tuple, field: str) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        with pytest.raises(TypeError) as refused:
+            getattr(engine, method)(*args)
+        expected = (
+            f"RealtimeEngine.{method}: {field} must be a bool"
+            if field == "bank_valid"
+            else f"RealtimeEngine.{method}: {field} must be an integer"
+        )
+        assert str(refused.value) == expected
+
+
+def test_push_midi_sysex_rejects_non_buffer_inputs_before_earlier_domain() -> None:
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=128)
+    try:
+        for data in ([0xF0, 0xF7], 2):
+            with pytest.raises(TypeError) as refused:
+                engine.push_midi_sysex(2**32, data)  # type: ignore[arg-type]
+            assert str(refused.value) == (
+                "RealtimeEngine.push_midi_sysex: data must be bytes, bytearray or memoryview"
+            )
+        for data in (b"\xf0\xf7", bytearray(b"\xf0\xf7"), memoryview(b"\xf0\xf7")):
+            with pytest.raises(SonareValueError) as refused:
+                engine.push_midi_sysex(2**32, data)
+            assert str(refused.value) == (
+                "RealtimeEngine.push_midi_sysex: destination_id must be an integer in "
+                "[0, 4294967295]"
+            )
+    finally:
+        engine.close()
 
 
 @pytest.mark.parametrize("method,args", _LIVE_INPUT_PUSHES)

@@ -565,6 +565,33 @@ def test_midi_cc_to_breakpoint_reports_valid_sysex_as_not_supported() -> None:
         "[6] midi_cc_to_breakpoint: MIDI CC conversion does not support SysEx events"
     )
 
+    wrong_shape = dataclasses.replace(
+        event,
+        sysex=[0xF0, 0x00, 0xF7],  # type: ignore[arg-type]
+    )
+    invalid_binding = dataclasses.replace(binding, cc_lsb_number=128)
+    with pytest.raises(
+        TypeError, match=r"^midi_cc_to_breakpoint: event\.sysex must be bytes or None$"
+    ):
+        ls.midi_cc_to_breakpoint([invalid_binding], wrong_shape)
+
+
+def test_cc_refuses_wrong_sysex_shape_before_a_domain_error() -> None:
+    event = ProjectMidiEvent(
+        0.0,
+        0x30000000,
+        sysex=[0xF0, 0x00, 0xF7],  # type: ignore[arg-type]
+    )
+    with pytest.raises(
+        TypeError, match=r"^midi_cc_learn: events\[0\]\.sysex must be bytes or None$"
+    ):
+        ls.midi_cc_learn([event], param_id=1, min_movement=128)
+    first = ProjectMidiEvent(0.0, -1)
+    with pytest.raises(
+        TypeError, match=r"^midi_cc_learn: events\[1\]\.sysex must be bytes or None$"
+    ):
+        ls.midi_cc_learn([first, event], param_id=1)
+
 
 def test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused() -> None:
     event = ls.midi_cc(0.0, 0, 9, 1, 100)
@@ -605,6 +632,55 @@ def test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token() -> None:
         ls.midi_param_to_cc([dataclasses.replace(binding, kind=0)], 5, 0.5, 0)  # type: ignore[arg-type]
     with pytest.raises(SonareValueError, match="kind"):
         ls.midi_param_to_cc([dataclasses.replace(binding, kind="cc7")], 5, 0.5, 0)  # type: ignore[arg-type]
+
+
+def test_cc_readers_check_all_shapes_before_any_domain() -> None:
+    domain_event = ProjectMidiEvent(0.0, -1)
+    malformed_event = ProjectMidiEvent(0.0, object())  # type: ignore[arg-type]
+    with pytest.raises(TypeError) as refused:
+        ls.midi_cc_learn([domain_event, malformed_event], param_id=1)
+    assert str(refused.value) == (
+        "midi_cc_learn: events[1].word0 must be an integer in [0, 4294967295]"
+    )
+
+    with Project() as project:
+        clip_id = project.add_midi_clip(0.0, 1.0).clip_id
+        with pytest.raises(TypeError) as refused:
+            project.set_midi_events(clip_id, [domain_event, malformed_event])
+        assert str(refused.value) == (
+            "Project.set_midi_events: events[1].word0 must be an integer in [0, 4294967295]"
+        )
+
+    event = ls.midi_cc(0.0, 0, 0, 1, 64)
+    invalid_binding = MidiCcBinding(cc_number=128, param_id=4)
+    malformed_binding = dataclasses.replace(
+        MidiCcBinding(cc_number=1, param_id=5),
+        min_value=object(),  # type: ignore[arg-type]
+    )
+    with pytest.raises(TypeError) as refused:
+        ls.midi_cc_to_breakpoint([invalid_binding, malformed_binding], event)
+    assert str(refused.value) == ("midi_cc_to_breakpoint: bindings[1].min_value must be a number")
+    with pytest.raises(TypeError) as refused:
+        ls.midi_param_to_cc([invalid_binding, malformed_binding], 4, 0.5, 0)
+    assert str(refused.value) == ("midi_param_to_cc: bindings[1].min_value must be a number")
+
+    with pytest.raises(TypeError) as refused:
+        ls.midi_route_events([domain_event], {"filter_group": object()})
+    assert str(refused.value) == "midi_route_events: filter_group must be an integer or None"
+
+
+def test_cc_learn_refuses_a_later_sysex_after_earlier_learnable_ccs() -> None:
+    events = [
+        ls.midi_cc(0.0, 0, 0, 7, 0),
+        ls.midi_cc(1.0, 0, 0, 7, 64),
+        ProjectMidiEvent(2.0, 0x20903C40, sysex=b"\xf0\xf7"),
+    ]
+    with pytest.raises(SonareValueError) as refused:
+        ls.midi_cc_learn(events, param_id=9)
+    assert str(refused.value) == (
+        "midi_cc_learn: events[2].sysex must be NULL and empty for a channel-voice event"
+    )
+    assert refused.value.code == ErrorCode.INVALID_PARAMETER
 
 
 def test_midi_cc_learn_and_conversion_helpers() -> None:

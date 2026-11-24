@@ -28,8 +28,12 @@ import {
 } from './internal/entry.js';
 import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
-import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import {
+  assertBankShape,
+  assertMidiFieldShape,
+  assertMidiWordListContainerShape,
+} from './internal/midi_shape.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { requireOneOf } from './internal/one_of.js';
 import { optionalId } from './internal/optional_ints.js';
@@ -171,17 +175,25 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
   return number;
 }
 
-/** Most words one UMP message carries. */
-const UMP_MAX_WORDS = 4;
+/** Checks runtime types for the native MIDI readers in declaration order. */
+type MidiPushShape = {
+  name: string;
+  value: unknown;
+  shape: 'number' | 'object' | 'bank' | 'wordList';
+  optional?: boolean;
+};
 
-/** Refuses a word list of the wrong length before the addon walks it. */
-function requireUmpWordCount(words: UmpWords): void {
-  if (!Array.isArray(words)) {
-    return;
-  }
-  requireListBudget(words, 'words');
-  if (words.length < 1 || words.length > UMP_MAX_WORDS) {
-    throw refuse(`words must hold 1 to ${UMP_MAX_WORDS} words`);
+function assertMidiPushShapes(fields: readonly MidiPushShape[]): void {
+  for (const field of fields) {
+    if (field.shape === 'bank') {
+      if (field.value !== undefined) {
+        assertBankShape(field.value);
+      }
+    } else if (field.shape === 'wordList') {
+      assertMidiWordListContainerShape(field.value, field.name);
+    } else {
+      assertMidiFieldShape(field.value, field.name, field.shape, field.optional);
+    }
   }
 }
 
@@ -2010,7 +2022,6 @@ export class RealtimeEngine {
 
   /** Bind a 7/14-bit CC, RPN, or NRPN descriptor to a live parameter. */
   bindMidiCc(binding: ProjectMidiCcBinding): void {
-    assertMidiCcBindingBytes(binding);
     this.native.bindMidiCc(binding);
   }
 
@@ -2367,14 +2378,7 @@ export class RealtimeEngine {
     velocity: number,
     renderFrame?: number,
   ): void {
-    this.native.pushMidiNoteOn(
-      destinationId,
-      group,
-      channel,
-      note,
-      velocity,
-      resolveRenderFrame(renderFrame),
-    );
+    this.native.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
   }
 
   /**
@@ -2395,14 +2399,7 @@ export class RealtimeEngine {
     velocity = 0,
     renderFrame?: number,
   ): void {
-    this.native.pushMidiNoteOff(
-      destinationId,
-      group,
-      channel,
-      note,
-      velocity,
-      resolveRenderFrame(renderFrame),
-    );
+    this.native.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
   }
 
   /**
@@ -2418,14 +2415,7 @@ export class RealtimeEngine {
     value: number,
     renderFrame?: number,
   ): void {
-    this.native.pushMidiCc(
-      destinationId,
-      group,
-      channel,
-      controller,
-      value,
-      resolveRenderFrame(renderFrame),
-    );
+    this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
   }
 
   /**
@@ -2455,13 +2445,7 @@ export class RealtimeEngine {
     bend14: number,
     renderFrame?: number,
   ): void {
-    this.native.pushMidiPitchBend(
-      destinationId,
-      group,
-      channel,
-      bend14,
-      resolveRenderFrame(renderFrame),
-    );
+    this.native.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
   }
 
   /**
@@ -2482,13 +2466,7 @@ export class RealtimeEngine {
     pressure: number,
     renderFrame?: number,
   ): void {
-    this.native.pushMidiChannelPressure(
-      destinationId,
-      group,
-      channel,
-      pressure,
-      resolveRenderFrame(renderFrame),
-    );
+    this.native.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
   }
 
   /**
@@ -2511,14 +2489,7 @@ export class RealtimeEngine {
     pressure: number,
     renderFrame?: number,
   ): void {
-    this.native.pushMidiPolyPressure(
-      destinationId,
-      group,
-      channel,
-      note,
-      pressure,
-      resolveRenderFrame(renderFrame),
-    );
+    this.native.pushMidiPolyPressure(destinationId, group, channel, note, pressure, renderFrame);
   }
 
   /**
@@ -2526,7 +2497,7 @@ export class RealtimeEngine {
    * `renderFrame` is the render-frame time to apply; omit for immediate (negative is refused).
    */
   pushMidiPanic(renderFrame?: number): void {
-    this.native.pushMidiPanic(resolveRenderFrame(renderFrame));
+    this.native.pushMidiPanic(renderFrame);
   }
 
   /**
@@ -2539,7 +2510,7 @@ export class RealtimeEngine {
    * (retry after a processed block).
    */
   pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame?: number): void {
-    this.native.pushMidiSysex(destinationId, data, resolveRenderFrame(renderFrame));
+    this.native.pushMidiSysex(destinationId, data, renderFrame);
   }
 
   /**
@@ -2552,8 +2523,15 @@ export class RealtimeEngine {
    * apply (omit for immediate).
    */
   pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
-    requireUmpWordCount(words);
-    this.native.pushMidiUmp(destinationId, words, resolveRenderFrame(renderFrame));
+    assertMidiPushShapes([
+      { name: 'destinationId', value: destinationId, shape: 'number' },
+      { name: 'words', value: words, shape: 'wordList' },
+      { name: 'renderFrame', value: renderFrame, shape: 'number', optional: true },
+    ]);
+    if (Array.isArray(words)) {
+      requireListBudget(words, 'words');
+    }
+    this.native.pushMidiUmp(destinationId, words, renderFrame);
   }
 
   /**
@@ -2583,6 +2561,14 @@ export class RealtimeEngine {
     bank?: MidiBank,
     renderFrame?: number,
   ): void {
+    assertMidiPushShapes([
+      { name: 'destinationId', value: destinationId, shape: 'number' },
+      { name: 'group', value: group, shape: 'number' },
+      { name: 'channel', value: channel, shape: 'number' },
+      { name: 'program', value: program, shape: 'number' },
+      { name: 'bank', value: bank, shape: 'bank', optional: true },
+      { name: 'renderFrame', value: renderFrame, shape: 'number', optional: true },
+    ]);
     const { bankValid, msb, lsb } = bankFields('pushMidiProgram', bank);
     this.native.pushMidiProgram(
       destinationId,
@@ -2592,7 +2578,7 @@ export class RealtimeEngine {
       bankValid,
       msb,
       lsb,
-      resolveRenderFrame(renderFrame),
+      renderFrame,
     );
   }
 
@@ -2609,6 +2595,18 @@ export class RealtimeEngine {
     bank?: MidiBank,
     offsetInBlockSamples = 0,
   ): void {
+    assertMidiPushShapes([
+      { name: 'group', value: group, shape: 'number' },
+      { name: 'channel', value: channel, shape: 'number' },
+      { name: 'program', value: program, shape: 'number' },
+      { name: 'bank', value: bank, shape: 'bank', optional: true },
+      {
+        name: 'offsetInBlockSamples',
+        value: offsetInBlockSamples,
+        shape: 'number',
+        optional: true,
+      },
+    ]);
     const { bankValid, msb, lsb } = bankFields('pushMidiInputProgram', bank);
     this.native.pushMidiInputProgram(
       group,
@@ -2628,7 +2626,13 @@ export class RealtimeEngine {
    * an absolute clock position; exact here, because the caller drives the block.
    */
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
-    requireUmpWordCount(words);
+    assertMidiPushShapes([
+      { name: 'words', value: words, shape: 'wordList' },
+      { name: 'offsetInBlockSamples', value: offsetInBlockSamples, shape: 'number' },
+    ]);
+    if (Array.isArray(words)) {
+      requireListBudget(words, 'words');
+    }
     this.native.pushMidiInputUmp(words, offsetInBlockSamples);
   }
 

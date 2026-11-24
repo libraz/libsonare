@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, isSonareError } from '../src/errors.js';
 import {
@@ -5,6 +6,7 @@ import {
   midiCcLearn,
   midiCcToBreakpoint,
   midiParamToCc,
+  midiRouteEvents,
   RealtimeEngine,
 } from '../src/index.js';
 
@@ -127,9 +129,9 @@ it('midiCcToBreakpoint forwards SysEx to the C refusal', () => {
           ppq: 0,
           word0: 0x30000000,
           word1: 0,
-          sysex: Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]),
+          sysex: Uint8Array.of(0x11, 0xf0, 0x00, 0x7d, 0xf7, 0x22).subarray(1, 5),
         },
-      } as never);
+      });
     } catch (caught) {
       return caught;
     }
@@ -140,6 +142,14 @@ it('midiCcToBreakpoint forwards SysEx to the C refusal', () => {
   expect((error as Error).message).toBe(
     'midiCcToBreakpoint: MIDI CC conversion does not support SysEx events',
   );
+
+  const wrongShape = () =>
+    midiCcToBreakpoint({
+      bindings: [{ ...good, ccLsbNumber: 128 }],
+      event: { ppq: 0, word0: 0x30000000, sysex: [0xf0, 0x00, 0xf7] as never },
+    });
+  expect(wrongShape).toThrow(TypeError);
+  expect(wrongShape).toThrow(new TypeError('midiCcToBreakpoint: event.sysex must be a Uint8Array'));
 });
 
 it('learn ignores valid SysEx and names a payload on a channel event', () => {
@@ -153,4 +163,85 @@ it('learn ignores valid SysEx and names a payload on a channel event', () => {
   const invalid = () => midiCcLearn({ events: [{ ...start, sysex: bytes }, end], paramId: 1 });
   expect(invalid).toThrow(RangeError);
   expect(invalid).toThrow(/events\[0\]\.sysex/);
+});
+
+it('copies the SysEx byte range including an embedded zero', () => {
+  const source = Uint8Array.of(0x11, 0xf0, 0x00, 0x7d, 0xf7, 0x22);
+  const sysex = source.subarray(1, 5);
+  const result = midiRouteEvents({ events: [{ ppq: 0, word0: 0x30000000, sysex }] });
+  source.fill(0);
+  expect(result.events[0]?.sysex).toEqual(Uint8Array.of(0xf0, 0x00, 0x7d, 0xf7));
+});
+
+it('checks binding shapes across the entire request before binding domains', () => {
+  const bad = { ccNumber: 200, paramId: 1, channel: 'not a channel' } as never;
+  expect(() => midiCcToBreakpoint({ bindings: [bad], event })).toThrow(
+    new TypeError('midiCcToBreakpoint: bindings[0].channel must be a number'),
+  );
+  expect(() =>
+    midiParamToCc({ bindings: [good, bad], paramId: 1, unitValue: 0.5, group: 0 }),
+  ).toThrow(new TypeError('midiParamToCc: bindings[1].channel must be a number'));
+  expect(() =>
+    midiParamToCc({
+      bindings: [{ ...good, ccLsbNumber: 128 }],
+      paramId: 1,
+      unitValue: 'not a value',
+      group: 0,
+    } as never),
+  ).toThrow(new TypeError('midiParamToCc: unitValue must be a number'));
+
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+  try {
+    expect(() => engine.bindMidiCc(bad)).toThrow(
+      new TypeError('RealtimeEngine.bindMidiCc: channel must be a number'),
+    );
+  } finally {
+    engine.destroy();
+  }
+});
+
+it('checks every routed event shape before any event domain', () => {
+  const malformedLater = () =>
+    midiRouteEvents({
+      events: [
+        { ppq: 0, word0: 4294967296 },
+        { ppq: 'not ppq', word0: 0 },
+      ] as never,
+    });
+  expect(malformedLater).toThrow(new TypeError('midiRouteEvents: events[1].ppq must be a number'));
+  expect(() =>
+    midiRouteEvents({
+      events: [{ ppq: 0, word0: 4294967296 }],
+      filterGroup: 'wrong' as never,
+    }),
+  ).toThrow(new TypeError('midiRouteEvents: filterGroup must be a number'));
+});
+
+it('accepts a cross-realm Uint8Array through the native event reader', () => {
+  const sysex = runInNewContext('new Uint8Array([0xf0, 0x00, 0xf7])') as Uint8Array;
+  expect(
+    midiCcLearn({ events: [{ ppq: 0, word0: 0x30000000, word1: 0, sysex }], paramId: 1 }),
+  ).toBeNull();
+  const result = midiRouteEvents({ events: [{ ppq: 0, word0: 0x30000000, sysex }] });
+  expect(result.events[0]?.sysex).toEqual(Uint8Array.of(0xf0, 0x00, 0xf7));
+});
+
+it('refuses wrong event and request shapes before CC domains', () => {
+  const event = { ppq: 0, word0: 0x30000000, sysex: [0xf0, 0x00, 0xf7] as never };
+  const learn = () =>
+    midiCcLearn({
+      events: [midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 64 })],
+      paramId: 1,
+      maxValue: 'wrong' as never,
+      minMovement: 128,
+    });
+  const learnList = () =>
+    midiCcLearn({ events: [{ ppq: 0, word0: 4294967296 }, event], paramId: 1 });
+  for (const [run, message] of [
+    [learn, 'midiCcLearn: maxValue must be a number'],
+    [learnList, 'midiCcLearn: events[1].sysex must be a Uint8Array'],
+  ] as const) {
+    expect(run).toThrow(TypeError);
+    expect(run).toThrow(new TypeError(message));
+  }
 });

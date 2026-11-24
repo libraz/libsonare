@@ -45,6 +45,12 @@ import { entryClass, invalidState, refuse } from '../internal/entry.js';
 import { assertHandleLive } from '../internal/handle_guard.js';
 import { stringifyWithinBudget } from '../internal/list_budget.js';
 import { packMidi2ProgramRequest } from '../internal/midi_program_pack.js';
+import {
+  assertMidiBankShape,
+  assertMidiNumberShapes,
+  assertMidiTimingShape,
+  assertMidiWordListShapes,
+} from '../internal/midi_shape.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import { boundedUmpWords } from '../internal/ump_events.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
@@ -1423,6 +1429,14 @@ export class SonareEngine {
     offsetInBlockSamples: number | undefined,
     options: SonareEngineMidiTimingOptions | undefined,
   ): void {
+    assertMidiNumberShapes([
+      ['group', group],
+      ['channel', channel],
+      ['data0', data0],
+      ['data1', data1],
+      ['offsetInBlockSamples', offsetInBlockSamples, true],
+    ]);
+    assertMidiTimingShape('offsetInBlockSamples', offsetInBlockSamples, options);
     const timing = resolveMidiInputTiming(
       `SonareEngine.pushMidiInput${type.slice('syncMidiInput'.length)}` as MidiInputPushName,
       offsetInBlockSamples,
@@ -1640,6 +1654,13 @@ export class SonareEngine {
     offsetInBlockSamples?: number,
     options?: SonareEngineMidiTimingOptions,
   ): void {
+    assertMidiNumberShapes([
+      ['group', group],
+      ['channel', channel],
+      ['program', program],
+    ]);
+    assertMidiBankShape(bank);
+    assertMidiTimingShape('offsetInBlockSamples', offsetInBlockSamples, options);
     const timing = resolveMidiInputTiming(
       'SonareEngine.pushMidiInputProgram',
       offsetInBlockSamples,
@@ -1666,6 +1687,8 @@ export class SonareEngine {
     offsetInBlockSamples?: number,
     options?: SonareEngineMidiTimingOptions,
   ): void {
+    const wordCount = assertMidiWordListShapes(words);
+    assertMidiTimingShape('offsetInBlockSamples', offsetInBlockSamples, options);
     const timing = resolveMidiInputTiming(
       'SonareEngine.pushMidiInputUmp',
       offsetInBlockSamples,
@@ -1674,7 +1697,7 @@ export class SonareEngine {
     const copiedWords =
       words instanceof Uint32Array
         ? new Uint32Array(words)
-        : (Array.isArray(words) ? boundedUmpWords(words) : words).slice();
+        : boundedUmpWords(Array.from({ length: wordCount }, (_, index) => words[index]!));
     this.offlineEngine.pushMidiInputUmp(copiedWords, timing.offsetInBlockSamples);
     this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, ...timing });
   }

@@ -110,6 +110,14 @@ const SELF_BUILT_LENGTH_READS: ReadonlyMap<string, string> = new Map([
     'bindings/common/common.cpp keys["length"] #1',
     'masteringParamsFromObject: `keys` is the Object.keys array built two lines above.',
   ],
+  [
+    'bindings/common/midi_cc_kind.h keys["length"] #1',
+    'requireCcBindingShape: `keys` is the Object.keys array built immediately above.',
+  ],
+  [
+    'bindings/project/project_midi.cpp keys["length"] #1',
+    'requireKnownMidiObjectKeys: `keys` is the Object.keys array built immediately above.',
+  ],
 ]);
 
 describe('WASM binding sources budget every caller-supplied array length', () => {

@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <string>
@@ -52,6 +53,104 @@ void ThrowCurrentException(Napi::Env env);
 
 /// @brief Number.MAX_SAFE_INTEGER, the largest integer a JS number holds exactly.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
+
+inline std::string node_element_field(const std::string& at, const char* key);
+inline bool IsUint8Array(const Napi::Value& value);
+
+enum class NodeInputShape { kNumber, kInteger, kBoolean, kString, kObject, kArray, kUint8Array };
+
+/// @brief One field in a type-only preflight. Numeric ranges are deliberately left to the reader.
+struct NodeInputShapeField {
+  const char* name;
+  NodeInputShape shape;
+  bool optional = false;
+  const char* expected = nullptr;
+};
+
+inline bool CheckNodeInputShape(Napi::Env env, const Napi::Value& value, const std::string& label,
+                                NodeInputShape shape, bool optional = false,
+                                const char* expected = nullptr) {
+  if (env.IsExceptionPending()) return false;
+  if (optional && (value.IsUndefined() || value.IsNull())) return true;
+  bool matches = false;
+  const char* description = expected;
+  switch (shape) {
+    case NodeInputShape::kNumber:
+      matches = value.IsNumber();
+      if (description == nullptr) description = "a number";
+      break;
+    case NodeInputShape::kInteger:
+      // Integer-ness belongs to the domain pass; this checks only the JS type.
+      matches = value.IsNumber();
+      if (description == nullptr) description = "an integer";
+      break;
+    case NodeInputShape::kBoolean:
+      matches = value.IsBoolean();
+      if (description == nullptr) description = "a boolean";
+      break;
+    case NodeInputShape::kString:
+      matches = value.IsString();
+      if (description == nullptr) description = "a string";
+      break;
+    case NodeInputShape::kObject:
+      matches = value.IsObject() && !value.IsArray() && !value.IsFunction();
+      if (description == nullptr) description = "an object";
+      break;
+    case NodeInputShape::kArray:
+      matches = value.IsArray();
+      if (description == nullptr) description = "an array";
+      break;
+    case NodeInputShape::kUint8Array:
+      matches = value.IsBuffer() || IsUint8Array(value);
+      if (description == nullptr) description = "a Uint8Array";
+      break;
+  }
+  if (!matches) {
+    Napi::TypeError::New(env, label + " must be " + description).ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
+/// @brief Check all named object fields' types before any field's numeric domain is read.
+inline bool PreflightNodeObjectShapes(Napi::Env env, const Napi::Object& object,
+                                      std::initializer_list<NodeInputShapeField> fields,
+                                      const std::string& at = std::string()) {
+  for (const auto& field : fields) {
+    if (!CheckNodeInputShape(env, object.Get(field.name), node_element_field(at, field.name),
+                             field.shape, field.optional, field.expected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// @brief Check all positional argument types before any argument's numeric domain is read.
+inline bool PreflightNodeArgumentShapes(Napi::Env env, const Napi::CallbackInfo& info,
+                                        std::initializer_list<NodeInputShapeField> fields,
+                                        size_t start_index = 0) {
+  size_t index = start_index;
+  for (const auto& field : fields) {
+    if (!CheckNodeInputShape(env, info[index++], field.name, field.shape, field.optional,
+                             field.expected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline bool PreflightNodeArgumentShapes(Napi::Env env, const Napi::CallbackInfo& info,
+                                        const std::vector<NodeInputShapeField>& fields,
+                                        size_t start_index = 0) {
+  size_t index = start_index;
+  for (const auto& field : fields) {
+    if (!CheckNodeInputShape(env, info[index++], field.name, field.shape, field.optional,
+                             field.expected)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /// @brief Whether @p value is a Float32Array.
 inline bool IsFloat32Array(const Napi::Value& value) {
@@ -1541,6 +1640,27 @@ inline bool OptionalInt64Arg(Napi::Env env, const Napi::CallbackInfo& info, size
   if (value.IsUndefined() || value.IsNull()) {
     *out = fallback;
     return true;
+  }
+  return RequiredInt64Value(env, value, name, out);
+}
+
+/// @brief Read an optional live MIDI render frame; absence is immediate, explicit negatives refuse.
+/// @details Call after the entry has shape-checked every argument, in declaration order, so a
+///          later wrong type wins over an earlier numeric domain.
+inline bool OptionalMidiRenderFrameArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                       const char* name, int64_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = -1;
+    return true;
+  }
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || number < 0.0) {
+    Napi::RangeError::New(
+        env, std::string(name) + " must be finite and at least 0; omit it to apply immediately")
+        .ThrowAsJavaScriptException();
+    return false;
   }
   return RequiredInt64Value(env, value, name, out);
 }

@@ -391,8 +391,21 @@ std::vector<int32_t> int32ArrayToVector(val arr, const char* subject) {
   return result;
 }
 
+bool isUint8ArrayView(const val& value) {
+  if (!val::global("ArrayBuffer").call<bool>("isView", value)) return false;
+  const val object = val::global("Object");
+  const val typed_array_prototype =
+      object.call<val>("getPrototypeOf", val::global("Uint8Array")["prototype"]);
+  const val descriptor = object.call<val>("getOwnPropertyDescriptor", typed_array_prototype,
+                                          val::global("Symbol")["toStringTag"]);
+  const val tag_getter = descriptor["get"];
+  return tag_getter.call<val>("call", value).as<std::string>() == "Uint8Array";
+}
+
 std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject) {
-  requireTypedOrPlainArray(arr, subject, "Uint8Array", "a");
+  if (!isUint8ArrayView(arr) && !isPlainArray(arr)) {
+    throw WasmTypeError(std::string(subject) + " must be a Uint8Array");
+  }
   // A plain array has no byteLength; its length is its byte count.
   const size_t n = budgetedLength(arr, subject, isPlainArray(arr) ? "length" : "byteLength");
   std::vector<uint8_t> result(n);

@@ -1,6 +1,15 @@
 import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
-import { assertMidiCcBindingListBytes } from './internal/midi_cc_binding.js';
+import {
+  assertMidiCcBindingListBytes,
+  assertMidiCcEventPayload,
+  assertMidiCcEventPayloads,
+} from './internal/midi_cc_binding.js';
 import { packMidi2Program } from './internal/midi_program_pack.js';
+import {
+  assertMidiBooleanShape,
+  assertMidiCcBindingListShapes,
+  assertMidiNumberShapes,
+} from './internal/midi_shape.js';
 import {
   assertEventPpq,
   midi2Byte,
@@ -833,6 +842,13 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
 export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRouteResult {
   return withEntry('midiRouteEvents', () => {
     const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
+    assertMidiCcEventPayloads(events);
+    assertMidiNumberShapes([
+      ['filterGroup', config.filterGroup, true],
+      ['filterChannel', config.filterChannel, true],
+      ['remapChannel', config.remapChannel, true],
+    ]);
+    assertMidiBooleanShape(config.thru, 'thru', true);
     const present: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(config)) {
       if (!isAbsent(value)) {
@@ -849,6 +865,13 @@ export function midiCcLearn(
 ): (ProjectMidiCcBinding & { consume: boolean }) | null {
   return withEntry('midiCcLearn', () => {
     const r = requestObject('midiCcLearn', request, 'request', true);
+    assertMidiCcEventPayloads(r.events);
+    assertMidiNumberShapes([
+      ['paramId', r.paramId],
+      ['minValue', r.minValue, true],
+      ['maxValue', r.maxValue, true],
+      ['minMovement', r.minMovement, true],
+    ]);
     return projectModule().midiCcLearn(
       r.events,
       r.paramId,
@@ -859,18 +882,14 @@ export function midiCcLearn(
   });
 }
 
-/** Convert one CC event to an automation breakpoint using native CcMap. */
+/** Convert a CC event to a breakpoint. Refuses valid SysEx with NotSupported. */
 export function midiCcToBreakpoint(
   request: MidiCcToBreakpointRequest,
 ): ProjectAutomationPoint | null {
   return withEntry('midiCcToBreakpoint', () => {
     const { bindings, event } = requestObject('midiCcToBreakpoint', request, 'request', true);
-    if (!Array.isArray(bindings)) {
-      throw refuseType('bindings must be an array');
-    }
-    if (!isNonArrayObject(event)) {
-      throw refuseType('event must be an object');
-    }
+    assertMidiCcBindingListShapes(bindings);
+    assertMidiCcEventPayload(event, 'event');
     assertMidiCcBindingListBytes(bindings);
     const native = projectModule().midiCcToBreakpoint(bindings, event);
     return native === null ? null : projectAutomationPointFromNative(native);
@@ -886,6 +905,13 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
   return withEntry('midiParamToCc', () => {
     const fn = 'midiParamToCc';
     const r = requestObject(fn, request, 'request', true);
+    assertMidiCcBindingListShapes(r.bindings);
+    assertMidiNumberShapes([
+      ['paramId', r.paramId],
+      ['unitValue', r.unitValue],
+      ['group', r.group],
+      ['ppq', r.ppq, true],
+    ]);
     assertMidiCcBindingListBytes(r.bindings);
     return projectModule().midiParamToCc(
       r.bindings,

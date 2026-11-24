@@ -28,6 +28,7 @@ from ._project import (
     _cc_binding_to_c,
     _synth_patch_arg,
 )
+from ._project_model import _require_midi_shapes
 from ._project_synth import (
     Articulation,
     ControllerAxis,
@@ -63,8 +64,19 @@ from ._runtime import (
 from ._types_engine import MidiFxConfig
 
 
+def _require_midi_ump_words(words: Iterable[int]) -> tuple[int, ...]:
+    """Materialize UMP words and check every element's shape before narrowing any."""
+    try:
+        source = iter(words)
+    except TypeError:
+        raise _refuse_type("words must be an iterable of integers") from None
+    values: tuple[int, ...] = tuple(source)
+    _require_midi_shapes(*((f"words[{i}]", word, "integer") for i, word in enumerate(values)))
+    return values
+
+
 def _ump_words_to_c(words: Iterable[int]) -> tuple[ctypes.Array[ctypes.c_uint32], int]:
-    """Narrow ``words`` onto a ``uint32_t`` array; the C side validates the count."""
+    """Narrow shape-checked words onto a uint32 array; C validates message size."""
     values = [_to_c_uint32(word, f"words[{i}]").value for i, word in enumerate(words)]
     return (ctypes.c_uint32 * len(values))(*values), len(values)
 
@@ -149,6 +161,14 @@ class _EngineMidiMixin:
         ``group`` in 0..15. ``render_frame`` is the render-frame time to apply
         (``None`` for immediate).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("controller", controller, "integer"),
+            ("value", value, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -192,6 +212,11 @@ class _EngineMidiMixin:
         ``OUT_OF_MEMORY`` if the payload slots or the command queue are full (retry after a
         processed block).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("data", data, "bytes_like"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         buf = bytes(data)
         if not buf:
@@ -225,6 +250,9 @@ class _EngineMidiMixin:
         is full. ``render_frame`` is the render-frame time to apply (``None``
         for immediate).
         """
+        _require_midi_shapes(("destination_id", destination_id, "integer"))
+        words = _require_midi_ump_words(words)
+        _require_midi_shapes(("render_frame", render_frame, "optional_index_integer"))
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -273,6 +301,16 @@ class _EngineMidiMixin:
         CHANGE off, and an MPE member channel. A future-dated op can be
         evicted by the pending-command bank like any future command.
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("program", program, "integer"),
+            ("bank_valid", bank_valid, "boolean"),
+            ("bank_msb", bank_msb, "integer"),
+            ("bank_lsb", bank_lsb, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -303,6 +341,9 @@ class _EngineMidiMixin:
 
         ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
+        _require_midi_shapes(
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         _check(
             lib.sonare_engine_push_midi_panic(
@@ -952,6 +993,13 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("note", note, "integer"),
+            ("velocity", velocity, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -991,6 +1039,13 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("note", note, "integer"),
+            ("velocity", velocity, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -1030,6 +1085,13 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("controller", controller, "integer"),
+            ("value", value, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -1073,6 +1135,12 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("bend14", bend14, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -1111,6 +1179,12 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("pressure", pressure, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -1151,6 +1225,13 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("note", note, "integer"),
+            ("pressure", pressure, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -1187,6 +1268,8 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        words = _require_midi_ump_words(words)
+        _require_midi_shapes(("offset_in_block_samples", offset_in_block_samples, "integer"))
         lib = _get_lib()
         handle = self._require_handle()
         c_words, count = _ump_words_to_c(words)
@@ -1232,6 +1315,15 @@ class _EngineMidiMixin:
         drained, clamped to that block's last frame; a negative value reads as 0.
         It is not an absolute clock position.
         """
+        _require_midi_shapes(
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("program", program, "integer"),
+            ("bank_valid", bank_valid, "boolean"),
+            ("bank_msb", bank_msb, "integer"),
+            ("bank_lsb", bank_lsb, "integer"),
+            ("offset_in_block_samples", offset_in_block_samples, "integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_group = _to_c_uint8(group, "group")
@@ -1275,6 +1367,14 @@ class _EngineMidiMixin:
 
         ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("note", note, "integer"),
+            ("velocity", velocity, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -1315,6 +1415,14 @@ class _EngineMidiMixin:
 
         ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("note", note, "integer"),
+            ("velocity", velocity, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -1357,6 +1465,13 @@ class _EngineMidiMixin:
         a value above the range is refused rather than clamped.
         ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("bend14", bend14, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -1394,6 +1509,13 @@ class _EngineMidiMixin:
         ``pressure`` is 7-bit (0..127). ``render_frame`` is the render-frame
         time to apply (``None`` for immediate).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("pressure", pressure, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")
@@ -1433,6 +1555,14 @@ class _EngineMidiMixin:
         (both 0..127). ``render_frame`` is the render-frame time to apply (``None`` for
         immediate).
         """
+        _require_midi_shapes(
+            ("destination_id", destination_id, "integer"),
+            ("group", group, "integer"),
+            ("channel", channel, "integer"),
+            ("note", note, "integer"),
+            ("pressure", pressure, "integer"),
+            ("render_frame", render_frame, "optional_index_integer"),
+        )
         lib = _get_lib()
         handle = self._require_handle()
         c_destination = _to_c_uint32(destination_id, "destination_id")

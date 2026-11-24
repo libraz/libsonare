@@ -7,10 +7,15 @@ const WASM_LIST_BUDGET = 64 * 1024 * 1024;
  * Refuses a list longer than the native setter accepts, before any walk over
  * it: a sparse array can carry that length without holding the entries.
  */
-export function requireListBudget(list: ArrayLike<unknown>, subject: string): void {
-  if (list.length > WASM_LIST_BUDGET) {
+export function requireListBudget(list: ArrayLike<unknown>, subject: string): number {
+  const length = list.length;
+  if (!Number.isSafeInteger(length) || length < 0) {
+    throw refuse(`${subject} length must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
+  }
+  if (length > WASM_LIST_BUDGET) {
     throw refuse(`${subject} exceeds the input length budget`);
   }
+  return length;
 }
 
 /**
