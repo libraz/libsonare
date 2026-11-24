@@ -1544,6 +1544,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.dynamic_range(hop_sec)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.dynamic_range(window_sec)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.mastering(release_ms)` | absent is None (the library default 50 ms); an explicit 0 or a negative value raises SonareValueError |
+| `Audio.note_move(target_onset_sample)` | omission no longer moves the note to sample 0; give exactly one of target_onset_sample or target_onset_sec |
 | `Audio.spectrum(db_amin)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.spectrum(db_ref)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.spectrum(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'Audio.spectrum: n_fft must be a power of two in [2, 4194304]' |
@@ -2629,6 +2630,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `extract_percussive_events(n_fft)` | an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default |
 | `extract_percussive_events(onset_delta)` | a given 0 is read literally as a zero offset instead of as the library default; omit it (None) for the default |
 | `extract_percussive_events(onset_wait)` | a given 0 is read literally as a zero wait instead of as the library default; omit it (None) for the default |
+| `note_move(target_onset_sample)` | omission no longer moves the note to sample 0; give exactly one of target_onset_sample or target_onset_sec |
 | `render_percussive_events(fade_ms)` | an explicit 0 or a negative value raises SonareValueError; omit it for the default 5 ms |
 | `render_percussive_events(hop_length)` | an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4, so it moves with a given n_fft |
 | `render_percussive_events(hpss_kernel_harmonic)` | an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default |
@@ -4249,7 +4251,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.preview_midi_fx_count(config_json)` | `Project.preview_midi_fx_count(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `Project.remove_automation_lane(target_param_id)` | `Project.remove_automation_lane(lane_id)` |
 | `Project.set_assist_sidecar(module_id)` | takes module_id and payload positionally and schema_version, target_track_id, region_start_ppq and region_end_ppq as keywords; a descriptor mapping in place of module_id is TypeError |
-| `Project.set_clip_comp_segments(segments)` | each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError |
+| `Project.set_clip_comp_segments(segments)` | each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError; each segment requires explicit start_ppq, which used to default to 0 |
 | `Project.set_clip_takes(takes)` | each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key; takes is required and None raises TypeError, pass [] to clear; id is required and non-zero, a source_id absent or None uses the clip's source and 0 raises SonareValueError, a name absent or None leaves the take unnamed, an empty name raises SonareValueError and a non-string name raises TypeError instead of being converted with str() |
 | `Project.set_midi_events(events)` | each event is a ProjectMidiEvent record, or the whole list is one (n, 3) array of ppq, word0, word1 columns; a tuple or mapping is TypeError |
 | `Project.set_tempo_segments(segments)` | each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; start_sample, which was ignored, and any other key raise SonareValueError naming it |
@@ -9552,8 +9554,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
-| `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
-| `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
+| `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection |
+| `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection |
 | `estimateTuning(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(hopLength)` (`./analysis`) | removed: pass hopLength as a field of EstimateTuningRequest |
@@ -10583,6 +10585,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `NnFilterRequest.k` (`./analysis`) | 0 or a negative k is refused with RangeError; it used to filter with 5 neighbours (capped at the frame count). Omit k for the default 7 |
 | `NnFilterRequest.k` | 0 or a negative k is refused with RangeError; it used to filter with 5 neighbours (capped at the frame count). Omit k for the default 7 |
+| `NoteMoveOptions.targetOnsetSample` | omission no longer moves the note to sample 0; give exactly one of targetOnsetSample or targetOnsetSec |
 | `PercussiveEvent.percussiveRatio` (`./analysis`) | optional; absent when the span is silent (was 0) |
 | `PercussiveEvent.percussiveRatio` | optional; absent when the span is silent (was 0) |
 | `RirSynthOptions.crossfadeMs` (`./analysis`) | `SynthesizeRirRequest.crossfadeMs`: absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default |
@@ -13220,6 +13223,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
 | `ProjectChordSymbol.romanNumeral` | Omit romanNumeral to store no label. An explicit empty string is a RangeError naming chords[i].romanNumeral. |
+| `ProjectClipDesc.startPpq` | required: an absent startPpq is refused with TypeError naming startPpq (1.x read it as 0) |
+| `ProjectKeySegment.startPpq` | each annotation requires an explicit startPpq; omission no longer starts the annotation at 0 |
+| `ProjectLoopRecordingDesc.startPpq` | required: an absent startPpq is refused with TypeError naming startPpq (1.x read it as 0) |
 | `ProjectMidiRouteConfig.filterChannel` | filterChannel is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.filterGroup` | filterGroup is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.remapChannel` | remapChannel is typed number, not number \| null; a null at runtime still reads as absent |
@@ -13972,7 +13978,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `filter --cutoff` (native CLI only) | `filter --cutoff-hz` |
 | `note-move --offset` | `note-move --offset-sample`: renamed --offset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `note-move --onset` | `note-move --onset-sample`: renamed --onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `note-move --target-onset` | `note-move --target-onset-sample`: renamed --target-onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
+| `note-move --target-onset` | `note-move --target-onset-sample`: renamed --target-onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); give exactly one of --target-onset-sample or --target-onset-sec even when moving to sample 0 |
 | `note-stretch --offset` | `note-stretch --offset-sample`: renamed --offset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `note-stretch --onset` | `note-stretch --onset-sample`: renamed --onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 

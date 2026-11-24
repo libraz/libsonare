@@ -57,7 +57,7 @@ import { assertAudioInput, requestObject } from './validation.js';
  * const project = new Project();
  * project.setSampleRate(sampleRate);
  * const trackId = project.addTrack({ kind: 'audio' });
- * const clipId = project.addClip({ trackId, lengthPpq: 64, channels: [take], sampleRate }); // 16 bars at 4/4, in quarter notes (PPQ)
+ * const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 64, channels: [take], sampleRate }); // 16 bars at 4/4, in quarter notes (PPQ)
  * project.setWarpMap({ id: 1, anchors });
  * project.setClipWarpRef(clipId, 1);
  * project.setClipWarpMode(clipId, 'timeStretch');

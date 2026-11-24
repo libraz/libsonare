@@ -459,10 +459,10 @@ val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   OnsetDetectConfig config;
   config.n_fft = intProperty(options, "nFft", config.n_fft);
   config.hop_length = intProperty(options, "hopLength", config.hop_length);
-  // Type-checked to match the addon's FloatProperty on the same two keys. Both
-  // are peak-picking quantities with no "unspecified" spelling, so a wrong-typed
-  // value is a caller error rather than a request for the default.
-  config.threshold = floatProperty(options, "threshold", config.threshold);
+  if (hasProperty(options, "threshold")) {
+    config.threshold = floatProperty(options, "threshold", config.threshold);
+    util::check::greater_than(config.threshold, 0.0, "threshold");
+  }
   // intProperty refuses a wrong-typed value: the peak-picking windows have no "unspecified"
   // spelling, matching the addon's IntProperty on the same six keys.
   config.pre_max = intProperty(options, "preMax", config.pre_max);

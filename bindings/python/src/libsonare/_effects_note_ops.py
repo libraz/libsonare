@@ -29,7 +29,7 @@ from ._effects_note_model import (
     _transcribe_result_from_c,
     _transcribe_sample_rate,
 )
-from ._errors import _entry, _refuse
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
     SONARE_NOTE_TARGET_UNMATCHED_MUTE,
@@ -163,10 +163,12 @@ def note_move(
     """Move a note region to a new onset without changing its duration.
 
     Each of ``onset``, ``offset`` and ``target_onset`` is given in samples
-    (``*_sample``, default 0 / the input length / 0) or in seconds (``*_sec``,
-    rounded to the nearest sample at ``sample_rate``), one spelling per bound.
+    (``*_sample``) or in seconds (``*_sec``, rounded to the nearest sample at
+    ``sample_rate``), one spelling per bound. The source region defaults to the
+    full input. Give exactly one target position.
 
     Raises:
+        TypeError: If neither target position is given.
         SonareValueError: If a bound is given in both samples and seconds, or is
             negative.
     """
@@ -181,13 +183,15 @@ def note_move(
         "target_onset_sample",
         "target_onset_sec",
     )
+    if target.value is None:
+        raise _refuse_type("give target_onset_sample or target_onset_sec")
     return _call_float_array_transform(
         "sonare_note_move",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int64(0 if onset.value is None else onset.value, "onset_sample"),
         _to_c_int64(len(samples) if offset.value is None else offset.value, "offset_sample"),
-        _to_c_int64(0 if target.value is None else target.value, "target_onset_sample"),
+        _to_c_int64(target.value, "target_onset_sample"),
         respelled=_respellings(onset, offset, target),
     )
 

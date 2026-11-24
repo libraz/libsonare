@@ -40,7 +40,7 @@ const ROUTES: [entry: string, cause: string, run: () => unknown][] = [
   [
     'Project.addClip',
     'unknown track',
-    withProject((p) => p.addClip({ trackId: 9999, lengthPpq: 4 })),
+    withProject((p) => p.addClip({ trackId: 9999, startPpq: 0, lengthPpq: 4 })),
   ],
   ['Project.removeClip', 'unknown clip', withProject((p) => p.removeClip(9999))],
 ];

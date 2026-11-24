@@ -834,6 +834,8 @@ def _refuse_both_bound_spellings(
 
 def _validate_note_move_bounds(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     _refuse_both_bound_spellings(args, parser, ("onset", "offset", "target-onset"))
+    if args.target_onset_sample is None and args.target_onset_sec is None:
+        parser.error("give --target-onset-sample or --target-onset-sec")
 
 
 def _validate_note_stretch_bounds(

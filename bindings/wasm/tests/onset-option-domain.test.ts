@@ -23,6 +23,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import { detectOnsets as detectAnalysisOnsets, init as initAnalysis } from '../dist/analysis.js';
 import { detectOnsets, extractPercussiveEvents, init } from '../dist/index.js';
 import { expectArgumentRefusal, expectRefusalOf } from './_helpers';
 
@@ -51,6 +52,19 @@ const clicks = ((): Float32Array => {
 
 beforeAll(async () => {
   await init();
+  await initAnalysis();
+});
+
+it('uses adaptive onsets only when the threshold is omitted', () => {
+  for (const detect of [detectOnsets, detectAnalysisOnsets]) {
+    const request = { samples: clicks, sampleRate };
+    const adaptive = detect(request);
+    const refuseZero = () => detect({ ...request, threshold: 0 });
+    expect(refuseZero).toThrow(RangeError);
+    expect(refuseZero).toThrow('threshold must be finite and greater than 0');
+    expect(adaptive.length).toBeGreaterThan(0);
+    expect(detect({ ...request, threshold: 1000 })).toHaveLength(0);
+  }
 });
 
 const onsets = (options: Record<string, number | boolean>): number[] =>
@@ -115,7 +129,7 @@ describe('an onset window length refuses a negative frame count', () => {
 
 describe('an onset strength refuses a non-finite number', () => {
   const FLOATS: ReadonlyArray<{ field: string; low: number; high: number }> = [
-    { field: 'threshold', low: 0, high: 20 },
+    { field: 'threshold', low: 0.01, high: 20 },
     { field: 'delta', low: 0, high: 20 },
   ];
 

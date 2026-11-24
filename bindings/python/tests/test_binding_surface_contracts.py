@@ -44,6 +44,21 @@ def test_project_ppq_arguments_refuse_non_numbers(bad: object) -> None:
             project.set_sample_rate(bad)  # type: ignore[arg-type]
 
 
+def test_clip_comp_segment_requires_its_start() -> None:
+    from libsonare import Project
+
+    with Project() as project:
+        track = project.add_track("audio", "comp")
+        clip = project.add_clip(track, 0.0, 4.0)
+        project.set_clip_takes(clip, [{"id": 1, "name": "take A"}], active_take_id=1)
+        with pytest.raises(
+            TypeError,
+            match=r"^Project.set_clip_comp_segments: segments\[0\].start_ppq must be a number$",
+        ):
+            project.set_clip_comp_segments(clip, [{"end_ppq": 1.0, "take_id": 1}])
+        project.set_clip_comp_segments(clip, [{"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1}])
+
+
 @pytest.mark.parametrize("bad", [math.nan, math.inf])
 def test_project_ppq_arguments_refuse_non_finite(bad: float) -> None:
     from libsonare import Project, SonareValueError

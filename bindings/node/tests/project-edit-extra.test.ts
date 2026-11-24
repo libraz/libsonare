@@ -395,7 +395,7 @@ describe('Project edit ops (new bindings)', () => {
   it('addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio', name: 'record' });
-    const desc = { trackId: track, loopLengthPpq: 1, audio: new Float32Array(100) };
+    const desc = { trackId: track, startPpq: 0, loopLengthPpq: 1, audio: new Float32Array(100) };
     const add = (partial: object) => () =>
       project.addLoopRecordingTakes(partial as unknown as ProjectLoopRecordingDesc);
     expectRefusal(add({ ...desc, audioSampleRate: 48000 }), TypeError, /audioChannels/);
@@ -407,7 +407,13 @@ describe('Project edit ops (new bindings)', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio', name: 'record' });
     const planar = [new Float32Array(100), new Float32Array(100)];
-    const desc = { trackId: track, loopLengthPpq: 1, audio: planar, audioSampleRate: 48000 };
+    const desc = {
+      trackId: track,
+      startPpq: 0,
+      loopLengthPpq: 1,
+      audio: planar,
+      audioSampleRate: 48000,
+    };
     const add = (partial: object) => () =>
       project.addLoopRecordingTakes(partial as unknown as ProjectLoopRecordingDesc);
     expectRefusal(add({ ...desc, audioChannels: 2 }), TypeError, /audioChannels/);

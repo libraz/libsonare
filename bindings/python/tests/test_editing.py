@@ -304,9 +304,26 @@ def test_note_editing_defaults_offset_to_input_length() -> None:
     sr = 22050
     samples = _tone(sr)
     stretched = libsonare.note_stretch(samples, sample_rate=sr)
-    moved = libsonare.note_move(samples, sample_rate=sr)
+    moved = libsonare.note_move(samples, sample_rate=sr, target_onset_sample=0)
     assert len(stretched) > 0
     assert len(moved) == len(samples)
+
+
+def test_note_move_requires_a_target() -> None:
+    sr = 22050
+    samples = _tone(sr)
+    audio = Audio.from_buffer(samples, sr)
+    with pytest.raises(
+        TypeError, match=r"^note_move: give target_onset_sample or target_onset_sec$"
+    ):
+        libsonare.note_move(samples, sr, onset_sample=2000, offset_sample=6000)
+    with pytest.raises(
+        TypeError, match=r"^Audio.note_move: give target_onset_sample or target_onset_sec$"
+    ):
+        audio.note_move(onset_sample=2000, offset_sample=6000)
+    placed = libsonare.note_move(samples, sr, 2000, 6000, 0)
+    assert abs(float(placed[1000]) - (samples[1000] + samples[3000])) < 1e-6
+    np.testing.assert_allclose(audio.note_move(2000, 6000, 0), placed, atol=1e-6)
 
 
 def test_voice_change_function() -> None:

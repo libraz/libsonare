@@ -9693,10 +9693,10 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.set_clip_comp_segments(segments)"
-changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError"
+changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError; each segment requires explicit start_ppq, which used to default to 0"
 domain = "project"
 rule = "one-input-form"
-test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+test = "bindings/python/tests/test_binding_surface_contracts.py::test_clip_comp_segment_requires_its_start"
 
 [[entry]]
 kind = "option"
@@ -10336,6 +10336,14 @@ rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
 
 [[entry]]
+kind = "option"
+old = "note_move(target_onset_sample)"
+changed = "omission no longer moves the note to sample 0; give exactly one of target_onset_sample or target_onset_sec"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_editing.py::test_note_move_requires_a_target"
+
+[[entry]]
 kind = "function"
 old = "note_move"
 changed = "returns a float32 ndarray instead of list[float]"
@@ -10428,6 +10436,14 @@ changed = "returns a float32 ndarray instead of list[float]"
 domain = "core"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "option"
+old = "Audio.note_move(target_onset_sample)"
+changed = "omission no longer moves the note to sample 0; give exactly one of target_onset_sample or target_onset_sec"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_editing.py::test_note_move_requires_a_target"
 
 [[entry]]
 kind = "method"

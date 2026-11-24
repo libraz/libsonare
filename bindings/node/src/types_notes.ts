@@ -659,7 +659,7 @@ export interface NoteMoveOptions {
   offsetSample?: number;
   /** Last second of the note to move, rounded to the nearest sample. Not with `offsetSample`. */
   offsetSec?: number;
-  /** Sample the note's onset moves to. Default 0. Not with `targetOnsetSec`. */
+  /** Sample the note's onset moves to. Required unless given as seconds. Not with `targetOnsetSec`. */
   targetOnsetSample?: number;
   /** Second the note's onset moves to, rounded to the nearest sample. Not with `targetOnsetSample`. */
   targetOnsetSec?: number;

@@ -67,7 +67,7 @@ export const PROJECT_ROWS: ReadonlyArray<Row<Project>> = [
   [
     'addClip channels',
     'channels',
-    (p, l) => p.addClip({ trackId: 1, channels: l, sampleRate: 48000 } as never),
+    (p, l) => p.addClip({ trackId: 1, startPpq: 0, channels: l, sampleRate: 48000 } as never),
   ],
   ['importExternalStems', 'stems', (p, l) => p.importExternalStems({ stems: l } as never)],
   [

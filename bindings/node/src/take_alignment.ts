@@ -46,7 +46,7 @@ import { assertAudioInput, assertSampleRate, requestOnly } from './validation.js
  * project.setSampleRate(48000);
  * project.setWarpMap({ id: 1, name: 'comp', anchors });
  * const trackId = project.addTrack({ kind: 'audio' });
- * const takeClipId = project.addClip({ trackId, lengthPpq: 64, channels: [comp], sampleRate: 48000 });
+ * const takeClipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 64, channels: [comp], sampleRate: 48000 });
  * project.setClipWarpRef(takeClipId, 1);
  * project.setClipWarpMode(takeClipId, 'timeStretch');
  * ```

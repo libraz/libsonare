@@ -697,14 +697,14 @@ def register_note_edit_parsers(
         note_move_p.add_argument(
             "--target-onset-sample",
             type=_c_int,
-            help="Where the start of the region moves to (omitted: the start of the input)",
+            help="Where the start of the region moves to (give one target-onset flag)",
         )
     )
     _position(
         note_move_p.add_argument(
             "--target-onset-sec",
             type=_finite_float,
-            help="Where the start of the region moves to (omitted: the start of the input)",
+            help="Where the start of the region moves to (give one target-onset flag)",
         )
     )
     scale_quantize_p = sub.add_parser(

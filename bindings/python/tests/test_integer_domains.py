@@ -146,6 +146,7 @@ _ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
         "n_components": 2,
     },
     "samples_to_frames": {"samples": 1024},
+    "note_move": {"target_onset_sample": 0},
 }
 
 # Keywords whose explicit 0 is refused as the spelling of absence ("omit it"), so the
@@ -214,6 +215,8 @@ def _refusal(entry: str, keyword: str, value: object) -> str:
         and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
         and name != keyword
     }
+    # An entry-specific value also stands in for an optional argument the call needs.
+    kwargs.update({n: v for n, v in given.items() if n in parameters and n != keyword})
     paired = _PAIRED.get(keyword)
     if paired is not None and paired in parameters:
         kwargs[paired] = _REQUIRED[paired]

@@ -757,7 +757,7 @@ class _ProjectEditMixin:
         c_segments = (SonareProjectClipCompSegment * len(segment_items))()
         for i, item in enumerate(segment_items):
             segment = _mapping_keys(item, _COMP_SEGMENT_KEYS, f"segments[{i}]")
-            start_ppq = segment.get("start_ppq", 0.0)
+            start_ppq = segment.get("start_ppq")
             end_ppq = segment.get("end_ppq", 0.0)
             crossfade_ppq = segment.get("crossfade_ppq", 0.0)
             c_segments[i].start_ppq = _narrow_double(start_ppq, f"segments[{i}].start_ppq")

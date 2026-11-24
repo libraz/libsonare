@@ -206,7 +206,9 @@ class Audio:
         onset_sec: float | None = None,
         offset_sec: float | None = None,
         target_onset_sec: float | None = None,
-    ) -> np.ndarray: ...
+    ) -> np.ndarray:
+        """Give exactly one of target_onset_sample or target_onset_sec."""
+        ...
     def voice_change(
         self,
         pitch_semitones: float = 0.0,

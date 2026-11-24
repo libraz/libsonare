@@ -153,7 +153,7 @@ it('reads stored tracks, clips, and sources as arrays', () => {
 it('reads and edits audio source metadata without mutating input', () => {
   const project = new Project();
   const trackId = project.addTrack({ kind: 'audio' });
-  project.addClip({ trackId, lengthPpq: 4, sourceUri: 'asset://metadata.wav' });
+  project.addClip({ trackId, startPpq: 0, lengthPpq: 4, sourceUri: 'asset://metadata.wav' });
   const sourceId = project.clips()[0].sourceId;
   const { clipId: midiClipId } = project.addMidiClip(0, 1);
   const midiSourceId = project.clips()[1].sourceId;

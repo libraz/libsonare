@@ -332,7 +332,9 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   SonareProjectClipDesc desc{};
   desc.track_id = Uint32Property(obj, "trackId", 0);
   desc.is_midi = BoolProperty(obj, "isMidi", desc.is_midi != 0) ? 1 : 0;
-  desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
+  if (!RequiredDoubleProperty(env, obj, "startPpq", &desc.start_ppq)) {
+    return env.Undefined();
+  }
   desc.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
   desc.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);
   desc.gain = FloatProperty(obj, "gain", 1.0f);
@@ -383,7 +385,9 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareProjectLoopRecordingDesc desc{};
   desc.track_id = Uint32Property(obj, "trackId", 0);
-  desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
+  if (!RequiredDoubleProperty(env, obj, "startPpq", &desc.start_ppq)) {
+    return env.Undefined();
+  }
   desc.loop_length_ppq = DoubleProperty(obj, "loopLengthPpq", 0.0);
   // The capture's format is a fact about the recording, so neither has a default.
   if (!RequiredIntProperty(env, obj, "audioChannels", &desc.audio_channels) ||
@@ -434,7 +438,7 @@ Napi::Value ProjectWrap::AddMidiClip(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   double start_ppq = 0.0;
   double length_ppq = 0.0;
-  if (!OptionalDoubleArg(env, info, 0, "startPpq", 0.0, &start_ppq) ||
+  if (!sonare_node::RequiredDoubleArg(env, info, 0, "startPpq", &start_ppq) ||
       !OptionalDoubleArg(env, info, 1, "lengthPpq", 0.0, &length_ppq)) {
     return env.Undefined();
   }
@@ -475,7 +479,7 @@ Napi::Value ProjectWrap::TrimClip(const Napi::CallbackInfo& info) {
   double start_ppq = 0.0;
   double length_ppq = 0.0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
-      !OptionalDoubleArg(env, info, 1, "newStartPpq", 0.0, &start_ppq) ||
+      !sonare_node::RequiredDoubleArg(env, info, 1, "newStartPpq", &start_ppq) ||
       !OptionalDoubleArg(env, info, 2, "newLengthPpq", 0.0, &length_ppq)) {
     return env.Undefined();
   }
@@ -492,7 +496,7 @@ Napi::Value ProjectWrap::MoveClip(const Napi::CallbackInfo& info) {
   double start_ppq = 0.0;
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
-      !OptionalDoubleArg(env, info, 1, "newStartPpq", 0.0, &start_ppq) ||
+      !sonare_node::RequiredDoubleArg(env, info, 1, "newStartPpq", &start_ppq) ||
       !OptionalUint32Arg(env, info, 2, "newTrackId", 0, &track_id)) {
     return env.Undefined();
   }
@@ -868,7 +872,7 @@ Napi::Value ProjectWrap::DuplicateClip(const Napi::CallbackInfo& info) {
   uint32_t clip_id = 0;
   double start_ppq = 0.0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
-      !OptionalDoubleArg(env, info, 1, "newStartPpq", 0.0, &start_ppq)) {
+      !sonare_node::RequiredDoubleArg(env, info, 1, "newStartPpq", &start_ppq)) {
     return env.Undefined();
   }
   uint32_t out_id = 0;

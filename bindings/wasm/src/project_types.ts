@@ -420,8 +420,8 @@ export type ProjectLoopRecordingDesc = ProjectLoopRecordingCommon &
 export interface ProjectLoopRecordingCommon {
   /** Track the clip is added to. */
   trackId: number;
-  /** Clip start in PPQ, in [0, 1e12]. Default `0`. */
-  startPpq?: number;
+  /** Required clip start in PPQ, in [0, 1e12]. */
+  startPpq: number;
   /** Length of one loop in PPQ; also the length of the added clip, in (0, 1e12]. */
   loopLengthPpq: number;
   /** Sample rate of `audio` in Hz. */
@@ -919,8 +919,8 @@ export interface ProjectClipDesc {
   trackId: number;
   /** Whether the clip is a MIDI clip. Defaults to `false`. */
   isMidi?: boolean;
-  /** Clip start in PPQ, in [0, 1e12]. Defaults to `0`. */
-  startPpq?: number;
+  /** Required clip start position in PPQ, in [0, 1e12]. */
+  startPpq: number;
   /** Clip length in PPQ, in (0, 1e12]. */
   lengthPpq: number;
   /** Offset into the source in PPQ, in [0, 1e12]. Defaults to `0`. */

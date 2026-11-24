@@ -741,7 +741,12 @@ CliValidationError refuse_both_bound_spellings(const CliArgs& args,
 }
 
 CliValidationError validate_note_move_bounds(const CliArgs& args) {
-  return refuse_both_bound_spellings(args, {"onset", "offset", "target-onset"});
+  CliValidationError error = refuse_both_bound_spellings(args, {"onset", "offset", "target-onset"});
+  if (!error.empty()) return error;
+  if (!args.has("target-onset-sample") && !args.has("target-onset-sec")) {
+    return {"give --target-onset-sample or --target-onset-sec"};
+  }
+  return {};
 }
 
 CliValidationError validate_note_stretch_bounds(const CliArgs& args) {
@@ -1236,9 +1241,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                          "20.0"),
          required_output()},
         {}, validate_pitch_correct_timevarying_target, 1);
-    // Each bound is given in samples or in seconds, never both, and an omitted
-    // one takes the library's default (0, or the end of the input for an offset),
-    // which the handler resolves.
+    // Each bound is given in samples or in seconds. The target is required.
+    // The source region defaults to the full input.
     add_command(commands, "note-move", true,
                 {position(int_value("onset-sample")), position(number_value("onset-sec")),
                  position(int_value("offset-sample")), position(number_value("offset-sec")),

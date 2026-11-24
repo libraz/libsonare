@@ -9449,19 +9449,19 @@ test = "bindings/wasm/tests/tuning-auto.test.ts::lets the key candidates take a 
 [[entry]]
 kind = "function"
 old = "detectOnsets"
-changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest"
+changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/onset-option-domain.test.ts::uses adaptive onsets only when the threshold is omitted"
 
 [[entry]]
 kind = "function"
 old = "detectOnsets"
-changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest"
+changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/onset-option-domain.test.ts::uses adaptive onsets only when the threshold is omitted"
 
 [[entry]]
 kind = "function"
@@ -18766,6 +18766,14 @@ changed = "one positional form (noteMove(samples, sampleRate, options: NoteMoveO
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "field"
+old = "NoteMoveOptions.targetOnsetSample"
+changed = "omission no longer moves the note to sample 0; give exactly one of targetOnsetSample or targetOnsetSec"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires one note move target and accepts an explicit zero"
 
 [[entry]]
 kind = "function"
@@ -37872,3 +37880,28 @@ domain = "analysis"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
 entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "ProjectKeySegment.startPpq"
+changed = "each annotation requires an explicit startPpq; omission no longer starts the annotation at 0"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project.test.ts::requires the start of a key annotation and accepts explicit zero"
+
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.startPpq"
+changed = "required: an absent startPpq is refused with TypeError naming startPpq (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project-edit-ops.test.ts::addClip requires startPpq and accepts explicit zero"
+
+[[entry]]
+kind = "field"
+old = "ProjectLoopRecordingDesc.startPpq"
+changed = "required: an absent startPpq is refused with TypeError naming startPpq (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project-edit-ops.test.ts::addLoopRecordingTakes requires startPpq and accepts explicit zero"

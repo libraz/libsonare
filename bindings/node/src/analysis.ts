@@ -305,7 +305,7 @@ export interface OnsetDetectOptions {
   nFft?: number;
   /** Hop length in samples. Default `512`. */
   hopLength?: number;
-  /** Peak-picking threshold on the onset envelope. Default `0`. */
+  /** Positive peak-picking threshold on the onset envelope. Omit for adaptive detection. */
   threshold?: number;
   /** Frames before a peak over which it must be the maximum. Default `1`. */
   preMax?: number;

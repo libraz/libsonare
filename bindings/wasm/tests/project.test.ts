@@ -91,6 +91,20 @@ describe('Sonare WASM Project', () => {
     return project;
   }
 
+  it('requires the start of a key annotation and accepts explicit zero', () => {
+    const project = new Project();
+    try {
+      const key = { endPpq: 4, tonicPc: 0, mode: 'major' as const };
+      const error = expectRefusalOf(() => project.annotateKeys([key] as never), TypeError);
+      expect(error.message).toContain('keys[0].startPpq');
+      expect(project.keyAnnotations()).toEqual([]);
+      project.annotateKeys([{ ...key, startPpq: 0 }]);
+      expect(project.keyAnnotations()).toEqual([{ ...key, startPpq: 0 }]);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('reads PPQ, seconds, bar and beat from the project time map', () => {
     const project = new Project();
     try {

@@ -225,7 +225,7 @@ describe('a take id is required and 0 is refused by name', () => {
 describe('an omitted id is the default and an explicit 0 is refused', () => {
   it('on a clip track and on a clip move', () => {
     withProject((project, trackId, clipId) => {
-      expect(() => project.addClip({ trackId: 0, lengthPpq: 1 })).toThrow(
+      expect(() => project.addClip({ trackId: 0, startPpq: 0, lengthPpq: 1 })).toThrow(
         new RangeError('Project.addClip: trackId must not be 0; a clip needs an existing track'),
       );
       expect(() => project.moveClip(clipId, 1, { trackId: 0 })).toThrow(

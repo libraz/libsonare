@@ -90,11 +90,12 @@ void ProjectWasm::annotateKeys(val keys) {
     segments.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       val entry = keys[i];
+      const std::string at = elementAt("keys", i);
       static constexpr std::array<const char*, 4> kAllowed = {"endPpq", "mode", "startPpq",
                                                               "tonicPc"};
       refuseUnknownAnnotationKeys(entry, "keys", i, kAllowed);
       SonareProjectKeySegment seg{};
-      seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+      seg.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
       seg.end_ppq = doubleProperty(entry, "endPpq", 0.0);
       seg.tonic_pc =
           static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "tonicPc", 0, 11, 255));

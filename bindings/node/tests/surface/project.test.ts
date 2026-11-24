@@ -367,6 +367,7 @@ describe('edits', () => {
       const right = new Float32Array(480).fill(-0.1);
       const clipId = project.addClip({
         trackId,
+        startPpq: 0,
         lengthPpq: 4,
         channels: [left, right],
         sampleRate: SR,
@@ -387,7 +388,13 @@ describe('edits', () => {
       ).toThrow(/planarSamples/);
       expect(() => project.importExternalStems(stem({ layout: 2 }) as never)).toThrow(TypeError);
       expect(() =>
-        project.addClip({ trackId, lengthPpq: 4, audio: left, audioSampleRate: SR } as never),
+        project.addClip({
+          trackId,
+          startPpq: 0,
+          lengthPpq: 4,
+          audio: left,
+          audioSampleRate: SR,
+        } as never),
       ).toThrow(/unknown key audio \(expected /);
     });
   });

@@ -1059,7 +1059,7 @@ class Audio:
         offset_sec: float | None = None,
         target_onset_sec: float | None = None,
     ) -> np.ndarray:
-        """Move a note region to a new onset without changing its duration."""
+        """Move a note region. Give exactly one of target_onset_sample or target_onset_sec."""
         return _note_move(
             self.data,
             self.sample_rate,

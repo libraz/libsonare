@@ -111,7 +111,9 @@ describe('project booleans and numbers are refused by name, never coerced', () =
       const p = project as Loose;
       expect(() => p.addClip({ trackId, isMidi: 'false', lengthPpq: 4 })).toThrow(/isMidi/);
       expect(() => p.addClip({ trackId, startPpq: '1', lengthPpq: 4 })).toThrow(/startPpq/);
-      expect(() => p.addClip({ trackId, lengthPpq: 4, sourceUri: 7 })).toThrow(/sourceUri/);
+      expect(() => p.addClip({ trackId, startPpq: 0, lengthPpq: 4, sourceUri: 7 })).toThrow(
+        /sourceUri/,
+      );
       expect(project.toJson()).toBe(before);
     });
   });

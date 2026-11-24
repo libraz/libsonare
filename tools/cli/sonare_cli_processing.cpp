@@ -5,6 +5,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -254,9 +255,9 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
 
 // Resolves a position the caller gave as `--<bound>-sample` or `--<bound>-sec`
 // (the registry refuses both at once and a negative value), rounding seconds to
-// the nearest sample as the library does. Absent means `fallback`.
-static int note_bound_sample(const CliArgs& args, const std::string& bound, int sample_rate,
-                             int fallback) {
+// the nearest sample as the library does.
+static std::optional<int> note_bound_sample(const CliArgs& args, const std::string& bound,
+                                            int sample_rate) {
   const std::string sec = bound + "-sec";
   if (args.has(sec)) {
     const double samples = std::floor(args.get_double(sec, 0.0) * sample_rate + 0.5);
@@ -267,16 +268,17 @@ static int note_bound_sample(const CliArgs& args, const std::string& bound, int 
     return static_cast<int>(samples);
   }
   const std::string sample = bound + "-sample";
-  return args.has(sample) ? args.get_int(sample, 0) : fallback;
+  if (args.has(sample)) return args.get_int(sample, 0);
+  return std::nullopt;
 }
 
 int cmd_note_move(const CliArgs& args, const Audio& audio) {
   const int sample_rate = audio.sample_rate();
   editing::pitch_editor::NoteRegion region;
-  region.onset_sample = note_bound_sample(args, "onset", sample_rate, 0);
+  region.onset_sample = note_bound_sample(args, "onset", sample_rate).value_or(0);
   region.offset_sample =
-      note_bound_sample(args, "offset", sample_rate, static_cast<int>(audio.size()));
-  const int target_onset = note_bound_sample(args, "target-onset", sample_rate, 0);
+      note_bound_sample(args, "offset", sample_rate).value_or(static_cast<int>(audio.size()));
+  const int target_onset = note_bound_sample(args, "target-onset", sample_rate).value();
 
   editing::pitch_editor::NoteEditor editor;
   Audio result = editor.move_note(audio, region, target_onset);
@@ -303,9 +305,9 @@ int cmd_note_move(const CliArgs& args, const Audio& audio) {
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   const int sample_rate = audio.sample_rate();
   editing::pitch_editor::NoteRegion region;
-  region.onset_sample = note_bound_sample(args, "onset", sample_rate, 0);
+  region.onset_sample = note_bound_sample(args, "onset", sample_rate).value_or(0);
   region.offset_sample =
-      note_bound_sample(args, "offset", sample_rate, static_cast<int>(audio.size()));
+      note_bound_sample(args, "offset", sample_rate).value_or(static_cast<int>(audio.size()));
   const float ratio = args.get_float("ratio", 1.0f);
 
   editing::pitch_editor::NoteEditor editor;

@@ -31,6 +31,10 @@ _CHANNELS = (
         (["midi-render", _UNREADABLE, "--channels", "3", "-o", "{output}"], _CHANNELS),
         (["repair", _UNREADABLE], "--output is required unless --detect is given"),
         (
+            ["note-move", _UNREADABLE, "-o", "{output}"],
+            "give --target-onset-sample or --target-onset-sec",
+        ),
+        (
             ["note-move", _UNREADABLE, "--onset-sample", "0", "--onset-sec", "0", "-o", "{output}"],
             "give --onset-sample or --onset-sec, not both",
         ),

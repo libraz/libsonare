@@ -385,6 +385,10 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str | re.Pattern[str]], ...] = (
         "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 3000, --f0-max-hz 2093)",
     ),
     (
+        ["note-move", "{input}", "-o", "{output}"],
+        "give --target-onset-sample or --target-onset-sec",
+    ),
+    (
         ["note-move", "{input}", "--onset-sample", "0", "--onset-sec", "0", "-o", "{output}"],
         "give --onset-sample or --onset-sec, not both",
     ),

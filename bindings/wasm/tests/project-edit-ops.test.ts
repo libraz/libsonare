@@ -117,6 +117,75 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('addClip requires startPpq and accepts explicit zero', () => {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const trackId = project.addTrack({ kind: 'audio' });
+    try {
+      const before = project.toJson();
+      let caught: unknown;
+      try {
+        project.addClip({ trackId, lengthPpq: 4, sourceUri: 'asset://required.wav' } as never);
+      } catch (error) {
+        caught = error;
+      }
+      expect(expectArgumentRefusal(caught, TypeError).message).toBe(
+        'Project.addClip: startPpq must be a number',
+      );
+      expect(project.toJson()).toBe(before);
+
+      const clipId = project.addClip({
+        trackId,
+        startPpq: 0,
+        lengthPpq: 4,
+        sourceUri: 'asset://required.wav',
+      });
+      expect(clipId).toBeGreaterThan(0);
+      expect(project.clips().find((clip) => clip.id === clipId)?.startPpq).toBe(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('addLoopRecordingTakes requires startPpq and accepts explicit zero', () => {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const trackId = project.addTrack({ kind: 'audio' });
+    try {
+      const audio = new Float32Array(480).fill(0.25);
+      const before = project.toJson();
+      let caught: unknown;
+      try {
+        project.addLoopRecordingTakes({
+          trackId,
+          loopLengthPpq: 1,
+          audio,
+          audioChannels: 1,
+          audioSampleRate: 48000,
+        } as never);
+      } catch (error) {
+        caught = error;
+      }
+      expect(expectArgumentRefusal(caught, TypeError).message).toBe(
+        'Project.addLoopRecordingTakes: startPpq must be a number',
+      );
+      expect(project.toJson()).toBe(before);
+
+      const result = project.addLoopRecordingTakes({
+        trackId,
+        startPpq: 0,
+        loopLengthPpq: 1,
+        audio,
+        audioChannels: 1,
+        audioSampleRate: 48000,
+      });
+      expect(result.clipId).toBeGreaterThan(0);
+      expect(project.clips().find((clip) => clip.id === result.clipId)?.startPpq).toBe(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('rebinds deserialized source audio before bouncing', () => {
     const project = new Project();
     const audio = new Float32Array(480).fill(0.25);
@@ -581,7 +650,7 @@ describe('Sonare WASM Project edit ops', () => {
     const project = new Project();
     try {
       const trackId = project.addTrack({ kind: 'audio', name: 'record' });
-      const desc = { trackId, loopLengthPpq: 1, audio: new Float32Array(100) };
+      const desc = { trackId, startPpq: 0, loopLengthPpq: 1, audio: new Float32Array(100) };
       const refusal = (partial: object): unknown => {
         try {
           project.addLoopRecordingTakes(partial as unknown as ProjectLoopRecordingDesc);
@@ -607,7 +676,13 @@ describe('Sonare WASM Project edit ops', () => {
     try {
       const trackId = project.addTrack({ kind: 'audio', name: 'record' });
       const planar = [new Float32Array(100), new Float32Array(100)];
-      const desc = { trackId, loopLengthPpq: 1, audio: planar, audioSampleRate: 48000 };
+      const desc = {
+        trackId,
+        startPpq: 0,
+        loopLengthPpq: 1,
+        audio: planar,
+        audioSampleRate: 48000,
+      };
       let caught: unknown;
       try {
         project.addLoopRecordingTakes({

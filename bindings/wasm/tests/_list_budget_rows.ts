@@ -413,7 +413,9 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
     callable: 'Project.addClip',
     message: `Project.addClip: ${overBudget('channels')}`,
     run: (api, l) =>
-      withProject(api, (p) => p.addClip({ trackId: 1, channels: l, sampleRate: 48000 } as never)),
+      withProject(api, (p) =>
+        p.addClip({ trackId: 1, startPpq: 0, channels: l, sampleRate: 48000 } as never),
+      ),
   },
   {
     callable: 'Project.setSourceAudio',

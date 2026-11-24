@@ -86,6 +86,15 @@ describe('effects notes surface', () => {
     await init();
   });
 
+  it('requires one note move target and accepts an explicit zero', () => {
+    const region = { samples, sampleRate, onsetSample: 2000, offsetSample: 6000 };
+    const missing = () => noteMove(region);
+    expect(missing).toThrow(TypeError);
+    expect(missing).toThrow('give targetOnsetSample or targetOnsetSec');
+    const placed = noteMove({ ...region, targetOnsetSample: 0 });
+    expect(placed[1000]).toBeCloseTo(samples[1000] + samples[3000], 6);
+  });
+
   const { f0Hz, voiced, frameRate } = track();
   const spectralOps = [{ startSec: 0.05, endSec: 0.2, lowHz: 100, highHz: 2000, gainDb: -6 }];
 
