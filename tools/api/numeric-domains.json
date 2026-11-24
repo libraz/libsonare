@@ -1861,6 +1861,17 @@
     },
     {
       "entry": "engine_set_markers",
+      "param": "markers[].key_fifths",
+      "kind": "integer",
+      "lo": -7,
+      "hi": 7,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_markers",
       "param": "markers[].ppq",
       "kind": "real",
       "lo": 0,

@@ -11,6 +11,7 @@
 #include "c_api/numeric_domain_row.h"
 #include "c_api/playback_domains.h"
 #include "c_api/ppq_domains.h"
+#include "c_api/project_input_domains.h"
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "editing/note_model/note_target.h"
@@ -102,6 +103,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_set_loop", "end_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_loop", "start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_markers", "markers[].id", kEngineMarkerIdDomain, nullptr},
+    {"engine_set_markers", "markers[].key_fifths", kMarkerKeyFifthsDomain, nullptr},
     {"engine_set_markers", "markers[].ppq", kPublicPpqDomain, nullptr},
     {"engine_set_master_strip_eq_band_json", "band_index", kEngineBandIndexDomain, nullptr},
     {"engine_set_midi_clips", "clips[].events[].group", kEngineUmpGroupDomain, nullptr},

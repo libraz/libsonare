@@ -380,6 +380,31 @@ TEST_CASE("engine marker refusals", "[c_api][engine_refusal]") {
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("engine key signature markers require fifths from minus seven to seven",
+          "[domain-marker]") {
+  SonareEngine* engine = make_engine();
+
+  SonareEngineMarker marker{};
+  marker.id = 1;
+  marker.kind = SONARE_MARKER_KIND_KEY_SIGNATURE;
+  marker.key_fifths = 7;
+  REQUIRE(sonare_engine_set_markers(engine, &marker, 1) == SONARE_OK);
+  for (const int8_t fifths : {-8, 8}) {
+    CAPTURE(fifths);
+    marker.key_fifths = fifths;
+    marker.ppq = 2.0;
+    CHECK(sonare_engine_set_markers(engine, &marker, 1) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "markers[0].key_fifths must be an integer in [-7, 7]");
+    SonareEngineMarker stored{};
+    REQUIRE(sonare_engine_marker(engine, 1, &stored) == SONARE_OK);
+    CHECK(stored.key_fifths == 7);
+    CHECK(stored.ppq == 0.0);
+  }
+  marker.key_fifths = -7;
+  REQUIRE(sonare_engine_set_markers(engine, &marker, 1) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("engine marker key fields are refused when the kind does not read them",
           "[domain-marker]") {
   SonareEngine* engine = make_engine();

@@ -219,13 +219,8 @@ void check_marker(const SonareProjectMarker* marker) {
     check::refuse("marker.kind", sonare::util::refusal::kDeclaredValuePredicate);
   }
   check_assignable_entity_id(marker->id, "marker.id");
-  // Key signatures encode the SMF `sf` byte, which is constrained to -7..7
-  // (7 flats to 7 sharps), so an out-of-range value would not serialize to a conformant SMF.
-  if (sonare_c_detail::marker_kind_reads_key_signature_fields(marker->kind)) {
-    check::integer_within(marker->key_fifths, kMarkerKeyFifthsDomain, "marker.key_fifths");
-  }
-  sonare_c_detail::check_inactive_marker_key_signature_fields(marker->kind, marker->key_fifths,
-                                                              marker->key_minor, "marker.");
+  sonare_c_detail::check_marker_key_signature_fields(marker->kind, marker->key_fifths,
+                                                     marker->key_minor, "marker.");
 }
 
 }  // namespace

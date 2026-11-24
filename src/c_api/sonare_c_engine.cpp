@@ -614,8 +614,8 @@ SonareError sonare_engine_set_markers(SonareEngine* engine, const SonareEngineMa
       util::check::refuse((prefix + "id").c_str(), "must be unique across markers");
     }
     util::check::within(markers[i].ppq, kPublicPpqDomain, (prefix + "ppq").c_str());
-    sonare_c_detail::check_inactive_marker_key_signature_fields(
-        markers[i].kind, markers[i].key_fifths, markers[i].key_minor, prefix);
+    sonare_c_detail::check_marker_key_signature_fields(markers[i].kind, markers[i].key_fifths,
+                                                       markers[i].key_minor, prefix);
     staged_ids.push_back(markers[i].id);
     staged_strings.push_back(fixed_text(markers[i].name, sizeof(markers[i].name)));
     transport::Marker prepared_marker;

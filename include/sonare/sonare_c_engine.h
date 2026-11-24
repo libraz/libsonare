@@ -302,8 +302,8 @@ SonareError sonare_engine_set_automation_lane(SonareEngine* engine, uint32_t par
 SonareError sonare_engine_automation_lane_count(SonareEngine* engine, size_t* out_count);
 /// @brief Atomically replaces all realtime-engine markers.
 /// @details Marker ids must be positive and unique, and PPQ positions must be
-///   finite and non-negative. Key-signature markers read @c key_fifths and
-///   @c key_minor; a nonzero value in either field on another kind returns
+///   finite and non-negative. Key-signature markers read @c key_fifths, in
+///   [-7, 7], and @c key_minor; a nonzero value in either field on another kind returns
 ///   @c SONARE_ERROR_INVALID_PARAMETER. An empty list clears the marker map. Any
 ///   invalid entry rejects the whole list and leaves the previous markers
 ///   byte-for-byte unchanged.

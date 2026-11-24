@@ -113,6 +113,7 @@ DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {
     ("RealtimeEngine.set_graph", "num_channels"): (1, 2147483647, None),
     ("RealtimeEngine.set_graph", "parameter_bindings[].param_id"): (1, 4294967295, None),
     ("RealtimeEngine.set_markers", "markers[].id"): (1, 4294967295, None),
+    ("RealtimeEngine.set_markers", "markers[].key_fifths"): (-7, 7, None),
     ("RealtimeEngine.set_metronome", "click_samples"): (1, 384000, None),
     ("RealtimeEngine.set_midi_clips", "clips[].events[].group"): (0, 15, None),
     ("RealtimeEngine.set_midi_clips", "clips[].fade_in_samples"): (0, None, None),

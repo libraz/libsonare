@@ -1119,11 +1119,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SONARE_SYNTH_ENGINE_MODE_COUNT` | The synth-engine mode count changes from 18 to 19. Size tables from the current header constant and account for the additional mode. |
 | `SonareEngineBounceResult` | Appends quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the count only when present. |
 | `SonareEngineCaptureStatus` | the struct removes overflow_count and retains dropped_frames as the sole loss tally; recompile C consumers and update the layout mirror |
+| `SonareEngineMarker.key_fifths` | a nonzero key_fifths on a marker whose kind is not key signature is refused by sonare_engine_set_markers with SONARE_ERROR_INVALID_PARAMETER (1.x stored it); leave it 0 on other kinds |
+| `SonareEngineMarker.key_minor` | a nonzero key_minor on a marker whose kind is not key signature is refused by sonare_engine_set_markers with SONARE_ERROR_INVALID_PARAMETER (1.x stored it); leave it 0 on other kinds |
 | `SonareTransportState.bar_count` | `SonareTransportState.bar_index` |
 | `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_engine_external_midi_dropped_count` | takes const SonareEngine* because it only reads engine state |
-| `sonare_engine_set_markers` | a nonzero key_fifths or key_minor is refused when marker.kind does not read key-signature fields |
+| `sonare_engine_set_markers` | a key-signature marker with key_fifths outside [-7, 7] returns SONARE_ERROR_INVALID_PARAMETER and leaves the previous markers unchanged (1.x stored it) |
 | `sonare_engine_set_midi_clips` | a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period) |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_midi_param_to_cc` | a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it) |
@@ -1213,7 +1215,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_remove_automation_lane(target_param_id)` | `sonare_project_remove_automation_lane(lane_id)` |
 | `sonare_project_remove_automation_lane` | takes the lane_id returned by add or the lane reader |
 | `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
-| `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id; nonzero key_fifths or key_minor on other kinds is refused with SONARE_ERROR_INVALID_PARAMETER |
+| `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id |
 | `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division |
 | `sonare_project_snap_to_grid` | takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init |
 
@@ -1353,6 +1355,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareMidiCcBinding.reserved` | the old uint16_t is split into uint8_t consume followed by uint8_t reserved. Set reserved to zero and set consume to one to suppress live forwarding after automation. |
 | `SonareMidiEventPod` | Appends const uint8_t* sysex and size_t sysex_size. Recompile and extend layout mirrors. Set both to NULL/0 for channel-voice events, or supply framed SysEx bytes and their size. The project event list owns its returned bytes until sonare_free_midi_event_list. |
+| `SonareProjectMarker.key_fifths` | a nonzero key_fifths on a marker whose kind is not key signature is refused by sonare_project_set_marker with SONARE_ERROR_INVALID_PARAMETER (1.x stored it through sonare_project_set_marker_ex); leave it 0 on other kinds |
+| `SonareProjectMarker.key_minor` | a nonzero key_minor on a marker whose kind is not key signature is refused by sonare_project_set_marker with SONARE_ERROR_INVALID_PARAMETER (1.x stored it through sonare_project_set_marker_ex); leave it 0 on other kinds |
 | `SonareSf2InstrumentBinding` | adds const char* sound_font_uri at the tail. Set it to NULL for the default font. Recompile code passing an array of these records. |
 | `sonare_project_set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now returns SONARE_ERROR_INVALID_PARAMETER. Use sonare_project_set_max_history_bytes(project, 0) to disable undo retention. |
 | `sonare_vocal_draft_apply` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale generation reports its conflict with the field expected_generation, where 1.x reported generation, with the same code, reason, message and values |

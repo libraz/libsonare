@@ -585,6 +585,10 @@ SonareError probe_engine_set_markers(const std::string& param, double value) {
   SonareEngineMarker marker{};
   marker.id = 1;
   if (is_param(param, "markers[].id")) marker.id = as_u32(value);
+  if (is_param(param, "markers[].key_fifths")) {
+    marker.kind = SONARE_MARKER_KIND_KEY_SIGNATURE;
+    marker.key_fifths = static_cast<int8_t>(value);
+  }
   if (is_param(param, "markers[].ppq")) marker.ppq = value;
   std::strcpy(marker.name, "m");
   return sonare_engine_set_markers(engine.get(), &marker, 1);
