@@ -76,7 +76,7 @@ _CHANNELS = (
         (["mastering", _UNREADABLE], "mastering needs --preset or --chain-config"),
         (
             ["mastering-streaming", _UNREADABLE, "--platforms", '[{"name":""}]'],
-            "argument --platforms: platforms[0].target_lufs must be given",
+            "--platforms [0].target_lufs must be given",
         ),
     ],
 )

@@ -23,6 +23,9 @@ from ._cli_common import (
     _atomic_wav_writer,
     _atomic_write_bytes,
     _audio_array,
+    _cli_key_refusal,
+    _cli_key_subjects,
+    _cli_unknown_key,
     _cli_token,
     _fmt_optional,
     _json_key_to_snake_case,
@@ -31,6 +34,7 @@ from ._cli_common import (
     _note_output_fit,
     _OutputFit,
     _parse_kv_params,
+    _params_keys,
     _PcmQuantizer,
     _resample,
     _strict_json_dumps,
@@ -45,13 +49,14 @@ from ._cli_options import (
     _finite_float,
     _library_catalog,
     _NumericTextError,
+    _option_supplied,
     _read_number_text,
     _tempo_bpm,
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._errors import ErrorCode
 from ._result_records import _result_to_json_dict
-from ._runtime import _get_lib, _to_c_size_t
+from ._runtime import _get_lib, _render_as_given, _to_c_size_t
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -89,23 +94,27 @@ def _mix_assistant_value_refusal(key: str, value: float) -> str | None:
     params, param_count = _mastering_params({key: value})
     result = ctypes.c_char_p()
     # No tracks: the call stops after the parameter reader, at no particular rate.
-    rc = lib.sonare_mixing_assistant_suggest(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        0,
-        _MIN_GENERATOR_SAMPLE_RATE,
-        params,
-        _to_c_size_t(param_count, "param_count"),
-        ctypes.byref(result),
-    )
-    if result.value is not None:
-        lib.sonare_free_string(result)
-    if rc != ErrorCode.INVALID_PARAMETER:
-        return None
+    with _cli_key_subjects("--params", (key,)):
+        rc = lib.sonare_mixing_assistant_suggest(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+            _MIN_GENERATOR_SAMPLE_RATE,
+            params,
+            _to_c_size_t(param_count, "param_count"),
+            ctypes.byref(result),
+        )
+        if result.value is not None:
+            lib.sonare_free_string(result)
+        if rc != ErrorCode.INVALID_PARAMETER:
+            return None
+        rendered = _render_as_given(lib, "params", None)
+    if rendered is not None:
+        return rendered[0]
     return (lib.sonare_last_error_message() or b"").decode("utf-8")
 
 
@@ -152,9 +161,9 @@ def suggest_mix_refusal(args: argparse.Namespace) -> str | None:
         try:
             value = _read_number_text(text)
         except _NumericTextError:
-            return f"invalid numeric value for parameter '{key}'"
+            return _cli_key_refusal("--params", key, "must be a finite number")
         if key not in known:
-            return f"unknown key {key} (expected {', '.join(known)})"
+            return _cli_unknown_key("--params", key, known)
         if value_refusal is None:
             value_refusal = _mix_assistant_value_refusal(key, value)
     # The dedicated option and `--params tempoBpm=` reach one field, so naming both
@@ -246,7 +255,13 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
         if tempo_bpm is not None:
             options["tempo_bpm"] = tempo_bpm
     tracks += _mix_assistant_tracks(args.input[len(tracks) :])
-    result = mixing_assistant_suggest(tracks, sample_rate=args.sample_rate, **options)
+    keys = _params_keys(args.params) if args.params else ()
+    with _cli_key_subjects(
+        "--params",
+        keys,
+        extra={"sample_rate": "--sample-rate"} if _option_supplied(args, "sample-rate") else None,
+    ):
+        result = mixing_assistant_suggest(tracks, sample_rate=args.sample_rate, **options)
     if args.scene_out:
         # Written from the result already in hand rather than through a second
         # suggestion, which would re-run an STFT per track and every pairwise

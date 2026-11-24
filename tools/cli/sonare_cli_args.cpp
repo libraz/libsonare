@@ -13,6 +13,7 @@
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli_registry.h"
 #include "util/exception.h"
+#include "util/json_schema.h"
 #include "util/refusal_predicates.h"
 
 int cli_exit_code_for_error(sonare::ErrorCode error) noexcept {
@@ -122,6 +123,21 @@ long long read_integer_text(const std::string& subject, const std::string& value
 
 }  // namespace
 
+std::string cli_bag_subject(std::string_view flag, std::string_view key,
+                            std::string_view internal_root) {
+  if (!internal_root.empty()) {
+    const std::string prefix = std::string(internal_root) + ".";
+    if (key.substr(0, prefix.size()) == prefix) {
+      key.remove_prefix(prefix.size());
+    } else if (key.size() > internal_root.size() &&
+               key.substr(0, internal_root.size()) == internal_root &&
+               key[internal_root.size()] == '[') {
+      key.remove_prefix(internal_root.size());
+    }
+  }
+  return key.empty() ? std::string(flag) : std::string(flag) + " " + std::string(key);
+}
+
 std::string option_subject(const std::string& option) { return "argument --" + option + ":"; }
 
 double parse_double_text(const std::string& subject, const std::string& value) {
@@ -204,14 +220,16 @@ std::string voice_set_refusal(const std::vector<std::string>& assignments) {
 
 // The flag literals the parser's own `--flag=false` form accepts, so one spelling does not mean
 // two things depending on where it is written.
-static bool parse_edit_flag(const std::string& field, const std::string& value) {
+static bool parse_edit_flag(const std::string& subject, const std::string& value) {
   std::string lowered = value;
   std::transform(lowered.begin(), lowered.end(), lowered.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") return true;
   if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") return false;
-  throw std::invalid_argument("argument --edit: " + field +
-                              " must be one of true, 1, yes, on, false, 0, no, off");
+  throw sonare::SonareParameterRefusal::predicate(
+            sonare::ErrorCode::InvalidParameter, subject,
+            "must be one of true, 1, yes, on, false, 0, no, off")
+      .as_caller_spelled();
 }
 
 // One --edit occurrence is one NOTE.FIELD=VALUE assignment: the dot path and the single
@@ -228,26 +246,28 @@ PolyphonicEdit parse_polyphonic_edit(const std::string& assignment) {
     throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
   }
   PolyphonicEdit edit;
-  edit.note = parse_int_text("argument --edit: NOTE", path.substr(0, dot));
+  edit.note = parse_int_text(cli_bag_subject("--edit", path), path.substr(0, dot));
   edit.field = path.substr(dot + 1);
   const std::string& field = edit.field;
+  const std::string field_subject = cli_bag_subject("--edit", path);
   if (field == "time_offset_samples") {
     // An int is the whole reachable range: the chain refuses audio longer than an int can
     // index, so a wider offset only ever moves a note off the end.
-    edit.integer = parse_int_text("argument --edit: time_offset_samples", value);
+    edit.integer = parse_int_text(field_subject, value);
   } else if (field == "muted") {
-    edit.flag = parse_edit_flag(field, value);
+    edit.flag = parse_edit_flag(field_subject, value);
   } else if (field == "pitch_shift_semitones" || field == "gain_db" ||
              field == "time_stretch_ratio" || field == "formant_shift_semitones" ||
              field == "vibrato_depth_change" || field == "drift_change") {
-    edit.number = parse_float_text("argument --edit: " + field, value);
+    edit.number = parse_float_text(field_subject, value);
   } else {
-    // The amplitude envelope is the one edit field missing: it is a curve, and nothing on a
-    // command line states one.
-    throw std::invalid_argument(
-        "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
-        "time_offset_samples, time_stretch_ratio, formant_shift_semitones, "
-        "vibrato_depth_change, drift_change, muted");
+    const std::vector<std::string> accepted = {
+        "pitch_shift_semitones", "gain_db", "time_offset_samples", "time_stretch_ratio",
+        "formant_shift_semitones", "vibrato_depth_change", "drift_change", "muted"};
+    throw sonare::SonareParameterRefusal::unknown(
+              sonare::ErrorCode::InvalidParameter, field_subject,
+              sonare::util::json::schema::expected_keys(accepted))
+        .as_caller_spelled();
   }
   return edit;
 }
@@ -255,6 +275,8 @@ PolyphonicEdit parse_polyphonic_edit(const std::string& assignment) {
 std::string polyphonic_edit_refusal(const std::vector<std::string>& assignments) {
   try {
     for (const auto& assignment : assignments) parse_polyphonic_edit(assignment);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    return refusal.what();
   } catch (const std::invalid_argument& refusal) {
     return refusal.what();
   }

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
 import re
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from typing import Any, cast, get_args
 
 import numpy as np
@@ -154,7 +155,7 @@ from ._ffi import (
     SONARE_ERROR_STALE_RESULT,
     resolved_library_path,
 )
-from ._runtime import SonareError
+from ._runtime import SonareError, _cli_refusal_subjects
 from .types import KeyMode, KeyProfile, PitchClass, SectionType
 
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -809,6 +810,53 @@ def _array_stats(vals: list[float], *, with_count: bool = True) -> dict[str, flo
 _PARAMS_GRAMMAR_REFUSAL = "argument --params: must be a comma-separated list of key=value entries"
 
 
+def _cli_key_subject(flag: str, key: str) -> str:
+    """Name a key exactly as the caller supplied it to a CLI flag."""
+    return f"{flag} {key}"
+
+
+def _cli_key_refusal(flag: str, key: str, detail: str) -> str:
+    """Render one CLI refusal whose cause belongs to a key in a flag's value."""
+    return f"{_cli_key_subject(flag, key)} {detail}"
+
+
+def _cli_expected_keys(expected: Iterable[str]) -> str:
+    """Format expected key names like the shared C schema renderer."""
+    collapsed = {re.sub(r"(?<=[A-Za-z])\d+(?=\.)", "{i}", key) for key in expected}
+    return ", ".join(sorted(collapsed))
+
+
+def _cli_unknown_key(flag: str, key: str, expected: Iterable[str]) -> str:
+    """Render an unknown-key refusal with the one sorted vocabulary used by both CLIs."""
+    return f"unknown key {_cli_key_subject(flag, key)} (expected {_cli_expected_keys(expected)})"
+
+
+@contextlib.contextmanager
+def _cli_key_subjects(
+    flag: str,
+    keys: Iterable[str],
+    *,
+    roots: tuple[str, ...] = ("params", "config", "overrides", "document"),
+    extra: dict[str, str] | None = None,
+) -> Iterator[None]:
+    """Respell structured native subjects for keys supplied through one CLI flag."""
+    mapping = dict(extra or {})
+    for key in keys:
+        spelling = _cli_key_subject(flag, key)
+        canonical = _json_key_to_snake_case(key)
+        mapping[key] = spelling
+        for root in roots:
+            mapping[f"{root}.{key}"] = spelling
+        # Several surface spellings can share one C subject. Prefer a literal
+        # C-style key when both it and an alias appear in the same bag.
+        if canonical == key or canonical not in mapping:
+            mapping[canonical] = spelling
+            for root in roots:
+                mapping[f"{root}.{canonical}"] = spelling
+    with _cli_refusal_subjects(mapping):
+        yield
+
+
 def _params_entries(value: str) -> list[str]:
     """Split ``--params`` text into its entries, as the native CLI's line reader does.
 
@@ -817,6 +865,15 @@ def _params_entries(value: str) -> list[str]:
     """
     entries = value.split(",")
     return entries[:-1] if entries[-1] == "" else entries
+
+
+def _numeric_params_refusal(value: str) -> str | None:
+    """The first numeric-only bag refusal, or None when every entry parses."""
+    try:
+        _parse_kv_params(value)
+    except ValueError as error:
+        return str(error)
+    return None
 
 
 def _params_grammar_refusal(value: str) -> str | None:
@@ -839,19 +896,21 @@ def _parse_kv_params(value: str, *, names: bool = False) -> dict[str, Any]:
     With ``names`` a value that is not a number is kept as text, for the library to
     resolve as the ``choices`` name of an enum-valued key (``noiseEstimator=mcra``).
     """
+    from ._cli_options import _NumericTextError, _read_number_text
+
     params: dict[str, Any] = {}
     if (refusal := _params_grammar_refusal(value)) is not None:
         raise ValueError(refusal)
     for item in _params_entries(value):
-        item = item.strip()
-        key, raw = item.split("=", 1)
-        text = raw.strip()
+        key, text = (part.strip() for part in item.split("=", 1))
         try:
-            params[key.strip()] = float(text)
-        except ValueError:
+            params[key] = _read_number_text(text, float32=False)
+        except _NumericTextError:
             if not names:
-                raise
-            params[key.strip()] = text
+                raise ValueError(
+                    _cli_key_refusal("--params", key, "must be a finite number")
+                ) from None
+            params[key] = text
     return params
 
 

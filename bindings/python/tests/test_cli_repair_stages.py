@@ -101,9 +101,10 @@ def test_repair_stages_takes_a_stage_name_in_any_letter_case(tmp_path) -> None:
         (["--stages", ""], "--stages has an empty entry"),
         (["--stages", "declip", "--preset", "speech"], "--stages cannot be combined with --preset"),
         (["--stages", "declip", "--explain"], "--explain cannot be combined with --stages"),
+        (["--params", "eq.enabled=1"], "--params eq.enabled must be a repair.* field"),
         (
             ["--stages", "dehum", "--params", "repair.declip.lpcOrder=24"],
-            "repair.declip.lpcOrder names a stage --stages does not run",
+            "--params repair.declip.lpcOrder names a stage --stages does not run",
         ),
     ],
 )

@@ -13901,7 +13901,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | 1.x | 2.0.0 |
 |---|---|
 | `mastering --ceiling-db` | `mastering --ceiling-dbtp` |
-| `mastering-streaming --platforms` | each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported as "argument --platforms: <reason>" before the input is read, while a --platforms-file document is still refused after it (exit 3) |
+| `mastering-streaming --platforms` | each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported before the input is read, with a refused field named --platforms [INDEX].KEY, while a --platforms-file document is still refused after it (exit 3) |
 | `mastering-suggest --ceiling-db` | `mastering-suggest --ceiling-dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
@@ -13966,14 +13966,15 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `mastering-chain` (python CLI only) | removed: use mastering --chain-config with a version-2 document, {"version":2,"params":<the old config>} |
 | `mastering-pair-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mastering-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `mastering-processor --params` | a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key |
-| `mastering-suggest --params` | unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order |
+| `mastering-processor --params` | a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY |
+| `mastering-profile --params` | a value that cannot be read as a finite number now exits 2 before input is read instead of exiting 3 after decoding. This also applies to the numeric --params bags of eq, mastering-pair-processor, mastering-pair-analyze and mastering-stereo-analyze. The refusal names the supplied key as --params KEY |
+| `mastering-suggest --params` | unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order. A refusal names the supplied key as --params KEY |
 | `mix-strip --pan` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mix-strip --width` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `repair --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `repair --output` | leaving it out without --detect, or giving it with --detect, is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `suggest-mix --input` | an entry with an empty track id or an empty path, and a call with no entry, are refused as a usage error (exit 2) before any input is read |
-| `suggest-mix --params` | malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order |
+| `suggest-mix --params` | malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order. A refusal names the supplied key as --params KEY |
 
 #### Other individual changes
 

@@ -24,6 +24,7 @@ from typing import Any, NoReturn, cast
 from ._cli_common import (
     EXIT_USAGE,
     _cli_mode_names,
+    _numeric_params_refusal,
     _params_grammar_refusal,
     _parse_key_profile,
     _parse_meter_candidates,
@@ -63,13 +64,13 @@ class _NumericTextError(ValueError):
     """A numeric value refused by requirement alone ("must be a number"), never echoing the text."""
 
 
-def _read_number_text(value: str) -> float:
-    """Read ``value`` as a finite number a 32-bit float holds, as the native reader does."""
+def _read_number_text(value: str, *, float32: bool = True) -> float:
+    """Read a finite decimal, applying the float32 transport limit when requested."""
     if not _NUMBER_TEXT.fullmatch(value):
         raise _NumericTextError("must be a number")
     parsed = float(value)
     # The library's own bound for a float argument: finite, and no larger than FLT_MAX.
-    if not math.isfinite(parsed) or abs(parsed) > _FLOAT32_MAX:
+    if not math.isfinite(parsed) or (float32 and abs(parsed) > _FLOAT32_MAX):
         raise _NumericTextError("must be finite")
     return parsed
 
@@ -745,8 +746,10 @@ def _validate_mastering_arguments(
 
 
 def _validate_params_grammar(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    # The entries of a --params text are command-line text, so they are refused before the read.
-    refusal = _params_grammar_refusal(getattr(args, "params", "") or "")
+    # The entries of a numeric-only --params text are argv values, so their syntax is refused
+    # before the input is read.
+    raw = getattr(args, "params", "") or ""
+    refusal = _params_grammar_refusal(raw) or _numeric_params_refusal(raw)
     if refusal is not None:
         parser.error(refusal)
 
@@ -765,6 +768,10 @@ def _validate_eq_params(args: argparse.Namespace, parser: argparse.ArgumentParse
     refusal = _eq_params_refusal(args)
     if refusal is not None:
         parser.error(refusal)
+    if _option_supplied(args, "params"):
+        refusal = _numeric_params_refusal(args.params or "")
+        if refusal is not None:
+            parser.error(refusal)
 
 
 def _validate_assistant_params(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:

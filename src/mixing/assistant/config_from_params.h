@@ -75,12 +75,15 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
       const auto tempo = static_cast<float>(value);
       // Zero is the only sentinel for the transport fallback; anything else is
       // taken as a real tempo and is refused unless it reads as one.
-      SONARE_CHECK_MSG(
-          tempo == 0.0f || (tempo >= kMinAssistantTempoBpm && tempo <= kMaxAssistantTempoBpm),
-          ErrorCode::InvalidParameter,
-          key + " must be 0 or a tempo between " +
-              std::to_string(static_cast<int>(kMinAssistantTempoBpm)) + " and " +
-              std::to_string(static_cast<int>(kMaxAssistantTempoBpm)) + " BPM");
+      if (!(tempo == 0.0f ||
+            (tempo >= kMinAssistantTempoBpm && tempo <= kMaxAssistantTempoBpm))) {
+        throw SonareParameterRefusal::predicate(
+                  ErrorCode::InvalidParameter, key,
+                  "must be 0 or a tempo between " +
+                      std::to_string(static_cast<int>(kMinAssistantTempoBpm)) + " and " +
+                      std::to_string(static_cast<int>(kMaxAssistantTempoBpm)) + " BPM")
+            .as_caller_spelled();
+      }
       config.tempo_bpm = tempo;
     } else if (key == "enableStructure") {
       config.enable_structure = value != 0.0;

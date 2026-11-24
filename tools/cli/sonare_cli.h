@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
@@ -107,6 +108,7 @@
 #include "util/json.h"
 #include "util/padding.h"
 #include "util/peak.h"
+#include "util/exception.h"
 #include "util/vector_normalize.h"
 
 using namespace sonare;
@@ -138,7 +140,34 @@ std::string catalog_token(const std::string& value, const std::vector<std::strin
 std::string read_plain_text_file(const std::string& path);
 /// @brief Throws a failed C entry's refusal as the library's coded error; a non-null @p root is
 ///        dropped from the front of each refusal subject.
-[[noreturn]] void throw_c_failure(SonareError err, const char* root);
+[[noreturn]] void throw_c_failure(SonareError err, const char* root,
+                                 const char* bag_flag = nullptr);
+/// Runs one library call and respells only structured subjects matching fields supplied in the
+/// named CLI bag; unrelated subjects retain their library spelling.
+template <typename Parameters, typename Function>
+decltype(auto) with_cli_bag_refusals(std::string_view flag, const Parameters& parameters,
+                                     Function&& function) {
+  try {
+    return std::forward<Function>(function)();
+  } catch (const SonareParameterRefusal& refusal) {
+    throw refusal.respelled(
+        refusal.code(),
+        [&](const std::string& subject) {
+          std::string key = subject;
+          constexpr std::string_view root = "params.";
+          if (key.compare(0, root.size(), root) == 0) key.erase(0, root.size());
+          for (const auto& parameter : parameters) {
+            if (parameter.key == key ||
+                (key == "n_fft" && parameter.key == "nFft") ||
+                (key == "hop_length" && parameter.key == "hopLength")) {
+              return cli_bag_subject(flag, parameter.key);
+            }
+          }
+          return subject;
+        },
+        true);
+  }
+}
 /// @brief Warns that a @p channels-channel input reaches the command as its mono downmix.
 void warn_downmixed_input(int channels);
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);

@@ -27,6 +27,53 @@ std::string params_grammar_refusal(const std::string& text) {
   return {};
 }
 
+std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
+                                                          bool resolve_names,
+                                                          const std::string& processor) {
+  if (const std::string refusal = params_grammar_refusal(text); !refusal.empty()) {
+    throw std::invalid_argument(refusal);
+  }
+  std::vector<mastering::api::Param> params;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    const auto eq = item.find('=');
+    // Locale-independent parse: std::stod follows LC_NUMERIC, which DAW plugin
+    // hosts sometimes set to e.g. de_DE (comma as decimal separator). Imbue the
+    // classic locale so "1.5" always parses as 1.5 regardless of host locale.
+    // Matches the policy in util/json.h.
+    const std::string value_text = item.substr(eq + 1);
+    std::istringstream ss(value_text);
+    ss.imbue(std::locale::classic());
+    double value = 0.0;
+    ss >> value;
+    if (!ss || ss.peek() != std::char_traits<char>::eof()) {
+      const std::string key = item.substr(0, eq);
+      // An enum-valued key may be given by its name; the resolver also refuses an unknown one.
+      if (resolve_names) {
+        try {
+          if (const auto named = mastering::api::mastering_enum_value(processor, key, value_text)) {
+            params.push_back({key, *named});
+            continue;
+          }
+        } catch (const SonareParameterRefusal& refusal) {
+          throw refusal.respelled(
+              refusal.code(), [&](const std::string& subject) {
+                return cli_bag_subject("--params", subject);
+              },
+              true);
+        }
+      }
+      throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                              cli_bag_subject("--params", key),
+                                              "must be a finite number")
+          .as_caller_spelled();
+    }
+    params.push_back({item.substr(0, eq), value});
+  }
+  return params;
+}
+
 // Refuses a supplied --params key the named processor does not read.
 //
 // insert_param_names() builds the processor against an empty map and reports
@@ -48,7 +95,13 @@ std::string unknown_processor_params_refusal(const std::string& processor,
     unknown += key;
   }
   if (unknown.empty()) return {};
-  return "unknown --params key for " + processor + ": " + unknown;
+  const auto separator = unknown.find(", ");
+  const std::string key = unknown.substr(0, separator);
+  const std::string expected = sonare::util::json::schema::expected_keys(known);
+  return SonareParameterRefusal::unknown(
+             ErrorCode::InvalidParameter, cli_bag_subject("--params", key), expected)
+      .as_caller_spelled()
+      .what();
 }
 
 namespace {
@@ -81,6 +134,14 @@ std::string chain_params_document(const std::string& text) {
 std::string chain_params_refusal(const std::string& text) {
   try {
     mastering::api::chain_config_from_json(chain_params_document(text));
+  } catch (const SonareParameterRefusal& refusal) {
+    return refusal
+        .respelled(refusal.code(),
+                   [](const std::string& subject) {
+                     return cli_bag_subject("--params", subject, "params");
+                   },
+                   true)
+        .what();
   } catch (const std::exception& error) {
     return error.what();
   }
@@ -92,8 +153,17 @@ std::vector<mastering::api::Param> parse_chain_params(const std::string& text) {
     throw std::invalid_argument(refusal);
   }
   std::vector<mastering::api::Param> out;
-  for (auto& leaf : mastering::api::chain_config_flat_params(chain_params_document(text))) {
-    out.push_back({std::move(leaf.key), leaf.value});
+  try {
+    for (auto& leaf : mastering::api::chain_config_flat_params(chain_params_document(text))) {
+      out.push_back({std::move(leaf.key), leaf.value});
+    }
+  } catch (const SonareParameterRefusal& refusal) {
+    throw refusal
+        .respelled(refusal.code(),
+                   [](const std::string& subject) {
+                     return cli_bag_subject("--params", subject, "params");
+                   },
+                   true);
   }
   return out;
 }
@@ -106,7 +176,23 @@ namespace {
 void reject_non_repair_overrides(const std::vector<mastering::api::Param>& overrides) {
   for (const auto& param : overrides) {
     if (param.key.rfind("repair.", 0) == 0) continue;
-    throw std::invalid_argument("--params key must be a repair.* field: " + param.key);
+    throw SonareParameterRefusal::predicate(
+              ErrorCode::InvalidParameter, cli_bag_subject("--params", param.key),
+              "must be a repair.* field")
+        .as_caller_spelled();
+  }
+}
+
+void reject_non_repair_param_keys(const std::string& text) {
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    const std::string key = item.substr(0, item.find('='));
+    if (key.rfind("repair.", 0) == 0) continue;
+    throw SonareParameterRefusal::predicate(
+              ErrorCode::InvalidParameter, cli_bag_subject("--params", key),
+              "must be a repair.* field")
+        .as_caller_spelled();
   }
 }
 
@@ -127,7 +213,10 @@ void reject_unlisted_stage_overrides(const std::vector<mastering::api::Param>& o
       continue;
     }
     if (std::find(stages.begin(), stages.end(), stage) != stages.end()) continue;
-    throw std::invalid_argument(param.key + " names a stage --stages does not run");
+    throw SonareParameterRefusal::predicate(
+              ErrorCode::InvalidParameter, cli_bag_subject("--params", param.key),
+              "names a stage --stages does not run")
+        .as_caller_spelled();
   }
 }
 
@@ -186,6 +275,11 @@ std::string repair_argument_refusal(const CliArgs& args) {
   try {
     const std::vector<std::string> stages =
         has_stages ? parse_repair_stages(args.get_string("stages")) : std::vector<std::string>{};
+    if (const std::string refusal = params_grammar_refusal(args.get_string("params"));
+        !refusal.empty()) {
+      return refusal;
+    }
+    reject_non_repair_param_keys(args.get_string("params"));
     const auto overrides = parse_chain_params(args.get_string("params"));
     reject_non_repair_overrides(overrides);
     if (const std::string refusal = chain_params_refusal(args.get_string("params"));
@@ -205,19 +299,27 @@ namespace {
 constexpr const char* kStreamingPlatformKeys[] = {"name", "target_lufs", "ceiling_dbtp"};
 
 float streaming_platform_number(const sonare::util::json::Value& entry, const std::string& where,
-                                const char* key) {
+                                const char* key, bool cli_value) {
+  const std::string internal = where + "." + key;
+  const std::string subject = cli_value ? cli_bag_subject("--platforms", internal, "platforms")
+                                        : internal;
   const sonare::util::json::Value& value = *entry.find(key);
-  if (!value.is_number()) throw std::invalid_argument(where + "." + key + " must be a number");
-  // The library's bound for a float field; JSON carries no infinity, so a large value is the case.
+  if (!value.is_number()) {
+    throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, subject,
+                                             "must be a number")
+        .as_caller_spelled();
+  }
+  // JSON carries no infinity, so a large value is the case for the library float bound.
   if (std::fabs(value.as_number()) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw std::invalid_argument(where + "." + key + " must be finite");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject, "must be finite")
+        .as_caller_spelled();
   }
   return value.as_float();
 }
 
 // The texts are the library's own platform-record refusals, keyed by the record's path.
 void check_streaming_platform_keys(const sonare::util::json::Value& entry,
-                                   const std::string& where) {
+                                   const std::string& where, bool cli_value) {
   for (const auto& item : entry.as_object()) {
     const auto& key = item.first;
     if (std::find(std::begin(kStreamingPlatformKeys), std::end(kStreamingPlatformKeys), key) ==
@@ -225,13 +327,21 @@ void check_streaming_platform_keys(const sonare::util::json::Value& entry,
       const std::string expected_list =
           sonare::util::json::schema::expected_keys(std::vector<std::string>(
               std::begin(kStreamingPlatformKeys), std::end(kStreamingPlatformKeys)));
-      throw std::invalid_argument("unknown key " + where + "." + key + " (expected " +
-                                  expected_list + ")");
+      const std::string internal = where + "." + key;
+      const std::string subject =
+          cli_value ? cli_bag_subject("--platforms", internal, "platforms") : internal;
+      throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, subject, expected_list)
+          .as_caller_spelled();
     }
   }
   for (const char* expected : kStreamingPlatformKeys) {
     if (entry.find(expected) == nullptr) {
-      throw std::invalid_argument(where + "." + expected + " must be given");
+      const std::string internal = where + "." + expected;
+      const std::string subject =
+          cli_value ? cli_bag_subject("--platforms", internal, "platforms") : internal;
+      throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                              "must be given")
+          .as_caller_spelled();
     }
   }
 }
@@ -263,16 +373,31 @@ std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& 
     if (!is_record_list()) throw std::invalid_argument("must be a JSON array of platform objects");
     for (const auto& entry : document.as_array()) {
       const std::string where = "platforms[" + std::to_string(platforms.size()) + "]";
-      check_streaming_platform_keys(entry, where);
+      const bool cli_value = subject == "argument --platforms";
+      check_streaming_platform_keys(entry, where, cli_value);
       StreamingPlatformSpec spec;
       const sonare::util::json::Value& name = *entry.find("name");
-      if (!name.is_string()) throw std::invalid_argument(where + ".name must be a string");
-      if (name.as_string().empty()) throw std::invalid_argument(where + ".name must not be empty");
+      const std::string name_subject =
+          cli_value ? cli_bag_subject("--platforms", where + ".name", "platforms")
+                    : where + ".name";
+      if (!name.is_string()) {
+        throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, name_subject,
+                                                 "must be a string")
+            .as_caller_spelled();
+      }
+      if (name.as_string().empty()) {
+        throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, name_subject,
+                                                "must not be empty")
+            .as_caller_spelled();
+      }
       spec.name = name.as_string();
-      spec.target_lufs = streaming_platform_number(entry, where, "target_lufs");
-      spec.ceiling_dbtp = streaming_platform_number(entry, where, "ceiling_dbtp");
+      spec.target_lufs = streaming_platform_number(entry, where, "target_lufs", cli_value);
+      spec.ceiling_dbtp = streaming_platform_number(entry, where, "ceiling_dbtp", cli_value);
       platforms.push_back(std::move(spec));
     }
+  } catch (const SonareParameterRefusal& refusal) {
+    if (subject == "argument --platforms") throw;
+    throw std::invalid_argument(subject + ": " + refusal.what());
   } catch (const std::invalid_argument& error) {
     throw std::invalid_argument(subject + ": " + error.what());
   }
@@ -284,6 +409,8 @@ std::string streaming_platforms_refusal(const CliArgs& args) {
   if (args.has("platforms-file") || !args.has("platforms")) return {};
   try {
     (void)parse_streaming_platforms(args.get_string("platforms", ""), "argument --platforms");
+  } catch (const SonareParameterRefusal& refusal) {
+    return refusal.what();
   } catch (const std::invalid_argument& error) {
     return error.what();
   }

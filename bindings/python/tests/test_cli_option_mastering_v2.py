@@ -778,7 +778,7 @@ def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypat
             ["eq", "input.wav", "--params", "band0.bogusKey=42", "--json"]
         )
     assert exc_info.value.code == 2
-    assert "unknown --params key for eq.equalizer: band0.bogusKey" in capsys.readouterr().err
+    assert "unknown key --params band0.bogusKey (expected " in capsys.readouterr().err
 
     # A key the processor does read still runs.
     good = cli._build_parser().parse_args(
@@ -841,7 +841,7 @@ def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys
         (("--target-lufs", "-12", "--params", "targetLufs=-12"), "set the same value"),
         (("--target-platform", "club", "--params", "targetPlatform=club"), "set the same value"),
         (("--params", "novalue"), "must be a comma-separated list of key=value entries"),
-        (("--params", "notAKey=1"), "unknown key notAKey (expected "),
+        (("--params", "notAKey=1"), "unknown key --params notAKey (expected "),
     ],
 )
 def test_mastering_suggest_refuses_a_contradiction_before_the_read(
@@ -868,18 +868,18 @@ def test_mastering_suggest_refuses_an_unknown_params_key_from_argv(
         cli.main()
     assert exc_info.value.code == 2
     assert (
-        "unknown key target_platform (expected ceilingDbtp, enableRepair, "
+        "unknown key --params target_platform (expected ceilingDbtp, enableRepair, "
         "preferStreamingSafe, preset, speechMonoAmount, targetLufs, targetPlatform)"
     ) in capsys.readouterr().err
 
 
 _SUGGEST_PRESETS = (
-    "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
+    "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
     "broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, "
     "techno, metal, trap, rnb, jazz, kpop, trance, gameOst"
 )
 _SUGGEST_PLATFORMS = (
-    "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, "
+    "--params targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, "
     "cinema, club, cd"
 )
 
@@ -891,9 +891,9 @@ _SUGGEST_PLATFORMS = (
         ("preset=vinyl", _SUGGEST_PRESETS),
         ("targetPlatform=2", _SUGGEST_PLATFORMS),
         ("targetPlatform=typo", _SUGGEST_PLATFORMS),
-        ("targetLufs=invalid", "invalid numeric value for parameter 'targetLufs'"),
-        ("ceilingDbtp=1e100", "invalid numeric value for parameter 'ceilingDbtp'"),
-        ("speechMonoAmount=nan", "invalid numeric value for parameter 'speechMonoAmount'"),
+        ("targetLufs=invalid", "--params targetLufs must be a finite number"),
+        ("ceilingDbtp=1e100", "--params ceilingDbtp must be a finite number"),
+        ("speechMonoAmount=nan", "--params speechMonoAmount must be a finite number"),
     ],
 )
 def test_mastering_suggest_refuses_invalid_param_values_before_read(

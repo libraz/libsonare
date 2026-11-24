@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import array
 import contextlib
+import contextvars
 import ctypes
 import functools
 import inspect
@@ -71,6 +72,21 @@ from ._types_enums import ProjectWarpMode as ProjectWarpMode
 from .types import *  # noqa: F403
 
 _ERROR_REASON_TOKENS = frozenset(get_args(ErrorReason))
+
+# CLI wrappers can respell selected structured subjects without changing the
+# Python API's normal C-to-Python spelling. The scope is one synchronous call.
+_CLI_REFUSAL_SUBJECTS: contextvars.ContextVar[Mapping[str, str] | None] = (
+    contextvars.ContextVar("sonare_cli_refusal_subjects", default=None)
+)
+
+
+@contextlib.contextmanager
+def _cli_refusal_subjects(subjects: Mapping[str, str]) -> Iterator[None]:
+    token = _CLI_REFUSAL_SUBJECTS.set(subjects)
+    try:
+        yield
+    finally:
+        _CLI_REFUSAL_SUBJECTS.reset(token)
 
 
 def _is_error_reason(value: str) -> TypeGuard[ErrorReason]:
@@ -188,9 +204,15 @@ def _render_as_given(
             head, dot, rest = subject.partition(".")
             if dot and head == root:
                 subject = rest
+        cli_subjects = _CLI_REFUSAL_SUBJECTS.get()
+        cli_subject = (
+            (cli_subjects.get(recorded) or cli_subjects.get(subject)) if cli_subjects else None
+        )
         given = respelled.get(subject) if respelled else None
         scale = 1.0
-        if given is not None:
+        if cli_subject is not None:
+            subject = cli_subject
+        elif given is not None:
             subject = given.name
             scale = 1.0 if given.scale is None else given.scale
         elif document_root is not None:

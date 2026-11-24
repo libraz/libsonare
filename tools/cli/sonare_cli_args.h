@@ -169,6 +169,10 @@ class CliUsageError final : public std::invalid_argument {
   explicit CliUsageError(const std::string& message) : std::invalid_argument(message) {}
 };
 
+/// Spells a structured field read through a named CLI value bag. @p internal_root is an optional
+/// C/schema root to remove before prefixing the user's flag and key.
+std::string cli_bag_subject(std::string_view flag, std::string_view key,
+                            std::string_view internal_root = {});
 /// "argument --<option>:", the subject every refusal of an option's value starts with.
 std::string option_subject(const std::string& option);
 /// The CLI's one numeric reader. Every refusal reads "<subject> must be a number",

@@ -136,7 +136,10 @@ double read_assistant_number(const std::string& key, const std::string& text) {
   } catch (const std::invalid_argument&) {
     // Both assistants use the same refusal for a value the numeric transport cannot read.
   }
-  throw std::invalid_argument("invalid numeric value for parameter '" + key + "'");
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                          cli_bag_subject("--params", key),
+                                          "must be a finite number")
+      .as_caller_spelled();
 }
 
 }  // namespace
@@ -181,6 +184,12 @@ std::string mix_assistant_value_refusal(const std::string& key, double value) {
   try {
     const mastering::api::Param param{key, value};
     mixing::assistant::mix_assistant_config_from_params(&param, 1);
+  } catch (const SonareParameterRefusal& refusal) {
+    return refusal
+        .respelled(refusal.code(),
+                   [&](const std::string& subject) { return cli_bag_subject("--params", subject); },
+                   true)
+        .what();
   } catch (const SonareException& refusal) {
     return refusal.what();
   }
@@ -213,6 +222,8 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
     double value;
     try {
       value = read_assistant_number(key, item.substr(eq + 1));
+    } catch (const SonareParameterRefusal& refusal) {
+      return refusal.what();
     } catch (const std::invalid_argument& refusal) {
       return refusal.what();
     }
@@ -224,6 +235,14 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
         mastering::assistant::refuse_unknown_param(
             key, std::vector<std::string>(kAssistantParamKeys.begin(), kAssistantParamKeys.end()));
       }
+    } catch (const SonareParameterRefusal& refusal) {
+      return refusal
+          .respelled(refusal.code(),
+                     [&](const std::string& subject) {
+                       return cli_bag_subject("--params", subject);
+                     },
+                     true)
+          .what();
     } catch (const std::exception& refusal) {
       return refusal.what();
     }
@@ -232,7 +251,8 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
   }
   // Naming it twice is a contradiction rather than a precedence question.
   if (args.has("tempo-bpm") && tempo_in_params) {
-    return "--tempo-bpm and --params tempoBpm= set the same value";
+    return std::string("--tempo-bpm and ") + cli_bag_subject("--params", "tempoBpm") +
+           "= set the same value";
   }
   return value_refusal;
 }
@@ -287,7 +307,9 @@ void validate_assistant_param_value(const std::string& key, const std::string& v
     message += separator + token;
     separator = ", ";
   }
-  throw std::invalid_argument(message);
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                          cli_bag_subject("--params", key), message.substr(key.size() + 1))
+      .as_caller_spelled();
 }
 
 }  // namespace
@@ -302,16 +324,27 @@ std::string assistant_params_refusal(const CliArgs& args) {
     const std::string key = item.substr(0, eq);
     try {
       validate_assistant_param_key(key);
+    } catch (const SonareParameterRefusal& refusal) {
+      return refusal
+          .respelled(refusal.code(),
+                     [](const std::string& subject) {
+                       return cli_bag_subject("--params", subject);
+                     },
+                     true)
+          .what();
     } catch (const std::exception& refusal) {
       return refusal.what();
     }
     for (const AssistantOption& named : kAssistantOptions) {
       if (key == named.key && args.has(named.option)) {
-        return std::string("--") + named.option + " and --params " + key + "= set the same value";
+        return std::string("--") + named.option + " and " + cli_bag_subject("--params", key) +
+               "= set the same value";
       }
     }
     try {
       validate_assistant_param_value(key, item.substr(eq + 1));
+    } catch (const SonareParameterRefusal& refusal) {
+      return refusal.what();
     } catch (const std::invalid_argument& refusal) {
       return refusal.what();
     }

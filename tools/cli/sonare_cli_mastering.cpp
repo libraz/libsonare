@@ -118,43 +118,6 @@ std::string suggestion_json_for_cli(const std::string& core_json) {
 
 }  // namespace
 
-std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
-                                                          bool resolve_names,
-                                                          const std::string& processor) {
-  if (const std::string refusal = params_grammar_refusal(text); !refusal.empty()) {
-    throw std::invalid_argument(refusal);
-  }
-  std::vector<mastering::api::Param> params;
-  std::stringstream stream(text);
-  std::string item;
-  while (std::getline(stream, item, ',')) {
-    const auto eq = item.find('=');
-    // Locale-independent parse: std::stod follows LC_NUMERIC, which DAW plugin
-    // hosts sometimes set to e.g. de_DE (comma as decimal separator). Imbue the
-    // classic locale so "1.5" always parses as 1.5 regardless of host locale.
-    // Matches the policy in util/json.h.
-    const std::string value_text = item.substr(eq + 1);
-    std::istringstream ss(value_text);
-    ss.imbue(std::locale::classic());
-    double value = 0.0;
-    ss >> value;
-    if (!ss || ss.peek() != std::char_traits<char>::eof()) {
-      // An enum-valued key may be given by its name; the resolver also refuses an unknown one.
-      if (resolve_names) {
-        if (const auto named =
-                mastering::api::mastering_enum_value(processor, item.substr(0, eq), value_text)) {
-          params.push_back({item.substr(0, eq), *named});
-          continue;
-        }
-      }
-      throw std::invalid_argument("invalid numeric value for parameter '" + item.substr(0, eq) +
-                                  "': " + value_text);
-    }
-    params.push_back({item.substr(0, eq), value});
-  }
-  return params;
-}
-
 std::string read_text_file(const std::string& path) {
   std::vector<uint8_t> bytes;
   if (!read_binary_file(path, &bytes)) {
@@ -292,6 +255,7 @@ namespace {
 mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& args,
                                                                 const std::string& params_text) {
   std::vector<mastering::api::Param> params;
+  std::vector<mastering::api::Param> bag_params;
   std::string platform = args.get_string("target-platform", "streaming");
   std::string preset = catalog_token(args.get_string("preset"), mastering::api::preset_names());
   bool has_platform = args.has("target-platform");
@@ -309,7 +273,20 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
       preset = item.substr(eq + 1);
       has_preset = true;
     } else {
-      params.push_back({key, parse_double_strict("params", item.substr(eq + 1))});
+      double value = 0.0;
+      try {
+        value = parse_double_strict("params", item.substr(eq + 1));
+        if (std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
+          throw std::invalid_argument("outside float range");
+        }
+      } catch (const std::invalid_argument&) {
+        throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                                cli_bag_subject("--params", key),
+                                                "must be a finite number")
+            .as_caller_spelled();
+      }
+      params.push_back({key, value});
+      bag_params.push_back({key, value});
     }
   }
 
@@ -322,7 +299,9 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
     params.push_back({"speechMonoAmount", args.get_float("speech-mono-amount", 1.0f)});
   }
 
-  auto config = mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  auto config = with_cli_bag_refusals("--params", bag_params, [&] {
+    return mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  });
   // Through the shared setter and parser, so a name is validated against the
   // same tables every other surface resolves it with.
   if (has_platform) mastering::assistant::set_target_platform(config, platform);
@@ -379,10 +358,14 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   const auto overrides = parse_chain_params(params_text);
   if (has_config) {
     document_params.insert(document_params.end(), overrides.begin(), overrides.end());
-    chain_config =
-        mastering::api::parse_chain_config_params(document_params.data(), document_params.size());
+    chain_config = with_cli_bag_refusals("--params", overrides, [&] {
+      return mastering::api::parse_chain_config_params(document_params.data(),
+                                                       document_params.size());
+    });
   } else if (!overrides.empty()) {
-    mastering::api::apply_chain_config_overrides(chain_config, overrides.data(), overrides.size());
+    with_cli_bag_refusals("--params", overrides, [&] {
+      mastering::api::apply_chain_config_overrides(chain_config, overrides.data(), overrides.size());
+    });
   }
 
   mastering::api::MasteringChain chain(std::move(chain_config));
@@ -577,10 +560,14 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
   // processor routes there from any source because the mono entry rejects it with
   // an opaque INVALID_PARAMETER. Everything else stays mono.
   if (args.source_channels == 2 || is_stereo_only_processor(processor)) {
-    return run_mastering_processor_stereo(args, audio, processor, params);
+    return with_cli_bag_refusals("--params", params, [&] {
+      return run_mastering_processor_stereo(args, audio, processor, params);
+    });
   }
-  const auto result = mastering::api::apply_named_processor(processor, audio.data(), audio.size(),
-                                                            audio.sample_rate(), params);
+  const auto result = with_cli_bag_refusals("--params", params, [&] {
+    return mastering::api::apply_named_processor(processor, audio.data(), audio.size(),
+                                                 audio.sample_rate(), params);
+  });
   const OutputFit fit = write_mastering_output(args, result, args.get_int("bits", 16));
 
   if (args.json_output) {
@@ -675,14 +662,18 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
   };
   if (stereo) {
     const StereoPlanes planes = load_stereo_planes(args, audio);
-    const auto result = mastering::api::apply_named_processor_stereo(
-        "eq.equalizer", planes.left.data(), planes.right.data(), planes.left.size(),
-        audio.sample_rate(), params);
+    const auto result = with_cli_bag_refusals("--params", params, [&] {
+      return mastering::api::apply_named_processor_stereo(
+          "eq.equalizer", planes.left.data(), planes.right.data(), planes.left.size(),
+          audio.sample_rate(), params);
+    });
     report(result, write_mastering_output(args, result, bits));
     return 0;
   }
-  const auto result = mastering::api::apply_named_processor(
-      "eq.equalizer", audio.data(), audio.size(), audio.sample_rate(), params);
+  const auto result = with_cli_bag_refusals("--params", params, [&] {
+    return mastering::api::apply_named_processor(
+        "eq.equalizer", audio.data(), audio.size(), audio.sample_rate(), params);
+  });
   report(result, write_mastering_output(args, result, bits));
   return 0;
 }
@@ -719,10 +710,11 @@ int cmd_mastering_presets(const CliArgs& args, const Audio&) {
 /// front-end. Its keys arrive in the core's camelCase and are re-keyed here for
 /// the same reason @ref analysis_json_for_cli exists: CLI stdout is snake_case
 /// throughout, and the core does not change convention for one pair of callers.
-int print_c_api_json(SonareError err, char* json) {
+int print_c_api_json(SonareError err, char* json, const char* root = nullptr,
+                     const char* bag_flag = nullptr) {
   if (err != SONARE_OK) {
     sonare_free_string(json);
-    throw_c_failure(err, nullptr);
+    throw_c_failure(err, root, bag_flag);
   }
   const std::string document(json);
   sonare_free_string(json);
@@ -743,7 +735,7 @@ int cmd_mastering_profile(const CliArgs& args, const Audio& audio) {
       std::string_view(sonare_last_refusal_subject(1)) == "sample_rate") {
     const std::string_view subject = sonare_last_refusal_subject(0);
     if (subject == "params.nFft" || subject == "params.hopLength") {
-      const std::string option = "--params " + std::string(subject.substr(sizeof("params.") - 1));
+      const std::string option = cli_bag_subject("--params", subject, "params");
       const char* subjects[] = {option.c_str(), "the input file's sample rate"};
       char* rendered = nullptr;
       if (sonare_last_refusal_render(subjects, nullptr, 2, SONARE_PRESENCE_SPELLING_C, &rendered) ==
@@ -754,7 +746,7 @@ int cmd_mastering_profile(const CliArgs& args, const Audio& audio) {
       }
     }
   }
-  return print_c_api_json(err, json);
+  return print_c_api_json(err, json, "params", "--params");
 }
 
 int cmd_mastering_streaming(const CliArgs& args, const Audio& audio) {
@@ -777,7 +769,9 @@ int cmd_mastering_streaming(const CliArgs& args, const Audio& audio) {
   const SonareError err = sonare_mastering_streaming_preview(
       audio.data(), audio.size(), audio.sample_rate(),
       platforms.empty() ? nullptr : platforms.data(), platforms.size(), &json);
-  return print_c_api_json(err, json);
+  return args.has("platforms") && platforms_file.empty()
+             ? print_c_api_json(err, json, "platforms", "--platforms")
+             : print_c_api_json(err, json);
 }
 
 int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
@@ -789,9 +783,11 @@ int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
   }
   const Audio reference = load_pair_reference_audio(args);
   const auto params = parse_mastering_params(args.get_string("params"));
-  const auto result = mastering::api::apply_named_pair_processor(
-      processor, audio.data(), reference.data(), audio.size(), reference.size(),
-      audio.sample_rate(), reference.sample_rate(), params);
+  const auto result = with_cli_bag_refusals("--params", params, [&] {
+    return mastering::api::apply_named_pair_processor(
+        processor, audio.data(), reference.data(), audio.size(), reference.size(),
+        audio.sample_rate(), reference.sample_rate(), params);
+  });
   const OutputFit fit = write_mastering_output(args, result, args.get_int("bits", 16));
 
   if (args.json_output) {
@@ -841,6 +837,9 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
   if (reference_path.empty()) throw std::invalid_argument("--reference is required");
   auto [reference_interleaved, reference_sample_rate, reference_channels] =
       load_audio_interleaved(reference_path);
+  const float* reference_data = reference_interleaved.data();
+  const size_t reference_length = reference_interleaved.size();
+  const int reference_rate = reference_sample_rate;
   if (reference_channels != 1 && reference_channels != 2) {
     throw SonareException(
         ErrorCode::InvalidParameter,
@@ -855,11 +854,12 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
 
   const auto params = parse_mastering_params(args.get_string("params"));
   if (source_channels == 1) {
-    std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
-                     analysis, audio.data(), reference_interleaved.data(), audio.size(),
-                     reference_interleaved.size(), audio.sample_rate(), reference_sample_rate,
-                     params))
-              << "\n";
+    const std::string result = with_cli_bag_refusals("--params", params, [&] {
+      return analysis_json_for_cli(mastering::api::analyze_named_pair(
+          analysis, audio.data(), reference_data, audio.size(), reference_length,
+          audio.sample_rate(), reference_rate, params));
+    });
+    std::cout << result << "\n";
   } else {
     const StereoPlanes source = load_stereo_planes(args, audio);
     std::vector<float> reference_left(reference_interleaved.size() / 2);
@@ -868,11 +868,13 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
       reference_left[frame] = reference_interleaved[2 * frame];
       reference_right[frame] = reference_interleaved[2 * frame + 1];
     }
-    std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
-                     analysis, source.left.data(), source.right.data(), source.left.size(),
-                     reference_left.data(), reference_right.data(), reference_left.size(),
-                     audio.sample_rate(), reference_sample_rate, params))
-              << "\n";
+    const std::string result = with_cli_bag_refusals("--params", params, [&] {
+      return analysis_json_for_cli(mastering::api::analyze_named_pair(
+          analysis, source.left.data(), source.right.data(), source.left.size(),
+          reference_left.data(), reference_right.data(), reference_left.size(),
+          audio.sample_rate(), reference_rate, params));
+    });
+    std::cout << result << "\n";
   }
   return 0;
 }
@@ -886,9 +888,11 @@ int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
   }
   const Audio right = load_reference_audio(args, audio.sample_rate(), audio.size());
   const auto params = parse_mastering_params(args.get_string("params"));
-  std::cout << analysis_json_for_cli(mastering::api::analyze_named_stereo(
-                   analysis, audio.data(), right.data(), audio.size(), audio.sample_rate(), params))
-            << "\n";
+  const std::string result = with_cli_bag_refusals("--params", params, [&] {
+    return analysis_json_for_cli(mastering::api::analyze_named_stereo(
+        analysis, audio.data(), right.data(), audio.size(), audio.sample_rate(), params));
+  });
+  std::cout << result << "\n";
   return 0;
 }
 

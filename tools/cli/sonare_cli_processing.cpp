@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <limits>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -361,13 +362,18 @@ std::vector<float> polyphonic_note_salience(const editing::polyphony::Polyphonic
 // Applies one assignment parse_polyphonic_edit has already read; only the note range is left to
 // check, because it depends on what the analysis found.
 void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& notes,
-                                const std::string& assignment) {
-  const PolyphonicEdit parsed = parse_polyphonic_edit(assignment);
-  if (notes.empty()) throw std::invalid_argument("argument --edit: the analysis found no notes");
+                                const PolyphonicEdit& parsed, const std::string& path) {
+  const std::string subject = cli_bag_subject("--edit", path);
+  if (notes.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            "the analysis found no notes")
+        .as_caller_spelled();
+  }
   if (parsed.note < 0 || static_cast<size_t>(parsed.note) >= notes.size()) {
-    throw std::invalid_argument(
-        "argument --edit: NOTE " +
-        sonare::util::refusal::integer_range_predicate(0.0, static_cast<double>(notes.size() - 1)));
+    throw SonareParameterRefusal::predicate(
+              ErrorCode::InvalidParameter, subject,
+              "must name a note index in [0, " + std::to_string(notes.size() - 1) + "]")
+        .as_caller_spelled();
   }
   auto& edit = notes[static_cast<size_t>(parsed.note)].edit;
   const std::string& field = parsed.field;
@@ -460,11 +466,29 @@ int cmd_polyphonic_render(const CliArgs& args, const Audio& audio) {
   }
   // The same defaults polyphonic-notes numbered the notes against.
   auto analysis = editing::polyphony::analyze_polyphonic(audio);
+  std::map<std::string, std::string> caller_paths;
   for (const auto& assignment : assignments) {
-    apply_polyphonic_note_edit(analysis.notes, assignment);
+    const PolyphonicEdit parsed = parse_polyphonic_edit(assignment);
+    const std::string path = assignment.substr(0, assignment.find('='));
+    caller_paths["analysis.notes[" + std::to_string(parsed.note) + "].edit." + parsed.field] =
+        path;
+    apply_polyphonic_note_edit(analysis.notes, parsed, path);
   }
 
-  const Audio result = editing::polyphony::render_polyphonic(analysis);
+  const Audio result = [&] {
+    try {
+      return editing::polyphony::render_polyphonic(analysis);
+    } catch (const SonareParameterRefusal& refusal) {
+      const auto shown = refusal.respelled(
+          refusal.code(),
+          [&](const std::string& subject) {
+            const auto it = caller_paths.find(subject);
+            return it != caller_paths.end() ? cli_bag_subject("--edit", it->second) : subject;
+          },
+          true);
+      throw shown;
+    }
+  }();
   const OutputFit fit = OutputFit().include(result.data(), result.size());
   write_wav(args.output_file, result, 16, fit);
   note_output_fit(args, fit);

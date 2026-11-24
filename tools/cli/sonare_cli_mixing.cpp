@@ -527,15 +527,14 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
     profile.n_fft = config.n_fft;
     profile.hop_length = config.hop_length;
     try {
-      (void)mastering::assistant::profile_stft_config(profile, sample_rate);
+      (void)with_cli_bag_refusals("--params", params, [&] {
+        return mastering::assistant::profile_stft_config(profile, sample_rate);
+      });
     } catch (const SonareParameterRefusal& refusal) {
       const auto shown = refusal.respelled(
           refusal.code(),
           [](const std::string& subject) {
-            if (subject == "n_fft") return std::string("--params nFft");
-            if (subject == "hop_length") return std::string("--params hopLength");
-            if (subject == "sample_rate") return std::string("--sample-rate");
-            return subject;
+            return subject == "sample_rate" ? cli_bag_subject("--sample-rate", "") : subject;
           },
           true);
       throw CliUsageError(shown.what());

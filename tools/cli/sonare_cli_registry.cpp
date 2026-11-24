@@ -381,6 +381,16 @@ CliValidationError validate_params_grammar(const CliArgs& args) {
   return {params_grammar_refusal(args.get_string("params"))};
 }
 
+CliValidationError validate_numeric_params(const CliArgs& args) {
+  if (CliValidationError error = validate_params_grammar(args); !error.empty()) return error;
+  try {
+    (void)parse_mastering_params(args.get_string("params"));
+  } catch (const std::exception& error) {
+    return {error.what()};
+  }
+  return {};
+}
+
 CliValidationError validate_mastering_arguments(const CliArgs& args) {
   if (CliValidationError error = validate_mastering_selection(args); !error.empty()) return error;
   if (CliValidationError error = validate_params_grammar(args); !error.empty()) return error;
@@ -407,7 +417,12 @@ CliValidationError validate_eq_params(const CliArgs& args) {
       return {std::string("--") + shortcut + " cannot be combined with --params"};
     }
   }
-  return {unknown_processor_params_refusal("eq.equalizer", args.get_string("params"))};
+  if (const std::string unknown =
+          unknown_processor_params_refusal("eq.equalizer", args.get_string("params"));
+      !unknown.empty()) {
+    return {unknown};
+  }
+  return validate_numeric_params(args);
 }
 
 CliValidationError validate_assistant_params(const CliArgs& args) {
@@ -1378,17 +1393,17 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {with_domain(required_string("processor"),
                              choices_of(mastering::api::pair_processor_names())),
                  required_path("reference"), string_value("params"), bits_value(), output_value()},
-                {}, validate_params_grammar);
+                {}, validate_numeric_params);
     add_command(commands, "mastering-pair-analyze", true,
                 {with_domain(required_string("analysis"),
                              choices_of(mastering::api::pair_analysis_names())),
                  required_path("reference"), string_value("params")},
-                {}, validate_params_grammar, 0, /*preserves_stereo_input=*/true);
+                {}, validate_numeric_params, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mastering-stereo-analyze", true,
                 {with_domain(required_string("analysis"),
                              choices_of(mastering::api::stereo_analysis_names())),
                  required_path("reference"), string_value("params")},
-                {}, validate_params_grammar);
+                {}, validate_numeric_params);
     // `--config-out` writes the suggested chain in the core's own chain-config
     // form, which is what `mastering --chain-config` reads back -- the same
     // role `suggest-mix --scene-out` plays for a mix scene.
@@ -1408,7 +1423,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-stereo-analyses", false, {});
     add_command(commands, "mastering-presets", false, {});
     add_command(commands, "mastering-profile", true, {string_value("params")}, {},
-                validate_params_grammar);
+                validate_numeric_params);
     add_command(commands, "mastering-streaming", true,
                 {nullable_string_value("platforms"), path_value("platforms-file")}, {},
                 validate_streaming_platforms);

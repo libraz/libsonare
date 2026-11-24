@@ -423,7 +423,7 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
         )
     assert refused.value.code == 2
     assert (
-        "params.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
+        "--params repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
         in capsys.readouterr().err
     )
 
@@ -456,7 +456,7 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
         )
     assert refused.value.code == 2
     assert (
-        "params.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
+        "--params repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
         in capsys.readouterr().err
     )
 

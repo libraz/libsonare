@@ -255,9 +255,13 @@ def run_domain_refusals(
     return compared, not_compared
 
 
+def _unknown_key_with_catalog(subject: str) -> re.Pattern[str]:
+    return re.compile(re.escape(f"unknown key {subject} (expected ") + r"(?P<keys>[^)]+)\)$")
+
+
 # (argv, the one line both front-ends must print); each is refused with exit 2. ``{input}`` is an unreadable
 # input and ``{output}`` a scratch path; each pair is legal option by option.
-CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
+CROSS_OPTION_ROWS: tuple[tuple[list[str], str | re.Pattern[str]], ...] = (
     (
         ["bpm", "{input}", "-o", "{output}"],
         "Command 'bpm' does not produce a file output; remove -o/--output",
@@ -271,51 +275,51 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=abc"],
-        "invalid numeric value for parameter 'tempoBpm'",
+        "--params tempoBpm must be a finite number",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "targetTrackLufs=1e100"],
-        "invalid numeric value for parameter 'targetTrackLufs'",
+        "--params targetTrackLufs must be a finite number",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=19"],
-        "tempoBpm must be 0 or a tempo between 20 and 400 BPM",
+        "--params tempoBpm must be 0 or a tempo between 20 and 400 BPM",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=401"],
-        "tempoBpm must be 0 or a tempo between 20 and 400 BPM",
+        "--params tempoBpm must be 0 or a tempo between 20 and 400 BPM",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "nFft=3"],
-        "nFft must be an even integer in [2, 524288]",
+        "--params nFft must be an even integer in [2, 524288]",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "nFft=2.5"],
-        "nFft must be an even integer in [2, 524288]",
+        "--params nFft must be an even integer in [2, 524288]",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "nFft=524290"],
-        "nFft must be an even integer in [2, 524288]",
+        "--params nFft must be an even integer in [2, 524288]",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "hopLength=0"],
-        "hopLength must be an integer in [1, 2147483647]",
+        "--params hopLength must be an integer in [1, 2147483647]",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "hopLength=1.5"],
-        "hopLength must be an integer in [1, 2147483647]",
+        "--params hopLength must be an integer in [1, 2147483647]",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "hopLength=2147483648"],
-        "hopLength must be an integer in [1, 2147483647]",
+        "--params hopLength must be an integer in [1, 2147483647]",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "enable_eq=1"],
-        "unknown key enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, targetTrackLufs, tempoBpm)",
+        "unknown key --params enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, targetTrackLufs, tempoBpm)",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "nosuchkey=1"],
-        "unknown key nosuchkey (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, targetTrackLufs, tempoBpm)",
+        "unknown key --params nosuchkey (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, targetTrackLufs, tempoBpm)",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=100", "--tempo-bpm", "120"],
@@ -362,7 +366,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (["analyze", "{input}", "--meter-candidates", "3,x"], "invalid meter numerator: x"),
     (
         ["key", "{input}", "--hpss", "--hop-length", "8"],
-        "--hop-length must be at least 16 with --hpss (got 8)",
+        "--hop-length must be at least 16 with --hpss",
     ),
     (
         ["rhythm", "{input}", "--bpm-min", "200", "--bpm-max", "100"],
@@ -426,8 +430,12 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
         "--explain cannot be combined with --preset",
     ),
     (
+        ["repair", "{input}", "-o", "{output}", "--params", "repair.denoise.nFft=nan"],
+        "--params repair.denoise.nFft must be a number or a boolean",
+    ),
+    (
         ["repair", "{input}", "-o", "{output}", "--params", "eq.enabled=1"],
-        "--params key must be a repair.* field: eq.enabled",
+        "--params eq.enabled must be a repair.* field",
     ),
     (
         ["repair", "{input}", "-o", "{output}", "--params", "novalue"],
@@ -444,11 +452,11 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--params",
             "repair.denoise.nFft=512",
         ],
-        "repair.denoise.nFft names a stage --stages does not run",
+        "--params repair.denoise.nFft names a stage --stages does not run",
     ),
     (
         ["repair", "{input}", "-o", "{output}", "--params", "repair.bogus.x=1"],
-        "unknown key params.repair.bogus.x",
+        _unknown_key_with_catalog("--params repair.bogus.x"),
     ),
     (
         [
@@ -461,11 +469,11 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--params",
             "repair.bogus.x=1,repair.denoise.nFft=512",
         ],
-        "unknown key params.repair.bogus.x",
+        _unknown_key_with_catalog("--params repair.bogus.x"),
     ),
     (
         ["mastering", "{input}", "--preset", "pop", "--params", "bogus.x=1"],
-        "unknown key params.bogus.x",
+        _unknown_key_with_catalog("--params bogus.x"),
     ),
     (
         ["mastering", "{input}", "--preset", "pop", "--params", "novalue"],
@@ -507,7 +515,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     ),
     (
         ["mastering-suggest", "{input}", "--params", "target_platform=club"],
-        "unknown key target_platform (expected ceilingDbtp, enableRepair, preferStreamingSafe, preset, speechMonoAmount, targetLufs, targetPlatform)",
+        "unknown key --params target_platform (expected ceilingDbtp, enableRepair, preferStreamingSafe, preset, speechMonoAmount, targetLufs, targetPlatform)",
     ),
     (
         ["mastering-suggest", "{input}", "--target-lufs", "-12", "--params", "targetLufs=-12"],
@@ -515,31 +523,31 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     ),
     (
         ["mastering-suggest", "{input}", "--params", "preset=3"],
-        "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, techno, metal, trap, rnb, jazz, kpop, trance, gameOst",
+        "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, techno, metal, trap, rnb, jazz, kpop, trance, gameOst",
     ),
     (
         ["mastering-suggest", "{input}", "--params", "preset=vinyl"],
-        "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, techno, metal, trap, rnb, jazz, kpop, trance, gameOst",
+        "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, techno, metal, trap, rnb, jazz, kpop, trance, gameOst",
     ),
     (
         ["mastering-suggest", "{input}", "--params", "targetPlatform=2"],
-        "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, cinema, club, cd",
+        "--params targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, cinema, club, cd",
     ),
     (
         ["mastering-suggest", "{input}", "--params", "targetPlatform=typo"],
-        "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, cinema, club, cd",
+        "--params targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, cinema, club, cd",
     ),
     (
         ["mastering-suggest", "{input}", "--params", "targetLufs=invalid"],
-        "invalid numeric value for parameter 'targetLufs'",
+        "--params targetLufs must be a finite number",
     ),
     (
         ["mastering-suggest", "{input}", "--params", "ceilingDbtp=1e100"],
-        "invalid numeric value for parameter 'ceilingDbtp'",
+        "--params ceilingDbtp must be a finite number",
     ),
     (
         ["mastering-suggest", "{input}", "--params", "speechMonoAmount=nan"],
-        "invalid numeric value for parameter 'speechMonoAmount'",
+        "--params speechMonoAmount must be a finite number",
     ),
     (
         [
@@ -550,7 +558,8 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--params",
             "nosuchkey=1",
         ],
-        "unknown --params key for dynamics.compressor: nosuchkey",
+        "unknown key --params nosuchkey (expected attackMs, autoMakeup, detector, kneeDb, "
+        "makeupGainDb, pdrReleaseScale, pdrTimeMs, ratio, releaseMs, sidechainHighPassHz, thresholdDb)",
     ),
     (
         ["mastering-processor", "{input}", "--processor", "dynamics.compressor", "--params", "x"],
@@ -561,8 +570,31 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
         "--frequency-hz cannot be combined with --params",
     ),
     (
+        ["mastering-profile", "{input}", "--params", "nFft=abc"],
+        "--params nFft must be a finite number",
+    ),
+    (
+        ["mastering-pair-processor", "{input}", "--processor", "match.applyMatchEq",
+         "--reference", "{input}", "--params", "targetLufs=abc"],
+        "--params targetLufs must be a finite number",
+    ),
+    (
+        ["mastering-pair-analyze", "{input}", "--analysis", "match.tonalBalanceLogBands",
+         "--reference", "{input}", "--params", "nFft=abc"],
+        "--params nFft must be a finite number",
+    ),
+    (
+        ["mastering-stereo-analyze", "{input}", "--analysis", "stereo.monoCompatCheck",
+         "--reference", "{input}", "--params", "nFft=abc"],
+        "--params nFft must be a finite number",
+    ),
+    (
+        ["eq", "{input}", "--params", "band0.gainDb=abc"],
+        "--params band0.gainDb must be a finite number",
+    ),
+    (
         ["eq", "{input}", "--params", "nosuchkey=1"],
-        "unknown --params key for eq.equalizer: nosuchkey",
+        _unknown_key_with_catalog("--params nosuchkey"),
     ),
     (
         ["eq", "{input}", "--params", "novalue"],
@@ -628,7 +660,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":"a","target_lufs":-14,"ceilingDb":-1}]',
         ],
-        "argument --platforms: unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)",
+        "unknown key --platforms [0].ceilingDb (expected ceiling_dbtp, name, target_lufs)",
     ),
     (
         [
@@ -637,11 +669,11 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":"a","target_lufs":-14,"ceiling_dbtp":-1,"z":0}]',
         ],
-        "argument --platforms: unknown key platforms[0].z (expected name, target_lufs, ceiling_dbtp)",
+        "unknown key --platforms [0].z (expected ceiling_dbtp, name, target_lufs)",
     ),
     (
         ["mastering-streaming", "{input}", "--platforms", '[{"name":"a","target_lufs":-14}]'],
-        "argument --platforms: platforms[0].ceiling_dbtp must be given",
+        "--platforms [0].ceiling_dbtp must be given",
     ),
     (
         [
@@ -650,7 +682,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":1,"target_lufs":-14,"ceiling_dbtp":-1}]',
         ],
-        "argument --platforms: platforms[0].name must be a string",
+        "--platforms [0].name must be a string",
     ),
     (
         [
@@ -659,7 +691,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":"","target_lufs":-14,"ceiling_dbtp":-1}]',
         ],
-        "argument --platforms: platforms[0].name must not be empty",
+        "--platforms [0].name must not be empty",
     ),
     (
         [
@@ -668,7 +700,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":"a","target_lufs":true,"ceiling_dbtp":-1}]',
         ],
-        "argument --platforms: platforms[0].target_lufs must be a number",
+        "--platforms [0].target_lufs must be a number",
     ),
     (
         [
@@ -677,7 +709,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":"a","target_lufs":-14,"ceiling_dbtp":1e39}]',
         ],
-        "argument --platforms: platforms[0].ceiling_dbtp must be finite",
+        "--platforms [0].ceiling_dbtp must be finite",
     ),
     (
         ["mastering-streaming", "{input}", "--platforms", '{"name":"a"}'],
@@ -812,9 +844,9 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (
         ["polyphonic-render", "{input}", "--edit", "0.bogus=1", "-o", "{output}"],
         (
-            "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
-            "time_offset_samples, time_stretch_ratio, formant_shift_semitones, "
-            "vibrato_depth_change, drift_change, muted"
+            "unknown key --edit 0.bogus (expected drift_change, formant_shift_semitones, "
+            "gain_db, muted, pitch_shift_semitones, time_offset_samples, "
+            "time_stretch_ratio, vibrato_depth_change)"
         ),
     ),
     (
@@ -862,6 +894,7 @@ def run_cross_option_refusals(
     tokens = {"{input}": UNREADABLE_INPUT, "{output}": str(directory / "cross_option.wav")}
     for template, expected in CROSS_OPTION_ROWS:
         argv = [tokens.get(token, token) for token in template]
+        catalog_messages: dict[str, str] = {}
         for surface, executable in (("native", native_executable), ("python", python_executable)):
             result = run(surface, executable, argv, timeout)
             label = f"cross-option.{surface}.{argv!r}"
@@ -872,6 +905,18 @@ def run_cross_option_refusals(
                     ("fail", f"{label}: expected exit {EXIT_USAGE}, got {detail}: {tail}")
                 )
             lines = result["stderr"].splitlines()
-            if not any(line == expected or line.endswith(f": {expected}") for line in lines):
-                report.append(("fail", f"{label}: no line {expected!r} in {tail}"))
+            if isinstance(expected, str):
+                if not any(line == expected or line.endswith(f": {expected}") for line in lines):
+                    report.append(("fail", f"{label}: no line {expected!r} in {tail}"))
+                continue
+            match = next((m for line in lines if (m := expected.search(line))), None)
+            if match is None:
+                report.append(("fail", f"{label}: no catalog refusal {expected.pattern!r}"))
+                continue
+            keys = match["keys"].split(", ")
+            if keys != sorted(set(keys)):
+                report.append(("fail", f"{label}: accepted keys must be distinct and sorted"))
+            catalog_messages[surface] = match[0]
+        if len(catalog_messages) == 2 and len(set(catalog_messages.values())) != 1:
+            report.append(("fail", f"cross-option.{argv!r}: CLI key catalogs differ"))
     return len(CROSS_OPTION_ROWS)

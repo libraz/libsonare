@@ -7,8 +7,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _add_unreconstructed_runs,
+    _cli_key_refusal,
+    _cli_key_subjects,
     _load_channels_or_downmix,
     _params_entries,
+    _parse_kv_params,
     _params_grammar_refusal,
     _print_unreconstructed_runs,
     _strict_json_dumps,
@@ -90,7 +93,9 @@ def _reject_unlisted_stage_params(params: dict[str, float | str], stages: list[s
     for key in params:
         stage = key[len("repair.") :].split(".", 1)[0]
         if stage in _REPAIR_STAGE_NAMES and stage not in stages:
-            raise ValueError(f"{key} names a stage --stages does not run")
+            raise ValueError(
+                _cli_key_refusal("--params", key, "names a stage --stages does not run")
+            )
 
 
 def _parse_repair_params(raw: str) -> dict[str, float | str]:
@@ -101,18 +106,13 @@ def _parse_repair_params(raw: str) -> dict[str, float | str]:
     number there, and refuses a fractional value for an integer field, naming the
     key. This parser deliberately carries no second list of either kind of field.
     """
-    params: dict[str, float | str] = {}
     if (refusal := _params_grammar_refusal(raw)) is not None:
         raise ValueError(refusal)
     for item in _params_entries(raw):
-        key, value = (part.strip() for part in item.split("=", 1))
+        key = item.partition("=")[0].strip()
         if not key.startswith("repair."):
-            raise ValueError(f"--params key must be a repair.* field: {key}")
-        try:
-            params[key] = float(value)
-        except ValueError:
-            params[key] = value
-    return params
+            raise ValueError(_cli_key_refusal("--params", key, "must be a repair.* field"))
+    return _parse_kv_params(raw, names=True)
 
 
 def _repair_argument_refusal(args: argparse.Namespace) -> str | None:
@@ -142,12 +142,15 @@ def _repair_argument_refusal(args: argparse.Namespace) -> str | None:
         stages = _parse_repair_stages(args.stages) if has_stages else []
         params = _parse_repair_params(getattr(args, "params", "") or "")
         if params:
-            _check_chain_document(params)
+            with _cli_key_subjects("--params", params):
+                _check_chain_document(params)
         if has_stages:
             _reject_unlisted_stage_params(params, stages)
     except SonareError as exc:
-        # The core's own words, without the binding's "[code] " prefix.
-        return str(exc).partition("] ")[2]
+        # Drop the coded prefix when present; plain value errors already carry only the cause.
+        message = str(exc)
+        _, separator, detail = message.partition("] ")
+        return detail if separator else message
     except ValueError as exc:
         return str(exc)
     return None
@@ -297,20 +300,21 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     def run_chain(overrides: dict[str, float | str], preset_name: str | None) -> Any:
         nested = _nest_chain_config(overrides)
-        if stereo:
-            return master_audio_stereo(
+        with _cli_key_subjects("--params", params):
+            if stereo:
+                return master_audio_stereo(
+                    planes[0],
+                    planes[1],
+                    sample_rate=sr,
+                    preset=cast("MasteringPreset | None", preset_name),
+                    overrides=nested,
+                )
+            return master_audio(
                 planes[0],
-                planes[1],
                 sample_rate=sr,
                 preset=cast("MasteringPreset | None", preset_name),
                 overrides=nested,
             )
-        return master_audio(
-            planes[0],
-            sample_rate=sr,
-            preset=cast("MasteringPreset | None", preset_name),
-            overrides=nested,
-        )
 
     # Every mode reports the detectors, so they always run here -- never only
     # when it happens to be convenient for one mode.

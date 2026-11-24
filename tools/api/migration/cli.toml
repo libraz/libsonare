@@ -168,7 +168,7 @@ rule = "loudness-names"
 [[entry]]
 kind = "flag"
 old = "mastering-streaming --platforms"
-changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported as \"argument --platforms: <reason>\" before the input is read, while a --platforms-file document is still refused after it (exit 3)"
+changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported before the input is read, with a refused field named --platforms [INDEX].KEY, while a --platforms-file document is still refused after it (exit 3)"
 domain = "mastering"
 rule = "loudness-names"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering-streaming takes one platform record spelling"
@@ -2426,8 +2426,16 @@ test = "tests/cli/cli_mastering_test.cpp::CLI named mastering processors and pai
 
 [[entry]]
 kind = "flag"
+old = "mastering-profile --params"
+changed = "a value that cannot be read as a finite number now exits 2 before input is read instead of exiting 3 after decoding. This also applies to the numeric --params bags of eq, mastering-pair-processor, mastering-pair-analyze and mastering-stereo-analyze. The refusal names the supplied key as --params KEY"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI numeric mastering parameter bags refuse invalid values before the read"
+
+[[entry]]
+kind = "flag"
 old = "mastering-processor --params"
-changed = "a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key"
+changed = "a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY"
 domain = "mastering"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering --params keys the processor does not read"
@@ -2451,7 +2459,7 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed in
 [[entry]]
 kind = "flag"
 old = "suggest-mix --params"
-changed = "malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order"
+changed = "malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order. A refusal names the supplied key as --params KEY"
 domain = "mastering"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed inputs and params from argv"
@@ -2459,7 +2467,7 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed in
 [[entry]]
 kind = "flag"
 old = "mastering-suggest --params"
-changed = "unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order"
+changed = "unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order. A refusal names the supplied key as --params KEY"
 domain = "mastering"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering-suggest options"

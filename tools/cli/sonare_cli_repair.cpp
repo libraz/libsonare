@@ -253,7 +253,9 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
   for (const auto& stage : stage_list) overrides.push_back({"repair." + stage + ".enabled", 1.0});
   overrides.insert(overrides.end(), user_overrides.begin(), user_overrides.end());
   if (!overrides.empty()) {
-    mastering::api::apply_chain_config_overrides(repair_config, overrides.data(), overrides.size());
+    with_cli_bag_refusals("--params", user_overrides, [&] {
+      mastering::api::apply_chain_config_overrides(repair_config, overrides.data(), overrides.size());
+    });
   }
 
   mastering::api::MasteringChain chain(std::move(repair_config));

@@ -10562,7 +10562,7 @@
           "placeholder": "project_warning_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "10b88806dc837fe433cadd119f298137017d0b4b3eb49a3039b1aaff0e1e6989"
+          "sha256": "dac25801ba769b67420ebb800574598decb8f6018b7d009f833dba9e4ecbc7fa"
         }
       }
     },
@@ -11692,7 +11692,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "params.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
+            "--params repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
           ]
         },
         {
@@ -19132,19 +19132,19 @@
           "placeholder": "align_takes_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "ea0ceae9122e871b29139245247590e2ab33670a5cbe8cff648696fee2454a56"
+          "sha256": "2b5522b338e580db77fb80f43ad65acde98ab136ba0152c79969fefa1d825913"
         },
         "aligned_project_many": {
           "placeholder": "align_takes_many_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "247f072e49098bb17c8ace95529c7ec71ffd29de58dff0b7dcabfa6d4477d11f"
+          "sha256": "76e1ed19c48bc8f22052d23c670b94fee3465ae5bd67527c0a60ea500e9da41e"
         },
         "aligned_project_other_rate": {
           "placeholder": "align_takes_other_rate_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "f1e46c11e521366f02dfce61ed81513189e02388971645f29c682e8fa22b4d57"
+          "sha256": "feb11dd5f3f903fdc5e5b159b84fa5ea9c34e820c997bab095ede6e4f17103eb"
         }
       }
     },
@@ -20422,7 +20422,25 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "(expected detectDefects, hopLength, nFft, truePeakOversample)"
+            "unknown key --params foo (expected detectDefects, hopLength, nFft, truePeakOversample)"
+          ]
+        },
+        {
+          "id": "params_window_domain",
+          "argv": [
+            "mastering-profile",
+            "{audio}",
+            "--params",
+            "hopLength=0",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--params hopLength must be an integer in [1, 2147483647]"
           ]
         },
         {
@@ -20536,7 +20554,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "argument --platforms: unknown key platforms[0].ceilingDb (expected ceiling_dbtp, name, target_lufs)"
+            "unknown key --platforms [0].ceilingDb (expected ceiling_dbtp, name, target_lufs)"
           ]
         },
         {
@@ -20554,7 +20572,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "argument --platforms: platforms[0].ceiling_dbtp must be given"
+            "--platforms [0].ceiling_dbtp must be given"
           ]
         }
       ],
@@ -22136,7 +22154,7 @@
             "targetLufs=abc",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -22238,7 +22256,7 @@
             "notAKey=1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -22253,7 +22271,7 @@
             "preset=3",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",

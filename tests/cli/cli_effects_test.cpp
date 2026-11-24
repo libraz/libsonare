@@ -1519,13 +1519,15 @@ TEST_CASE("CLI effect and note-editing refusals are decided from argv before the
       {"polyphonic-render --edit nonsense " + missing + " -o " + out,
        "argument --edit: must be NOTE.FIELD=VALUE"},
       {"polyphonic-render --edit x.gain_db=1 " + missing + " -o " + out,
-       "argument --edit: NOTE must be an integer"},
+       "--edit x.gain_db must be an integer"},
       {"polyphonic-render --edit 0.bogus=1 " + missing + " -o " + out,
-       "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db"},
+       "unknown key --edit 0.bogus (expected drift_change, formant_shift_semitones, "
+       "gain_db, muted, pitch_shift_semitones, time_offset_samples, time_stretch_ratio, "
+       "vibrato_depth_change)"},
       {"polyphonic-render --edit 0.gain_db=abc " + missing + " -o " + out,
-       "argument --edit: gain_db must be a number"},
+       "--edit 0.gain_db must be a number"},
       {"polyphonic-render --edit 0.muted=maybe " + missing + " -o " + out,
-       "argument --edit: muted must be one of true, 1, yes, on, false, 0, no, off"},
+       "--edit 0.muted must be one of true, 1, yes, on, false, 0, no, off"},
 #ifdef SONARE_WITH_ARRANGEMENT
       {"transcribe --reattack-ratio 0.5 " + missing + " -o " + out,
        "--reattack-ratio must be 0 (no split) or greater than 1"},

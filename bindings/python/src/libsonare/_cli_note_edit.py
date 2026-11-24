@@ -11,6 +11,10 @@ from ._cli_common import (
     PITCH_NAMES,
     _absent_if_none,
     _audio_array,
+    _cli_key_refusal,
+    _cli_key_subject,
+    _cli_key_subjects,
+    _cli_unknown_key,
     _emit_effect_result,
     _fmt_optional,
     _read_bounded,
@@ -278,15 +282,15 @@ _POLYPHONIC_EDIT_ATTRIBUTES = {
 }
 
 
-def _parse_polyphonic_edit_float(field: str, value: str) -> float:
-    """Read one ``--edit`` value with the CLI's numeric reader, the field as the subject."""
+def _parse_polyphonic_edit_float(key: str, value: str) -> float:
+    """Read one ``--edit`` value with the complete caller-written path as its subject."""
     try:
         return _read_number_text(value)
     except _NumericTextError as exc:
-        raise ValueError(f"argument --edit: {field} {exc}") from None
+        raise ValueError(_cli_key_refusal("--edit", key, str(exc))) from None
 
 
-def _parse_polyphonic_edit_int(subject: str, value: str) -> int:
+def _parse_polyphonic_edit_int(key: str, value: str) -> int:
     """Read one ``--edit`` integer, bounded to a C ``int``.
 
     That is the whole reachable range: the chain refuses audio longer than an
@@ -295,10 +299,10 @@ def _parse_polyphonic_edit_int(subject: str, value: str) -> int:
     try:
         return _read_integer_text(value)
     except _NumericTextError as exc:
-        raise ValueError(f"argument --edit: {subject} {exc}") from None
+        raise ValueError(_cli_key_refusal("--edit", key, str(exc))) from None
 
 
-def _parse_polyphonic_edit_bool(field: str, value: str) -> bool:
+def _parse_polyphonic_edit_bool(key: str, value: str) -> bool:
     """Read one ``--edit`` value as a flag, using the parser's own literal sets."""
     from .cli import _FALSE_FLAG_LITERALS, _TRUE_FLAG_LITERALS
 
@@ -307,7 +311,9 @@ def _parse_polyphonic_edit_bool(field: str, value: str) -> bool:
         return True
     if lowered in _FALSE_FLAG_LITERALS:
         return False
-    raise ValueError(f"argument --edit: {field} must be one of true, 1, yes, on, false, 0, no, off")
+    raise ValueError(
+        _cli_key_refusal("--edit", key, "must be one of true, 1, yes, on, false, 0, no, off")
+    )
 
 
 def _parse_polyphonic_edit(assignment: str) -> tuple[int, str, float | int | bool]:
@@ -324,20 +330,18 @@ def _parse_polyphonic_edit(assignment: str) -> tuple[int, str, float | int | boo
     index_text, dot, field = path.rpartition(".")
     if not dot or not index_text or not field:
         raise ValueError("argument --edit: must be NOTE.FIELD=VALUE")
-    index = _parse_polyphonic_edit_int("NOTE", index_text)
+    index = _parse_polyphonic_edit_int(path, index_text)
     typed: float | int | bool
     if field == "time_offset_samples":
-        typed = _parse_polyphonic_edit_int(field, value)
+        typed = _parse_polyphonic_edit_int(path, value)
     elif field == "muted":
-        typed = _parse_polyphonic_edit_bool(field, value)
+        typed = _parse_polyphonic_edit_bool(path, value)
     elif field in _POLYPHONIC_EDIT_FLOAT_FIELDS:
-        typed = _parse_polyphonic_edit_float(field, value)
+        typed = _parse_polyphonic_edit_float(path, value)
     else:
         # The accepted set is named at the refusal because the help carries no
         # per-field text, so this is the only place a caller can read it.
-        raise ValueError(
-            f"argument --edit: FIELD must be one of {', '.join(_POLYPHONIC_EDIT_FIELDS)}"
-        )
+        raise ValueError(_cli_unknown_key("--edit", path, _POLYPHONIC_EDIT_FIELDS))
     return index, field, typed
 
 
@@ -354,10 +358,13 @@ def _polyphonic_edit_refusal(args: argparse.Namespace) -> str | None:
 def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
     """Apply one ``NOTE.FIELD=VALUE`` assignment in place, returning the note index."""
     index, field, value = _parse_polyphonic_edit(assignment)
+    key = assignment.partition("=")[0]
     if not edits:
-        raise ValueError("argument --edit: the analysis found no notes")
+        raise ValueError(_cli_key_refusal("--edit", key, "the analysis found no notes"))
     if index < 0 or index >= len(edits):
-        raise ValueError(f"argument --edit: NOTE must be an integer in [0, {len(edits) - 1}]")
+        raise ValueError(
+            _cli_key_refusal("--edit", key, f"must name a note index in [0, {len(edits) - 1}]")
+        )
     setattr(edits[index], _POLYPHONIC_EDIT_ATTRIBUTES.get(field, field), value)
     return index
 
@@ -526,7 +533,15 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
                 if index not in touched:
                     touched.append(index)
             for index in touched:
-                analysis.set_note_edit(index, edits[index])
+                subjects: dict[str, str] = {}
+                for assignment in assignments:
+                    path = assignment.partition("=")[0]
+                    index_text, dot, field = path.rpartition(".")
+                    if dot and int(index_text) == index:
+                        c_field = _POLYPHONIC_EDIT_ATTRIBUTES.get(field, field)
+                        subjects[f"edit.{c_field}"] = _cli_key_subject("--edit", path)
+                with _cli_key_subjects("--edit", (), roots=(), extra=subjects):
+                    analysis.set_note_edit(index, edits[index])
         result = _audio_array(analysis.render())
 
     return _emit_effect_result(

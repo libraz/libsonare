@@ -1631,24 +1631,28 @@ def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None
     [
         (
             '{"name":"x","targetLufs":-14,"ceiling_dbtp":-1}',
-            "unknown key platforms[0].targetLufs (expected ceiling_dbtp, name, target_lufs)",
+            "unknown key --platforms [0].targetLufs (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceilingDb":-1}',
-            "unknown key platforms[0].ceilingDb (expected ceiling_dbtp, name, target_lufs)",
+            "unknown key --platforms [0].ceilingDb (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceilingDbtp":-1}',
-            "unknown key platforms[0].ceilingDbtp (expected ceiling_dbtp, name, target_lufs)",
+            "unknown key --platforms [0].ceilingDbtp (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceiling_db":-1}',
-            "unknown key platforms[0].ceiling_db (expected ceiling_dbtp, name, target_lufs)",
+            "unknown key --platforms [0].ceiling_db (expected ceiling_dbtp, name, target_lufs)",
         ),
-        ('{"name":"x","target_lufs":-14}', "platforms[0].ceiling_dbtp must be given"),
+        ('{"name":"x","target_lufs":-14}', "--platforms [0].ceiling_dbtp must be given"),
+        (
+            '{"name":"x","target_lufs":"-14","ceiling_dbtp":-1}',
+            "--platforms [0].target_lufs must be a number",
+        ),
         (
             '{"name":"x","target_lufs":-14,"ceiling_dbtp":-1,"x":1}',
-            "unknown key platforms[0].x (expected ceiling_dbtp, name, target_lufs)",
+            "unknown key --platforms [0].x (expected ceiling_dbtp, name, target_lufs)",
         ),
     ],
 )
@@ -1669,7 +1673,7 @@ def test_mastering_streaming_takes_one_platform_record_spelling(
         "mastering-streaming", str(source), "--platforms", f"[{record}]", "--json"
     )
     assert refused.returncode == 2, refused.stderr
-    assert f"argument --platforms: {message}" in refused.stderr
+    assert refused.stderr.splitlines()[-1] == f"sonare: error: {message}"
     # A file is read with the input, so the same document is refused after it, by its source.
     document = tmp_path / "platforms.json"
     document.write_text(f"[{record}]", encoding="utf-8")
@@ -1677,4 +1681,5 @@ def test_mastering_streaming_takes_one_platform_record_spelling(
         "mastering-streaming", str(source), "--platforms-file", str(document), "--json"
     )
     assert from_file.returncode == 3, from_file.stderr
-    assert f"--platforms-file: {message}" in from_file.stderr
+    document_message = message.replace("--platforms [", "platforms[", 1)
+    assert f"--platforms-file: {document_message}" in from_file.stderr

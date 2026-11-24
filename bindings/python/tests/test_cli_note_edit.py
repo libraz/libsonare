@@ -157,21 +157,21 @@ def test_polyphonic_render_cli_applies_one_edit_per_occurrence() -> None:
 @pytest.mark.parametrize(
     ("assignment", "message"),
     [
-        ("0.no_such_field=1", "argument --edit: FIELD must be one of pitch_shift_semitones, "),
-        ("9.gain_db=-3", "argument --edit: NOTE must be an integer in [0, "),
+        ("0.no_such_field=1", "unknown key --edit 0.no_such_field (expected "),
+        ("9.gain_db=-3", "--edit 9.gain_db must name a note index in [0, "),
         ("0.gain_db", "argument --edit: must be NOTE.FIELD=VALUE"),
         (
             "0.muted=maybe",
-            "argument --edit: muted must be one of true, 1, yes, on, false, 0, no, off",
+            "--edit 0.muted must be one of true, 1, yes, on, false, 0, no, off",
         ),
-        ("0.gain_db=nan", "argument --edit: gain_db must be finite"),
+        ("0.gain_db=nan", "--edit 0.gain_db must be finite"),
         # The native parsers read a value whole and an offset is a C int, so
         # neither an underscore separator nor a wider offset is a number here.
-        ("0.gain_db=1_0", "argument --edit: gain_db must be a number"),
-        ("x.gain_db=1", "argument --edit: NOTE must be an integer"),
+        ("0.gain_db=1_0", "--edit 0.gain_db must be a number"),
+        ("x.gain_db=1", "--edit x.gain_db must be an integer"),
         (
             "0.time_offset_samples=99999999999",
-            "argument --edit: time_offset_samples must be an integer in [-2147483648, 2147483647]",
+            "--edit 0.time_offset_samples must be an integer in [-2147483648, 2147483647]",
         ),
     ],
 )
@@ -186,8 +186,34 @@ def test_polyphonic_render_cli_refuses_a_bad_edit(assignment: str, message: str)
             ["polyphonic-render", wav_path, "-o", out_path, "--edit", assignment, "--json"]
         )
 
-        assert result.returncode == (3 if "NOTE must be an integer in [0, " in message else 2)
+        assert result.returncode == (3 if "must name a note index in [0, " in message else 2)
         assert message in result.stderr
+        assert not os.path.exists(out_path)
+
+
+def test_polyphonic_render_cli_respelled_note_edit_refusal() -> None:
+    """The C edit validator reports the key the caller wrote in --edit."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "chord.wav")
+        out_path = os.path.join(tmpdir, "rendered.wav")
+        _write_polyphonic_chord(wav_path)
+
+        result = _run_cli(
+            [
+                "polyphonic-render",
+                wav_path,
+                "-o",
+                out_path,
+                "--edit",
+                "00.time_stretch_ratio=0",
+                "--json",
+            ]
+        )
+
+        assert result.returncode == 3, result.stderr
+        assert result.stderr.strip().endswith(
+            "--edit 00.time_stretch_ratio must be finite and greater than 0"
+        )
         assert not os.path.exists(out_path)
 
 

@@ -12,6 +12,10 @@ from ._cli_common import (
     _absent_if_none,
     _add_unreconstructed_runs,
     _atomic_write_bytes,
+    _cli_key_refusal,
+    _cli_key_subject,
+    _cli_key_subjects,
+    _cli_unknown_key,
     _load_channels_or_downmix,
     _measured_pairs,
     _OutputFit,
@@ -248,10 +252,13 @@ def _chain_params_refusal(args: argparse.Namespace) -> str | None:
     if not raw:
         return None
     try:
-        _check_chain_document(_parse_kv_params(raw, names=True))
+        with _cli_key_subjects("--params", _params_keys(raw)):
+            _check_chain_document(_parse_kv_params(raw, names=True))
     except SonareError as exc:
-        # The core's own words, without the binding's "[code] " prefix.
-        return str(exc).partition("] ")[2]
+        # Drop the coded prefix when present; plain value errors already carry only the cause.
+        message = str(exc)
+        _, separator, detail = message.partition("] ")
+        return detail if separator else message
     except ValueError as exc:
         return str(exc)
     return None
@@ -296,7 +303,7 @@ def _assistant_params_refusal(args: argparse.Namespace) -> str | None:
     for item in _params_entries(raw):
         key, value = item.split("=", 1)
         if key not in _ASSISTANT_PARAM_KEYS:
-            return f"unknown key {key} (expected {', '.join(sorted(_ASSISTANT_PARAM_KEYS))})"
+            return _cli_unknown_key("--params", key, _ASSISTANT_PARAM_KEYS)
         for named_key, option in _ASSISTANT_OPTIONS:
             if key == named_key and _option_supplied(args, option):
                 return f"--{option} and --params {key}= set the same value"
@@ -312,10 +319,10 @@ def _assistant_params_refusal(args: argparse.Namespace) -> str | None:
             try:
                 _read_number_text(value)
             except _NumericTextError:
-                return f"invalid numeric value for parameter '{key}'"
+                return _cli_key_refusal("--params", key, "must be a finite number")
             continue
         if value not in tokens:
-            return f"{key} must be one of {', '.join(tokens)}"
+            return _cli_key_refusal("--params", key, f"must be one of {', '.join(tokens)}")
     return None
 
 
@@ -350,15 +357,18 @@ def _reject_unknown_processor_params(processor: str, keys: Sequence[str]) -> Non
     is off), not "reads nothing". Those ids keep the old silent-ignore
     behaviour, which is the remaining half of this gap.
     """
-    from . import mastering_insert_param_names
+    if not keys:
+        return
+    from . import mastering_insert_names, mastering_insert_param_names
 
+    if processor not in mastering_insert_names():
+        return
     known = set(mastering_insert_param_names(processor))
     if not known:
         return
-    unknown = [key for key in keys if key not in known]
-    if unknown:
-        joined = ", ".join(unknown)
-        raise ValueError(f"unknown --params key for {processor}: {joined}")
+    unknown = next((key for key in keys if key not in known), None)
+    if unknown is not None:
+        raise ValueError(_cli_unknown_key("--params", unknown, known))
 
 
 def cmd_mastering(args: argparse.Namespace) -> int:
@@ -380,17 +390,18 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         """Run one chain config over however many channels the source has."""
         from . import master_audio, master_audio_stereo
 
-        if stereo:
-            return master_audio_stereo(
-                planes[0],
-                planes[1],
-                sample_rate=sr,
-                preset=None,
-                overrides=_nest_chain_config(config),
+        with _cli_key_subjects("--params", _params_keys(params_raw)):
+            if stereo:
+                return master_audio_stereo(
+                    planes[0],
+                    planes[1],
+                    sample_rate=sr,
+                    preset=None,
+                    overrides=_nest_chain_config(config),
+                )
+            return master_audio(
+                samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
             )
-        return master_audio(
-            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
-        )
 
     result: Any
     mode = "chainConfig"
@@ -398,21 +409,22 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     if preset and not assistant:
         from . import master_audio, master_audio_stereo
 
-        if stereo:
-            result = master_audio_stereo(
-                planes[0],
-                planes[1],
-                sample_rate=sr,
-                preset=cast("MasteringPreset", preset),
-                overrides=_nest_chain_config(params) if params else None,
-            )
-        else:
-            result = master_audio(
-                samples,
-                sample_rate=sr,
-                preset=cast("MasteringPreset", preset),
-                overrides=_nest_chain_config(params) if params else None,
-            )
+        with _cli_key_subjects("--params", _params_keys(params_raw)):
+            if stereo:
+                result = master_audio_stereo(
+                    planes[0],
+                    planes[1],
+                    sample_rate=sr,
+                    preset=cast("MasteringPreset", preset),
+                    overrides=_nest_chain_config(params) if params else None,
+                )
+            else:
+                result = master_audio(
+                    samples,
+                    sample_rate=sr,
+                    preset=cast("MasteringPreset", preset),
+                    overrides=_nest_chain_config(params) if params else None,
+                )
         mode = "preset"
     elif config_raw:
         config = _chain_config_document(config_raw)
@@ -587,9 +599,10 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     channels: list[list[float]]
     if use_stereo:
         left, right = (planes[0], planes[1]) if len(planes) == 2 else (planes[0], planes[0])
-        stereo = mastering_apply_processor_stereo(
-            processor_name, left, right, sample_rate=sr, params=params
-        )
+        with _cli_key_subjects("--params", _params_keys(params_raw)):
+            stereo = mastering_apply_processor_stereo(
+                processor_name, left, right, sample_rate=sr, params=params
+            )
         # Written as a pair rather than folded back: these processors exist to act
         # on or create a difference between the channels, and a downmix discards
         # exactly what they produced.
@@ -603,7 +616,10 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
             declip_unreconstructed_runs=stereo.declip_unreconstructed_runs,
         )
     else:
-        result = mastering_apply_processor(processor_name, planes[0], sample_rate=sr, params=params)
+        with _cli_key_subjects("--params", _params_keys(params_raw)):
+            result = mastering_apply_processor(
+                processor_name, planes[0], sample_rate=sr, params=params
+            )
         channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
@@ -677,13 +693,17 @@ def cmd_eq(args: argparse.Namespace) -> int:
     result: Any
     channels: list[list[float]]
     if use_stereo:
-        stereo = mastering_apply_processor_stereo(
-            "eq.equalizer", planes[0], planes[1], sample_rate=sr, params=params
-        )
+        with _cli_key_subjects("--params", _params_keys(params_raw)):
+            stereo = mastering_apply_processor_stereo(
+                "eq.equalizer", planes[0], planes[1], sample_rate=sr, params=params
+            )
         channels = [list(stereo.left), list(stereo.right)]
         result = stereo
     else:
-        result = mastering_apply_processor("eq.equalizer", planes[0], sample_rate=sr, params=params)
+        with _cli_key_subjects("--params", _params_keys(params_raw)):
+            result = mastering_apply_processor(
+                "eq.equalizer", planes[0], sample_rate=sr, params=params
+            )
         channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
@@ -760,14 +780,15 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     reference = decode_channels(_read_audio_bounded(args.reference))
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    result = mastering_analyze_pair(
-        args.analysis,
-        source.channels,
-        reference.channels,
-        sample_rate=source.sample_rate,
-        reference_sample_rate=reference.sample_rate,
-        params=params or None,
-    )
+    with _cli_key_subjects("--params", _params_keys(params_raw)):
+        result = mastering_analyze_pair(
+            args.analysis,
+            source.channels,
+            reference.channels,
+            sample_rate=source.sample_rate,
+            reference_sample_rate=reference.sample_rate,
+            params=params or None,
+        )
     print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
@@ -779,14 +800,15 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
     reference, ref_sr = _load_audio(args.reference)
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    result = mastering_apply_pair_processor(
-        args.processor,
-        source,
-        reference,
-        sample_rate=sr,
-        reference_sample_rate=ref_sr,
-        params=params or None,
-    )
+    with _cli_key_subjects("--params", _params_keys(params_raw)):
+        result = mastering_apply_pair_processor(
+            args.processor,
+            source,
+            reference,
+            sample_rate=sr,
+            reference_sample_rate=ref_sr,
+            params=params or None,
+        )
     output = getattr(args, "output", "") or ""
     fit = _write_mastering_output(output, [result.samples], result.sample_rate, _wav_bits(args))
     if args.json:
@@ -825,9 +847,10 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
         raise ValueError("reference length must match input length")
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    result = mastering_analyze_stereo(
-        args.analysis, left, right, sample_rate=sr, params=params or None
-    )
+    with _cli_key_subjects("--params", _params_keys(params_raw)):
+        result = mastering_analyze_stereo(
+            args.analysis, left, right, sample_rate=sr, params=params or None
+        )
     print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
@@ -862,7 +885,11 @@ def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
             raise ValueError("must be a JSON array of platform objects")
         platforms: list[dict[str, Any]] = []
         for index, entry in enumerate(document):
-            where = f"platforms[{index}]"
+            where = (
+                _cli_key_subject("--platforms", f"[{index}]")
+                if subject == "argument --platforms"
+                else f"platforms[{index}]"
+            )
             _mapping_keys(entry, _STREAMING_PLATFORM_KEYS, where, required=_STREAMING_PLATFORM_KEYS)
             name = entry["name"]
             if not isinstance(name, str):
@@ -877,7 +904,13 @@ def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
                 }
             )
     except ValueError as exc:
-        raise ValueError(f"{subject}: {exc}") from None
+        message = str(exc)
+        if subject == "argument --platforms" and (
+            message.startswith("unknown key --platforms ")
+            or message.startswith("--platforms ")
+        ):
+            raise ValueError(message) from None
+        raise ValueError(f"{subject}: {message}") from None
     return platforms
 
 
@@ -920,7 +953,8 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     params = _assistant_params_from_args(args, args.params or "")
-    suggestion = mastering_assistant_suggest(samples, sample_rate=sr, params=params)
+    with _cli_key_subjects("--params", _params_keys(args.params or "")):
+        suggestion = mastering_assistant_suggest(samples, sample_rate=sr, params=params)
     # The suggested chain is fed back to the library verbatim
     # (`mastering --chain-config`), so the names under it belong to the chain
     # param schema rather than to CLI stdout, and re-keying them would make the
@@ -945,7 +979,12 @@ def cmd_mastering_profile(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     params = _parse_kv_params(args.params) if args.params else {}
-    result = mastering_audio_profile(samples, sample_rate=sr, params=params)
+    with _cli_key_subjects(
+        "--params",
+        _params_keys(args.params or ""),
+        extra={"sample_rate": "the input file's sample rate"},
+    ):
+        result = mastering_audio_profile(samples, sample_rate=sr, params=params)
     print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 

@@ -480,15 +480,15 @@ def test_mixer_commands_refuse_malformed_argv_before_reading_inputs(tmp_path) ->
         ),
         (
             ["suggest-mix", "--input", missing, "--params", "tempoBpm=abc"],
-            "invalid numeric value for parameter 'tempoBpm'",
+            "--params tempoBpm must be a finite number",
         ),
         (
             ["suggest-mix", "--input", missing, "--params", "enable_eq=1"],
-            f"unknown key enable_eq (expected {_ASSISTANT_KEYS})",
+            f"unknown key --params enable_eq (expected {_ASSISTANT_KEYS})",
         ),
         (
             ["suggest-mix", "--input", missing, "--params", "nosuchkey=1"],
-            f"unknown key nosuchkey (expected {_ASSISTANT_KEYS})",
+            f"unknown key --params nosuchkey (expected {_ASSISTANT_KEYS})",
         ),
         (
             ["suggest-mix", "--input", missing, "--params", "tempoBpm=100", "--tempo-bpm", "120"],
@@ -516,15 +516,15 @@ def test_mixer_commands_refuse_malformed_argv_before_reading_inputs(tmp_path) ->
 @pytest.mark.parametrize(
     ("params", "text"),
     [
-        ("targetTrackLufs=1e100", "invalid numeric value for parameter 'targetTrackLufs'"),
-        ("tempoBpm=19", "tempoBpm must be 0 or a tempo between 20 and 400 BPM"),
-        ("tempoBpm=401", "tempoBpm must be 0 or a tempo between 20 and 400 BPM"),
-        ("nFft=3", "nFft must be an even integer in [2, 524288]"),
-        ("nFft=2.5", "nFft must be an even integer in [2, 524288]"),
-        ("nFft=524290", "nFft must be an even integer in [2, 524288]"),
-        ("hopLength=0", "hopLength must be an integer in [1, 2147483647]"),
-        ("hopLength=1.5", "hopLength must be an integer in [1, 2147483647]"),
-        ("hopLength=2147483648", "hopLength must be an integer in [1, 2147483647]"),
+        ("targetTrackLufs=1e100", "--params targetTrackLufs must be a finite number"),
+        ("tempoBpm=19", "--params tempoBpm must be 0 or a tempo between 20 and 400 BPM"),
+        ("tempoBpm=401", "--params tempoBpm must be 0 or a tempo between 20 and 400 BPM"),
+        ("nFft=3", "--params nFft must be an even integer in [2, 524288]"),
+        ("nFft=2.5", "--params nFft must be an even integer in [2, 524288]"),
+        ("nFft=524290", "--params nFft must be an even integer in [2, 524288]"),
+        ("hopLength=0", "--params hopLength must be an integer in [1, 2147483647]"),
+        ("hopLength=1.5", "--params hopLength must be an integer in [1, 2147483647]"),
+        ("hopLength=2147483648", "--params hopLength must be an integer in [1, 2147483647]"),
     ],
 )
 def test_suggest_mix_refuses_invalid_param_values_before_read(tmp_path, params, text) -> None:

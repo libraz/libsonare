@@ -274,8 +274,8 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
       auto [code, output] =
           exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json 2>&1");
       CHECK(code == 2);
-      CHECK_THAT(output, ContainsSubstring("unknown key target_platform (expected ceilingDbtp, "
-                                           "enableRepair, preferStreamingSafe, preset, "
+      CHECK_THAT(output, ContainsSubstring("unknown key --params target_platform (expected "
+                                           "ceilingDbtp, enableRepair, preferStreamingSafe, preset, "
                                            "speechMonoAmount, targetLufs, targetPlatform)"));
     }
   }
@@ -296,25 +296,25 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
     auto [code, output] =
         exec_command(CLI + " mastering-suggest " + TEST_WAV + " --params notAKey=1 --json 2>&1");
     CHECK(code == 2);
-    CHECK_THAT(output, ContainsSubstring("unknown key notAKey (expected "));
+    CHECK_THAT(output, ContainsSubstring("unknown key --params notAKey (expected "));
   }
 
   SECTION("mastering-suggest refuses invalid param values before the read") {
     const std::string presets =
-        "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
+        "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
         "broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, "
         "techno, metal, trap, rnb, jazz, kpop, trance, gameOst";
     const std::string platforms =
-        "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, "
+        "--params targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, "
         "cinema, club, cd";
     const std::vector<std::pair<std::string, std::string>> rows = {
         {"preset=3", presets},
         {"preset=vinyl", presets},
         {"targetPlatform=2", platforms},
         {"targetPlatform=typo", platforms},
-        {"targetLufs=invalid", "invalid numeric value for parameter 'targetLufs'"},
-        {"ceilingDbtp=1e100", "invalid numeric value for parameter 'ceilingDbtp'"},
-        {"speechMonoAmount=nan", "invalid numeric value for parameter 'speechMonoAmount'"},
+        {"targetLufs=invalid", "--params targetLufs must be a finite number"},
+        {"ceilingDbtp=1e100", "--params ceilingDbtp must be a finite number"},
+        {"speechMonoAmount=nan", "--params speechMonoAmount must be a finite number"},
     };
     for (const auto& [params, expected] : rows) {
       CAPTURE(params);
@@ -549,7 +549,7 @@ TEST_CASE("CLI mastering --params keys the processor does not read", "[cli][mast
   auto [code, output] =
       exec_command(CLI + " eq " + TEST_WAV + " --params band0.bogusKey=42 -o " + eq_out + " -q");
   REQUIRE(code == 2);
-  REQUIRE_THAT(output, ContainsSubstring("unknown --params key for eq.equalizer"));
+  REQUIRE_THAT(output, ContainsSubstring("unknown key --params band0.bogusKey (expected "));
   REQUIRE_THAT(output, ContainsSubstring("band0.bogusKey"));
 
   // A key the processor does read still runs.
@@ -562,7 +562,7 @@ TEST_CASE("CLI mastering --params keys the processor does not read", "[cli][mast
       exec_command(CLI + " mastering-processor " + TEST_WAV +
                    " --processor dynamics.compressor --params bogusKey=1 -q");
   REQUIRE(processor_code == 2);
-  REQUIRE_THAT(processor_output, ContainsSubstring("unknown --params key"));
+  REQUIRE_THAT(processor_output, ContainsSubstring("unknown key --params bogusKey (expected "));
   std::remove(eq_out.c_str());
 }
 
@@ -603,7 +603,33 @@ TEST_CASE("CLI mastering and repair refuse an unknown chain key before the read"
     CAPTURE(command);
     auto [code, output] = exec_command(CLI + " " + command + " 2>&1");
     REQUIRE(code == 2);
-    REQUIRE_THAT(output, ContainsSubstring("unknown key params."));
+    const std::string key = command.rfind("mastering ", 0) == 0 ? "bogus.x" : "repair.bogus.x";
+    REQUIRE_THAT(output, ContainsSubstring("unknown key --params " + key + " (expected "));
+  }
+}
+
+TEST_CASE("CLI numeric mastering parameter bags refuse invalid values before the read",
+          "[cli][mastering]") {
+  const std::string missing = "/nonexistent/numeric-bag-input.wav";
+  const std::vector<std::pair<std::string, std::string>> rows = {
+      {"mastering-profile " + missing, "nFft"},
+      {"mastering-pair-processor " + missing + " --processor match.applyMatchEq --reference " +
+           missing,
+       "targetLufs"},
+      {"mastering-pair-analyze " + missing + " --analysis match.tonalBalanceLogBands --reference " +
+           missing,
+       "nFft"},
+      {"mastering-stereo-analyze " + missing + " --analysis stereo.monoCompatCheck --reference " +
+           missing,
+       "nFft"},
+      {"eq " + missing, "band0.gainDb"},
+  };
+  for (const auto& [command, key] : rows) {
+    CAPTURE(command, key);
+    const auto result = exec_command_split(CLI + " " + command + " --params " + key + "=abc");
+    CHECK(result.exit_code == 2);
+    CHECK(result.out.empty());
+    CHECK_THAT(result.err, ContainsSubstring("Error: --params " + key + " must be a finite number\n"));
   }
 }
 
@@ -769,26 +795,26 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
     const SplitResult refused = run(record);
     CHECK(refused.exit_code == 2);
     CHECK_THAT(refused.err,
-               ContainsSubstring("argument --platforms: unknown key platforms[0]." + old_key +
+               ContainsSubstring("unknown key --platforms [0]." + old_key +
                                  " (expected ceiling_dbtp, name, target_lufs)"));
   }
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
   CHECK(missing.exit_code == 2);
   CHECK_THAT(missing.err,
-             ContainsSubstring("argument --platforms: platforms[0].ceiling_dbtp must be given"));
+             ContainsSubstring("--platforms [0].ceiling_dbtp must be given"));
 
   const SplitResult mistyped = run(R"([{"name":"custom","target_lufs":"loud","ceiling_dbtp":-1}])");
   CHECK(mistyped.exit_code == 2);
   CHECK_THAT(mistyped.err,
-             ContainsSubstring("argument --platforms: platforms[0].target_lufs must be a number"));
+             ContainsSubstring("--platforms [0].target_lufs must be a number"));
 
   const SplitResult unknown =
       run(R"([{"name":"custom","target_lufs":-14,"ceiling_dbtp":-1,"x":1}])");
   CHECK(unknown.exit_code == 2);
   CHECK_THAT(
       unknown.err,
-      ContainsSubstring("unknown key platforms[0].x (expected ceiling_dbtp, name, target_lufs)"));
+      ContainsSubstring("unknown key --platforms [0].x (expected ceiling_dbtp, name, target_lufs)"));
 
   // A file is read with the input, so the same document is refused after it, by its source.
   const std::string document = unique_temp_path("_platforms.json");
@@ -825,7 +851,7 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a numb
   CHECK(number_code == 2);
   CHECK_THAT(number_output,
              ContainsSubstring(
-                 "Error: params.repair.denoise.noiseEstimator must be one of quantile, mcra, "
+                 "Error: --params repair.denoise.noiseEstimator must be one of quantile, mcra, "
                  "imcra, spp\n"));
 
   // --chain-config: the same name inside the JSON file.
@@ -854,7 +880,7 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a numb
   CHECK(number_key_code == 2);
   CHECK_THAT(
       number_key_output,
-      ContainsSubstring("Error: params.loudness.targetLufs must be a number or a boolean\n"));
+      ContainsSubstring("Error: --params loudness.targetLufs must be a number or a boolean\n"));
   std::remove(by_name_out.c_str());
   std::remove(config_path.c_str());
   std::remove(config_out.c_str());
@@ -1621,7 +1647,7 @@ TEST_CASE("CLI repair --params stays inside the repair config", "[cli][mastering
                                      TEST_OUT + " -q");
   REQUIRE(code == 2);
   REQUIRE_THAT(output,
-               ContainsSubstring("--params key must be a repair.* field: loudness.enabled"));
+               ContainsSubstring("--params loudness.enabled must be a repair.* field"));
 
   auto [ok_code, ok_output] = exec_command(
       CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
@@ -1985,35 +2011,35 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
       {"suggest-mix --input " + missing + " --params novalue",
        "invalid parameter entry: 'novalue' (expected key=value)"},
       {"suggest-mix --input " + missing + " --params tempoBpm=abc",
-       "invalid numeric value for parameter 'tempoBpm'"},
+       "--params tempoBpm must be a finite number"},
       {"suggest-mix --input " + missing + " --params targetTrackLufs=1e100",
-       "invalid numeric value for parameter 'targetTrackLufs'"},
+       "--params targetTrackLufs must be a finite number"},
       {"suggest-mix --input " + missing + " --params tempoBpm=19",
-       "tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
+       "--params tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
       {"suggest-mix --input " + missing + " --params tempoBpm=401",
-       "tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
+       "--params tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
       {"suggest-mix --input " + missing + " --params nFft=3",
-       "nFft must be an even integer in [2, 524288]", true},
+       "--params nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params nFft=0",
-       "nFft must be an even integer in [2, 524288]", true},
+       "--params nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params nFft=3.5",
-       "nFft must be an even integer in [2, 524288]", true},
+       "--params nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params nFft=524290",
-       "nFft must be an even integer in [2, 524288]", true},
+       "--params nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params nFft=1e20",
-       "nFft must be an even integer in [2, 524288]", true},
+       "--params nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params hopLength=0",
-       "hopLength must be an integer in [1, 2147483647]", true},
+       "--params hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params hopLength=1.5",
-       "hopLength must be an integer in [1, 2147483647]", true},
+       "--params hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params hopLength=2147483648",
-       "hopLength must be an integer in [1, 2147483647]", true},
+       "--params hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params enable_eq=1",
-       "unknown key enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, "
+       "unknown key --params enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, "
        "enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, "
        "nFft, suggestionStrength, targetTrackLufs, tempoBpm)"},
       {"suggest-mix --input " + missing + " --params nosuchkey=1",
-       "unknown key nosuchkey (expected "},
+       "unknown key --params nosuchkey (expected "},
       {"suggest-mix --input " + missing + " --params tempoBpm=100 --tempo-bpm 120",
        "--tempo-bpm and --params tempoBpm= set the same value"},
       {"mix --preset vocalReverbSend --input =x -o " + out,

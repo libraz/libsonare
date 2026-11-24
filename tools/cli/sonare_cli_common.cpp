@@ -136,17 +136,23 @@ std::string read_plain_text_file(const std::string& path) {
 }
 
 // A struct the command fills is named by its members alone, as every binding names them.
-void throw_c_failure(SonareError err, const char* root) {
+void throw_c_failure(SonareError err, const char* root, const char* bag_flag) {
   std::string message = sonare_last_error_message();
   const size_t count = sonare_last_refusal_subject_count();
   if (root != nullptr && count > 0) {
     const std::string prefix = std::string(root) + ".";
+    const std::string indexed_prefix = std::string(root) + "[";
     std::vector<std::string> subjects;
     std::vector<const char*> pointers;
     subjects.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       std::string subject = sonare_last_refusal_subject(i);
-      if (subject.rfind(prefix, 0) == 0) subject.erase(0, prefix.size());
+      if (bag_flag != nullptr &&
+          (subject.rfind(prefix, 0) == 0 || subject.rfind(indexed_prefix, 0) == 0)) {
+        subject = cli_bag_subject(bag_flag, subject, root);
+      } else if (subject.rfind(prefix, 0) == 0) {
+        subject.erase(0, prefix.size());
+      }
       subjects.push_back(std::move(subject));
     }
     for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
