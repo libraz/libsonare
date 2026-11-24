@@ -2697,11 +2697,11 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
     // so fail each of the final allocations of a successful call.
     const std::vector<float> body(4096, 0.1f);
     const auto run_mono = [&](SonareMasteringChainResult* r) {
-      return sonare_master_audio(nullptr, body.data(), body.size(), 48000, nullptr, nullptr, r);
+      return sonare_master_audio(nullptr, body.data(), body.size(), 48000, "{}", nullptr, r);
     };
     const auto run_stereo = [&](SonareMasteringChainStereoResult* r) {
-      return sonare_master_audio_stereo(nullptr, body.data(), body.data(), body.size(), 48000,
-                                        nullptr, nullptr, r);
+      return sonare_master_audio_stereo(nullptr, body.data(), body.data(), body.size(), 48000, "{}",
+                                        nullptr, r);
     };
     const auto count_allocations = [](auto call) {
       size_t count = 0;

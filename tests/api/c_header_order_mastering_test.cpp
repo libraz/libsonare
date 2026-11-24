@@ -98,7 +98,7 @@ TEST_CASE("mastering apply entries refuse in header order", "[c_api][header_orde
   CHECK(latency == 0);
 }
 
-TEST_CASE("master_audio default-chain entries refuse in header order", "[c_api][header_order]") {
+TEST_CASE("master_audio entries refuse in header order", "[c_api][header_order]") {
   const std::vector<float> samples = make_samples();
 
   SonareMasteringChainResult result;

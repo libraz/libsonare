@@ -73,6 +73,7 @@ inline const char* presence_phrase(const std::string& token, PresenceSpelling sp
       {"must_be_present", "must not be NULL", "must not be None", "must be given"},
       {"must_not_both_be_absent", "must not both be NULL", "must not both be None",
        "must not both be omitted"},
+      {"give_either", "give", "give", "give"},
       {"is_absent", "is NULL", "is None", "is omitted"},
       {"is_present", "is not NULL", "is not None", "is given"},
   };
@@ -91,10 +92,11 @@ inline const char* presence_phrase(const std::string& token, PresenceSpelling sp
 }
 
 /// @brief Whether @p pattern requires a value to be left out or supplied: it carries a
-///        `{must_be_absent}`, `{must_be_present}` or `{must_not_both_be_absent}` token. A presence
+///        required-presence or required-absence token. A presence
 ///        token in a condition (`{is_absent}`, `{is_present}`) requires nothing of its own.
 inline bool requires_presence(const std::string& pattern) {
-  for (const char* token : {"{must_be_absent}", "{must_be_present}", "{must_not_both_be_absent}"}) {
+  for (const char* token :
+       {"{must_be_absent}", "{must_be_present}", "{must_not_both_be_absent}", "{give_either}"}) {
     if (pattern.find(token) != std::string::npos) return true;
   }
   return false;

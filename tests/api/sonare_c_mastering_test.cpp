@@ -57,6 +57,52 @@ SonareError create_chain_with_gain(const char* config, float static_gain_db, flo
 
 }  // namespace
 
+TEST_CASE("Master audio requires a preset or overrides object",
+          "[c_api][mastering][master_audio_selector]") {
+  const std::vector<float> samples(64, 0.25f);
+  constexpr int sample_rate = 48000;
+  const auto check_refusal = [] {
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "give preset or overrides_json");
+    REQUIRE(sonare_last_refusal_subject_count() == 2);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "preset");
+    CHECK(std::string(sonare_last_refusal_subject(1)) == "overrides_json");
+  };
+
+  SECTION("mono") {
+    SonareMasteringChainResult out = {};
+    REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), sample_rate, nullptr,
+                                nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    check_refusal();
+    CHECK(out.samples == nullptr);
+    CHECK(out.length == 0);
+    REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), sample_rate, "{}", nullptr,
+                                &out) == SONARE_OK);
+    CHECK(out.stages_count == 0);
+    REQUIRE(out.length == samples.size());
+    CHECK(std::equal(samples.begin(), samples.end(), out.samples));
+    sonare_free_mastering_chain_result(&out);
+  }
+
+  SECTION("stereo") {
+    SonareMasteringChainStereoResult out = {};
+    REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(),
+                                       sample_rate, nullptr, nullptr,
+                                       &out) == SONARE_ERROR_INVALID_PARAMETER);
+    check_refusal();
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(),
+                                       sample_rate, "{}", nullptr, &out) == SONARE_OK);
+    CHECK(out.stages_count == 0);
+    REQUIRE(out.length == samples.size());
+    CHECK(std::equal(samples.begin(), samples.end(), out.left));
+    CHECK(std::equal(samples.begin(), samples.end(), out.right));
+    sonare_free_mastering_chain_stereo_result(&out);
+  }
+}
+
 TEST_CASE("sonare_mastering stereo analysis parameter admission", "[c_api][mastering][stereo]") {
   constexpr const char* log_bands = "stereo.monoCompatCheckLogBands";
   constexpr const char* bands_refusal =
@@ -443,7 +489,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 
     SonareMasteringChainStereoResult ok{};
     REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(),
-                                       22050, nullptr, nullptr, &ok) == SONARE_OK);
+                                       22050, "{}", nullptr, &ok) == SONARE_OK);
     sonare_free_mastering_chain_stereo_result(&ok);
   }
 
@@ -3132,7 +3178,7 @@ TEST_CASE("a C mastering chain result carries the declip count only when declip 
 
   SonareMasteringChainStereoResult without{};
   REQUIRE(sonare_master_audio_stereo(nullptr, clipped.data(), clipped.data(), clipped.size(), 48000,
-                                     nullptr, nullptr, &without) == SONARE_OK);
+                                     "{}", nullptr, &without) == SONARE_OK);
   CHECK(without.has_declip_unreconstructed_runs == 0);
   CHECK(without.declip_unreconstructed_runs == 0);
   sonare_free_mastering_chain_stereo_result(&without);

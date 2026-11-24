@@ -321,13 +321,13 @@ typedef struct {
 /// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
 void sonare_master_audio_options_init(SonareMasterAudioOptions* options);
 
-/// @brief Apply a preset chain, or the default chain, to mono audio.
-/// Restoration presets' repair stages, like every classical denoise
-/// configuration, can mistake a steady tone -- a calibration tone, a drone, a
-/// long held note -- for noise and pull it down by the configured reduction
-/// depth. Check for musical sustained tones before applying one.
-/// @param preset e.g. "pop", "aiMusic" (see @c sonare_mastering_preset_names()), or NULL for the
-///   default chain.
+/// @brief Apply a mastering chain to mono audio.
+/// Supply @p preset or @p overrides_json, using NULL and `"{}"` respectively for identity
+/// mastering. Restoration presets' repair stages, like every classical denoise configuration, can
+/// mistake a steady tone -- a calibration tone, a drone, a long held note -- for noise and pull it
+/// down by the configured reduction depth. Check for musical sustained tones before applying one.
+/// @param preset e.g. "pop", "aiMusic" (see @c sonare_mastering_preset_names()), or NULL to use
+///   @p overrides_json alone.
 /// @param overrides_json NULL, or one JSON object overriding the chain @p preset names. A refusal
 ///   names the key under the root `overrides` and returns @c SONARE_ERROR_INVALID_PARAMETER.
 /// @param options NULL for the defaults (@ref sonare_master_audio_options_init): no progress, no
@@ -352,7 +352,9 @@ SonareError sonare_master_audio(const char* preset, const float* samples, size_t
                                 const SonareMasterAudioOptions* options,
                                 SonareMasteringChainResult* out);
 
-/// @brief Stereo equivalent of @c sonare_master_audio.
+/// @brief Apply a mastering chain to stereo audio.
+/// Supply @p preset or @p overrides_json, using NULL and `"{}"` respectively for identity
+/// mastering.
 SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
                                        size_t length, int sample_rate, const char* overrides_json,
                                        const SonareMasterAudioOptions* options,

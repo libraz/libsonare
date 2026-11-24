@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/master_audio_selector.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
@@ -225,18 +226,16 @@ inline void clear_chain_result(SonareMasteringChainStereoResult* out, int sample
   zero_chain_metrics(out);
 }
 
-// Forward the optional progress and cancel callbacks onto a chain.
-/// @brief The chain @p preset names (the default chain when NULL) with the caller's
-///        @p overrides_json object applied, refused under the root `overrides`.
+/// @brief Resolves the chain from a preset, an overrides object, or both.
 inline sonare::mastering::api::MasteringChainConfig preset_chain_config(
     const char* preset, const char* overrides_json) {
   namespace api = sonare::mastering::api;
   constexpr std::string_view kRoot = "overrides";
+  api::require_master_audio_selector(preset != nullptr, overrides_json != nullptr,
+                                     "overrides_json");
   if (preset == nullptr) {
-    return overrides_json == nullptr
-               ? api::MasteringChainConfig{}
-               : api::chain_config_from_json(api::chain_params_document(overrides_json, kRoot),
-                                             api::chain_params_argument(kRoot));
+    return api::chain_config_from_json(api::chain_params_document(overrides_json, kRoot),
+                                       api::chain_params_argument(kRoot));
   }
   auto config = api::preset_config(api::preset_from_string(preset));
   if (overrides_json == nullptr) return config;
