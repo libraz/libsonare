@@ -6,6 +6,7 @@
 #include <cmath>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -114,6 +115,43 @@ TEST_CASE("project snap-to-grid clears failure output and validates by argument 
 #endif
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+TEST_CASE("take alignment returns identity for rounding-level perturbations",
+          "[c_api][project][alignment]") {
+  constexpr int kRate = 48000;
+  constexpr int kHop = 512;
+  std::vector<float> reference(kRate / 2);
+  for (size_t i = 0; i < reference.size(); ++i) {
+    const double t = static_cast<double>(i) / kRate;
+    reference[i] = static_cast<float>(0.34 * std::sin(sonare::constants::kTwoPiD * 257.0 * t) +
+                                      0.17 * std::sin(sonare::constants::kTwoPiD * 1373.0 * t));
+  }
+  auto take = reference;
+  SECTION("with exact samples") {}
+  SECTION("with rounding-level sample perturbations") {
+    for (size_t i = 0; i < take.size(); ++i) {
+      take[i] = static_cast<float>(take[i] + (i % 2 == 0 ? 1e-8 : -1e-8));
+    }
+    REQUIRE(take != reference);
+  }
+  SonareProjectWarpAnchor* raw = nullptr;
+  size_t count = 0;
+  SonareTakeAlignment alignment{};
+  REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), kRate, take.data(),
+                                         take.size(), kRate, nullptr, &raw, &count,
+                                         &alignment) == SONARE_OK);
+  const std::unique_ptr<SonareProjectWarpAnchor, decltype(&sonare_free_project_warp_anchors)>
+      anchors(raw, sonare_free_project_warp_anchors);
+  REQUIRE(anchors != nullptr);
+  REQUIRE(count == 47);
+  CHECK(alignment.reference_frames == 47);
+  CHECK(alignment.take_frames == 47);
+  CHECK(std::abs(alignment.mean_residual_frames) < 5e-7f);
+  for (size_t i = 0; i < count; ++i) {
+    CHECK(raw[i].warp_sample == static_cast<double>(i * kHop));
+    CHECK(raw[i].source_sample == static_cast<double>(i * kHop));
+  }
+}
+
 TEST_CASE("take alignment leaves diagnostics empty when output allocation fails",
           "[c_api][project][allocation]") {
   constexpr int kSampleRate = 22050;

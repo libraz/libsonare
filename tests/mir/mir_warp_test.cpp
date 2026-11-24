@@ -1483,6 +1483,25 @@ TEST_CASE("the production column-norm reduction sums bins in ascending order", "
   REQUIRE(reversed_disagreements > 0);
 }
 
+TEST_CASE("chroma DTW prefers the diagonal within cosine rounding error", "[mir]") {
+  const std::vector<float> ref(9, 1.0f);
+  auto take = ref;
+  take[1] = std::nextafter(1.0f, 2.0f);
+  const std::vector<int> projection{0, 1, 2};
+  const std::vector<std::pair<int, int>> diagonal{{0, 0}, {1, 1}, {2, 2}};
+  CHECK(sonare::mir::detail::banded_dtw_path(ref, 3, 3, ref, 3, projection, 2) == diagonal);
+  CHECK(sonare::mir::detail::banded_dtw_path(ref, 3, 3, take, 3, projection, 2) == diagonal);
+
+  // Opposite perturbations make the strict-minimum detour cheaper even with
+  // nonnegative double costs. Here the difference is below the tie tolerance.
+  auto up = ref;
+  auto down = ref;
+  const float noise = 2.0f * std::numeric_limits<float>::epsilon();
+  up[1] += noise;
+  down[1] -= noise;
+  CHECK(sonare::mir::detail::banded_dtw_path(up, 3, 3, down, 3, projection, 2) == diagonal);
+}
+
 TEST_CASE("the banded DTW path spans both corners in unit steps", "[mir]") {
   // The production banded DP, in the default run. The two cases that reach it
   // through a full alignment are tagged out of the default suite and compare

@@ -14,7 +14,6 @@
 #include "mir/warp_detail.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
-#include "util/sequence.h"
 
 namespace sonare::mir {
 namespace detail {
@@ -32,52 +31,15 @@ std::vector<double> chroma_column_norms(const std::vector<float>& m, int n_chrom
   return norms;
 }
 
-// Banded DTW: only cells within +/- band_radius of the projected path's target
-// index (per reference frame) are evaluated, widened only where consecutive
-// rows would otherwise not overlap and at the two corners. For the
-// non-decreasing projection project_path produces, that bounds the evaluated
-// cells at O(ref_frames * band_width + tgt_frames): each widened row spans
-// hi[i] - hi[i-1], and those telescope over a non-decreasing hi.
-//
-// We implement this as a self-contained deterministic DP over the band so we do
-// not have to thread a band mask through util/sequence::dtw. The cost is the
-// cosine distance between chroma columns; steps are the symmetric P0 pattern
-// {(1,1),(1,0),(0,1)} matching util/sequence's default.
-std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, int n_chroma,
-                                                 int ref_frames, const std::vector<float>& tgt,
-                                                 int tgt_frames,
-                                                 const std::vector<int>& projected_tgt,
-                                                 int band_radius) {
-  const float kInf = 1e30f;
-  // Per reference frame i, the target band is [lo[i], hi[i]] (inclusive).
-  std::vector<int> lo(ref_frames), hi(ref_frames);
-  for (int i = 0; i < ref_frames; ++i) {
-    const int64_t center = projected_tgt[i];
-    const int64_t radius = band_radius;
-    lo[i] = static_cast<int>(std::max<int64_t>(0, center - radius));
-    hi[i] = static_cast<int>(std::min<int64_t>(tgt_frames - 1, center + radius));
-    if (hi[i] < lo[i]) hi[i] = lo[i];
-  }
-  // Anchor the start corner before the repair below, so the repair sees it.
-  lo[0] = 0;
-  // A diagonal or up step lands at most one column past where row i-1 sat, so
-  // row i is enterable iff lo[i] <= hi[i-1] + 1 and hi[i] >= reach_lo, the
-  // first column of row i-1 that is itself reachable. Repair on the row that
-  // fails the condition, widening by the deficit alone; a running min over lo
-  // and max over hi cannot express it, because a non-decreasing projection pins
-  // every floor to lo[0] and never fires the max.
-  int reach_lo = lo[0];
-  for (int i = 1; i < ref_frames; ++i) {
-    lo[i] = std::min(lo[i], hi[i - 1] + 1);
-    hi[i] = std::max(hi[i], reach_lo);
-    reach_lo = std::max(reach_lo, lo[i]);
-  }
-  // Anchor the end corner. The last row now runs contiguously from lo[last],
-  // reachable from the row above, up to tgt_frames-1 via successive left steps,
-  // so (ref_frames-1, tgt_frames-1) is reachable without widening any interior
-  // row.
-  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
-
+// Fixed start and end, symmetric steps and cosine cost. Full and banded
+// project alignment use the same recurrence. The general DTW API retains its
+// own step and tie semantics.
+static std::vector<std::pair<int, int>> cosine_dtw_path(const std::vector<float>& ref, int n_chroma,
+                                                        int ref_frames,
+                                                        const std::vector<float>& tgt,
+                                                        int tgt_frames, const std::vector<int>& lo,
+                                                        const std::vector<int>& hi) {
+  constexpr double kInf = std::numeric_limits<double>::infinity();
   // Each operand's norm depends on one index only, so deriving it inside the
   // (i, j) loop below redoes the same ref_frames + tgt_frames reductions once
   // per cell. Each norm is still summed over c in the same order, so the
@@ -85,16 +47,16 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
   const std::vector<double> ref_norms = chroma_column_norms(ref, n_chroma, ref_frames);
   const std::vector<double> tgt_norms = chroma_column_norms(tgt, n_chroma, tgt_frames);
 
-  auto cos_dist = [&](int i, int j) -> float {
+  auto cos_dist = [&](int i, int j) {
     const double denom = ref_norms[static_cast<size_t>(i)] * tgt_norms[static_cast<size_t>(j)];
-    if (denom <= 0.0) return 1.0f;
+    if (denom <= 0.0) return 1.0;
     double dot = 0.0;
     for (int c = 0; c < n_chroma; ++c) {
       const double a = ref[static_cast<size_t>(c) * ref_frames + i];
       const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
       dot += a * b;
     }
-    return static_cast<float>(1.0 - dot / denom);
+    return std::max(1.0 - dot / denom, 0.0);
   };
 
   // The recurrence reads rows i-1 and i only, so the accumulated cost is a
@@ -104,18 +66,18 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
   for (int i = 0; i < ref_frames; ++i) {
     back[i].assign(hi[i] - lo[i] + 1, -1);
   }
-  std::vector<float> prev_acc;
-  std::vector<float> curr_acc;
+  std::vector<double> prev_acc;
+  std::vector<double> curr_acc;
   int prev_lo = 0;
   int prev_hi = -1;  // Row -1 is an empty band, so every read of it is inf.
   int curr_row = 0;
   // Both windows are indexed by their own row's lo, because the band edges move
   // per row and a fixed width would read the neighbouring row off by its shift.
-  auto at_prev = [&](int j) -> float {
+  auto at_prev = [&](int j) -> double {
     if (j < prev_lo || j > prev_hi) return kInf;
     return prev_acc[j - prev_lo];
   };
-  auto at_curr = [&](int j) -> float {
+  auto at_curr = [&](int j) -> double {
     if (j < lo[curr_row] || j > hi[curr_row]) return kInf;
     return curr_acc[j - lo[curr_row]];
   };
@@ -126,31 +88,37 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
     // as inf, not as whatever the row two above left in that slot.
     curr_acc.assign(hi[i] - lo[i] + 1, kInf);
     for (int j = lo[i]; j <= hi[i]; ++j) {
-      const float local = cos_dist(i, j);
+      const double local = cos_dist(i, j);
       if (i == 0 && j == 0) {
         curr_acc[j - lo[i]] = local;
         back[i][j - lo[i]] = -1;
         continue;
       }
-      const float d = at_prev(j - 1);                   // diagonal
-      const float u = at_prev(j);                       // ref advance
-      const float l = (j > 0) ? at_curr(j - 1) : kInf;  // tgt advance
-      float best = d;
-      int bk = 0;
-      if (u < best) {
-        best = u;
-        bk = 1;
+      const double diagonal = at_prev(j - 1);
+      const double up = at_prev(j);
+      const double left = j > 0 ? at_curr(j - 1) : kInf;
+      const double minimum = std::min({diagonal, up, left});
+      if (!std::isfinite(minimum)) continue;
+
+      // A path has at most i+j+1 cells. Each cosine evaluates a unit-scale
+      // subtraction after the dot and two norm reductions. Allow eight double
+      // epsilons per bin and sixteen for the final norm/product/division and
+      // the comparison. The two accumulated sums add error at their own scale.
+      const double cells = static_cast<double>(i) + j + 1;
+      const double tolerance =
+          std::numeric_limits<double>::epsilon() * cells * (8.0 * n_chroma + 16.0 + 2.0 * minimum);
+      const double tie_limit = minimum + tolerance;
+      // Compare each predecessor to the same minimum. Traceback prefers the
+      // diagonal, then up, amongst ties. The accumulator keeps the true minimum
+      // so a preferred step cannot raise the cost seen by the next comparison.
+      if (diagonal <= tie_limit) {
+        back[i][j - lo[i]] = 0;
+      } else if (up <= tie_limit) {
+        back[i][j - lo[i]] = 1;
+      } else {
+        back[i][j - lo[i]] = 2;
       }
-      if (l < best) {
-        best = l;
-        bk = 2;
-      }
-      if (best >= kInf) {
-        // Unreachable cell inside the band: leave as inf.
-        continue;
-      }
-      curr_acc[j - lo[i]] = best + local;
-      back[i][j - lo[i]] = bk;
+      curr_acc[j - lo[i]] = minimum + local;
     }
     prev_acc.swap(curr_acc);
     prev_lo = lo[i];
@@ -186,6 +154,51 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
   }
   std::reverse(path.begin(), path.end());
   return path;
+}
+
+// Banded DTW: only cells within +/- band_radius of the projected path's target
+// index (per reference frame) are evaluated, widened only where consecutive
+// rows would otherwise not overlap and at the two corners. For the
+// non-decreasing projection project_path produces, that bounds the evaluated
+// cells at O(ref_frames * band_width + tgt_frames): each widened row spans
+// hi[i] - hi[i-1], and those telescope over a non-decreasing hi.
+//
+// Both this restricted search and the full search use the same cosine DP.
+std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, int n_chroma,
+                                                 int ref_frames, const std::vector<float>& tgt,
+                                                 int tgt_frames,
+                                                 const std::vector<int>& projected_tgt,
+                                                 int band_radius) {
+  // Per reference frame i, the target band is [lo[i], hi[i]] (inclusive).
+  std::vector<int> lo(ref_frames), hi(ref_frames);
+  for (int i = 0; i < ref_frames; ++i) {
+    const int64_t center = projected_tgt[i];
+    const int64_t radius = band_radius;
+    lo[i] = static_cast<int>(std::max<int64_t>(0, center - radius));
+    hi[i] = static_cast<int>(std::min<int64_t>(tgt_frames - 1, center + radius));
+    if (hi[i] < lo[i]) hi[i] = lo[i];
+  }
+  // Anchor the start corner before the repair below, so the repair sees it.
+  lo[0] = 0;
+  // A diagonal or up step lands at most one column past where row i-1 sat, so
+  // row i is enterable iff lo[i] <= hi[i-1] + 1 and hi[i] >= reach_lo, the
+  // first column of row i-1 that is itself reachable. Repair on the row that
+  // fails the condition, widening by the deficit alone; a running min over lo
+  // and max over hi cannot express it, because a non-decreasing projection pins
+  // every floor to lo[0] and never fires the max.
+  int reach_lo = lo[0];
+  for (int i = 1; i < ref_frames; ++i) {
+    lo[i] = std::min(lo[i], hi[i - 1] + 1);
+    hi[i] = std::max(hi[i], reach_lo);
+    reach_lo = std::max(reach_lo, lo[i]);
+  }
+  // Anchor the end corner. The last row now runs contiguously from lo[last],
+  // reachable from the row above, up to tgt_frames-1 via successive left steps,
+  // so (ref_frames-1, tgt_frames-1) is reachable without widening any interior
+  // row.
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+
+  return cosine_dtw_path(ref, n_chroma, ref_frames, tgt, tgt_frames, lo, hi);
 }
 
 }  // namespace detail
@@ -296,17 +309,16 @@ std::vector<float> downsample_time(const std::vector<float>& feat, int n_chroma,
   return out;
 }
 
-// Full DTW over two chroma matrices, returns the warping path as (ref, tgt)
-// pairs in increasing order. Uses the shared util/sequence dtw (cosine metric).
+// Full DTW uses the entire target axis as the band. Keep the cell-count
+// limit in force for callers who raise the full-resolution threshold.
 std::vector<std::pair<int, int>> full_dtw_path(const std::vector<float>& ref, int n_chroma,
                                                int ref_frames, const std::vector<float>& tgt,
                                                int tgt_frames) {
-  // util/sequence dtw expects features [rows x cols] with rows = feature dim.
-  // X is reference, Y is target -> path pairs are (X-index, Y-index) = (ref, tgt).
-  DtwResult r = dtw(ref.data(), n_chroma, ref_frames, tgt.data(), n_chroma, tgt_frames, "cosine");
-  // Moved out rather than copied: `r` also holds the [ref_frames x tgt_frames]
-  // accumulated-cost matrix, which nothing on this route reads.
-  return std::move(r.path);  // already (X, Y) ordered start->end.
+  util::check::element_count(static_cast<uint64_t>(ref_frames), static_cast<uint64_t>(tgt_frames),
+                             std::numeric_limits<int>::max(), "X_cols", "the cost matrix");
+  return detail::cosine_dtw_path(ref, n_chroma, ref_frames, tgt, tgt_frames,
+                                 std::vector<int>(ref_frames, 0),
+                                 std::vector<int>(ref_frames, tgt_frames - 1));
 }
 
 // Project a path from a coarse level (factors of `scale`) up to a finer level
