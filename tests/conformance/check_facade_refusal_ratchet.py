@@ -37,6 +37,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from check_c_abi_bare_refusals import blank_comments_and_strings, match_forward
 
 ROOT = Path(__file__).resolve().parents[2]
