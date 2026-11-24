@@ -27,6 +27,7 @@ from ._project_edit import key_mode_from_analysis as key_mode_from_analysis
 from ._project_inspection import _ProjectInspectionMixin
 from ._project_instruments import ProjectDestinationInstrument as ProjectDestinationInstrument
 from ._project_instruments import ProjectInstrument as ProjectInstrument
+from ._project_instruments import ProjectInstrumentKind as ProjectInstrumentKind
 from ._project_midi import _ProjectMidiMixin
 from ._project_model import *  # noqa: F403
 from ._project_model import (

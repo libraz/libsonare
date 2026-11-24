@@ -37,6 +37,7 @@ from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import ProjectDestinationInstrument as ProjectDestinationInstrument
 from ._project import ProjectFadeCurve as ProjectFadeCurve
 from ._project import ProjectInstrument as ProjectInstrument
+from ._project import ProjectInstrumentKind as ProjectInstrumentKind
 from ._project import ProjectKeyMode as ProjectKeyMode
 from ._project import ProjectKeySegment as ProjectKeySegment
 from ._project import ProjectLoopMode as ProjectLoopMode
