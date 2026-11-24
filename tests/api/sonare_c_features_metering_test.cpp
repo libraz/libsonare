@@ -86,6 +86,29 @@ TEST_CASE("sonare pseudo/hybrid CQT C API", "[c_api]") {
                             &result) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("C CQT reports the effective gamma", "[c_api][feature]") {
+  const auto samples = generate_sine(440.0f, 22050, 0.25f);
+  SonareCqtResult result{};
+
+  REQUIRE(sonare_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, 1.0f, &result) ==
+          SONARE_OK);
+  CHECK(result.gamma == Catch::Approx(0.0f));
+  sonare_free_cqt_result(&result);
+
+  const float supplied_gamma = 7.5f;
+  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, 1.0f,
+                     supplied_gamma, &result) == SONARE_OK);
+  CHECK(result.gamma == Catch::Approx(supplied_gamma));
+  sonare_free_cqt_result(&result);
+
+  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, 1.0f,
+                     std::numeric_limits<float>::quiet_NaN(), &result) == SONARE_OK);
+  const float step = std::pow(2.0f, 2.0f / 12.0f);
+  const float alpha = (step - 1.0f) / (step + 1.0f);
+  CHECK(result.gamma == Catch::Approx(24.7f * alpha / 0.108f));
+  sonare_free_cqt_result(&result);
+}
+
 TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   auto samples = generate_sine(110.0f, 22050, 1.0f);
   SonareChromaResult result{};

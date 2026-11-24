@@ -1485,6 +1485,23 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
   }
 }
 
+TEST_CASE("stream quantize config requires struct_size", "[c_api][streaming]") {
+  SonareStreamConfig stream_config;
+  sonare_stream_config_init(&stream_config);
+  stream_config.sample_rate = 22050;
+
+  SonareStreamAnalyzer* analyzer = nullptr;
+  REQUIRE(sonare_stream_analyzer_create(&stream_config, &analyzer) == SONARE_OK);
+
+  SonareStreamQuantizeConfig quantize_config{};
+  SonareStreamFramesU8 frames{};
+  CHECK(sonare_stream_analyzer_read_quantized_frames_u8(analyzer, &quantize_config, 0, &frames) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "config.struct_size must be set by sonare_stream_quantize_config_init");
+  sonare_stream_analyzer_destroy(analyzer);
+}
+
 TEST_CASE("sonare_detect_beats", "[c_api]") {
   SECTION("detects beats from samples") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);

@@ -33,6 +33,10 @@ TEST_CASE("sonare_abi_version mirrors the compile-time aggregate", "[c_api][abi]
   REQUIRE((sonare_abi_version() & 0xFFu) == SONARE_FEATURE_ABI_VERSION);
 }
 
+TEST_CASE("C synth-engine mode count includes the final mode", "[c_api][abi]") {
+  CHECK(static_cast<int>(SONARE_SYNTH_ENGINE_SINGING) + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT);
+}
+
 TEST_CASE("C exception recording preserves the existing classifications", "[c_api][abi]") {
   const auto classify = [](auto&& thrower) -> SonareError {
     try {

@@ -216,3 +216,44 @@ TEST_CASE("streaming retune create refuses the config before the output", "[c_ap
   CHECK(grain == 0);
 }
 #endif  // defined(SONARE_WITH_VOICE_CHANGER)
+
+#if defined(SONARE_WITH_PITCH_EDITOR)
+TEST_CASE("note-target-assignment config requires struct_size", "[c_api][header_order]") {
+  SonareNoteTargetAssignConfig config{};
+  size_t assigned_count = 99;
+
+  CHECK(sonare_assign_note_targets(nullptr, 0, kRate, nullptr, 0, &config, &assigned_count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "config.struct_size must be set by sonare_note_target_assign_config_init");
+  CHECK(assigned_count == 0);
+}
+
+TEST_CASE("pitch-correction config requires struct_size", "[c_api][header_order]") {
+  const std::vector<float> samples = make_samples();
+  const float f0_hz = 220.0f;
+  SonarePitchCorrectionConfig config{};
+  float* out = garbage_pointer<float>();
+  size_t out_length = 77;
+
+  CHECK(sonare_pitch_correct_timevarying(samples.data(), samples.size(), kRate, &f0_hz, nullptr,
+                                         nullptr, 1, 1, &config, &out,
+                                         &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.struct_size must be set by sonare_pitch_correction_config_init");
+  CHECK(out == nullptr);
+  CHECK(out_length == 0);
+}
+#endif  // defined(SONARE_WITH_PITCH_EDITOR)
+
+TEST_CASE("spectral region operation requires struct_size", "[c_api][header_order]") {
+  const std::vector<float> samples = make_samples();
+  SonareSpectralRegionOp op{};
+  float* out = garbage_pointer<float>();
+  size_t out_length = 77;
+
+  CHECK(sonare_spectral_edit(samples.data(), samples.size(), kRate, nullptr, &op, 1, &out,
+                             &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "ops[0].struct_size must be set by sonare_spectral_region_op_init");
+  CHECK(out == nullptr);
+  CHECK(out_length == 0);
+}
