@@ -803,8 +803,12 @@ describe('Project native binding', () => {
         new RangeError('Project.countInFrames: countInBars must be an integer in [0, 16]'),
       );
     }
-    project.setSampleRate(48000);
-    project.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }]);
+    project.setSampleRate(384000);
+    project.setTimeSignatures([{ startPpq: 0, numerator: 32, denominator: 4 }]);
+    project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+    expect(project.countInFrames(16)).toBe(98_304_000);
+
+    project.setTempoSegments([{ startPpq: 0, bpm: 1e-6 }]);
     let caught: unknown;
     try {
       project.countInFrames(16);
