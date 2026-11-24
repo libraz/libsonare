@@ -313,11 +313,11 @@ namespace {
 void check_yin_rate_params(int sr, const PitchConfig& config) {
   const float nyquist = 0.5f * static_cast<float>(sr);
   if (!(config.fmax <= nyquist)) {
-    util::check::refuse_relation({"fmax", "sr"}, "{0} must be at most {1} / 2");
+    util::check::refuse_relation({"fmax", "sample_rate"}, "{0} must be at most {1} / 2");
   }
   const double periods = static_cast<double>(sr) / static_cast<double>(config.fmin);
   if (!(periods < static_cast<double>(config.frame_length - 1))) {
-    util::check::refuse_relation({"fmin", "frame_length", "sr"},
+    util::check::refuse_relation({"fmin", "frame_length", "sample_rate"},
                                  "{2} / {0} must be less than {1} - 1");
   }
 }

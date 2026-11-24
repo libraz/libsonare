@@ -51,7 +51,7 @@ Chroma Chroma::compute(const Audio& audio, const ChromaConfig& config) {
 Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
                                 const ChromaFilterConfig& chroma_config) {
   if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
-  util::check::integer_within<int>(sr, kChromaCountDomain, "sr");
+  util::check::integer_within<int>(sr, kChromaCountDomain, "sample_rate");
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();

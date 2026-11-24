@@ -62,7 +62,7 @@ TEST_CASE("MelSpectrogram entry points name their required inputs",
   const Audio audio = create_test_audio();
   const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
   CHECK_THROWS_WITH(MelSpectrogram::from_spectrogram(spec, 0, MelFilterConfig()),
-                    Catch::Matchers::ContainsSubstring("sr must be an integer"));
+                    Catch::Matchers::ContainsSubstring("sample_rate must be an integer"));
 }
 
 TEST_CASE("MelSpectrogram from_spectrogram", "[mel_spectrogram]") {

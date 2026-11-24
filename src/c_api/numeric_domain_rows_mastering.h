@@ -15,6 +15,7 @@
 #include "core/spectrum.h"
 #include "effects/common/room_field_checks.h"
 #include "feature/inverse.h"
+#include "feature/tonnetz.h"
 #include "mastering/api/chain.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mastering/repair/declick.h"
@@ -273,7 +274,7 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"synthesize_rir", "config.mixing_time_ms", sonare::effects::common::kRirMixingTimeMsDomain,
      nullptr},
     {"synthesize_rir", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
-    {"tonnetz", "n_chroma", kMatrixDimensionDomain, nullptr},
+    {"tonnetz", "n_chroma", sonare::kTonnetzChromaDomain, nullptr},
     {"tonnetz", "n_frames", kMatrixDimensionDomain, nullptr},
     {"vqt_to_audio", "n_frames", kInverseSpectrogramExtentDomain, "within_work_size_limit"},
     {"vqt_to_audio", "n_iter", kGriffinLimIterationsDomain, nullptr},

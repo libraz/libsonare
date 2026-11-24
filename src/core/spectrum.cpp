@@ -424,20 +424,22 @@ int stft_frame_count(std::size_t signal_length, const StftConfig& config) {
 void validate_reused_geometry(const Spectrogram& spec, const StftConfig& config, int sample_rate,
                               std::size_t signal_length) {
   const StftConfig checked = Validated<StftConfig>::make(config).get();
-  SONARE_CHECK_MSG(spec.sample_rate() == sample_rate, ErrorCode::InvalidParameter,
-                   "reused spectrogram was analyzed at a different sample rate");
-  SONARE_CHECK_MSG(spec.n_fft() == checked.n_fft && spec.hop_length() == checked.hop_length &&
-                       spec.win_length() == checked.actual_win_length(),
-                   ErrorCode::InvalidParameter,
-                   "reused spectrogram was analyzed with a different framing");
-  SONARE_CHECK_MSG(spec.window() == checked.window, ErrorCode::InvalidParameter,
-                   "reused spectrogram was analyzed with a different window");
-  SONARE_CHECK_MSG(
-      spec.center() == checked.center && (!checked.center || spec.pad_mode() == checked.pad_mode),
-      ErrorCode::InvalidParameter, "reused spectrogram was analyzed with a different centering");
-  SONARE_CHECK_MSG(spec.n_frames() == stft_frame_count(signal_length, checked),
-                   ErrorCode::InvalidParameter,
-                   "reused spectrogram does not span the signal it is read alongside");
+  if (spec.sample_rate() != sample_rate) {
+    util::check::refuse_relation({"spec", "sample_rate"}, "{0} must be analyzed at {1}");
+  }
+  if (spec.n_fft() != checked.n_fft || spec.hop_length() != checked.hop_length ||
+      spec.win_length() != checked.actual_win_length()) {
+    util::check::refuse_relation({"spec", "config"}, "{0} must use the framing in {1}");
+  }
+  if (spec.window() != checked.window) {
+    util::check::refuse_relation({"spec", "config.window"}, "{0} must use {1}");
+  }
+  if (spec.center() != checked.center || (checked.center && spec.pad_mode() != checked.pad_mode)) {
+    util::check::refuse_relation({"spec", "config"}, "{0} must use the centering in {1}");
+  }
+  if (spec.n_frames() != stft_frame_count(signal_length, checked)) {
+    util::check::refuse_relation({"spec", "signal_length"}, "{0} must span {1} samples");
+  }
 }
 
 float Spectrogram::duration() const {
@@ -631,10 +633,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // below gives: the iteration count is the caller's alone and nothing downstream
   // narrows it. Zero is a real request -- the random-phase seed, reconstructed
   // once -- while a negative runs the same empty loop under a different number.
-  SONARE_CHECK_MSG(config.n_iter >= 0 && config.n_iter <= resource::kMaxGriffinLimIterations,
-                   ErrorCode::InvalidParameter,
-                   "nIter must be in [0, " + std::to_string(resource::kMaxGriffinLimIterations) +
-                       "], got " + std::to_string(config.n_iter));
+  constexpr auto kIterations = util::check::integer_domain(0, resource::kMaxGriffinLimIterations);
+  util::check::integer_within(config.n_iter, kIterations, "n_iter");
 
   // Element count in size_t so the n_bins*n_frames multiply and the bin * n_frames + frame
   // index cannot overflow int for large caller-supplied n_frames.
@@ -764,9 +764,7 @@ MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power) {
   if (!(power > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "power must be > 0");
   }
-  if (n > 0 && spec == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
-  }
+  util::check::non_null_when_count(spec, n, "spec", "n");
   MagPhase out;
   out.magnitude.resize(n);
   out.phase.resize(n);

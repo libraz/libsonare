@@ -257,14 +257,14 @@ namespace detail {
 
 void validate_cqt_top_bin(const std::vector<float>& frequencies, int sr) {
   if (frequencies.empty() || !(frequencies.back() < static_cast<float>(sr) * 0.5f)) {
-    util::check::refuse_relation({"fmin", "n_bins", "bins_per_octave", "sr"},
+    util::check::refuse_relation({"fmin", "n_bins", "bins_per_octave", "sample_rate"},
                                  "{0} * 2^(({1} - 1) / {2}) must be less than {3} / 2");
   }
 }
 
 void validate_cqt_filter_length(double longest, int max_length, std::vector<std::string> subjects) {
   if (std::isfinite(longest) && longest <= static_cast<double>(max_length)) return;
-  refuse_cqt_filter_length(max_length, std::move(subjects), "sr");
+  refuse_cqt_filter_length(max_length, std::move(subjects), "sample_rate");
 }
 
 void refuse_cqt_filter_length(int max_length, std::vector<std::string> subjects, std::string rate) {
@@ -310,7 +310,7 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
                                              const CqtKernel* donor, int host_concurrency) {
   validate_cqt_config(config);
-  util::check::integer_within(sr, kCqtKernelSampleRateDomain, "sr");
+  util::check::integer_within(sr, kCqtKernelSampleRateDomain, "sample_rate");
   auto kernel = std::unique_ptr<CqtKernel>(new CqtKernel());
 
   // Center frequencies for all bins.

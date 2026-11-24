@@ -1056,7 +1056,7 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
   CHECK_THROWS_WITH(spectral_centroid(m, 3, 0, 22050, 2048),
                     "n_frames must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(spectral_centroid(m, 3, 1, 0, 2048),
-                    "sr must be an integer in [1, 2147483647]");
+                    "sample_rate must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(spectral_centroid(m, 3, 1, 22050, 0),
                     "n_fft must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(spectral_bandwidth(m, 3, 1, 22050, 4, 0.0f),
@@ -1076,7 +1076,7 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
   CHECK_THROWS_WITH(spectral_contrast(empty, 22050, 6, 0.0f, 0.02f),
                     "fmin must be finite and greater than 0");
   CHECK_THROWS_WITH(spectral_contrast(empty, 0, 6, 200.0f, 0.02f),
-                    "sr must be an integer in [1, 2147483647]");
+                    "sample_rate must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(spectral_contrast(empty, 22050, 6, 200.0f, 0.02f),
                     "n_bins must be an integer in [1, 2147483647]");
 
@@ -1085,7 +1085,7 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
   stft.hop_length = 256;
   const Spectrogram spec = Spectrogram::compute(generate_sine_audio(440.0f), stft);
   CHECK_THROWS_WITH(spectral_contrast(spec, 22050, 8, 200.0f, 0.02f),
-                    "fmin * 2^(n_bands - 1) must be less than sr / 2");
+                    "fmin * 2^(n_bands - 1) must be less than sample_rate / 2");
   // Over 16 points one bin spans 1378 Hz, so a 200 Hz first band holds no bin past the trim.
   StftConfig tiny;
   tiny.n_fft = 16;
@@ -1093,7 +1093,7 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
   const Spectrogram coarse = Spectrogram::compute(generate_sine_audio(440.0f), tiny);
   CHECK_THROWS_WITH(spectral_contrast(coarse, 22050, 6, 20.0f, 0.02f),
                     "fmin and n_bands must leave every contrast band at least one bin of n_fft "
-                    "at sr");
+                    "at sample_rate");
 
   const std::vector<float> samples(8, 0.5f);
   CHECK_THROWS_WITH(zero_crossing_rate(samples.data(), samples.size(), 0, 4),
@@ -1145,7 +1145,7 @@ TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral]
 
   const TempogramConfig ok;
   CHECK_THROWS_WITH(cyclic_tempogram(env, 0, ok, 30.0f, 12),
-                    "sr must be an integer in [1, 2147483647]");
+                    "sample_rate must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(cyclic_tempogram(env, 22050, bad_hop, 30.0f, 12),
                     "hop_length must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(cyclic_tempogram(env, 22050, ok, 0.0f, 12),
@@ -1163,7 +1163,7 @@ TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral]
   CHECK_THROWS_WITH(plp(env, plp_hop), "hop_length must be an integer in [1, 2147483647]");
   PlpConfig plp_sr = plp_config;
   plp_sr.sr = 0;
-  CHECK_THROWS_WITH(plp(env, plp_sr), "sr must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(plp(env, plp_sr), "sample_rate must be an integer in [1, 2147483647]");
   PlpConfig plp_min = plp_config;
   plp_min.tempo_min = 0.0f;
   CHECK_THROWS_WITH(plp(env, plp_min), "tempo_min must be finite and greater than 0");
@@ -1178,15 +1178,15 @@ TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral]
   CHECK_THROWS_WITH(tempogram_ratio(data, 8, 22050, 0, factors),
                     "hop_length must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>{1.0f, nan}, 8, 22050, 512, factors),
-                    "tempogram_data contains a non-finite sample at index 1");
+                    "tempogram contains a non-finite sample at index 1");
   CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>(), 8, 22050, 512, factors),
-                    "tempogram_data must not be empty");
+                    "tempogram must not be empty");
   CHECK_THROWS_WITH(tempogram_ratio(data, 8, 22050, 512, std::vector<float>()),
                     "factors must not be empty");
   CHECK_THROWS_WITH(tempogram_ratio(data, 8, 22050, 512, std::vector<float>{1.0f, 0.0f}),
                     "factors must be finite and greater than 0");
   CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>(3, 0.5f), 8, 22050, 512, factors),
-                    "tempogram_data must hold at least win_length values");
+                    "tempogram must hold at least win_length values");
 }
 
 TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral][refusal]") {
@@ -1201,7 +1201,7 @@ TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral
   CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, bad_fft, 22050),
                     "n_fft must be an integer in [1, 8192]");
   CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, config, 0),
-                    "sr must be an integer in [1, 2147483647]");
+                    "sample_rate must be an integer in [1, 2147483647]");
   std::vector<float> mel_nan = mel;
   mel_nan[1] = nan;
   CHECK_THROWS_WITH(mel_to_stft(mel_nan.data(), 4, 4, config, 22050),

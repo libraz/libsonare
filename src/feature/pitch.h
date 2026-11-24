@@ -19,7 +19,7 @@ inline constexpr util::check::NumericDomain kPitchCountDomain =
 
 /// @brief The core names yin/pyin refuse under, as their JS requests spell them.
 inline constexpr std::array<std::pair<const char*, const char*>, 3> kPitchTrackRequestKeys{
-    {{"fmin", "f0MinHz"}, {"fmax", "f0MaxHz"}, {"sr", "sampleRate"}}};
+    {{"fmin", "f0MinHz"}, {"fmax", "f0MaxHz"}, {"sample_rate", "sampleRate"}}};
 /// @brief The core names piptrack refuses under, as its JS request spells them.
 inline constexpr std::array<std::pair<const char*, const char*>, 2> kPiptrackRequestKeys{
     {{"fmin", "fminHz"}, {"fmax", "fmaxHz"}}};

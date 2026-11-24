@@ -704,7 +704,7 @@ TEST_CASE("Griffin-Lim refuses a geometry that cannot overlap-add and an unbound
   // Zero iterations is a real request -- the random-phase seed, reconstructed
   // once -- and librosa spells it the same way, so only a negative is refused.
   REQUIRE_NOTHROW(run(hop_length, 0));
-  REQUIRE_THROWS_AS(run(hop_length, -1), SonareException);
+  REQUIRE_THROWS_WITH(run(hop_length, -1), "n_iter must be an integer in [0, 256]");
   REQUIRE_NOTHROW(run(hop_length, resource::kMaxGriffinLimIterations));
   REQUIRE_THROWS_AS(run(hop_length, resource::kMaxGriffinLimIterations + 1), SonareException);
 }
@@ -924,7 +924,8 @@ TEST_CASE("The reuse guard rejects every geometry a consumer did not ask for", "
   }
 
   SECTION("a different sample rate") {
-    REQUIRE_THROWS_AS(validate_reused_geometry(spec, wanted, 44100, length), SonareException);
+    REQUIRE_THROWS_WITH(validate_reused_geometry(spec, wanted, 44100, length),
+                        "spec must be analyzed at sample_rate");
   }
 
   SECTION("a signal the spectrogram does not span") {

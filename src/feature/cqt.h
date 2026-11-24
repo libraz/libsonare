@@ -233,7 +233,7 @@ auto with_derived_cqt_grid(std::string bins_per_octave, std::string rate,
     const auto names = [&](const char* subject) {
       return std::find(named.begin(), named.end(), subject) != named.end();
     };
-    if (names("n_bins") && names("sr")) {
+    if (names("n_bins") && names("sample_rate")) {
       util::check::refuse_relation({std::move(bins_per_octave), std::move(rate)},
                                    "{0} puts the top chroma bin at or above half of {1}");
     }

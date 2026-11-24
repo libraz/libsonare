@@ -151,7 +151,7 @@ float note_to_hz(const std::string& note) {
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {
-  util::check::integer_within<int>(sr, kFrameTimeSampleRateDomain, "sr");
+  util::check::integer_within<int>(sr, kFrameTimeSampleRateDomain, "sample_rate");
   util::check::integer_within<int>(hop_length, kFrameTimeHopDomain, "hop_length");
   return static_cast<float>(frames) * static_cast<float>(hop_length) / static_cast<float>(sr);
 }
@@ -161,7 +161,7 @@ float envelope_frame_time(int frame, int shift_frames, int sr, int hop) {
 }
 
 int time_to_frames(float time, int sr, int hop_length) {
-  util::check::integer_within<int>(sr, kFrameTimeSampleRateDomain, "sr");
+  util::check::integer_within<int>(sr, kFrameTimeSampleRateDomain, "sample_rate");
   util::check::integer_within<int>(hop_length, kFrameTimeHopDomain, "hop_length");
   // Compute in double and saturate into int before casting: a large time (long
   // file) would otherwise floor to a float beyond INT_MAX and casting an
@@ -177,16 +177,12 @@ int time_to_frames(float time, int sr, int hop_length) {
 }
 
 float samples_to_time(int samples, int sr) {
-  if (sr <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sr must be positive");
-  }
+  if (sr <= 0) util::check::refuse("sample_rate", "must be positive");
   return static_cast<float>(samples) / sr;
 }
 
 int time_to_samples(float time, int sr) {
-  if (sr <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sr must be positive");
-  }
+  if (sr <= 0) util::check::refuse("sample_rate", "must be positive");
   const double samples = static_cast<double>(time) * static_cast<double>(sr);
   if (!std::isfinite(samples)) {
     return samples < 0.0 ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max();
@@ -249,9 +245,8 @@ std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_leng
 }
 
 float bin_to_hz(int bin, int sr, int n_fft) {
-  if (sr <= 0 || n_fft <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sr and n_fft must be positive");
-  }
+  if (sr <= 0) util::check::refuse("sample_rate", "must be positive");
+  if (n_fft <= 0) util::check::refuse("n_fft", "must be positive");
   // Promote to double before multiplying so bin * sr cannot overflow int at
   // high sample rates / large FFT bins (e.g. bin=2048, sr=192000 overflows a
   // 32-bit int). Accumulate in double, return float.
@@ -260,9 +255,8 @@ float bin_to_hz(int bin, int sr, int n_fft) {
 }
 
 int hz_to_bin(float hz, int sr, int n_fft) {
-  if (sr <= 0 || n_fft <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sr and n_fft must be positive");
-  }
+  if (sr <= 0) util::check::refuse("sample_rate", "must be positive");
+  if (n_fft <= 0) util::check::refuse("n_fft", "must be positive");
   // This helper is part of the established non-throwing scalar conversion
   // family: NaN has no ordered bin and maps to the neutral zero sentinel,
   // while infinities saturate to the corresponding int boundary.

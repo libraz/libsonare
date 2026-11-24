@@ -247,31 +247,31 @@ TEST_CASE("FFT input validation", "[fft]") {
   SECTION("FFT forward with null input") {
     FFT fft(1024);
     std::vector<std::complex<float>> output(513);
-    REQUIRE_THROWS_AS(fft.forward(nullptr, output.data()), SonareException);
+    REQUIRE_THROWS_WITH(fft.forward(nullptr, output.data()), "input must not be NULL");
   }
 
   SECTION("FFT forward with null output") {
     FFT fft(1024);
     std::vector<float> input(1024, 0.0f);
-    REQUIRE_THROWS_AS(fft.forward(input.data(), nullptr), SonareException);
+    REQUIRE_THROWS_WITH(fft.forward(input.data(), nullptr), "output must not be NULL");
   }
 
   SECTION("FFT inverse with null input") {
     FFT fft(1024);
     std::vector<float> output(1024);
-    REQUIRE_THROWS_AS(fft.inverse(nullptr, output.data()), SonareException);
+    REQUIRE_THROWS_WITH(fft.inverse(nullptr, output.data()), "input must not be NULL");
   }
 
   SECTION("FFT inverse with null output") {
     FFT fft(1024);
     std::vector<std::complex<float>> input(513);
-    REQUIRE_THROWS_AS(fft.inverse(input.data(), nullptr), SonareException);
+    REQUIRE_THROWS_WITH(fft.inverse(input.data(), nullptr), "output must not be NULL");
   }
 
   SECTION("FFT forward_complex with null input") {
     FFT fft(1024);
     std::vector<std::complex<float>> output(1024);
-    REQUIRE_THROWS_AS(fft.forward_complex(nullptr, output.data()), SonareException);
+    REQUIRE_THROWS_WITH(fft.forward_complex(nullptr, output.data()), "input must not be NULL");
     try {
       fft.forward_complex(nullptr, output.data());
     } catch (const SonareException& e) {
@@ -282,7 +282,7 @@ TEST_CASE("FFT input validation", "[fft]") {
   SECTION("FFT forward_complex with null output") {
     FFT fft(1024);
     std::vector<std::complex<float>> input(1024);
-    REQUIRE_THROWS_AS(fft.forward_complex(input.data(), nullptr), SonareException);
+    REQUIRE_THROWS_WITH(fft.forward_complex(input.data(), nullptr), "output must not be NULL");
     try {
       fft.forward_complex(input.data(), nullptr);
     } catch (const SonareException& e) {

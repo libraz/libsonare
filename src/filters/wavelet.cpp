@@ -67,7 +67,7 @@ std::vector<float> relative_bandwidths(const std::vector<float>& freqs) {
 
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
                                    float Q) {
-  util::check::integer_within<int>(sr, kWaveletSampleRateDomain, "sr");
+  util::check::integer_within<int>(sr, kWaveletSampleRateDomain, "sample_rate");
   util::check::greater_than(window_param, 0.0, "window_param");
   util::check::at_least(Q, 0.0, "Q");
   const bool use_Q = (Q > 0.0f);
@@ -91,7 +91,8 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
       lengths[i] = (window_param / alpha[i]) * static_cast<float>(sr) / freqs[i];
     }
     if (!numeric::finite_positive(lengths[i])) {
-      util::check::refuse("freqs", "must give every filter a finite length at sr");
+      util::check::refuse_relation({"freqs", "sample_rate", "window_param", "Q"},
+                                   "{0}, {1}, {2}, and {3} must give every filter a finite length");
     }
   }
   return lengths;

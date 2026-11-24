@@ -1039,6 +1039,7 @@ double mastering_inside_value(const NumericDomainRow& row) {
     if (param == "n_fft") return 64.0;
     if (param == "n_iter") return 1.0;
   }
+  if (entry == "tonnetz" && param == "n_chroma") return 12.0;
   if (entry == "pcen" || entry == "tonnetz") return 4.0;
   // A room that holds the default placement, and a receiver pair that fits inside it.
   if (param == "config.length_m" || param == "config.width_m" || param == "config.height_m") {

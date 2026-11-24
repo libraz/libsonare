@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 extern "C" {
 #include "kiss_fft.h"
@@ -240,8 +241,8 @@ void FFT::prepare(bool real_forward, bool real_inverse, bool complex_forward) {
 }
 
 void FFT::forward(const float* input, std::complex<float>* output) {
-  SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
-                   "Null pointer passed to FFT::forward");
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
   impl_->ensure_real(n_fft_, /*inverse=*/false);
 #if SONARE_HAVE_PFFFT
   if (impl_->real_setup) {
@@ -266,8 +267,8 @@ void FFT::forward(const float* input, std::complex<float>* output) {
 }
 
 void FFT::forward_complex(const std::complex<float>* input, std::complex<float>* output) {
-  SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
-                   "Null pointer passed to FFT::forward_complex");
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
   impl_->ensure_complex(n_fft_);
 #if SONARE_HAVE_PFFFT
   if (impl_->complex_setup) {
@@ -287,8 +288,8 @@ void FFT::forward_complex(const std::complex<float>* input, std::complex<float>*
 }
 
 void FFT::inverse(const std::complex<float>* input, float* output) {
-  SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
-                   "Null pointer passed to FFT::inverse");
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
   impl_->ensure_real(n_fft_, /*inverse=*/true);
 #if SONARE_HAVE_PFFFT
   if (impl_->real_setup) {

@@ -10,6 +10,7 @@
 #include "core/db_convert.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -118,15 +119,15 @@ std::vector<float> frequency_weighting(const std::vector<float>& freqs, const st
 
 std::vector<float> perceptual_weighting(const float* S, int n_bins, int n_frames,
                                         const std::vector<float>& freqs, const std::string& kind) {
-  if (n_bins < 0 || n_frames < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "negative shape");
-  }
+  if (n_bins < 0) util::check::refuse("n_bins", "must be non-negative");
+  if (n_frames < 0) util::check::refuse("n_frames", "must be non-negative");
   if (static_cast<int>(freqs.size()) != n_bins) {
     throw SonareException(ErrorCode::InvalidParameter, "freqs size must equal n_bins");
   }
   const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
   if (total > 0 && S == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "null spectrogram with non-zero shape");
+    util::check::refuse_relation({"S", "n_bins", "n_frames"},
+                                 "{0} must not be NULL when {1} and {2} are not 0");
   }
 
   std::vector<float> weights = frequency_weighting(freqs, kind);

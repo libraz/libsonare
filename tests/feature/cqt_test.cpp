@@ -1480,7 +1480,7 @@ TEST_CASE("cqt, pseudo_cqt, hybrid_cqt and vqt refuse a member by its name", "[c
   vqt_config.n_bins = 0;
   CHECK_THROWS_WITH(vqt(audio, vqt_config), "n_bins must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(CqtKernel::create(0, config),
-                    Catch::Matchers::ContainsSubstring("sr must be an integer"));
+                    Catch::Matchers::ContainsSubstring("sample_rate must be an integer"));
 }
 
 TEST_CASE("the constant-Q transforms bound n_bins before allocating its frequencies", "[cqt]") {
@@ -1566,7 +1566,8 @@ TEST_CASE(
     "are refused by the members that set them",
     "[cqt]") {
   const Audio audio = generate_sine(440.0f, 0.5f, 22050);
-  const std::string nyquist = "fmin * 2^((n_bins - 1) / bins_per_octave) must be less than sr / 2";
+  const std::string nyquist =
+      "fmin * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2";
   CqtConfig high;
   high.fmin = 20000.0f;
   CHECK_THROWS_WITH(cqt(audio, high), nyquist);
@@ -1584,7 +1585,7 @@ TEST_CASE(
   narrow.bins_per_octave = 100000;
   const std::string filter =
       "fmin, bins_per_octave and filter_scale must keep every filter at most 131072 samples long "
-      "at sr";
+      "at sample_rate";
   CHECK_THROWS_WITH(cqt(audio, narrow), filter);
   CHECK_THROWS_WITH(pseudo_cqt(audio, narrow), filter);
   CHECK_THROWS_WITH(hybrid_cqt(audio, narrow), filter);

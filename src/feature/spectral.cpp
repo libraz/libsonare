@@ -23,7 +23,7 @@ namespace {
 void check_spectrogram_shape(int n_bins, int n_frames, int sr, int n_fft) {
   util::check::integer_within<int>(n_bins, kSpectralCountDomain, "n_bins");
   util::check::integer_within<int>(n_frames, kSpectralCountDomain, "n_frames");
-  util::check::integer_within<int>(sr, kSpectralCountDomain, "sr");
+  util::check::integer_within<int>(sr, kSpectralCountDomain, "sample_rate");
   util::check::integer_within<int>(n_fft, kSpectralCountDomain, "n_fft");
 }
 
@@ -273,7 +273,7 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   util::check::in_interval(quantile, 0.0, false, 1.0, false, "quantile");
   // An infinite fmin is refused here by its own domain instead of at the Nyquist relation.
   util::check::greater_than(fmin, 0.0, "fmin");
-  util::check::integer_within<int>(sr, kSpectralCountDomain, "sr");
+  util::check::integer_within<int>(sr, kSpectralCountDomain, "sample_rate");
 
   const std::vector<float>& magnitude = spec.magnitude();
   int n_bins = spec.n_bins();
@@ -285,7 +285,7 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
 
   float nyquist = 0.5f * static_cast<float>(sr);
   if (!(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist)) {
-    util::check::refuse_relation({"fmin", "n_bands", "sr"},
+    util::check::refuse_relation({"fmin", "n_bands", "sample_rate"},
                                  "{0} * 2^({1} - 1) must be less than {2} / 2");
   }
 
@@ -310,7 +310,7 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
     }
 
     if (band_indices.empty()) {
-      util::check::refuse_relation({"fmin", "n_bands", "n_fft", "sr"},
+      util::check::refuse_relation({"fmin", "n_bands", "n_fft", "sample_rate"},
                                    "{0} and {1} must leave every contrast band at least one bin "
                                    "of {2} at {3}");
     }

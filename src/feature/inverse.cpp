@@ -32,7 +32,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   util::check::non_null(M, "M");
   if (n_mels <= 0 || n_frames <= 0) return {};
   util::check::integer_within(mel_config.n_fft, kMelToStftFftSizeDomain, "n_fft");
-  util::check::integer_within(sr, kInverseSampleRateDomain, "sr");
+  util::check::integer_within(sr, kInverseSampleRateDomain, "sample_rate");
   // A non-finite mel band poisons the NNLS active set, which then returns an
   // all-NaN spectrogram of the expected shape. Rejected here rather than at each
   // binding so the C ABI, the WASM bindings (which call this directly) and the
@@ -65,7 +65,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter, int sr) {
   util::check::integer_within(n_iter, kInverseIterationsDomain, "n_iter");
-  util::check::integer_within(sr, kInverseAudioSampleRateDomain, "sr");
+  util::check::integer_within(sr, kInverseAudioSampleRateDomain, "sample_rate");
   // mel_to_stft already returns a magnitude spectrogram (librosa-compatible), so
   // no additional square root is applied here before Griffin-Lim.
   std::vector<float> magnitude = mel_to_stft(M, n_mels, n_frames, mel_config, sr);
@@ -135,7 +135,7 @@ Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig
   // The frame and FFT ranges mel_to_stft inverts, stated before mfcc_to_mel's own floors.
   util::check::integer_within(n_frames, kMelToStftFramesDomain, "n_frames");
   util::check::integer_within(mel_config.n_fft, kMelToStftFftSizeDomain, "n_fft");
-  util::check::integer_within(sr, kInverseAudioSampleRateDomain, "sr");
+  util::check::integer_within(sr, kInverseAudioSampleRateDomain, "sample_rate");
   std::vector<float> mel = mfcc_to_mel(mfcc, n_mfcc, n_frames, mel_config.n_mels, lifter);
   return mel_to_audio(mel.data(), mel_config.n_mels, n_frames, mel_config, n_iter, sr);
 }

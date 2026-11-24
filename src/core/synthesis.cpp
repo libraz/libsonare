@@ -25,7 +25,7 @@ size_t checked_sample_count(float duration, int sample_rate, const char* subject
   if (!std::isfinite(duration) || duration < 0.0f || samples < 0.0 ||
       samples > static_cast<double>(resource::kMaxOfflineAudioSamples)) {
     util::check::refuse_relation(
-        {subject, "sr"},
+        {subject, "sample_rate"},
         "{0} * {1} must be at most " + util::refusal::integer_bound_text(
                                            static_cast<double>(resource::kMaxOfflineAudioSamples)));
   }
@@ -35,7 +35,7 @@ size_t checked_sample_count(float duration, int sample_rate, const char* subject
 }  // namespace
 
 Audio tone(float frequency, int sr, float duration, float phi, float amplitude) {
-  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sr");
+  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sample_rate");
   // Reject non-finite duration explicitly: `duration < 0` is false for NaN, so a
   // NaN (or +Inf) would slip past the sign check and cast to a huge/garbage size_t,
   // triggering a runaway allocation.
@@ -53,7 +53,7 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
 }
 
 Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
-  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sr");
+  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sample_rate");
   // See tone(): NaN/Inf duration must be rejected before the size_t cast.
   util::check::at_least(duration, 0.0, "duration");
 
@@ -103,7 +103,7 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
 
 Audio clicks(const std::vector<float>& times, int sr, int length, float frequency,
              float click_duration) {
-  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sr");
+  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sample_rate");
   util::check::greater_than(click_duration, 0.0, "click_duration");
   util::check::greater_than(frequency, 0.0, "frequency");
   util::check::integer_within<int>(length, kClicksLengthDomain, "length");
@@ -112,7 +112,7 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
   const size_t click_count = checked_sample_count(click_duration, sr, "click_duration");
   const int click_n = static_cast<int>(click_count);
   if (click_n <= 0) {
-    util::check::refuse_relation({"click_duration", "sr"}, "{0} * {1} must be at least 1");
+    util::check::refuse_relation({"click_duration", "sample_rate"}, "{0} * {1} must be at least 1");
   }
   std::vector<float> click(click_n);
   const double w = kTwoPiD * static_cast<double>(frequency) / static_cast<double>(sr);
@@ -141,7 +141,7 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
     const double rounded = std::round(static_cast<double>(t) * sr);
     if (rounded > static_cast<double>(resource::kMaxOfflineAudioSamples) ||
         rounded > static_cast<double>(std::numeric_limits<int>::max())) {
-      util::check::refuse_relation({"times", "sr"},
+      util::check::refuse_relation({"times", "sample_rate"},
                                    "{0} * {1} must be at most " +
                                        util::refusal::integer_bound_text(
                                            static_cast<double>(resource::kMaxOfflineAudioSamples)));
@@ -157,7 +157,7 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
       if (p > max_pos) max_pos = p;
     }
     if (static_cast<size_t>(max_pos) > resource::kMaxOfflineAudioSamples - click_count) {
-      util::check::refuse_relation({"times", "sr", "click_duration"},
+      util::check::refuse_relation({"times", "sample_rate", "click_duration"},
                                    "max({0}) * {1} + {2} * {1} must be at most " +
                                        util::refusal::integer_bound_text(
                                            static_cast<double>(resource::kMaxOfflineAudioSamples)));

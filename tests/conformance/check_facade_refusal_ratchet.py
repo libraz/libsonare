@@ -22,6 +22,10 @@ above it fails, and a count below it fails too until the file is rewritten with
 ``--write``, so a migration lowers the line in the same commit and it cannot
 drift back up. Comments are stripped before matching; a scan reading no file
 fails, so a moved tree cannot pass as clean.
+
+The core subject scan refuses retired spellings in validation calls under
+``src/core``, ``src/feature`` and ``src/filters``, without reading comments,
+variable names or unrelated string literals.
 """
 
 from __future__ import annotations
@@ -32,6 +36,8 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+
+from check_c_abi_bare_refusals import blank_comments_and_strings, match_forward
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).resolve().parent / "facade_refusal_ratchet.json"
@@ -212,6 +218,49 @@ def evaluate(found: dict[str, dict], baseline: dict[str, dict]) -> list[str]:
     return errors
 
 
+CORE_SUBJECT_ROOTS = ("src/core", "src/feature", "src/filters")
+CORE_REFUSAL_CALL = re.compile(
+    r"\b(?:check::\w+(?:\s*<[^>]+>)?|SonareParameterRefusal::\w+|"
+    r"SonareException|SONARE_CHECK_MSG|validate_offline_audio_samples|"
+    r"refuse_cqt_filter_length)\s*\("
+)
+CORE_RETIRED_SUBJECT = re.compile(r"\b(?:sr|nIter|tempogram_data)\b")
+CPP_SEPARATED_INTEGER = re.compile(r"\b(?:0[xX][0-9a-fA-F]+(?:'[0-9a-fA-F]+)+|\d+(?:'\d+)+)")
+
+
+def check_core_subjects(root: Path) -> list[str]:
+    errors: list[str] = []
+    for folder in CORE_SUBJECT_ROOTS:
+        scanned = 0
+        for path in sorted((root / folder).rglob("*")):
+            if path.suffix not in (".cpp", ".h"):
+                continue
+            text = path.read_text(encoding="utf-8")
+            # Keep offsets while preventing digit separators from opening character literals.
+            text = CPP_SEPARATED_INTEGER.sub(lambda match: match[0].replace("'", "_"), text)
+            code = blank_comments_and_strings(text)
+            for call in CORE_REFUSAL_CALL.finditer(code):
+                opening = call.end() - 1
+                closing = match_forward(code, opening)
+                if closing < 0:
+                    continue
+                literals = string_literals(text[opening + 1 : closing], cpp=True)
+                if not literals:
+                    continue
+                scanned += 1
+                for value in literals:
+                    if match := CORE_RETIRED_SUBJECT.search(value):
+                        line = text.count("\n", 0, call.start()) + 1
+                        errors.append(
+                            f"{path.relative_to(root)}:{line}: refusal uses {match[0]!r}; "
+                            "name the declared parameter"
+                        )
+        print(f"core refusal subjects: {folder} scanned={scanned}")
+        if scanned == 0:
+            errors.append(f"{folder}: scanned no refusal sites")
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true", help="record the current counts")
@@ -220,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     for surface, data in found.items():
         totals = " ".join(f"{k}={v}" for k, v in data["totals"].items())
         print(f"facade refusal ratchet: {surface} scanned={data['scanned']} {totals}")
+    subject_errors = check_core_subjects(ROOT)
+    if subject_errors:
+        for error in subject_errors:
+            print(f"  FAIL {error}")
+        return 1
     if args.write:
         if any(data["scanned"] == 0 for data in found.values()):
             print("refusing to record a scan that read no file", file=sys.stderr)

@@ -1617,7 +1617,7 @@ TEST_CASE("array transforms refuse a non-finite input", "[c_api]") {
              "onset_envelope contains a non-finite sample at index 100");
   refused_as(
       sonare_tempogram_ratio(input.data(), 5 * 200, 8, 22050, 512, nullptr, 0, &out, &out_length),
-      "tempogram_data contains a non-finite sample at index 100");
+      "tempogram contains a non-finite sample at index 100");
   CHECK(out == nullptr);
   CHECK(intervals == nullptr);
 

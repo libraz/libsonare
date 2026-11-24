@@ -261,12 +261,11 @@ std::wstring utf8_to_wide_path(const std::string& path) {
   if (path.empty()) return {};
   const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.data(),
                                         static_cast<int>(path.size()), nullptr, 0);
-  SONARE_CHECK_MSG(count > 0, ErrorCode::InvalidParameter, "Path is not valid UTF-8: " + path);
+  if (count <= 0) util::check::refuse("path", "must be valid UTF-8");
   std::wstring wide(static_cast<size_t>(count), L'\0');
   const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.data(),
                                           static_cast<int>(path.size()), wide.data(), count);
-  SONARE_CHECK_MSG(written == count, ErrorCode::InvalidParameter,
-                   "Failed to decode UTF-8 path: " + path);
+  if (written != count) util::check::refuse("path", "must be convertible to UTF-16");
   return wide;
 }
 #endif
@@ -423,8 +422,7 @@ AudioFormat detect_format(const uint8_t* data, size_t size) {
 namespace {
 
 void validate_buffer_pointer(const uint8_t* data, size_t size) {
-  SONARE_CHECK_MSG(data != nullptr || size == 0, ErrorCode::InvalidParameter,
-                   "Audio buffer pointer is null for non-empty input");
+  util::check::non_null_when_count(data, size, "data", "size");
 }
 
 #ifdef SONARE_WITH_FFMPEG
@@ -1025,15 +1023,19 @@ struct WavFormatFields {
 WavFormatFields make_wav_format_fields(int sample_rate, int channel_count, int bits_per_sample) {
   // Entry points validate sample rate and bit depth first; this checks the
   // derived header fields, which a narrowing cast would otherwise truncate.
-  SONARE_CHECK_MSG(channel_count > 0, ErrorCode::InvalidParameter, "Invalid channel count");
+  if (channel_count <= 0) util::check::refuse("channel_count", "must be positive");
 
   const uint64_t wide_block_align =
       static_cast<uint64_t>(channel_count) * static_cast<uint64_t>(bits_per_sample / 8);
-  SONARE_CHECK_MSG(wide_block_align > 0 && wide_block_align <= std::numeric_limits<uint16_t>::max(),
-                   ErrorCode::InvalidParameter, "WAV block alignment exceeds header range");
+  if (wide_block_align == 0 || wide_block_align > std::numeric_limits<uint16_t>::max()) {
+    util::check::refuse_relation({"channel_count", "bits_per_sample"},
+                                 "{0} and {1} must fit the WAV block alignment field");
+  }
   const uint64_t wide_byte_rate = static_cast<uint64_t>(sample_rate) * wide_block_align;
-  SONARE_CHECK_MSG(wide_byte_rate <= std::numeric_limits<uint32_t>::max(),
-                   ErrorCode::InvalidParameter, "WAV byte rate exceeds header range");
+  if (wide_byte_rate > std::numeric_limits<uint32_t>::max()) {
+    util::check::refuse_relation({"sample_rate", "channel_count", "bits_per_sample"},
+                                 "{0}, {1}, and {2} must fit the WAV byte rate field");
+  }
   return {static_cast<uint16_t>(wide_block_align), static_cast<uint32_t>(wide_byte_rate)};
 }
 
@@ -1279,9 +1281,9 @@ std::vector<uint8_t> encode_wav_planar(const float* samples, size_t frames, int 
 #ifndef __EMSCRIPTEN__
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
               int bits_per_sample, QuantizeReport* report) {
-  SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
-  SONARE_CHECK_MSG(n_samples > 0, ErrorCode::InvalidParameter, "No samples to save");
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
+  util::check::non_null(samples, "samples");
+  if (n_samples == 0) util::check::refuse("n_samples", "must be positive");
+  if (sample_rate <= 0) util::check::refuse("sample_rate", "must be positive");
   SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
                    "bits_per_sample must be 16 or 24");
   const WavFormatFields format_fields = make_wav_format_fields(sample_rate, 1, bits_per_sample);
@@ -1298,13 +1300,14 @@ void save_wav(const std::string& path, const std::vector<float>& samples, int sa
 void save_wav_multichannel(const std::string& path, const float* interleaved, size_t n_frames,
                            int channel_count, ChannelLayout layout, int sample_rate,
                            int bits_per_sample, QuantizeReport* report) {
-  SONARE_CHECK_MSG(interleaved != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
-  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "No frames to save");
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
+  util::check::non_null(interleaved, "interleaved");
+  if (n_frames == 0) util::check::refuse("n_frames", "must be positive");
+  if (sample_rate <= 0) util::check::refuse("sample_rate", "must be positive");
   SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
                    "bits_per_sample must be 16 or 24");
-  SONARE_CHECK_MSG(channel_count == sonare::channel_count(layout), ErrorCode::InvalidParameter,
-                   "channel_count does not match the layout");
+  if (channel_count != sonare::channel_count(layout)) {
+    util::check::refuse_relation({"channel_count", "layout"}, "{0} must match {1}");
+  }
 
   const WavFormatFields format_fields =
       make_wav_format_fields(sample_rate, channel_count, bits_per_sample);

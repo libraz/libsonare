@@ -385,13 +385,15 @@ TEST_CASE("normalize_rms_stereo measures the two channels together", "[effects][
 TEST_CASE("the stereo normalizers refuse a pair they cannot process", "[effects][normalize]") {
   const Audio left = create_audio_with_amplitude(0.5f);
   const Audio shorter = left.slice_samples(0, left.size() / 2);
-  const Audio other_rate = create_audio_with_amplitude(0.5f, 44100);
+  const Audio other_rate = Audio::from_vector(std::vector<float>(left.size(), 0.5f), 44100);
   const Audio empty = Audio::from_vector({}, 22050);
 
-  REQUIRE_THROWS_AS(normalize_stereo(left, shorter), SonareException);
-  REQUIRE_THROWS_AS(normalize_stereo(left, other_rate), SonareException);
-  REQUIRE_THROWS_AS(normalize_stereo(left, empty), SonareException);
-  REQUIRE_THROWS_AS(normalize_rms_stereo(left, shorter), SonareException);
+  REQUIRE_THROWS_WITH(normalize_stereo(left, shorter), "left and right must have the same length");
+  REQUIRE_THROWS_WITH(normalize_stereo(left, other_rate),
+                      "left and right must share a sample rate");
+  REQUIRE_THROWS_WITH(normalize_stereo(left, empty), "right must not be empty");
+  REQUIRE_THROWS_WITH(normalize_rms_stereo(left, shorter),
+                      "left and right must have the same length");
 
   // Control: the same pair with none of those faults is accepted, so the
   // refusals above are about the pair rather than about the entry point.

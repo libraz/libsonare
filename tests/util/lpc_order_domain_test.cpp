@@ -67,7 +67,7 @@ TEST_CASE("LPC refuses an order the signal cannot support and names the order re
     message = error.what();
   }
   CAPTURE(message);
-  REQUIRE(message.find("ill-conditioned for an order-36 model; stable up to order " +
+  REQUIRE(message.find("y must be well-conditioned for order; it is stable up to order " +
                        std::to_string(model.order_reached)) != std::string::npos);
 
   const std::vector<float> supported = sonare::lpc(tone, model.order_reached);

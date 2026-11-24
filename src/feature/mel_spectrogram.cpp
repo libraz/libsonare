@@ -46,7 +46,7 @@ MelSpectrogram MelSpectrogram::compute(const Audio& audio, const MelConfig& conf
 MelSpectrogram MelSpectrogram::from_spectrogram(const Spectrogram& spec, int sr,
                                                 const MelFilterConfig& mel_config) {
   if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
-  util::check::integer_within(sr, kMelSampleRateDomain, "sr");
+  util::check::integer_within(sr, kMelSampleRateDomain, "sample_rate");
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();

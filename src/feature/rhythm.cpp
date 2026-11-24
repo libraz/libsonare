@@ -221,7 +221,7 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
 
 std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
                                     const TempogramConfig& config, float bpm_min, int n_bins) {
-  util::check::integer_within<int>(sr, kRhythmCountDomain, "sr");
+  util::check::integer_within<int>(sr, kRhythmCountDomain, "sample_rate");
   util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   // Finite, not merely positive: a non-finite bpm_min makes the phase below NaN, and
   // the cast to a bin index is undefined before std::clamp ever sees the value.
@@ -274,7 +274,7 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
   util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
   util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
-  util::check::integer_within<int>(config.sr, kRhythmCountDomain, "sr");
+  util::check::integer_within<int>(config.sr, kRhythmCountDomain, "sample_rate");
   // The band test below is the only reader of these, and it is a pair of relational
   // comparisons: a NaN bound fails both, so the band silently stops restricting.
   util::check::greater_than(config.tempo_min, 0.0, "tempo_min");
@@ -400,9 +400,9 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
   // Every rejection below used to be answered with a zero-filled vector, which
   // reads as a genuine "no energy at this ratio" measurement. Reject instead so
   // a caller can never mistake an unanswerable call for a result.
-  validate_offline_audio_samples("tempogram_data", tempogram_data.data(), tempogram_data.size(), 0);
+  validate_offline_audio_samples("tempogram", tempogram_data.data(), tempogram_data.size(), 0);
   if (tempogram_data.empty()) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "tempogram_data",
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "tempogram",
                                             "must not be empty");
   }
   if (factors.empty()) {
@@ -418,8 +418,7 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
   const int n_frames =
       static_cast<int>(tempogram_data.size() / static_cast<std::size_t>(win_length));
   if (n_frames <= 0) {
-    util::check::refuse_relation({"tempogram_data", "win_length"},
-                                 "{0} must hold at least {1} values");
+    util::check::refuse_relation({"tempogram", "win_length"}, "{0} must hold at least {1} values");
   }
   std::vector<float> out(factors.size(), 0.0f);
 

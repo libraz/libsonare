@@ -935,7 +935,7 @@ SonareError probe_onset_strength(const std::string& param, double value) {
 SonareError probe_frames_to_time(const std::string& param, double value) {
   int sr = kAnalysisRate;
   size_t hop_length = 512;
-  if (is_param(param, "sr")) sr = static_cast<int>(value);
+  if (is_param(param, "sample_rate")) sr = static_cast<int>(value);
   if (is_param(param, "hop_length")) hop_length = as_size(value);
   (void)sonare_frames_to_time(10, sr, hop_length);
   return sonare_last_error_code();
@@ -944,7 +944,7 @@ SonareError probe_frames_to_time(const std::string& param, double value) {
 SonareError probe_time_to_frames(const std::string& param, double value) {
   int sr = kAnalysisRate;
   size_t hop_length = 512;
-  if (is_param(param, "sr")) sr = static_cast<int>(value);
+  if (is_param(param, "sample_rate")) sr = static_cast<int>(value);
   if (is_param(param, "hop_length")) hop_length = as_size(value);
   (void)sonare_time_to_frames(1.0f, sr, hop_length);
   return sonare_last_error_code();

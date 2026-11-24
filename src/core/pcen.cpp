@@ -5,6 +5,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -12,12 +13,9 @@ namespace {
 
 float derive_b(float time_constant, int sr, int hop_length) {
   // librosa: T = time_constant * sr / hop_length, b = (sqrt(1 + 4 T^2) - 1) / (2 T^2)
-  if (time_constant <= 0.0f || sr <= 0 || hop_length <= 0) {
-    // Signal the bad parameters rather than substituting a magic coefficient
-    // that happens to pass the (0,1] range check and silently mis-normalizes.
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "time_constant, sr, and hop_length must be positive");
-  }
+  if (time_constant <= 0.0f) util::check::refuse("time_constant", "must be positive");
+  if (sr <= 0) util::check::refuse("sample_rate", "must be positive");
+  if (hop_length <= 0) util::check::refuse("hop_length", "must be positive");
   double T = static_cast<double>(time_constant) * static_cast<double>(sr) /
              static_cast<double>(hop_length);
   double t2 = T * T;
@@ -28,14 +26,12 @@ float derive_b(float time_constant, int sr, int hop_length) {
 }  // namespace
 
 std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConfig& config) {
-  if (S == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "S is null");
-  }
-  if (!std::isfinite(config.time_constant) || !std::isfinite(config.gain) ||
-      !std::isfinite(config.bias) || !std::isfinite(config.power) || !std::isfinite(config.eps)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "scalar configuration values must be finite");
-  }
+  util::check::non_null(S, "values");
+  util::check::finite_float(config.time_constant, "time_constant");
+  util::check::finite_float(config.gain, "gain");
+  util::check::finite_float(config.bias, "bias");
+  util::check::finite_float(config.power, "power");
+  util::check::finite_float(config.eps, "eps");
   if (config.b.size() > 1) {
     throw SonareException(ErrorCode::InvalidParameter, "b must have length 0 or 1");
   }
@@ -128,7 +124,8 @@ std::vector<float> pcen(const std::vector<float>& S, int n_bins, int n_frames,
     std::size_t expected = 0;
     if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
         S.size() != expected) {
-      throw SonareException(ErrorCode::InvalidParameter, "S size must equal n_bins * n_frames");
+      util::check::refuse_relation({"values", "n_bins", "n_frames"},
+                                   "{0} must hold {1} * {2} values");
     }
   }
   return pcen(S.data(), n_bins, n_frames, config);

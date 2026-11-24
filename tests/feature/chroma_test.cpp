@@ -474,7 +474,7 @@ TEST_CASE("chroma entry points refuse a member by its name", "[chroma]") {
                     "spec must not be empty");
   const Spectrogram spec = Spectrogram::compute(audio, StftConfig{});
   CHECK_THROWS_WITH(Chroma::from_spectrogram(spec, 0, ChromaFilterConfig{}),
-                    "sr must be an integer in [1, 2147483647]");
+                    "sample_rate must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(chroma_cqt(Audio(), ChromaCqtConfig{}), "audio must not be empty");
   CHECK_THROWS_WITH(chroma_cens(Audio(), ChromaCensConfig{}), "audio must not be empty");
   ChromaCqtConfig cqt;

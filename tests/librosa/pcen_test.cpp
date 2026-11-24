@@ -97,10 +97,12 @@ TEST_CASE("pcen rejects malformed and non-finite configuration", "[librosa][pcen
 
   SECTION("scalar parameters must be finite") {
     cfg.gain = std::numeric_limits<float>::infinity();
-    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+    REQUIRE(throws_invalid_parameter_with_message([&] { pcen(input.data(), 1, 1, cfg); },
+                                                  "gain must be finite"));
     cfg.gain = 0.98f;
     cfg.time_constant = std::numeric_limits<float>::quiet_NaN();
-    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+    REQUIRE(throws_invalid_parameter_with_message([&] { pcen(input.data(), 1, 1, cfg); },
+                                                  "time_constant must be finite"));
   }
 
   SECTION("derived smoothing coefficient must be finite") {
@@ -118,7 +120,7 @@ TEST_CASE("pcen vector overload requires the declared matrix size", "[librosa][p
                     SonareException);
   REQUIRE(throws_invalid_parameter_with_message(
       [&] { pcen(std::vector<float>{}, std::numeric_limits<int>::max(), 2, cfg); },
-      "S size must equal"));
+      "values must hold n_bins * n_frames values"));
 }
 
 namespace {

@@ -136,7 +136,7 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
 
 std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   validate_cqt_config(config.to_cqt_config());
-  util::check::integer_within(sr, kVqtSampleRateDomain, "sr");
+  util::check::integer_within(sr, kVqtSampleRateDomain, "sample_rate");
   util::check::within(config.gamma, kVqtGammaDomain, "gamma");
   auto kernel = std::unique_ptr<VqtKernel>(new VqtKernel());
 

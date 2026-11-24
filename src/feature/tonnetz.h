@@ -6,8 +6,13 @@
 #include <vector>
 
 #include "feature/chroma.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
+
+/// @brief The chroma bin count tonnetz projects, librosa's fixed twelve.
+inline constexpr util::check::NumericDomain kTonnetzChromaDomain =
+    util::check::integer_domain(12, 12);
 
 /// @brief Computes the Tonnetz tonal centroid representation from a chromagram.
 /// @details Implements `librosa.feature.tonnetz`. The Tonnetz projects each

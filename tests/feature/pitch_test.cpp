@@ -1035,13 +1035,14 @@ TEST_CASE("YIN and pYIN refuse the parameters librosa refuses", "[pitch]") {
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 96000);
   PitchConfig too_low;
   too_low.fmin = 40.0f;  // 96000 / 40 = 2400 >= 2047
-  CHECK_THROWS_WITH(yin_track(audio, too_low), "sr / fmin must be less than frame_length - 1");
-  CHECK_THROWS_WITH(pyin(audio, too_low), "sr / fmin must be less than frame_length - 1");
+  CHECK_THROWS_WITH(yin_track(audio, too_low),
+                    "sample_rate / fmin must be less than frame_length - 1");
+  CHECK_THROWS_WITH(pyin(audio, too_low), "sample_rate / fmin must be less than frame_length - 1");
   PitchConfig above_nyquist;
   above_nyquist.fmin = 65.0f;
   above_nyquist.fmax = 60000.0f;
-  CHECK_THROWS_WITH(yin_track(audio, above_nyquist), "fmax must be at most sr / 2");
-  CHECK_THROWS_WITH(pyin(audio, above_nyquist), "fmax must be at most sr / 2");
+  CHECK_THROWS_WITH(yin_track(audio, above_nyquist), "fmax must be at most sample_rate / 2");
+  CHECK_THROWS_WITH(pyin(audio, above_nyquist), "fmax must be at most sample_rate / 2");
   CHECK_THROWS_WITH(yin_track(Audio(), PitchConfig()), "audio must not be empty");
   CHECK_THROWS_WITH(piptrack(Audio(), 2048, 512, 150.0f, 4000.0f, 0.1f), "audio must not be empty");
   // The 96 kHz default (sr / fmin = 1477) is inside librosa's range.

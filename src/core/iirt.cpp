@@ -7,6 +7,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -203,10 +204,9 @@ int frame_count_for_iirt(size_t n_samples, int win_length, int hop_length, bool 
 std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& config) {
   if (n_samples > 0 && y == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "y is null");
-  if (config.sr <= 0 || config.hop_length <= 0 || config.win_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "sr, hop_length, and win_length must be positive");
-  }
+  if (config.sr <= 0) util::check::refuse("sample_rate", "must be positive");
+  if (config.hop_length <= 0) util::check::refuse("hop_length", "must be positive");
+  if (config.win_length <= 0) util::check::refuse("win_length", "must be positive");
   if (config.n_filters <= 0)
     throw SonareException(ErrorCode::InvalidParameter, "n_filters must be positive");
   if (!(config.Q > 0.0f)) throw SonareException(ErrorCode::InvalidParameter, "Q must be positive");

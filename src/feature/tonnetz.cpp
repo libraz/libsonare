@@ -3,7 +3,7 @@
 #include <cmath>
 
 #include "util/constants.h"
-#include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -48,9 +48,7 @@ std::vector<float> tonnetz(const float* chromagram, int n_chroma, int n_frames) 
   if (chromagram == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "chromagram is null");
   }
-  if (n_chroma != kChromaBins) {
-    throw SonareException(ErrorCode::InvalidParameter, "only 12-bin chromagrams are supported");
-  }
+  util::check::integer_within(n_chroma, kTonnetzChromaDomain, "n_chroma");
   if (n_frames <= 0) {
     return {};
   }

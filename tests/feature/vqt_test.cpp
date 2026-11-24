@@ -198,7 +198,7 @@ TEST_CASE("VQT input refusals name their source values", "[vqt][validation]") {
   VqtConfig config;
   config.gamma = 1.0f;
   CHECK_THROWS_WITH(VqtKernel::create(0, config),
-                    Catch::Matchers::ContainsSubstring("sr must be an integer"));
+                    Catch::Matchers::ContainsSubstring("sample_rate must be an integer"));
   config.gamma = -1.0f;
   CHECK_THROWS_WITH(VqtKernel::create(22050, config), "gamma must be finite and at least 0");
   CHECK_THROWS_WITH(vqt(Audio(), VqtConfig()), "audio must not be empty");
