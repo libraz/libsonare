@@ -456,6 +456,14 @@ def test_matrix_results_are_two_dimensional() -> None:
     assert libsonare.tonnetz(c["chroma"]).shape == (6, c["chroma"].shape[1])
 
 
+def test_tempogram_family_keeps_the_tempo_axis_on_an_empty_envelope() -> None:
+    empty = np.zeros(0, dtype=np.float32)
+    assert libsonare.tempogram(empty, sr=SR, win_length=64).shape == (64, 0)
+    assert libsonare.cyclic_tempogram(empty, SR, n_bins=30).shape == (30, 0)
+    assert libsonare.fourier_tempogram(empty, sr=SR, win_length=64).shape == (33, 0)
+    assert libsonare.fourier_tempogram(empty, sr=SR).shape == (193, 0)
+
+
 def test_result_classes_hold_two_dimensional_arrays() -> None:
     y = _signal()
     stft = libsonare.stft(y, SR)

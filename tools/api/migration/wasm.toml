@@ -9507,7 +9507,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::estimateMeter takes 
 [[entry]]
 kind = "function"
 old = "fourierTempogram"
-changed = "norm option removed"
+changed = "norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of a RangeError"
 domain = "analysis"
 rule = "individual"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::is request-only"
@@ -9515,7 +9515,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::is request-only"
 [[entry]]
 kind = "function"
 old = "fourierTempogram"
-changed = "norm option removed"
+changed = "norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of a RangeError"
 domain = "analysis"
 rule = "individual"
 entry = "./analysis"

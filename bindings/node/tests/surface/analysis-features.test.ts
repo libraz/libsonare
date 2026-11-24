@@ -1102,3 +1102,25 @@ describe('public request and constructor migration pins', () => {
     expect(typeof noConfig).toBe('function');
   });
 });
+
+describe('tempogram family on an empty onset envelope', () => {
+  it('keeps the input-independent tempo axis and has no frames', () => {
+    const onsetEnvelope = new Float32Array(0);
+    const sampleRate = 22050;
+    const shape = (m: { rows: number; cols: number; data: Float32Array }) => [
+      m.rows,
+      m.cols,
+      m.data.length,
+    ];
+    expect(shape(sonare.tempogram({ onsetEnvelope, sampleRate, winLength: 64 }))).toEqual([
+      64, 0, 0,
+    ]);
+    expect(shape(sonare.cyclicTempogram({ onsetEnvelope, sampleRate, nBins: 30 }))).toEqual([
+      30, 0, 0,
+    ]);
+    expect(shape(sonare.fourierTempogram({ onsetEnvelope, sampleRate, winLength: 64 }))).toEqual([
+      33, 0, 0,
+    ]);
+    expect(shape(sonare.fourierTempogram({ onsetEnvelope, sampleRate }))).toEqual([193, 0, 0]);
+  });
+});

@@ -319,7 +319,7 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
   });
 }
 
-/** Fourier tempogram. Returns rows = tempo bins, cols = frames. */
+/** Fourier tempogram. Returns rows = `winLength / 2 + 1` tempo bins (kept for an empty envelope), cols = frames. */
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D;
 export function fourierTempogram(...args: unknown[]): Matrix2D {
   return withEntry('fourierTempogram', () => {

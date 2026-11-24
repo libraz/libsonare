@@ -88,7 +88,6 @@ _SAMPLE_WRAPPERS = {
     "chroma_cens": lambda buf: chroma_cens(buf, SR),
     "chroma_cqt": lambda buf: chroma_cqt(buf, SR),
     "bass_chroma": lambda buf: bass_chroma(buf, SR),
-    "pitch_tuning": lambda buf: pitch_tuning(buf),
     "harmonic": lambda buf: harmonic(buf, SR),
     "percussive": lambda buf: percussive(buf, SR),
     "normalize": lambda buf: normalize(buf, SR),
@@ -258,37 +257,25 @@ class TestPitchCAbiValidation:
         assert result.voiced_flag.shape == result.f0.shape
 
 
-# Wrappers whose validated buffer is not called ``samples``; the guard names the
-# real parameter, so the expected message differs.
-_BUFFER_ARG_NAMES = {"pitch_tuning": "frequencies"}
-
-
-def _buffer_arg(name: str) -> str:
-    return _BUFFER_ARG_NAMES.get(name, "samples")
-
-
 class TestSampleWrapperGuardCoverage:
     """Parametrized empty / NaN / Inf coverage across every guarded buffer wrapper."""
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_empty(self, name):
-        arg = _buffer_arg(name)
-        with pytest.raises(ValueError, match=rf"{name}: {arg} must not be empty"):
+        with pytest.raises(ValueError, match=rf"{name}: samples must not be empty"):
             _SAMPLE_WRAPPERS[name](np.empty(0, dtype=np.float32))
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_nan_with_index(self, name):
-        arg = _buffer_arg(name)
         with pytest.raises(
-            ValueError, match=rf"{name}: {arg} contains a non-finite sample at index 100"
+            ValueError, match=rf"{name}: samples contains a non-finite sample at index 100"
         ):
             _SAMPLE_WRAPPERS[name](_with_nan())
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_inf_with_index(self, name):
-        arg = _buffer_arg(name)
         with pytest.raises(
-            ValueError, match=rf"{name}: {arg} contains a non-finite sample at index 200"
+            ValueError, match=rf"{name}: samples contains a non-finite sample at index 200"
         ):
             _SAMPLE_WRAPPERS[name](_with_inf())
 
@@ -466,17 +453,6 @@ class TestZeroCrossingsInput:
 class TestNonFiniteInputYieldsNoPlausibleResult:
     """Input with no usable data must fail rather than resolve to a normal answer."""
 
-    def test_pitch_tuning_rejects_an_all_non_finite_track(self):
-        # Non-finite entries are dropped like non-positive ones, so a track with
-        # nothing usable in it must not resolve to 0.0 -- a legitimate "perfectly
-        # in tune" answer that no caller could distinguish from a real one.
-        assert math.isfinite(pitch_tuning([440.0, 880.0, 660.0]))
-        with pytest.raises(
-            SonareValueError,
-            match=r"^pitch_tuning: frequencies contains a non-finite sample at index 0$",
-        ):
-            pitch_tuning(np.full(32, math.nan, dtype=np.float32))
-
     def test_magnitude_response_separates_an_empty_curve_from_a_non_finite_frequency(self):
         # The two halves of the buffer rule part company here, so the derived
         # coverage module cannot pin it: an empty frequency list is a defined
@@ -624,8 +600,7 @@ class TestBufferRankGuards:
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_every_guarded_wrapper_rejects_a_2d_buffer(self, name):
-        arg = _buffer_arg(name)
-        with pytest.raises(SonareValueError, match=rf"{name}: {arg} must be a 1-D buffer"):
+        with pytest.raises(SonareValueError, match=rf"{name}: samples must be a 1-D buffer"):
             _SAMPLE_WRAPPERS[name](_stereo_2d())
 
     def test_nested_sequence_is_rejected_like_a_2d_array(self):
@@ -683,11 +658,10 @@ class TestNoneIsRefusedAsNotABufferNotAsANanSample:
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_every_guarded_wrapper_refuses_none_as_not_a_buffer(self, name):
-        arg = _buffer_arg(name)
         with pytest.raises(SonareValueError) as exc_info:
             _SAMPLE_WRAPPERS[name](None)
         assert str(exc_info.value) == (
-            f"{name}: {arg} must be a sequence of numbers or a numpy array"
+            f"{name}: samples must be a sequence of numbers or a numpy array"
         )
 
     def test_a_bare_scalar_is_refused_as_not_a_buffer_too(self):
@@ -738,3 +712,21 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
         assert [entry.split(":")[0] for entry in definitions] == ["_runtime.py"], (
             f"_check must be defined once and imported everywhere else: {definitions}"
         )
+
+
+def test_pitch_tuning_reads_nan_as_unvoiced_and_refuses_an_infinity() -> None:
+    """NaN in a frequency track marks an unvoiced frame, as on every other surface."""
+    track = np.array([445.0, math.nan, 890.0, 667.5], dtype=np.float32)
+    voiced_only = pitch_tuning(track[~np.isnan(track)])
+    assert voiced_only != 0.0
+    assert pitch_tuning(track) == voiced_only
+    assert pitch_tuning(np.full(32, math.nan, dtype=np.float32)) == 0.0
+    assert pitch_tuning(np.empty(0, dtype=np.float32)) == 0.0
+    track[1] = math.inf
+    with pytest.raises(
+        SonareValueError,
+        match=r"^pitch_tuning: frequencies contains a non-finite sample at index 1$",
+    ):
+        pitch_tuning(track)
+    with pytest.raises(SonareValueError, match=r"pitch_tuning: frequencies must be a 1-D"):
+        pitch_tuning(np.zeros((2, 2), dtype=np.float32))

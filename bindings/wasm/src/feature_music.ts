@@ -28,11 +28,11 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertCqtHopLength,
+  assertFiniteValues,
   assertMatrix2D,
   assertNonNegativeScalar,
   assertPositiveFloatValue,
   assertSampleRate,
-  assertSamples,
   optionalBoolean,
   requestOnly,
   sampleOneShot,
@@ -748,7 +748,8 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
 /**
  * Compute the Fourier tempogram from an onset envelope.
  *
- * @returns {@link Matrix2D} whose rows are the tempo bins and cols are frames
+ * @returns {@link Matrix2D} whose rows are the `winLength / 2 + 1` tempo bins and cols are
+ *   frames; an empty envelope keeps the rows and has no cols
  * @throws {TypeError} when the request is not an object or `onsetEnvelope` is not a `Float32Array`
  */
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
@@ -761,7 +762,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
       throw refuseType('onsetEnvelope must be a Float32Array');
     }
     const center = optionalBoolean(r.center, 'center', true);
-    assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
+    assertFiniteValues(r.onsetEnvelope, 'onsetEnvelope');
     // Native takes a `norm` flag; the normalised form is the only one exposed.
     const onsetEnvelope = r.onsetEnvelope;
     const call = () =>

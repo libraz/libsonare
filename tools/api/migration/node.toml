@@ -421,7 +421,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request a
 [[entry]]
 kind = "function"
 old = "fourierTempogram"
-changed = "norm option removed"
+changed = "norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of 0 rows"
 domain = "analysis"
 rule = "individual"
 test = "bindings/node/tests/surface/analysis-features.test.ts::drops the fourierTempogram norm field and the tempogram ratio window"

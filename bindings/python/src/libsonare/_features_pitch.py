@@ -39,11 +39,11 @@ def pitch_tuning(
     """Per-octave tuning offset from detected pitches (librosa.pitch_tuning).
 
     Args:
-        frequencies: Detected pitch frequencies in Hz (non-positive ignored).
-            Non-finite entries are rejected, so a pitch track carrying NaN for
-            unvoiced frames -- what :func:`pitch_pyin` returns with
-            ``fill_na=False`` -- must be filtered or produced with
-            ``fill_na=True`` first.
+        frequencies: Detected pitch frequencies in Hz. A non-positive or NaN
+            entry is an unvoiced frame and is ignored, so a :func:`pitch_pyin`
+            track can be passed as it is; an infinite entry raises
+            :class:`SonareValueError` naming its index. A track with no voiced
+            frame, including an empty one, returns 0.0.
         resolution: Tuning resolution in fractions of a bin (default 0.01).
         bins_per_octave: Pitch bins per octave (default 12).
 
@@ -53,10 +53,10 @@ def pitch_tuning(
         is not attainable, because a residual of ``+0.5`` wraps to ``-0.5``.
     """
     lib = _get_lib()
-    # Non-finite entries are dropped like non-positive ones, so an all-NaN track
-    # would report 0.0 -- a legitimate "perfectly in tune" answer -- rather than
-    # signalling that nothing usable was supplied.
-    frequency_buf = _validate_samples(frequencies, arg_name="frequencies")
+    # NaN marks an unvoiced frame, so the values are read by the C reader rather than scanned here.
+    frequency_buf = _validate_samples(
+        frequencies, arg_name="frequencies", scan=False, allow_empty=True
+    )
     c_array, length = _to_c_float_array(frequency_buf)
     out = ctypes.c_float(0.0)
     rc = lib.sonare_pitch_tuning(

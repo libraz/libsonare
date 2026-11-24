@@ -2370,6 +2370,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `analyze_bpm(start_bpm)` | removed: omit start_bpm. If passed positionally, move n_fft, hop_length and max_candidates one position earlier. The result's bpm is None when no tempo is measured. Apply any fallback in the caller. |
 | `decode_channels` | Returns DecodedChannels. Read channels and sample_rate instead of unpacking the two-tuple. |
 | `note_segments` | voicing is voiced= (per-frame flags) or voiced_prob= by keyword, exactly one of them: both or neither raises SonareValueError; frame_rate follows f0_hz |
+| `pitch_tuning` | a NaN frequency is read as an unvoiced frame instead of raising SonareValueError, and a track with no voiced frame, including an empty one, returns 0.0 instead of raising; an infinite frequency is still refused naming its index |
 | `pitch_yin(fill_na)` | removed: had no effect: YIN reads no fill flag |
 
 ### Python: Effects, separation, repair and room acoustics
@@ -5602,7 +5603,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `OnsetStrengthMultiRequest.htk` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
 | `PcenOptions` | removed: put timeConstant, gain, bias, power and eps on PcenRequest |
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
-| `fourierTempogram` | norm option removed |
+| `fourierTempogram` | norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of 0 rows |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `hzToNote` | A non-positive or nonfinite frequency raises RangeError instead of SonareError InvalidParameter. |
 | `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
@@ -10204,8 +10205,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PolyphonicAnalysis.setNoteEdit(edit)` | optional (absent clears the edit), as on Node |
 | `VqtToAudioRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
-| `fourierTempogram` (`./analysis`) | norm option removed |
-| `fourierTempogram` | norm option removed |
+| `fourierTempogram` (`./analysis`) | norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of a RangeError |
+| `fourierTempogram` | norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of a RangeError |
 | `framesToSamples(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `hzToNote` (`./analysis`) | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |

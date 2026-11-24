@@ -855,7 +855,8 @@ def tempogram(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
+        # The tempo axis does not depend on the input, so an empty envelope keeps it.
+        return _from_c_float_matrix(out, win_length, int(n_frames.value))
 
 
 @_entry("cyclic_tempogram")
@@ -885,7 +886,8 @@ def cyclic_tempogram(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
+        # The tempo axis does not depend on the input, so an empty envelope keeps it.
+        return _from_c_float_matrix(out, n_bins, int(n_frames.value))
 
 
 @_entry("plp")
@@ -999,7 +1001,8 @@ def fourier_tempogram(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
+        # The tempo axis does not depend on the input, so an empty envelope keeps it.
+        return _from_c_float_matrix(out, win_length // 2 + 1, int(n_frames.value))
 
 
 @_entry("tempogram_ratio")

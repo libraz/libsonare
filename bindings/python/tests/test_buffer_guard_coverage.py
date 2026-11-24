@@ -317,7 +317,9 @@ _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS = {
 # asked to fill it -- so a value scan would refuse a measurement rather than a
 # mistake. Their emptiness check is unchanged, and the rest of their arguments
 # are still guarded; only the contour's values are read rather than judged.
-_NO_PITCH_IS_A_VALUE = frozenset({"decompose_note_pitch", "note_segments"})
+# pitch_tuning reads NaN as an unvoiced frame like the C reader, and an empty track
+# has no voiced frame, so it answers 0.0 as C does instead of refusing.
+_NO_PITCH_IS_A_VALUE = frozenset({"decompose_note_pitch", "note_segments", "pitch_tuning"})
 
 _GUARDED = sorted(set(_ENTRY_POINTS) - _EMPTY_INPUT_IS_DEFINED - _NO_PITCH_IS_A_VALUE)
 _EXEMPT = sorted(_EMPTY_INPUT_IS_DEFINED & set(_ENTRY_POINTS))
@@ -512,6 +514,8 @@ def _no_pitch_call(name: str, contour: np.ndarray) -> Any:
     parameter from the same array and would hand `note_segments` a voicing
     probability of 220 -- refused for its own reason, not the contour's.
     """
+    if name == "pitch_tuning":
+        return libsonare.pitch_tuning(contour)
     if name == "note_segments":
         probability = np.full(len(contour), 0.9, dtype=np.float32)
         return libsonare.note_segments(contour, 100.0, voiced_prob=probability)
@@ -522,7 +526,8 @@ def _no_pitch_call(name: str, contour: np.ndarray) -> Any:
 def test_no_pitch_contour_is_read_rather_than_refused(name: str) -> None:
     """The exemption is a contract, so it is asserted rather than only excused.
 
-    A non-finite contour is accepted and an empty one is still refused by name,
+    A non-finite contour is accepted and an empty one is still refused by name
+    (pitch_tuning, whose empty track holds no voiced frame, answers 0.0 as C does),
     which is what separates "these values mean something" from "this argument
     lost its guard".
     """
@@ -530,6 +535,9 @@ def test_no_pitch_contour_is_read_rather_than_refused(name: str) -> None:
     contour[7] = np.nan
     _no_pitch_call(name, contour)
 
+    if name == "pitch_tuning":
+        assert _no_pitch_call(name, np.zeros(0, dtype=np.float32)) == 0.0
+        return
     with pytest.raises(SonareValueError) as excinfo:
         _no_pitch_call(name, np.zeros(0, dtype=np.float32))
     assert "must not be empty" in str(excinfo.value)

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import type { Matrix2D } from '../../dist/index.js';
+import * as api from '../../dist/index.js';
 import {
   amplitudeToDb,
   bassChroma,
@@ -833,5 +834,25 @@ describe('analysis features: note segments voicing', () => {
       frameRate: sr / 512,
     });
     expect(segments.length).toBeGreaterThan(0);
+  });
+});
+
+describe('tempogram family on an empty onset envelope', () => {
+  it('keeps the input-independent tempo axis and has no frames', () => {
+    const onsetEnvelope = new Float32Array(0);
+    const sampleRate = 22050;
+    const shape = (m: { rows: number; cols: number; data: Float32Array }) => [
+      m.rows,
+      m.cols,
+      m.data.length,
+    ];
+    expect(shape(api.tempogram({ onsetEnvelope, sampleRate, winLength: 64 }))).toEqual([64, 0, 0]);
+    expect(shape(api.cyclicTempogram({ onsetEnvelope, sampleRate, nBins: 30 }))).toEqual([
+      30, 0, 0,
+    ]);
+    expect(shape(api.fourierTempogram({ onsetEnvelope, sampleRate, winLength: 64 }))).toEqual([
+      33, 0, 0,
+    ]);
+    expect(shape(api.fourierTempogram({ onsetEnvelope, sampleRate }))).toEqual([193, 0, 0]);
   });
 });

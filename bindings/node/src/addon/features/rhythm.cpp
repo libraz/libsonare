@@ -262,7 +262,8 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   SonareError err = sonare_fourier_tempogram(sonare_node::ElementData(arr), arr.ElementLength(), sr,
                                              hop, win, center, norm, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  int n_bins = n_frames > 0 ? static_cast<int>(count / static_cast<size_t>(n_frames)) : 0;
+  // The tempo axis does not depend on the input, so an empty envelope keeps it.
+  const int n_bins = win / 2 + 1;
   Napi::Object result = Napi::Object::New(env);
   result.Set("nBins", Napi::Number::New(env, n_bins));
   result.Set("nFrames", Napi::Number::New(env, n_frames));

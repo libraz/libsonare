@@ -1875,6 +1875,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "function"
+old = "pitch_tuning"
+changed = "a NaN frequency is read as an unvoiced frame instead of raising SonareValueError, and a track with no voiced frame, including an empty one, returns 0.0 instead of raising; an infinite frequency is still refused naming its index"
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_empty_nan_guards.py::test_pitch_tuning_reads_nan_as_unvoiced_and_refuses_an_infinity"
+
+[[entry]]
+kind = "function"
 old = "cross_similarity"
 to = "segment_cross_similarity"
 changed = "takes two 2-D (features, frames) arrays and returns a float32 ndarray instead of SegmentMatrix"
