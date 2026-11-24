@@ -245,7 +245,7 @@ old = "rhythm --start-bpm"
 changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
 domain = "analysis"
 rule = "tempo-range"
-test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
+test = "tests/conformance/cli_contract_v2.json::start_bpm_zero_refused"
 
 [[entry]]
 kind = "flag"
@@ -258,10 +258,10 @@ test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
 [[entry]]
 kind = "flag"
 old = "rhythm --bpm-max"
-changed = "a value at or below 0 is refused as a usage error (exit 2) rather than a usage error (exit 2) before the input is read, as on every flag that takes a tempo"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
 domain = "analysis"
 rule = "tempo-range"
-test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
+test = "tests/conformance/cli_contract_v2.json::bpm_max_zero_refused_rhythm"
 
 [[entry]]
 kind = "flag"
@@ -2078,11 +2078,11 @@ test = "tests/cli/cli_effects_test.cpp::CLI fade takes at least one side and ref
 [[entry]]
 kind = "command"
 old = "gain"
-changed = "runs the library's utility.gain processor, which writes the same file (the WAV writer clamps to full scale where the command used to); leaving out --gain-db is refused as a usage error (exit 2) before the input is read rather than exit 1; the command needs a build with mastering"
+changed = "runs the library's utility.gain processor; a gain that lifts the peak past full scale is fitted by one output gain, reported as output_gain_db in --json and as a stderr note, instead of being clamped to full scale; leaving out --gain-db is refused as a usage error (exit 2) before the input is read rather than exit 1; the command needs a build with mastering"
 frontend = "native"
 domain = "effects"
 rule = "cli-front-end-parity"
-test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+test = "tests/cli/cli_effects_test.cpp::CLI level writers refuse an unreachable target and fit a reachable one"
 
 [[entry]]
 kind = "command"

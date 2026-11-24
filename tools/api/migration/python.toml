@@ -13403,7 +13403,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_renamed_
 kind = "function"
 old = "voice_change_realtime"
 to = "realtime_voice_changer_render"
-changed = "a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown"
+changed = "a preset document must carry schemaVersion 4 (1.x wrote 1) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown"
 domain = "effects"
 rule = "individual"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_preset_document_names_the_grain_in_samples"

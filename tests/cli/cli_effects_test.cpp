@@ -121,6 +121,16 @@ TEST_CASE("CLI level writers refuse an unreachable target and fit a reachable on
     CHECK(pinned_share(out) < 0.01);
   }
 
+  SECTION("a gain that lifts the crests past full scale is fitted and reported") {
+    // The tone peaks at -6.02 dBFS, so +12 dB puts its crests 5.98 dB over full scale.
+    auto [code, output] =
+        exec_command(CLI + " gain " + tone + " --gain-db 12 -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    CHECK(payload["output_gain_db"].as_number() == Catch::Approx(-5.98).margin(0.05));
+    CHECK(pinned_share(out) < 0.01);
+  }
+
   SECTION("a stereo set fitted on one gain writes both channels with no held sample") {
     // The left channel sets the set's peak and the right sits under it; a sample the writer had
     // to hold past full scale would fail the write, so a clean exit is the count reading 0.

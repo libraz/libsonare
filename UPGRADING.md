@@ -2754,7 +2754,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `split_note` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
-| `voice_change_realtime` | `realtime_voice_changer_render`: a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
+| `voice_change_realtime` | `realtime_voice_changer_render`: a preset document must carry schemaVersion 4 (1.x wrote 1) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
 
 ### Python: Mastering, mixing and loudness
 
@@ -13558,7 +13558,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 |---|---|
 | `plp --tempo-max` | `plp --bpm-max`: renamed --bpm-max; omitted, it searches the library's 60-200 BPM range rather than 30-300, so pass --bpm-min 30 --bpm-max 300 for the old search; a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter |
 | `plp --tempo-min` | `plp --bpm-min`: renamed --bpm-min; omitted, it searches the library's 60-200 BPM range rather than 30-300, so pass --bpm-min 30 --bpm-max 300 for the old search; a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter |
-| `rhythm --bpm-max` | a value at or below 0 is refused as a usage error (exit 2) rather than a usage error (exit 2) before the input is read, as on every flag that takes a tempo |
+| `rhythm --bpm-max` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
 | `rhythm --bpm-min` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
 | `rhythm --start-bpm` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
 | `transcribe --tempo-bpm` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
@@ -13750,7 +13750,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `filter --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `filter` (native CLI only) | the frequencies --type reads are required and one it does not read is refused, as usage errors (exit 2) before the input is read rather than exit 1; a corner or centre at or above the input's Nyquist frequency is refused (exit 3) rather than written as a non-finite signal; the JSON names cutoff_hz, center_hz and bandwidth_hz, each present only where the type reads it, and adds order and zero_phase |
 | `gain --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `gain` (native CLI only) | runs the library's utility.gain processor, which writes the same file (the WAV writer clamps to full scale where the command used to); leaving out --gain-db is refused as a usage error (exit 2) before the input is read rather than exit 1; the command needs a build with mastering |
+| `gain` (native CLI only) | runs the library's utility.gain processor; a gain that lifts the peak past full scale is fitted by one output gain, reported as output_gain_db in --json and as a stderr note, instead of being clamped to full scale; leaving out --gain-db is refused as a usage error (exit 2) before the input is read rather than exit 1; the command needs a build with mastering |
 | `hpss --harmonic-only` | giving more than one output mode is refused as a usage error (exit 2) before the input is read, with one text on both front-ends |
 | `hpss --hop-length` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3), and the refusal states the upper bound the field holds ("must be an integer in [N, 2147483647]") |
 | `hpss --n-fft` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3), and the refusal states the upper bound the field holds ("must be an integer in [N, 2147483647]") |

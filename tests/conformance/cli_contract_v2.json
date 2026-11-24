@@ -12476,6 +12476,42 @@
           ]
         },
         {
+          "id": "start_bpm_zero_refused",
+          "argv": [
+            "rhythm",
+            "{audio}",
+            "--start-bpm",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "start-bpm"
+          ]
+        },
+        {
+          "id": "bpm_max_zero_refused_rhythm",
+          "argv": [
+            "rhythm",
+            "{audio}",
+            "--bpm-max",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "bpm-max"
+          ]
+        },
+        {
           "id": "silent",
           "argv": [
             "rhythm",
