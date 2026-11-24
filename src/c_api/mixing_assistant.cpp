@@ -9,7 +9,6 @@
 
 #include <sonare/sonare_c.h>
 
-#include <array>
 #include <string>
 #include <vector>
 
@@ -77,8 +76,7 @@ SonareError check_assistant_args(int sample_rate, const SonareMasteringParam* pa
   return SONARE_OK;
 }
 
-constexpr std::array<CName, 2> kProfileParamNames{
-    {{"n_fft", "params.nFft"}, {"hop_length", "params.hopLength"}}};
+constexpr std::string_view kMixingAssistantBag = "mixing_assistant_suggest";
 
 assistant::MixAssistantConfig admit_assistant_config(int sample_rate,
                                                      const SonareMasteringParam* params,
@@ -91,7 +89,7 @@ assistant::MixAssistantConfig admit_assistant_config(int sample_rate,
     sonare::mastering::assistant::AudioProfileConfig profile;
     profile.n_fft = config.n_fft;
     profile.hop_length = config.hop_length;
-    with_c_names(kProfileParamNames, [&] {
+    sonare_c_mastering_detail::with_c_bag_keys(kMixingAssistantBag, [&] {
       return sonare::mastering::assistant::profile_stft_config(profile, sample_rate);
     });
   }
@@ -166,8 +164,8 @@ SonareError sonare_mixing_assistant_suggest(
   std::vector<std::vector<float>> resampled;
   const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
                                    track_sample_rates, input_count, sample_rate, resampled);
-  const auto result =
-      with_c_names(kProfileParamNames, [&] { return assistant::suggest_scene(tracks, config); });
+  const auto result = sonare_c_mastering_detail::with_c_bag_keys(
+      kMixingAssistantBag, [&] { return assistant::suggest_scene(tracks, config); });
   *json_out = copy_string(assistant::mix_assistant_result_to_json(result));
   return SONARE_OK;
   SONARE_C_CATCH

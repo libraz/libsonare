@@ -122,6 +122,33 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("zero_crossing_rate", "sample_rate"): "sr",
 }
 
+# Core subject -> caller key in a parameter bag, scoped to the entry.
+PARAMETER_BAG_KEYS: dict[str, dict[str, str]] = {
+    "mastering_analyze_stereo": {
+        "bands_per_octave": "bandsPerOctave",
+        "high_hz": "highHz",
+        "low_hz": "lowHz",
+    },
+    "mixing_assistant_suggest": {
+        "hop_length": "hopLength",
+        "n_fft": "nFft",
+    },
+}
+
+
+def parameter_bag_key(entry: str, subject: str) -> str:
+    """Caller key for a core parameter-bag subject, or the subject unchanged."""
+    return PARAMETER_BAG_KEYS.get(entry, {}).get(subject, subject)
+
+
+def parameter_bag_subject(entry: str, spelling: str) -> str:
+    """Core subject for a parameter-bag key, or the spelling unchanged."""
+    return next(
+        (subject for subject, key in PARAMETER_BAG_KEYS.get(entry, {}).items() if key == spelling),
+        spelling,
+    )
+
+
 # (C entry key, C-ABI count subject) pairs whose value is the length of the named array.
 LENGTHS: dict[tuple[str, str], str] = {
     ("align_take_to_reference", "reference_len"): "reference",

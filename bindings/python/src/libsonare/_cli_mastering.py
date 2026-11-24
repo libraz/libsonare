@@ -844,7 +844,7 @@ def _stereo_analysis_params_refusal(args: argparse.Namespace) -> str | None:
     raw = args.params or ""
     params, param_count = _mastering_params(_parse_kv_params(raw))
     lib = _get_lib()
-    with _cli_key_subjects("--params", _params_keys(raw)):
+    with _cli_key_subjects("--params", _params_keys(raw), bag_entry="mastering_analyze_stereo"):
         rc = lib.sonare_validate_mastering_stereo_analysis_params(
             _utf8_arg(args.analysis, "analysis"),
             params,
@@ -871,7 +871,9 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
         raise ValueError("reference length must match input length")
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    with _cli_key_subjects("--params", _params_keys(params_raw)):
+    with _cli_key_subjects(
+        "--params", _params_keys(params_raw), bag_entry="mastering_analyze_stereo"
+    ):
         result = mastering_analyze_stereo(
             args.analysis, left, right, sample_rate=sr, params=params or None
         )

@@ -203,6 +203,45 @@ class RequestFieldTest(unittest.TestCase):
         self.assertEqual(idle, [])
 
 
+class ParameterBagKeyTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.input = gen.tomllib.loads(gen.RENAMES.read_text(encoding="utf-8"))
+        self.rows = gen.parse_parameter_bag_keys(self.input)
+
+    def test_parameter_bag_spellings_are_entry_scoped_and_bidirectional(self) -> None:
+        expected = {
+            ("mixing_assistant_suggest", "n_fft"): "nFft",
+            ("mixing_assistant_suggest", "hop_length"): "hopLength",
+            ("mastering_analyze_stereo", "bands_per_octave"): "bandsPerOctave",
+            ("mastering_analyze_stereo", "low_hz"): "lowHz",
+            ("mastering_analyze_stereo", "high_hz"): "highHz",
+        }
+        self.assertEqual({(row.entry, row.subject): row.spelling for row in self.rows}, expected)
+        for (entry, subject), spelling in expected.items():
+            self.assertEqual(gen.parameter_bag_key(self.rows, entry, subject), spelling)
+            self.assertEqual(gen.parameter_bag_subject(self.rows, entry, spelling), subject)
+        self.assertEqual(gen.parameter_bag_key(self.rows, "other_entry", "n_fft"), "n_fft")
+        self.assertEqual(
+            gen.parameter_bag_subject(self.rows, "mixing_assistant_suggest", "n_fft"),
+            "n_fft",
+        )
+
+    def test_cpp_and_python_outputs_share_the_exact_bag_rows(self) -> None:
+        cpp = gen.render_parameter_bag_cpp(self.rows)
+        py = gen.render_py([], self.rows)
+        self.assertIn('{"mixing_assistant_suggest", "n_fft", "nFft"}', cpp)
+        self.assertIn('{"mastering_analyze_stereo", "bands_per_octave", "bandsPerOctave"}', cpp)
+        self.assertIn(
+            '"mixing_assistant_suggest": {\n        "hop_length": "hopLength",\n        "n_fft": "nFft",',
+            py,
+        )
+        self.assertIn(
+            '"mastering_analyze_stereo": {\n        "bands_per_octave": "bandsPerOctave",',
+            py,
+        )
+        self.assertIn("def parameter_bag_subject(entry: str, spelling: str)", py)
+
+
 class ClassifyTest(unittest.TestCase):
     def _unbound(self, kind: str = "param") -> list:
         return [gen.Unbound("node", "downmix", "frames", kind, "h:1")]

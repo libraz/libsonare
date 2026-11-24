@@ -6,6 +6,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "mastering/api/chain.h"
@@ -15,9 +16,30 @@
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_bag_keys.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_mastering_detail {
+
+/// Respells a structured bag refusal using the declared keys of the C entry.
+template <typename Call>
+decltype(auto) with_c_bag_keys(std::string_view entry, Call&& call) {
+  try {
+    return call();
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    if (refusal.form() == sonare::SonareParameterRefusal::Form::UnknownKey) throw;
+    throw refusal.respelled(
+        refusal.code(),
+        [entry](const std::string& subject) {
+          const auto key = sonare::util::parameter_bag_key(entry, subject);
+          if (key != subject || sonare::util::parameter_bag_subject(entry, subject) != subject) {
+            return "params." + std::string(key);
+          }
+          return subject;
+        },
+        refusal.caller_spelled());
+  }
+}
 
 /// @brief Canonical field paths the capability catalog emits.
 /// @details Rooted at the catalog object. The `processors` interior repeats

@@ -155,6 +155,7 @@ from ._ffi import (
     SONARE_ERROR_STALE_RESULT,
     resolved_library_path,
 )
+from ._field_spelling import parameter_bag_subject
 from ._runtime import SonareError, _cli_refusal_subjects
 from .types import KeyMode, KeyProfile, PitchClass, SectionType
 
@@ -838,12 +839,17 @@ def _cli_key_subjects(
     *,
     roots: tuple[str, ...] = ("params", "config", "overrides", "document"),
     extra: dict[str, str] | None = None,
+    bag_entry: str | None = None,
 ) -> Iterator[None]:
     """Respell structured native subjects for keys supplied through one CLI flag."""
     mapping = dict(extra or {})
     for key in keys:
         spelling = _cli_key_subject(flag, key)
-        canonical = _json_key_to_snake_case(key)
+        canonical = (
+            _json_key_to_snake_case(key)
+            if bag_entry is None
+            else parameter_bag_subject(bag_entry, key)
+        )
         mapping[key] = spelling
         for root in roots:
             mapping[f"{root}.{key}"] = spelling

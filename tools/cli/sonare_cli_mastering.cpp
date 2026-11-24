@@ -735,7 +735,7 @@ int cmd_mastering_profile(const CliArgs& args, const Audio& audio) {
   if (err == SONARE_ERROR_INVALID_PARAMETER && sonare_last_refusal_subject_count() == 2 &&
       std::string_view(sonare_last_refusal_subject(1)) == "sample_rate") {
     const std::string_view subject = sonare_last_refusal_subject(0);
-    if (subject == "params.nFft" || subject == "params.hopLength") {
+    if (subject.rfind("params.", 0) == 0) {
       const std::string option = cli_bag_subject("--params", subject, "params");
       const char* subjects[] = {option.c_str(), "the input file's sample rate"};
       char* rendered = nullptr;
@@ -889,10 +889,13 @@ int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
   }
   const Audio right = load_reference_audio(args, audio.sample_rate(), audio.size());
   const auto params = parse_mastering_params(args.get_string("params"));
-  const std::string result = with_cli_bag_refusals("--params", params, [&] {
-    return analysis_json_for_cli(mastering::api::analyze_named_stereo(
-        analysis, audio.data(), right.data(), audio.size(), audio.sample_rate(), params));
-  });
+  const std::string result = with_cli_bag_refusals(
+      "--params", params,
+      [&] {
+        return analysis_json_for_cli(mastering::api::analyze_named_stereo(
+            analysis, audio.data(), right.data(), audio.size(), audio.sample_rate(), params));
+      },
+      "mastering_analyze_stereo");
   std::cout << result << "\n";
   return 0;
 }

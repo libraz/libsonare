@@ -20,6 +20,7 @@ from typing import Any, NamedTuple
 import numpy as np
 
 from ._errors import _entry, _not_supported, _refuse, _refuse_type
+from ._field_spelling import parameter_bag_key as _parameter_bag_key
 from ._mastering_offline import _mastering_params
 from ._narrowing import _narrow_double, _Respelling
 from ._result_records import _fields, _fill_null_ends
@@ -46,8 +47,10 @@ from ._types_mixing_assistant import (
     MixTrackAlignment,
 )
 
-# Keyword argument -> C-ABI param key. The C side accepts both spellings, but
-# the camelCase key is the cross-binding canonical one, so that is what travels.
+_MIXING_ASSISTANT_BAG = "mixing_assistant_suggest"
+_INTEGER_PARAMS = frozenset({"n_fft", "hop_length"})
+
+# Keyword arguments travel under the canonical keys of the C parameter bag.
 _PARAM_KEYS = {
     "target_track_lufs": "targetTrackLufs",
     "suggestion_strength": "suggestionStrength",
@@ -61,14 +64,11 @@ _PARAM_KEYS = {
     "enable_dynamics": "enableDynamics",
     "enable_image": "enableImage",
     "enable_high_pass": "enableHighPass",
-    "n_fft": "nFft",
-    "hop_length": "hopLength",
+    **{key: _parameter_bag_key(_MIXING_ASSISTANT_BAG, key) for key in sorted(_INTEGER_PARAMS)},
 }
 
-# The STFT sizes refuse a bool as a type; the core checks their integer domains.
-_INTEGER_PARAMS = frozenset({"n_fft", "hop_length"})
 # The core names the STFT sizes by their wire keys; a refusal names the keyword the caller wrote.
-_STFT_RESPELLED = {"nFft": _Respelling("n_fft"), "hopLength": _Respelling("hop_length")}
+_STFT_RESPELLED = {_PARAM_KEYS[key]: _Respelling(key) for key in _INTEGER_PARAMS}
 
 
 class MixAssistantTrack(NamedTuple):

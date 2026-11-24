@@ -25,16 +25,16 @@ from ._cli_common import (
     _audio_array,
     _cli_key_refusal,
     _cli_key_subjects,
-    _cli_unknown_key,
     _cli_token,
+    _cli_unknown_key,
     _fmt_optional,
     _json_key_to_snake_case,
     _library_token,
     _load_channels_or_downmix,
     _note_output_fit,
     _OutputFit,
-    _parse_kv_params,
     _params_keys,
+    _parse_kv_params,
     _PcmQuantizer,
     _resample,
     _strict_json_dumps,
@@ -57,6 +57,7 @@ from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RA
 from ._errors import ErrorCode
 from ._result_records import _result_to_json_dict
 from ._runtime import _check, _get_lib, _render_as_given, _to_c_int, _to_c_size_t
+from .mixing_assistant import _MIXING_ASSISTANT_BAG
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -94,7 +95,7 @@ def _mix_assistant_value_refusal(key: str, value: float) -> str | None:
     params, param_count = _mastering_params({key: value})
     result = ctypes.c_char_p()
     # No tracks: the call stops after the parameter reader, at no particular rate.
-    with _cli_key_subjects("--params", (key,)):
+    with _cli_key_subjects("--params", (key,), bag_entry=_MIXING_ASSISTANT_BAG):
         rc = lib.sonare_mixing_assistant_suggest(
             None,
             None,
@@ -126,7 +127,10 @@ def _mix_assistant_config_refusal(
     lib = _get_lib()
     params, param_count = _mastering_param_items(entries)
     with _cli_key_subjects(
-        "--params", (key for key, _ in entries), extra={"sample_rate": "--sample-rate"}
+        "--params",
+        (key for key, _ in entries),
+        extra={"sample_rate": "--sample-rate"},
+        bag_entry=_MIXING_ASSISTANT_BAG,
     ):
         rc = lib.sonare_validate_mixing_assistant_config(
             _to_c_int(sample_rate, "sample_rate"), params, _to_c_size_t(param_count, "param_count")
@@ -289,6 +293,7 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
         "--params",
         keys,
         extra={"sample_rate": "--sample-rate"} if _option_supplied(args, "sample-rate") else None,
+        bag_entry=_MIXING_ASSISTANT_BAG,
     ):
         result = mixing_assistant_suggest(tracks, sample_rate=args.sample_rate, **options)
     if args.scene_out:

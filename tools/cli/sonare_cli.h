@@ -109,6 +109,7 @@
 #include "util/frame.h"
 #include "util/json.h"
 #include "util/padding.h"
+#include "util/parameter_bag_keys.h"
 #include "util/peak.h"
 #include "util/vector_normalize.h"
 
@@ -159,7 +160,7 @@ std::string stereo_analysis_params_refusal(const CliArgs& args);
 /// named CLI bag; unrelated subjects retain their library spelling.
 template <typename Parameters, typename Function>
 decltype(auto) with_cli_bag_refusals(std::string_view flag, const Parameters& parameters,
-                                     Function&& function) {
+                                     Function&& function, std::string_view entry = {}) {
   try {
     return std::forward<Function>(function)();
   } catch (const SonareParameterRefusal& refusal) {
@@ -170,9 +171,12 @@ decltype(auto) with_cli_bag_refusals(std::string_view flag, const Parameters& pa
           constexpr std::string_view root = "params.";
           if (key.compare(0, root.size(), root) == 0) key.erase(0, root.size());
           for (const auto& parameter : parameters) {
-            if (parameter.key == key || (key == "n_fft" && parameter.key == "nFft") ||
-                (key == "hop_length" && parameter.key == "hopLength")) {
-              return cli_bag_subject(flag, parameter.key);
+            if (parameter.key == key) return cli_bag_subject(flag, parameter.key);
+          }
+          if (refusal.form() != SonareParameterRefusal::Form::UnknownKey) {
+            const auto spelled = sonare::util::parameter_bag_key(entry, key);
+            for (const auto& parameter : parameters) {
+              if (parameter.key == spelled) return cli_bag_subject(flag, parameter.key);
             }
           }
           return subject;
