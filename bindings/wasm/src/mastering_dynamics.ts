@@ -34,7 +34,7 @@ export interface CompressorOptions {
   autoMakeup?: boolean;
   /** Level detector: `'peak'`, `'rms'` or `'logRms'`. Default `'rms'`. */
   detector?: CompressorDetector;
-  /** Sidechain high-pass corner in Hz, above 0. Absent = no sidechain high-pass. */
+  /** Sidechain high-pass corner in Hz. Use a finite positive value; omission or 0 disables the filter. */
   sidechainHighPassHz?: number;
   /** Program-dependent release time in ms. Default `0`. */
   pdrTimeMs?: number;

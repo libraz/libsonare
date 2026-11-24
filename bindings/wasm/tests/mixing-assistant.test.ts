@@ -139,7 +139,7 @@ describe('mixing assistant (WASM)', () => {
       expect(result.mix.trackCount).toBe(0);
     });
 
-    it('marks a silent track unusable without excluding the rest', () => {
+    it("omits the exclusion reason for a usable track and names a silent track's exclusion", () => {
       const result = mixingAssistantSuggest({
         tracks: [
           { id: 'silent', channels: [new Float32Array(Math.floor(SR * DURATION))] },
@@ -151,8 +151,9 @@ describe('mixing assistant (WASM)', () => {
       const silent = result.tracks.find((track) => track.stripId === 'silent');
       const keys = result.tracks.find((track) => track.stripId === 'keys');
       expect(silent?.usable).toBe(false);
-      expect(silent?.exclusionReason).not.toBe('');
+      expect(silent?.exclusionReason).toBe('track is silent');
       expect(keys?.usable).toBe(true);
+      expect(keys).not.toHaveProperty('exclusionReason');
     });
 
     it('suggests nothing when every decision domain is off', () => {

@@ -132,7 +132,7 @@ describe('mixing assistant native binding', () => {
     expect(result.mix.trackCount).toBe(0);
   });
 
-  it('marks a silent track unusable without failing the request', () => {
+  it("omits the exclusion reason for a usable track and names a silent track's exclusion", () => {
     const result = mixingAssistantSuggest({
       tracks: [
         { id: 'silent', channels: [new Float32Array(SR)] },
@@ -143,8 +143,10 @@ describe('mixing assistant native binding', () => {
 
     const silent = result.tracks.find((track) => track.stripId === 'silent');
     expect(silent?.usable).toBe(false);
-    expect(silent?.exclusionReason).not.toBe('');
-    expect(result.tracks.find((track) => track.stripId === 'tone')?.usable).toBe(true);
+    expect(silent?.exclusionReason).toBe('track is silent');
+    const tone = result.tracks.find((track) => track.stripId === 'tone');
+    expect(tone?.usable).toBe(true);
+    expect(tone).not.toHaveProperty('exclusionReason');
   });
 
   it('states a silent track at the infinite ends of its levels and omits its crest factor', () => {

@@ -250,7 +250,13 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
             call,
           )
         : call();
-    return parseRecordJson(json, 'mix_assistant_result') as unknown as MixAssistantResult;
+    const result = parseRecordJson(json, 'mix_assistant_result') as unknown as MixAssistantResult;
+    for (const track of result.tracks) {
+      if (track.exclusionReason === '') {
+        delete track.exclusionReason;
+      }
+    }
+    return result;
   });
 }
 

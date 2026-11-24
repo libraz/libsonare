@@ -468,8 +468,8 @@ export interface MixAssistantTrackProfile {
    * reason describes the buffer instead of the material.
    */
   usable: boolean;
-  /** Why the track was excluded; empty when {@link usable} is true. */
-  exclusionReason: string;
+  /** Why the track was excluded; absent when {@link usable} is true. */
+  exclusionReason?: string;
   /** Channel count of the track: 1 for mono, 2 for stereo. */
   numChannels: number;
   /** Track duration in seconds. */

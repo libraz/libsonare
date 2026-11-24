@@ -6531,6 +6531,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringChainSection` | removed: Use MasteringChainConfig for a chain config, or Record<string, unknown> for a generic walk over its sections. |
 | `MasteringInsertParamUnit` | Handle the added dBTP unit in exhaustive switches over catalog units. |
 | `MasteringResult.latencySamples` | optional -> required |
+| `MixAssistantTrackProfile.exclusionReason` | optional: absent on usable tracks, which previously returned an empty string. Excluded tracks still carry their reason. |
 | `TypedJson` | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
 | `masteringPresetParams` | masteringPresetParams(preset: MasteringPreset): MasteringChainConfig |
 | `mixingScenePresetJson` | `mixingScenePreset`: renamed to mixingScenePreset: mixingScenePreset(name: MixScenePreset): MixSceneDocument |
@@ -11508,6 +11509,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringInsertParamUnit` | Handle the added dBTP, midiNote and bpm units in exhaustive switches over catalog units. |
 | `MasteringResult.latencySamples` (`./analysis`) | optional -> required |
 | `MasteringResult.latencySamples` | optional -> required |
+| `MixAssistantTrackProfile.exclusionReason` | optional: absent on usable tracks, which previously returned an empty string. Excluded tracks still carry their reason. |
 | `TypedJson` (`./analysis`) | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
 | `TypedJson` | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
 | `masteringPresetParams` | masteringPresetParams(preset: MasteringPreset): MasteringChainConfig |

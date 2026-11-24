@@ -19550,6 +19550,14 @@ test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves
 
 [[entry]]
 kind = "field"
+old = "MixAssistantTrackProfile.exclusionReason"
+changed = "optional: absent on usable tracks, which previously returned an empty string. Excluded tracks still carry their reason."
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/node/tests/mixing_assistant.test.ts::omits the exclusion reason for a usable track and names a silent track's exclusion"
+
+[[entry]]
+kind = "field"
 old = "MatchTonalBalanceBand.sourceDb"
 changed = "optional: `-Infinity` for a silent band, absent when the band holds no bin"
 domain = "mastering"
