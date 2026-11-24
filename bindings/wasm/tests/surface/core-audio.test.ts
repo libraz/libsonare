@@ -1,5 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { Audio, ErrorCode, init, SonareError } from '../../dist/index.js';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import { Audio, ErrorCode, init, SonareError, type SonareErrorOptions } from '../../dist/index.js';
 
 const sampleRate = 48000;
 
@@ -29,6 +29,19 @@ describe('Audio.fromBuffer', () => {
     expect(() => fromBuffer(new Float32Array(16))).toThrow(
       new TypeError('Audio.fromBuffer: sampleRate must be an integer'),
     );
+  });
+});
+
+describe('SonareError constructor', () => {
+  it('derives codeName from (code, message, options)', () => {
+    expectTypeOf<ConstructorParameters<typeof SonareError>>().toEqualTypeOf<
+      [code: ErrorCode, message: string, options?: SonareErrorOptions]
+    >();
+    expectTypeOf<Extract<keyof SonareErrorOptions, 'codeName'>>().toEqualTypeOf<never>();
+    const error = new SonareError(ErrorCode.InvalidParameter, 'bad input', { cause: 'test' });
+    expect(error.codeName).toBe('InvalidParameter');
+    expect(error.message).toBe('bad input');
+    expect(error.cause).toBe('test');
   });
 });
 

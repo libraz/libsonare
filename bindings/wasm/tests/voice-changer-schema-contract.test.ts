@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import type {
+  RealtimeVoiceChangerPreset,
+  RealtimeVoiceChangerPresetMetadata,
+} from '../src/analysis';
 import {
   init,
   realtimeVoiceChangerPresetJson,
@@ -38,6 +42,14 @@ function expectBothValidatorsToReject(preset: object): void {
 describe('Realtime Voice Changer preset JSON Schema contract', () => {
   beforeAll(async () => {
     await init();
+  });
+
+  it('RealtimeVoiceChangerPreset uses schema version 4', () => {
+    expectTypeOf<RealtimeVoiceChangerPreset['schemaVersion']>().toEqualTypeOf<4>();
+  });
+
+  it('RealtimeVoiceChangerPresetMetadata uses schema version 4', () => {
+    expectTypeOf<RealtimeVoiceChangerPresetMetadata['schemaVersion']>().toEqualTypeOf<4>();
   });
 
   it('ships the canonical schema and accepts every factory preset through both validators', async () => {

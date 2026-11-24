@@ -8,9 +8,10 @@
  * is sorted by ordinal, so a member out of place reads as a drift too.
  */
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { automationTargetKindNames, init, Project } from '../dist/index.js';
 import { AUTOMATION_CURVE_VALUES } from '../src/codes.js';
+import type { ProjectLoopMode, ProjectTrackKind } from '../src/index';
 import {
   CHORD_QUALITY_CODES,
   FADE_CURVES,
@@ -107,5 +108,15 @@ describe('project token tables', () => {
     expect(automationTargetKindNames()).toEqual(
       coreTokens(document, ['tracks', 0, 'automationLanes', 0, 'targetKind']),
     );
+  });
+
+  it('uses string tokens for project loop modes', () => {
+    expectTypeOf<ProjectLoopMode>().toEqualTypeOf<'off' | 'loop'>();
+    expect(inOrdinalOrder(LOOP_MODES)).toEqual(['off', 'loop']);
+  });
+
+  it('uses string tokens for project track kinds', () => {
+    expectTypeOf<ProjectTrackKind>().toEqualTypeOf<'audio' | 'midi' | 'aux'>();
+    expect(inOrdinalOrder(TRACK_KINDS)).toEqual(['audio', 'midi', 'aux']);
   });
 });

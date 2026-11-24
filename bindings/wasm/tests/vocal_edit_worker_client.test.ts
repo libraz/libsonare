@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { ErrorCode, isSonareError } from '../src/errors';
 import type {
   VocalWorkerCreateResult,
@@ -164,6 +164,12 @@ class FakeWorker implements VocalEditWorker {
 }
 
 describe('vocal edit Worker client', () => {
+  it('VocalEditWorkerCreated carries its initial result fields', () => {
+    type Created = VocalEditWorkerSession['created'];
+    expectTypeOf<keyof Created>().toEqualTypeOf<'notes' | 'analysis' | 'capabilities'>();
+    expectTypeOf<Created['capabilities']['abiVersion']>().toEqualTypeOf<number>();
+  });
+
   it('keeps the guarded constructors out of the public type', () => {
     // Never called: the type check is the assertion, the guard refuses the call at runtime.
     const constructors = (guard: never) => [

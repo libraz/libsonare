@@ -1,11 +1,16 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import * as sonare from '../../dist/index.js';
 import {
+  type AcousticModeName,
   Audio,
   autoTune,
+  type DecomposeNotePitchRequest,
+  type EstimateRoomRequest,
+  type ExtractNotesRequest,
   extractNotes,
   extractPercussiveEvents,
   init,
+  type MergeNotesRequest,
   mergeNotes,
   type NoteObject,
   noteMove,
@@ -13,6 +18,8 @@ import {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchShift,
+  type RenderNotesRequest,
+  type RoomEstimateOptions,
   renderNotes,
   renderPercussiveEvents,
   scaleCorrectionSemitones,
@@ -594,5 +601,77 @@ describe('effects notes surface', () => {
     ])('refuses the removed positional form of Audio.%s', (_name, call) => {
       expect(thrown(call)).toBeInstanceOf(TypeError);
     });
+  });
+});
+
+describe('request type spellings', () => {
+  it('DecomposeNotePitchRequest uses absence for an omitted voiced track', () => {
+    expectTypeOf<DecomposeNotePitchRequest['voiced']>().toEqualTypeOf<
+      import('../../dist/index.js').VoicedFlags | undefined
+    >();
+    const request: DecomposeNotePitchRequest = {
+      f0Hz: new Float32Array(),
+      frameRate: 1,
+      medianHz: 440,
+    };
+    expect(request.voiced).toBeUndefined();
+  });
+
+  it('ExtractNotesRequest uses absence for voicedProb', () => {
+    expectTypeOf<ExtractNotesRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    const request: ExtractNotesRequest = {
+      samples: new Float32Array(),
+      sampleRate: 22050,
+      f0Hz: new Float32Array(),
+      frameRate: 1,
+    };
+    expect(request.voicedProb).toBeUndefined();
+  });
+
+  it('MergeNotesRequest uses absence for voiced and voicedProb', () => {
+    expectTypeOf<MergeNotesRequest['voiced']>().toEqualTypeOf<
+      import('../../dist/index.js').VoicedFlags | undefined
+    >();
+    expectTypeOf<MergeNotesRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    const request: MergeNotesRequest = {
+      samples: new Float32Array(),
+      sampleRate: 22050,
+      f0Hz: new Float32Array(),
+      frameRate: 1,
+      notes: [],
+      first: 0,
+      last: 0,
+    };
+    expect(request.voiced).toBeUndefined();
+    expect(request.voicedProb).toBeUndefined();
+  });
+
+  it('RenderNotesRequest uses absence for voiced', () => {
+    expectTypeOf<RenderNotesRequest['voiced']>().toEqualTypeOf<
+      import('../../dist/index.js').VoicedFlags | undefined
+    >();
+    const request: RenderNotesRequest = {
+      samples: new Float32Array(),
+      sampleRate: 22050,
+      notes: [],
+    };
+    expect(request.voiced).toBeUndefined();
+  });
+
+  it('EstimateRoomRequest requires sampleRate', () => {
+    expectTypeOf<EstimateRoomRequest['sampleRate']>().toEqualTypeOf<number>();
+    expectTypeOf<Pick<EstimateRoomRequest, 'samples' | 'sampleRate'>>().toEqualTypeOf<{
+      samples: Float32Array;
+      sampleRate: number;
+    }>();
+    const valid: EstimateRoomRequest = { samples: new Float32Array(), sampleRate: 22050 };
+    expect(valid.sampleRate).toBe(22050);
+  });
+
+  it('RoomEstimateOptions uses the current mode tokens', () => {
+    expectTypeOf<RoomEstimateOptions['mode']>().toEqualTypeOf<AcousticModeName | undefined>();
+    expectTypeOf<AcousticModeName>().toEqualTypeOf<'auto' | 'blind' | 'impulseResponse'>();
+    const valid: RoomEstimateOptions = { mode: 'impulseResponse' };
+    expect(valid.mode).toBe('impulseResponse');
   });
 });

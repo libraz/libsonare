@@ -71,6 +71,18 @@ describe('StreamingEqualizer.constructor', () => {
       eq.destroy();
     }
   });
+
+  it('takes a StreamingEqualizerConfig object', () => {
+    expectTypeOf<ConstructorParameters<typeof StreamingEqualizer>>().toEqualTypeOf<
+      [config: StreamingEqualizerConfig]
+    >();
+    expect(
+      errorOf(
+        () =>
+          new (StreamingEqualizer as unknown as new (...args: unknown[]) => unknown)(sampleRate),
+      ),
+    ).toBeInstanceOf(TypeError);
+  });
 });
 
 describe('StreamingEqualizerConfig.sampleRate', () => {
@@ -306,6 +318,20 @@ describe('EqStereoPlacement', () => {
       expect(Array.from(eq.magnitudeResponse(freqs, 'stereo'))).toEqual(Array.from(stereo));
       expect(eq.magnitudeResponse(freqs, 'mid')[1]).toBeGreaterThan(5);
       expect(Math.abs(eq.magnitudeResponse(freqs, 'left')[1] as number)).toBeLessThan(0.5);
+    } finally {
+      eq.destroy();
+    }
+  });
+
+  it('StreamingEqualizer.magnitudeResponse takes the current placement token', () => {
+    expectTypeOf<Parameters<StreamingEqualizer['magnitudeResponse']>[1]>().toEqualTypeOf<
+      EqStereoPlacement | undefined
+    >();
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      expect(Array.from(eq.magnitudeResponse(freqs))).toEqual(
+        Array.from(eq.magnitudeResponse(freqs, 'stereo')),
+      );
     } finally {
       eq.destroy();
     }

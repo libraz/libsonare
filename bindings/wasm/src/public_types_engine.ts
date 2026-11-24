@@ -440,14 +440,14 @@ export interface EngineBounceOptions {
 /** Planar result of {@link RealtimeEngine.bounceOffline}. */
 export interface EngineBounceResult {
   /** One `Float32Array` per output channel, all the same length. */
-  channels: Float32Array[];
+  readonly channels: Float32Array[];
   /** Sample rate of `channels` in Hz. */
-  sampleRate: number;
+  readonly sampleRate: number;
   /**
    * Integrated loudness of the bounce in LUFS.
    * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
    */
-  integratedLufs: number;
+  readonly integratedLufs: number;
   /**
    * Samples whose value before quantization and dither lies past full scale
    * (|x| > 1), summed over the channels; 0 when none clipped. Absent when the bounce

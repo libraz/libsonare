@@ -30,9 +30,11 @@ export class LiveSession {
     throw unavailable();
   }
 
-  /** Opening a native device session is unavailable in this build. */
-  constructor(engine: RealtimeEngine, config: LiveSessionConfig) {
-    void engine;
+  /**
+   * Opening a native device session is unavailable in this build.
+   * @param config - The realtime engine and its device selection settings.
+   */
+  constructor(config: LiveSessionConfig & { readonly engine: RealtimeEngine }) {
     void config;
     throw unavailable();
   }

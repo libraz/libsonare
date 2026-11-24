@@ -103,6 +103,22 @@ describe('stream analyzer surface', () => {
     expect(config).toEqual({});
   });
 
+  it('StreamAnalyzer takes an explicit StreamConfig', () => {
+    expectTypeOf<ConstructorParameters<typeof StreamAnalyzer>>().toEqualTypeOf<
+      [config: StreamConfig]
+    >();
+    const analyzer = new StreamAnalyzer({ sampleRate });
+    try {
+      expect(
+        caught(
+          () => new (StreamAnalyzer as unknown as new (...args: unknown[]) => unknown)(sampleRate),
+        ),
+      ).toBeInstanceOf(TypeError);
+    } finally {
+      analyzer.destroy();
+    }
+  });
+
   it('refuses removed and ordinal config fields', () => {
     const bad: Array<[string, Record<string, unknown>, unknown]> = [
       ['computeMagnitude', { computeMagnitude: false }, TypeError],
@@ -469,6 +485,20 @@ describe('stream analyzer surface', () => {
     // @ts-expect-error removed
     type _G = import('../../dist/index.js').PatternScore;
     expect(true).toBe(true);
+  });
+
+  it('StreamAnalyzer.stats returns the named StreamStats record', () => {
+    expectTypeOf<ReturnType<StreamAnalyzer['stats']>>().toEqualTypeOf<StreamStats>();
+    expectTypeOf<StreamStats['durationSec']>().toEqualTypeOf<number>();
+    expectTypeOf<keyof StreamStats>().not.toMatchTypeOf<'durationSeconds'>();
+    const a = analyzer();
+    try {
+      const stats = a.stats();
+      expect(stats).toHaveProperty('durationSec');
+      expect(stats).not.toHaveProperty('durationSeconds');
+    } finally {
+      a.destroy();
+    }
   });
 });
 

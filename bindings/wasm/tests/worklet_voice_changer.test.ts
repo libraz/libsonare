@@ -1,5 +1,10 @@
+import { expectTypeOf } from 'vitest';
 import type { RealtimeVoiceChangerConfig } from '../src/public_types';
 import { isRealtimeVoiceChangerMessage } from '../src/worklet/guards';
+import type {
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  SonareRealtimeVoiceChangerWorkletProcessor as SourceVoiceChangerProcessor,
+} from '../src/worklet.js';
 import {
   countFloat32Subarrays,
   describe,
@@ -111,6 +116,12 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
   setupWorklet();
 
   describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
+    it('requires processor options in its constructor', () => {
+      expectTypeOf<ConstructorParameters<typeof SourceVoiceChangerProcessor>>().toEqualTypeOf<
+        [options: SonareRealtimeVoiceChangerWorkletProcessorOptions]
+      >();
+    });
+
     it('refuses a numChannels instead of rounding it into range', () => {
       for (const numChannels of [1.5, 0, -1, Number.NaN]) {
         expect(

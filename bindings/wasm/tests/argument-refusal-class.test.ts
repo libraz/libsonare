@@ -11,7 +11,6 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { ExtractNotesRequest } from '../dist/index.js';
 import {
   dbToAmplitude,
   detectChords,
@@ -32,6 +31,7 @@ import {
   melToAudio,
   melToHz,
   melToStft,
+  mergeNotes,
   mfccToAudio,
   mfccToMel,
   midiRouteEvents,
@@ -43,6 +43,7 @@ import {
   renderPlayback,
   StreamingEqualizer,
   samplesToFrames,
+  splitNote,
   timeToFrames,
 } from '../dist/index.js';
 
@@ -184,10 +185,17 @@ describe('argument refusal classes shared with the Node surface', () => {
       sampleRate: 22050,
       f0Hz: new Float32Array(4),
       voiced: new Uint8Array(4),
-    } as unknown as ExtractNotesRequest;
-    const error = thrown(() => extractNotes(request));
-    expect(error).toBeInstanceOf(TypeError);
-    expect((error as Error).message).toBe('extractNotes: frameRate must be a number');
+    };
+    const attempts = [
+      ['extractNotes', () => extractNotes(request as never)],
+      ['splitNote', () => splitNote({ ...request, notes: [], index: 0, frame: 1 } as never)],
+      ['mergeNotes', () => mergeNotes({ ...request, notes: [], first: 0, last: 1 } as never)],
+    ] as const;
+    for (const [entry, run] of attempts) {
+      const error = thrown(run);
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as Error).message).toBe(`${entry}: frameRate must be a number`);
+    }
   });
 
   it('refuses a missing playback config with a TypeError, not an embind error', () => {

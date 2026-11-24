@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { ClipPageStreamer } from '../dist/index.js';
+import type {
+  attachOpfsClipStream,
+  OpfsClipStream,
+  OpfsClipStreamOptions,
+  ClipPageStreamer as SourceClipPageStreamer,
+} from '../src/index.js';
 import { unknownKeyError } from './_helpers';
 
 interface ClipPageRequest {
@@ -46,6 +52,15 @@ function fakeBinding(options: { failPages?: Set<number> } = {}) {
 }
 
 describe('ClipPageStreamer', () => {
+  it('uses a streamer and options without a separate engine argument', () => {
+    type StreamerAttach = (
+      streamer: SourceClipPageStreamer,
+      options: OpfsClipStreamOptions,
+    ) => Promise<OpfsClipStream>;
+
+    expectTypeOf<typeof attachOpfsClipStream>().toMatchTypeOf<StreamerAttach>();
+  });
+
   it('fetches the missed page plus its read-ahead window', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 12 }]);
     const binding = fakeBinding();

@@ -7572,6 +7572,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `projectAbiVersion` | returns undefined instead of 0 when the feature is compiled out |
 | `vocalEditApiVersion` | `vocalEditAbiVersion`: returns undefined instead of 0 when the feature is compiled out |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Audio.crestFactorDb` | Check the result for undefined before using it as a number; silence has no crest factor. |
+
 #### Every call scans its input for non-finite values
 
 | 1.x | 2.0.0 |
@@ -7708,7 +7714,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.harmonic` | harmonic(options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>) |
 | `Audio.hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
 | `Audio.hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
-| `Audio.hpss` | hpss(options?: Omit<HpssRequest,'samples'\|'sampleRate'>) |
+| `Audio.hpss` | hpss(options?: Omit<HpssRequest,'samples'\|'sampleRate'>). An out-of-domain kernel is a RangeError instead of SonareError InvalidParameter. |
 | `Audio.melSpectrogram(fmax)` | removed: pass it as fmaxHz in MelSpectrogramRequest |
 | `Audio.melSpectrogram(fmin)` | removed: pass it as fminHz in MelSpectrogramRequest |
 | `Audio.melSpectrogram(hopLength)` | removed: pass hopLength as a field of MelSpectrogramRequest |
@@ -7833,12 +7839,19 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EqBand` (`./analysis`) | `EqBandInput` |
 | `EqBand` | `EqBandInput` |
 | `SonareCapabilities` (`./analysis`) | `Capabilities` |
 | `SonareCapabilities` | `Capabilities` |
 | `SonareScopeRingBuffer` (`./worklet`) | `ScopeRingBuffer` |
 | `SonareScopeRingReadResult` (`./worklet`) | `ScopeRingReadResult` |
 | `readSonareScopeRingBuffer` (`./worklet`) | `readScopeRingBuffer` |
+
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareError` | Pass (code, message, options?) instead of (code, codeName, message); codeName is derived from the ErrorCode. |
 
 #### Historical aliases are removed
 
@@ -7871,6 +7884,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.dynamicRange` | delegates to meteringDynamicRange: an unknown option key is a TypeError reading 'Audio.dynamicRange: unknown key k (expected ...)' (was "unknown option 'k'") |
 | `Audio.spectrumFrame` | delegates to meteringSpectrumFrame: an unknown option key is a TypeError reading 'Audio.spectrumFrame: unknown key k (expected ...)' (was "unknown option 'k'"); an explicit nFft of 0 is a RangeError |
 | `Audio.spectrum` | delegates to meteringSpectrum: an unknown option key is a TypeError reading 'Audio.spectrum: unknown key k (expected ...)' (was "unknown option 'k'"); an explicit nFft of 0 is a RangeError |
+| `CapabilityCatalogPresets` | Result records expose readonly fields or arrays. Copy the record or array before mutating it. Affected types: CapabilityCatalog, CapabilityCatalogChain, CapabilityCatalogChainList, CapabilityCatalogChainStage, CapabilityCatalogPresets, MasteringInsertParamChoice, MasteringInsertParamDependency, MasteringInsertSlot, MasteringInsertTiming, ProjectClip, ProjectMarker, ProjectSource, ProjectTrack. |
 | `createSonareScopeRingBuffer` (`./worklet`) | `createScopeRingBuffer`: takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `sonareScopeRingBufferByteLength` (`./worklet`) | `scopeRingBufferByteLength`: takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 
@@ -8416,6 +8430,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EstimateMeterRequest.compoundSubdivisionThreshold` (`./analysis`) | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `EstimateMeterRequest.compoundSubdivisionThreshold` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `GriffinLimRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
@@ -8428,6 +8443,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalysisResult` | Check dynamics.dynamicRangeDb and dynamics.crestFactor for absence before numeric use and read loudness range from its renamed field. Read meanFrequencyHz and vibratoRateHz and allow unmeasured melody fields to be absent. |
+| `DynamicsResult` | Handle undefined in crestFactor, dynamicRangeDb. |
+| `LufsResult` | Handle undefined in maxMomentaryLufs, maxShortTermLufs, momentaryLufs, shortTermLufs. |
 | `SilenceCommonReport.silenceCeilingDb` | optional: a signal with no peak constrains nothing (was 0 for the whole report); Infinity when every signal that has a level holds an exactly zero frame (was 120); absent when every signal is silent |
 
 #### Every call scans its input for non-finite values
@@ -8705,6 +8723,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EstimateMeterRequest.beatStrengths` | removed: Pass analysis.beatObservations in EstimateMeterRequest.observations. |
 | `EstimateMeterRequest.beatTimes` (`./analysis`) | `EstimateMeterRequest.observations` |
 | `EstimateMeterRequest.beatTimes` | `EstimateMeterRequest.observations` |
+| `StreamAnalyzer.stats` | Use the typed StreamStats record and its current field names rather than the previous stats record. |
 
 #### Python arrays are numpy arrays
 
@@ -9049,8 +9068,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `chordFunctionalAnalysis(keyMode)` | removed: pass keyMode as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(keyRoot)` (`./analysis`) | removed: pass keyRoot as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(keyRoot)` | removed: pass keyRoot as a field of ChordFunctionalAnalysisRequest |
-| `chordFunctionalAnalysis` (`./analysis`) | one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'\|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields) |
-| `chordFunctionalAnalysis` | one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'\|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields) |
+| `chordFunctionalAnalysis` (`./analysis`) | one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'\|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields). Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
+| `chordFunctionalAnalysis` | one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'\|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields). Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `chordFunctions` | one generic signature chordFunctions<T extends ChordFunctionsInput>(request: ChordFunctionsRequest<T>): FunctionalChord<T>[] |
 | `chroma(hopLength)` (`./analysis`) | removed: pass hopLength as a field of ChromaRequest |
 | `chroma(hopLength)` | removed: pass hopLength as a field of ChromaRequest |
@@ -9148,14 +9167,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `detectAcoustic` (`./analysis`) | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectAcoustic` | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
-| `detectChords` (`./analysis`) | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest |
-| `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest |
+| `detectChords` (`./analysis`) | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
+| `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectDownbeats` (`./analysis`) | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
-| `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest |
-| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest |
-| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError |
+| `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
+| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
+| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
 | `estimateTuning(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of EstimateTuningRequest |
@@ -9926,6 +9945,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `OnsetBacktrackRequest.events` | type Int32Array \| ArrayLike<number> |
 | `SegmentSubsegmentRequest.boundaries` (`./analysis`) | type Int32Array \| ArrayLike<number> |
 | `SegmentSubsegmentRequest.boundaries` | type Int32Array \| ArrayLike<number> |
+| `SonareStreamAnalyzerNodeOptions` (`./worklet`) | Use window name tokens in the optional stream configuration; numeric window ordinals are removed. |
+| `StreamAnalyzer` | Pass an explicit StreamConfig to the constructor. |
 
 #### Historical aliases are removed
 
@@ -9999,8 +10020,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `fourierTempogram` | norm option removed |
 | `framesToSamples(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
+| `hzToNote` (`./analysis`) | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
+| `hzToNote` | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
 | `noteSegments` (`./analysis`) | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
 | `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
+| `noteToHz` (`./analysis`) | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
+| `noteToHz` | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
 | `samplesToFrames(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `samplesToFrames(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `streamAnalyzerConfigDefaults` | removed: Omit a StreamConfig field; the analyzer reads an absent field as the library default. |
@@ -10025,7 +10050,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DecomposeStemsRequest` (`./analysis`) | `sampleRate` is now required |
 | `DecomposeStemsRequest` | `sampleRate` is now required |
 | `EstimateRoomRequest.sampleRate` | optional -> required (no default) |
-| `EstimateRoomRequest` | `sampleRate` is now required |
+| `EstimateRoomRequest` | Supply sampleRate explicitly and use impulseResponse in place of impulse_response for mode. |
 | `HarmonicRequest.sampleRate` | optional -> required (no default) |
 | `HarmonicRequest` | `sampleRate` is now required |
 | `HpssRequest.sampleRate` | optional -> required (no default) |
@@ -10240,6 +10265,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
 | `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: always full length, NaN for each band not fitted, even when no band was |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
+| `MasteringRepairAnalysis` | Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records. |
+| `NoiseDetection` | Handle undefined in floorDbfs. |
+| `ReverbDetection` | Handle undefined in latePredictability. |
 | `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent together with rt60Bands only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when the absorption solve fails |
 | `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
@@ -10247,6 +10275,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent together with bandAbsorption only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when no band decay was measured |
 | `RoomEstimateResult.volume` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.widthM` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomGeometryEstimate` | Handle undefined in heightM, lengthM, widthM. |
 
 #### Every call scans its input for non-finite values
 
@@ -10328,6 +10357,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `RealtimeVoiceChangerPresetMetadata` (`./analysis`) | Use schemaVersion 4 in place of 1. |
+| `RealtimeVoiceChangerPreset` (`./analysis`) | Use schemaVersion 4 in place of 1. |
 | `masteringRepairDeclick` | returns DeclickResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel |
 | `masteringRepairDeclip` | returns DeclipResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel |
 | `masteringRepairDecrackle` | returns DecrackleResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel |
@@ -10389,7 +10420,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `decompose` (`./analysis`) | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `decompose` | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `estimateRoom` | one positional form (estimateRoom(samples, sampleRate, options?: RoomEstimateOptions)); request form takes EstimateRoomRequest; returns RoomEstimateResult |
-| `extractNotes` | one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'\|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[] |
+| `extractNotes` | one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'\|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError. |
 | `extractPercussiveEvents` | one positional form (extractPercussiveEvents(samples, sampleRate, options?: Omit<ExtractPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes ExtractPercussiveEventsRequest; returns PercussiveEvent[] |
 | `harmonic` | one positional form (harmonic(samples, sampleRate, options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>)); request form takes HarmonicRequest; returns Float32Array |
 | `hpss(hardMask)` | removed: pass hardMask as a field of HpssRequest |
@@ -10397,7 +10428,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
 | `hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
 | `hpss(nFft)` | removed: pass nFft as a field of HpssRequest |
-| `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult |
+| `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult. An out-of-domain kernel is a RangeError instead of SonareError InvalidParameter. |
 | `masteringRepairDeclickStereo(config)` | removed: pass config as a field of MasteringRepairDeclickStereoRequest |
 | `masteringRepairDeclickStereo(left)` | removed: pass left as a field of MasteringRepairDeclickStereoRequest |
 | `masteringRepairDeclickStereo(right)` | removed: pass right as a field of MasteringRepairDeclickStereoRequest |
@@ -10458,7 +10489,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringRepairTrimSilenceStereo(right)` | removed: pass right as a field of MasteringRepairTrimSilenceStereoRequest |
 | `masteringRepairTrimSilenceStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairTrimSilenceStereoRequest |
 | `masteringRepairTrimSilenceStereo` | request-only: masteringRepairTrimSilenceStereo(request: MasteringRepairTrimSilenceStereoRequest): MasteringRepairTrimSilenceResult |
-| `mergeNotes` | one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'\|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[] |
+| `mergeNotes` | one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'\|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError. |
 | `nnFilter(aggregate)` (`./analysis`) | removed: pass aggregate as a field of NnFilterRequest |
 | `nnFilter(aggregate)` | removed: pass aggregate as a field of NnFilterRequest |
 | `nnFilter(k)` (`./analysis`) | removed: pass k as a field of NnFilterRequest |
@@ -10512,11 +10543,11 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
 | `roomGeometryFromEstimate(estimate)` | removed: pass estimate as a field of RoomGeometryFromEstimateRequest |
-| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest). A submitted estimate without measurable room size is a RangeError instead of SonareError InvalidParameter. |
 | `spectralEdit(ops)` | removed: pass ops as a field of SpectralEditOptions |
 | `spectralEdit` | one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array |
-| `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[] |
-| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError. |
+| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest). Catch RangeError for an out-of-room source or listener. Read the named coordinate domain; the previous coded InvalidParameter and diagnostic id are gone. Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default. |
 | `timeStretch(hopLength)` | removed: pass hopLength as a field of TimeStretchRequest |
 | `timeStretch(nFft)` | removed: pass nFft as a field of TimeStretchRequest |
 | `timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
@@ -10648,6 +10679,17 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `VoiceChangeRealtimeRequest` | `RealtimeVoiceChangerRenderRequest`: renamed with realtimeVoiceChangerRender; the fields are unchanged |
 | `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(document: string): RealtimeVoiceChangerValidatePresetJsonResult |
 
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `DecomposeNotePitchRequest` | Omit voiced or use undefined instead of passing null. |
+| `ExtractNotesRequest` | Omit voicedProb or use undefined instead of passing null. |
+| `MergeNotesRequest` | Omit voiced or use undefined instead of passing null. Omit voicedProb or use undefined instead of passing null. |
+| `RenderNotesRequest` | Omit voiced or use undefined instead of passing null. |
+| `RoomEstimateOptions` | Use the mode token impulseResponse in place of impulse_response. |
+| `SonareRealtimeVoiceChangerWorkletProcessor` (`./worklet`) | Pass SonareRealtimeVoiceChangerWorkletProcessorOptions explicitly; omission is no longer accepted. |
+
 #### The ./worklet entry exports only the documented surface
 
 | 1.x | 2.0.0 |
@@ -10679,6 +10721,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `AutoTuneOptions.referenceMidi` (`./analysis`) | `AutoTuneOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
 | `AutoTuneOptions.referenceMidi` | `AutoTuneOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
+| `AutoTuneOptions.strength` (`./analysis`) | `AutoTuneOptions.retuneAmount`: strength -> retuneAmount, the name pitchCorrectTimevarying uses for the same correction strength |
 | `AutoTuneOptions.strength` | `AutoTuneOptions.retuneAmount`: strength -> retuneAmount, the name pitchCorrectTimevarying uses for the same correction strength |
 | `AutoTuneRequest.referenceMidi` | `AutoTuneRequest.scaleReferenceMidi` |
 | `AutoTuneRequest.strength` | `AutoTuneRequest.retuneAmount` |
@@ -10780,13 +10823,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomMorphStereoRequest.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
 | `RoomMorphStereoRequest.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
 | `RoomMorphStereoRequest.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphStereoRequest.receiverSpacingM` | Omitted receiverSpacingM is up to 0.5 m, reduced when necessary to keep both receivers in the room. An explicit 0.5 m retains the fixed geometry and can be refused. |
 | `RoomMorphStereoRequest.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
 | `RoomMorphStereoRequest.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
 | `RoomMorphStereoRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
-| `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
+| `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). A finite pitch or mix outside its domain and a grain size outside the supported multiples are now refused instead of clamped or rounded. |
 | `VoiceChangeRealtimeRequest.preset` | `RealtimeVoiceChangerRenderRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
+| `roomMorphStereo` | A listener whose receiver pair falls outside the room with explicitly supplied spacing yields RangeError naming receiverSpacingM rather than SonareError InvalidParameter. An omitted spacing may be reduced to fit. Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default. |
+| `roomMorph` | Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default. |
 | `voiceChangeRealtime` | `realtimeVoiceChangerRender`: renamed to the realtime voice changer stem and request-only: realtimeVoiceChangerRender(request: RealtimeVoiceChangerRenderRequest): Float32Array[] |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
 
@@ -10866,6 +10912,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingEqualizer.delete` | removed: call destroy() |
+| `StreamingMasteringChain.delete` (`./worklet`) | removed: call destroy() |
 | `StreamingMasteringChain.delete` | removed: call destroy() |
 
 #### Physical quantities carry their unit in the name
@@ -11010,7 +11057,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DynamicRangeReport.lowPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
 | `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringLoudnessSummary` | Handle undefined in maxMomentaryLufs, maxShortTermLufs. |
 | `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringStreamingPreviewPlatform` | Handle undefined in normalizationGainDb. |
 | `MatchReferenceLoudnessResult.referenceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
 | `MatchReferenceLoudnessResult.sourceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
 | `MatchTonalBalanceBand.deviationDb` | optional: `-Infinity` when only the source band is silent, absent when the reference band is silent or the band holds no bin |
@@ -11018,11 +11067,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MatchTonalBalanceBand.sourceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
 | `MixAssistantTrackProfile.crestFactorDb` | optional: absent for silence or a track that could not be measured |
 | `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
+| `MixMeterSnapshot` | Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs. |
 | `MixMonoRisk.correlation` | optional: absent when either channel is silent |
 | `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
 | `StereoMonoCompatBand.correlation` | number -> optional number: absent when either channel is silent in the band, never 0 |
 | `StereoMonoCompatCheckResult.correlation` | optional: absent when either channel is silent |
 | `StereoMonoCompatCheckResult.width` | T \| null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence |
+| `StreamingLoudnessGainResult` | Handle undefined in loudnessStaticGainDb. |
 
 #### Every call scans its input for non-finite values
 
@@ -11133,6 +11184,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `JsonResult` (`./analysis`) | removed: Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast. |
 | `JsonResult` | removed: Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast. |
+| `MasteringAmpPresetCatalogEntry` | Read named optional amplifier parameters, and handle absence instead of indexing an arbitrary string key. |
 | `MasteringAssistantResult.chainConfig` (`./analysis`) | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAssistantResult.chainConfig` | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAudioProfileDefects.clickCount` | removed: read defects.click.count |
@@ -11162,6 +11214,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: NoiseDetection, hum: HumDetection, reverb: ReverbDetection} |
 | `MasteringChainConfigDocument` (`./analysis`) | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
+| `MasteringInsertParamUnit` | Handle the added dBTP, midiNote and bpm units in exhaustive switches over catalog units. |
 | `MasteringResult.latencySamples` (`./analysis`) | optional -> required |
 | `MasteringResult.latencySamples` | optional -> required |
 | `TypedJson` (`./analysis`) | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
@@ -11382,7 +11435,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `StreamingMasteringChain.prepare` | removed: the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them |
 | `StreamingMasteringChainConfig` (`./analysis`) | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
 | `StreamingMasteringChainConfig` (`./worklet`) | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
-| `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
+| `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfigInput {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?}. Set repair.denoise.enabled in place of a bare repair.denoise boolean. |
 
 #### Multichannel audio is planar: channels plus sampleRate
 
@@ -11451,7 +11504,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringRepairTrimSilenceStereoResult.rightRange` | removed: read ranges[1] |
 | `MasteringRepairTrimSilenceStereoResult.right` (`./analysis`) | removed: read channels[1] |
 | `MasteringRepairTrimSilenceStereoResult.right` | removed: read channels[1] |
+| `MixAssistantTrack.left` (`./analysis`) | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixAssistantTrack.left` | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
+| `MixAssistantTrack.right` (`./analysis`) | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixAssistantTrack.right` | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixStereoRequest.leftChannels` | `MixStereoRequest.strips`: leftChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options)) |
 | `MixStereoRequest.rightChannels` | `MixStereoRequest.strips`: rightChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options)) |
@@ -11528,6 +11583,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `CompressorOptions.sidechainHpfEnabled` | `CompressorOptions.sidechainHighPassHz`: sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz) |
 | `CompressorOptions.sidechainHpfHz` | `CompressorOptions.sidechainHighPassHz`: sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz) |
 | `GateOptions.keyHpfHz` | `GateOptions.keyHighPassHz`: keyHpfHz -> keyHighPassHz (number (Hz); absent = off; 0 Hz passes everything, the same as off, so it stays accepted) |
+| `MasteringChainConfig.dynamics.deesser.bandpassQ` (`./analysis`) | `MasteringChainConfig.dynamics.deesser.bandPassQ`: renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ |
 | `MasteringChainConfig.dynamics.deesser.bandpassQ` | `MasteringChainConfig.dynamics.deesser.bandPassQ`: renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ |
 | `MasteringDynamicsCompressorRequest.sidechainHpfEnabled` | `MasteringDynamicsCompressorRequest.sidechainHighPassHz`: sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = off) |
 | `MasteringDynamicsCompressorRequest.sidechainHpfHz` | `MasteringDynamicsCompressorRequest.sidechainHighPassHz`: sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = off) |
@@ -11544,8 +11600,11 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `CapabilityCatalogMasteringPreset` (`./analysis`) | `MasteringPresetCatalogEntry` |
 | `CapabilityCatalogMasteringPreset` | `MasteringPresetCatalogEntry` |
+| `CapabilityCatalogParameter` (`./analysis`) | `MasteringInsertParamInfo` |
 | `CapabilityCatalogParameter` | `MasteringInsertParamInfo` |
+| `CapabilityCatalogProcessor` (`./analysis`) | `MasteringProcessorCatalogEntry` |
 | `CapabilityCatalogProcessor` | `MasteringProcessorCatalogEntry` |
 | `LufsInterleavedRequest` (`./analysis`) | `LufsMultichannelRequest` |
 | `LufsInterleavedRequest` | `LufsMultichannelRequest` |
@@ -11622,6 +11681,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SuggestMixSceneRequest` | `MixingAssistantSuggestRequest` |
 | `readSonareMeterRingBuffer` (`./worklet`) | `readMeterRingBuffer` |
 | `readSonareSpectrumRingBuffer` (`./worklet`) | `readSpectrumRingBuffer` |
+
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingEqualizer.magnitudeResponse` | Pass lower-camel-case placement tokens such as stereo in place of Stereo. |
+| `StreamingEqualizer` | Pass an explicit StreamingEqualizerConfig to the constructor. |
 
 #### Historical aliases are removed
 
@@ -11762,7 +11828,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `MasteringChainConfig` (`./analysis`) | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError |
-| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError |
+| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError. Set repair.denoise.enabled in place of a bare repair.denoise boolean. |
 
 #### Other individual changes
 
@@ -11903,6 +11969,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngine.setTrackOutputBus` (`./worklet`) | setTrackOutputBus(target, busId: number \| null): null routes to the master, 0 is a RangeError |
 | `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'Expected mod source to be a number or string' (1.x read each as its default) |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `EngineMeterTelemetry` | Read the peak, RMS and true-peak arrays by channel; the separate left/right fields are gone. Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs. |
+
 #### A number outside its domain is refused, never passed through
 
 | 1.x | 2.0.0 |
@@ -12040,11 +12112,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineCaptureStatus` | Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers. |
+| `EngineTelemetry` | Read type and error as tokens and graphLatencySamples in place of graphLatencySamplesQ8. |
+| `EngineTransportState` | Use barIndex instead of barCount. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
-| `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
+| `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). The default master strip can now be edited before any explicit strip settings. An insert still must exist before it can be toggled. |
 | `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
@@ -12058,6 +12132,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngine.setMidiFx` (`./worklet`) | takes a MidiFxConfig object instead of a JSON string; the worklet message still carries the serialized JSON |
 | `SonareEngine.setStripInserts` (`./worklet`) | removed: Call setStrip(target, strip) with a MixSceneStripInput object; target 'master' addresses the master strip. |
 | `SonareEngine.setTrackStripJson` (`./worklet`) | removed: Call setStrip(target, strip) with a MixSceneStripInput object; no JSON string. |
+| `SynthParamInfo` | Handle the added dBTP, midiNote and bpm units in exhaustive switches over synth parameter units. |
+| `WorkletTransport` (`./worklet`) | Accept WorkletMeterSnapshot channel-array measurements and handle absent values in the meter callback. |
 
 #### Public types never expose Wasm* names
 
@@ -12065,6 +12141,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `HrtfSet.native` | removed: the internal native handle, no longer public; pass the HrtfSet itself as the hrtf option |
 | `RealtimeEngine.drainExternalMidi` | events are the declared ExternalMidiEvent, and bytes is a Uint8Array (was number[]); destinationId is absent for clock and transport bytes meant for every port, instead of 0xFFFFFFFF |
+
+#### Python composite results are frozen dataclasses
+
+| 1.x | 2.0.0 |
+|---|---|
+| `EngineBounceResult.integratedLufs` | This result field is readonly. Copy the record before replacing the field. |
+| `EngineBounceResult.interleaved` | `EngineBounceResult.channels`: Read the planar channels from channels, one Float32Array per channel. This result field is readonly. Copy the record before replacing the field. |
+| `EngineBounceResult.sampleRate` | This result field is readonly. Copy the record before replacing the field. |
 
 #### One-shot JavaScript calls take a request object
 
@@ -12135,7 +12219,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngine.setLaneSidechain` (`./worklet`) | `SonareEngine.setStripSidechain` |
 | `SonareEngine.setMasterStripInsertParamByName` (`./worklet`) | `SonareEngine.setStripInsertParam` |
 | `SonareEngine.setStripInsertParamByName` (`./worklet`) | `SonareEngine.setStripInsertParam`: setStripInsertParam(target, insertIndex, { name, value }) replaces setStripInsertParamByName(target, insertIndex, paramName, value) |
-| `SonareEngine.setTrackLanes` (`./worklet`) | takes readonly EngineTrackLane[]; a bare track id is a TypeError |
+| `SonareEngine.setTrackLanes` (`./worklet`) | takes readonly EngineTrackLane[]; a bare track id is a TypeError. A valid non-stereo lane layout is refused as SonareError NotSupported before posting, rather than RangeError. |
 | `SonareEngine.setTrackStripInsertParamByName` (`./worklet`) | `SonareEngine.setStripInsertParam`: setStripInsertParam(target, insertIndex, { name, value }) replaces setTrackStripInsertParamByName(target, insertIndex, paramName, value) |
 
 #### Errors are coded by cause on every surface
@@ -12254,7 +12338,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceResult.frames` | removed: Read channels[0].length; the result is planar, with channels and sampleRate. |
-| `EngineBounceResult.interleaved` | `EngineBounceResult.channels` |
 | `RealtimeEngine.bounceOffline` | bounceOffline returns { channels, sampleRate, integratedLufs } with planar channels instead of an interleaved buffer |
 | `SonareEngine.bounceOffline` (`./worklet`) | bounceOffline resolves to { channels, sampleRate, integratedLufs } with planar channels instead of an interleaved buffer |
 
@@ -12264,7 +12347,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `CaptureOptions.channels` (`./worklet`) | `CaptureOptions.numChannels` |
 | `EngineBounceResult.numChannels` | removed: read channels.length |
+| `RenderPlaybackRequest.channels` (`./analysis`) | `RenderPlaybackRequest.numChannels` |
 | `RenderPlaybackRequest.channels` | `RenderPlaybackRequest.numChannels` |
+| `RenderPlaybackResult.channels` (`./analysis`) | `RenderPlaybackResult.numChannels` |
 | `RenderPlaybackResult.channels` | `RenderPlaybackResult.numChannels` |
 | `SonareEngineOptions.blockSize` (`./worklet`) | `SonareEngineOptions.maxBlockSize` |
 | `SonareEngineOptions.channelCount` (`./worklet`) | `SonareEngineOptions.numChannels` |
@@ -12304,13 +12389,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.armCapture` | armCapture(state: { armed: boolean }) |
 | `RealtimeEngine.pushMidiInputProgram` | pushMidiInputProgram(group, channel, program, bank?: { msb, lsb }, offsetInBlockSamples?) |
 | `RealtimeEngine.pushMidiProgram` | pushMidiProgram(destinationId, group, channel, program, bank?: { msb, lsb }, renderFrame?) |
-| `RealtimeEngine.setBusStripInsertBypassed` | `RealtimeEngine.setBusInsertBypassed`: setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass) |
+| `RealtimeEngine.setBusStripInsertBypassed` | `RealtimeEngine.setBusInsertBypassed`: setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass). A nonexistent insert index is a RangeError instead of InvalidState. |
 | `RealtimeEngine.setControllerVelocityMeaningful(meaningful)` | `RealtimeEngine.setControllerVelocityMeaningful(controllerVelocityMeaningful)` |
 | `RealtimeEngine.setExternalMidiClockEnabled(enabled)` | `RealtimeEngine.setExternalMidiClockEnabled(externalMidiClockEnabled)` |
-| `RealtimeEngine.setLoop` | setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled) |
-| `RealtimeEngine.setMasterStripInsertBypassed` | removed: Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? }). |
+| `RealtimeEngine.setLoop` | setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled). Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError. |
+| `RealtimeEngine.setMasterStripInsertBypassed` | removed: Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? }). A nonexistent insert index is a RangeError instead of InvalidState. |
 | `RealtimeEngine.setMidiDestinationExternal(external)` | `RealtimeEngine.setMidiDestinationExternal(midiDestinationExternal)` |
-| `RealtimeEngine.setTrackStripInsertBypassed` | `RealtimeEngine.setStripInsertBypassed`: setStripInsertBypassed(ref (a track id or 'master'), insertIndex, { bypassed, resetOnBypass? }) replaces setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass) |
+| `RealtimeEngine.setTrackStripInsertBypassed` | `RealtimeEngine.setStripInsertBypassed`: setStripInsertBypassed(ref (a track id or 'master'), insertIndex, { bypassed, resetOnBypass? }) replaces setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass). A nonexistent insert index is a RangeError instead of InvalidState. |
 | `SonareEngine.pushMidiProgram` (`./worklet`) | pushMidiProgram(trackId, group, channel, program, bank?: { msb, lsb }, renderFrame?) |
 | `SonareEngine.setBusStripInsertBypassed` (`./worklet`) | `SonareEngine.setBusInsertBypassed`: setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass) |
 | `SonareEngine.setExternalMidiClockEnabled(enabled)` (`./worklet`) | `SonareEngine.setExternalMidiClockEnabled(externalMidiClockEnabled)` |
@@ -12430,6 +12515,21 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `readSonareEngineTelemetryRingBuffer` (`./worklet`) | `readEngineTelemetryRingBuffer` |
 | `readSonareExternalMidiRingBuffer` (`./worklet`) | `readExternalMidiRingBuffer` |
 
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `BindWebMidiOptions` | Use ProjectMidiCcBinding rows with ccNumber in place of controller; channel can be omitted for any channel. |
+| `EngineBounceOptions` | Supply numChannels and use a dither token in place of an ordinal. |
+| `EngineClip` | Use ProjectWarpMode tokens and a ClipPageProvider object in place of numeric warp modes or structural provider IDs. Pass a ClipPageProvider instance; bare IDs and structural { id } objects are no longer accepted. |
+| `EngineGraphSpec` | Use tokens for graph node type and connection mix. |
+| `PlaybackTargetConfig` | Use left, right, center, leftSurround, rightSurround, leftSideSurround and rightSideSurround as speaker keys. |
+| `SonareEngine.create` (`./worklet`) | Pass SonareEngineOptions explicitly; omission is no longer accepted. |
+| `SonareEngine.pushMidiUmp` (`./worklet`) | Pass UmpWords in place of a bare number. |
+| `SonarePlaybackNodeOptions` (`./worklet`) | Use optional PlaybackRendererConfig \| undefined for config in place of the released optional string \| PlaybackRendererConfig \| undefined shape. |
+| `SonarePlaybackWorkletProcessorOptions` (`./worklet`) | Use optional PlaybackRendererConfig \| undefined for config in place of the released optional string \| PlaybackRendererConfig \| undefined shape. |
+| `SonareRealtimeEngineNode.create` (`./worklet`) | Pass SonareRealtimeEngineNodeOptions explicitly; omission is no longer accepted. |
+
 #### Each list input takes one item form
 
 | 1.x | 2.0.0 |
@@ -12541,12 +12641,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
 | `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
-| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. |
+| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError. |
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
 | `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given |
-| `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. |
+| `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
 | `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); absent or null is destination 0; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
 | `SonareEngine.armRecord` (`./worklet`) | removed: Call armCapture({ armed }); capture is engine-global, and per-track record arming does not exist. |
@@ -12648,6 +12748,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `CaptureOptions.bufferFrames` (`./worklet`) | `CaptureOptions.capacityFrames` |
 | `ClipPageRequest` | `ClipPageSampleRequest` |
 | `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number \| undefined: a value not measured (the correlation of silence) is undefined, not NaN |
+| `PlaybackRenderer.processPlanar` | Invalid input channel counts are RangeError rather than coded SonareError. Non-finite samples in an otherwise valid block are still replaced and counted. |
+| `PlaybackRenderer.renderOffline` | Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError. |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.clipPageRequestScratchSample` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.consumeExternalMidiScratch` | removed: use drainExternalMidi(maxRecords), which returns ExternalMidiEvent[] |
@@ -12766,7 +12868,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectVocalRehydrateItem.takeId` | absent when the base source was edited (was 0) |
 | `ProjectWarpAnchor.sourceSample` | required: an absent sourceSample is refused with TypeError naming anchors[i].sourceSample (1.x read it as 0) |
 | `ProjectWarpAnchor.warpSample` | required: an absent warpSample is refused with TypeError naming anchors[i].warpSample (1.x read it as 0) |
-| `VocalApplyRequest.expectedGeneration` | now optional; omitted means the draft's current generation |
+| `VocalApplyRequest.expectedGeneration` | now optional; omitted means the draft's current generation. Catch RangeError for an empty operation list. The expectedGeneration may be omitted, so the same call is no longer refused as a missing generation TypeError. |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ProjectClip` | Check loopLengthPpq for undefined before using it and copy the record before editing the field. Read loopMode as ProjectLoopMode and copy the record before editing. Read sourceKind as ProjectSourceKind and copy the record before editing. |
+| `ProjectSource` | Check contentHash for undefined before using it and copy the record before editing the field. Check externalStemRole for undefined before using it and copy the record before editing the field. Read kind as ProjectSourceKind and copy the record before editing. |
 
 #### A number outside its domain is refused, never passed through
 
@@ -12812,7 +12921,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectAutomationCurve` | the same tokens as AutomationCurve; an ordinal is a TypeError and the 'scurve' spelling is refused |
 | `ProjectChordSymbol.quality` | a ProjectChordQuality token instead of an ordinal; a number is refused with TypeError |
 | `ProjectKeySegment.mode` | a ProjectKeyMode token instead of an ordinal; a number is refused with TypeError |
+| `ProjectLoopMode` | Pass off or loop in place of numeric ordinals. |
 | `ProjectMidiCcBinding.kind` | 'controlChange7' \| 'controlChange14' \| 'rpn' \| 'nrpn' (was 0 \| 1 \| 2 \| 3); an ordinal is a TypeError |
+| `ProjectTrackKind` | Pass audio, midi or aux in place of numeric ordinals. |
 | `ProjectVocalEditDependency.reason` | VocalReason token instead of a number |
 | `ProjectVocalReason` | `VocalReason` |
 | `ProjectVocalRehydrateItem.reason` | VocalReason token instead of a number |
@@ -12825,16 +12936,18 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.compile` | compile returns { diagnostics } only; each diagnostic has a code token, an error / warning severity and an optional targetId |
-| `Project.lastBounceCompileResult` | lastBounceCompileResult returns the same { diagnostics } shape as compile |
+| `Project.lastBounceCompileResult` | lastBounceCompileResult returns the same { diagnostics } shape as compile. Check for undefined before the first bounce; only a completed attempt has a diagnostics record. |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.diagnosticCount` | removed: Read diagnostics.length. |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
 | `ProjectCompileTimelineResult` | removed: Use ProjectCompileResult; compile({ withTimeline: true }) fills its timeline. |
+| `ProjectMarker` | Read kind as ProjectMarkerKind and copy the record before editing. |
 | `ProjectMidiFxBakeRequest.configJson` | `ProjectMidiFxBakeRequest.config` |
 | `ProjectMidiFxPreviewRequest.configJson` | `ProjectMidiFxPreviewRequest.config` |
-| `ProjectTempoCandidate.timeSignature` | `ProjectTempoCandidate.firstTimeSignature` |
+| `ProjectTrack` | Read kind as ProjectTrackKind and copy the record before editing. |
 | `VocalEditWorkerSession.exportState` | resolves to a Uint8Array instead of { data } |
+| `VocalEditWorkerSession` | Read notes, analysis and capabilities from session.created; that record omits sessionId and token and uses capabilities.abiVersion. The session still exposes sessionId and token. |
 | `VocalErrorShape` | `VocalErrorDetail` |
 | `VocalNote.analysisFrameEnd` | number instead of a decimal string |
 | `VocalNote.analysisFrameStart` | number instead of a decimal string |
@@ -12874,6 +12987,22 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `VocalWorkerResultMessage` | removed: a worker wire-protocol type, no longer exported; use VocalEditWorkerClient and VocalEditWorkerSession |
 | `VocalWorkerResult` | removed: a worker wire-protocol type, no longer exported; use VocalEditWorkerClient and VocalEditWorkerSession |
 | `createOpfsClipPageWorker` | removed: call createOpfsClipPageProvider, which creates its own worker, or pass your own through its worker option |
+
+#### Python composite results are frozen dataclasses
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ProjectTempoCandidate.bpm` | This result field is readonly. Copy the record before replacing the field. |
+| `ProjectTempoCandidate.confidence` | This result field is readonly. Copy the record before replacing the field. |
+| `ProjectTempoCandidate.label` | This result field is readonly. Copy the record before replacing the field. |
+| `ProjectTempoCandidate.timeSignatureCount` | This result field is readonly. Copy the record before replacing the field. |
+| `ProjectTempoCandidate.timeSignature` | `ProjectTempoCandidate.firstTimeSignature`: Read the first time signature from firstTimeSignature. This result field is readonly. Copy the record before replacing the field. |
+| `VocalStateToken.draftId` | Read this counter as a readonly canonical decimal string. Copy the record before replacing the field. |
+| `VocalStateToken.generation` | Read this counter as a readonly canonical decimal string. Copy the record before replacing the field. |
+| `VocalStateToken.profileId` | This result field is readonly. Copy the record before replacing the field. |
+| `VocalStateToken.requestId` | Read this counter as a readonly canonical decimal string. Copy the record before replacing the field. |
+| `VocalStateToken.revision` | Read this counter as a readonly canonical decimal string. Copy the record before replacing the field. |
+| `VocalStateToken.sessionEpoch` | Read this counter as a readonly canonical decimal string. Copy the record before replacing the field. |
 
 #### Cancellation uses signal for promises and cancel for sync calls
 
@@ -13100,6 +13229,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareClipPageRequestRingReadResult` (`./worklet`) | `ClipPageRequestRingReadResult` |
 | `VocalHistoryState` | `VocalHistory` |
 | `readSonareClipPageRequestRingBuffer` (`./worklet`) | `readClipPageRequestRingBuffer` |
+
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ExternalSeparatedStem` | Pass mono or stereo instead of numeric channel-layout ordinals. |
+| `attachOpfsClipStream` | When passing a ClipPageStreamer, pass the options second and omit the separate engine argument. |
 
 #### Each list input takes one item form
 

@@ -17,17 +17,17 @@ export interface VocalRange {
  */
 export interface VocalStateToken {
   /** Changes whenever a session is created or restored. Decimal string (64-bit counter). */
-  sessionEpoch: string;
+  readonly sessionEpoch: string;
   /** Committed revision; every commit, undo and redo advances it. Decimal string (64-bit counter). */
-  revision: string;
+  readonly revision: string;
   /** Identifies the open draft, or `'0'` when the token describes committed state. */
-  draftId: string;
+  readonly draftId: string;
   /** Advances with every applied operation batch of a draft. Decimal string (64-bit counter). */
-  generation: string;
+  readonly generation: string;
   /** The `requestId` of the render this token accompanies, or `'0'`. Decimal string (64-bit counter). */
-  requestId: string;
+  readonly requestId: string;
   /** Identifier of the rendering profile the session uses. */
-  profileId: number;
+  readonly profileId: number;
 }
 
 /** A point of a pitch curve target. */

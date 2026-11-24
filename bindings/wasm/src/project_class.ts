@@ -25,10 +25,10 @@ import { withMonoHeap } from './internal/memory_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { sceneArgumentJson, sceneArgumentRefusal } from './internal/mix_scene.js';
 import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
+import { normalizeProjectDestinationInstrument } from './internal/project_destination_instruments.js';
 import { respellRefusal, withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
-import { normalizeProjectDestinationInstrument } from './project_destination_instruments.js';
 import {
   compSegmentsToNative,
   interleaveChannels,

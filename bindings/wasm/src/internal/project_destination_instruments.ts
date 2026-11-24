@@ -1,17 +1,17 @@
-import { ErrorCode } from './errors.js';
-import type { BuiltinSynthConfig, Sf2InstrumentConfig, SynthPatch } from './instrument_types.js';
+import { ErrorCode } from '../errors.js';
+import type { BuiltinSynthConfig, Sf2InstrumentConfig, SynthPatch } from '../instrument_types.js';
 import {
   BUILTIN_SYNTH_WAVEFORMS,
   SYNTH_ENGINE_MODES,
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
-} from './instrument_types.js';
-import { assertDeclaredKeys, codedError, refuse, refuseType } from './internal/entry.js';
-import { refuseBuiltinSynthOrdinals, refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
-import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
-import { synthPatchParamInfo } from './project_synth.js';
-import type { ProjectDestinationInstrumentOptions, ProjectInstrument } from './project_types.js';
-import { assertClosedToken, assertFiniteScalar, assertU7, optionalBoolean } from './validation.js';
+} from '../instrument_types.js';
+import { synthPatchParamInfo } from '../project_synth.js';
+import type { ProjectDestinationInstrumentOptions, ProjectInstrument } from '../project_types.js';
+import { assertClosedToken, assertFiniteScalar, assertU7, optionalBoolean } from '../validation.js';
+import { assertDeclaredKeys, codedError, refuse, refuseType } from './entry.js';
+import { refuseBuiltinSynthOrdinals, refuseSynthPatchOrdinals } from './synth_tokens.js';
+import { isAbsent, isNonArrayObject } from './value_guards.js';
 
 const PROJECT_INSTRUMENT_KINDS = ['synth', 'builtin', 'sf2'] as const;
 const NONPERSISTENT_INSTRUMENT_KINDS = ['sample', 'sampler', 'callback', 'external'];
@@ -46,7 +46,7 @@ const SF2_CONFIG_KEYS = [
   'gsEfxRealization',
 ];
 
-export interface NormalizedProjectDestinationInstrument {
+interface NormalizedProjectDestinationInstrument {
   instrument: ProjectInstrument | undefined;
   options: ProjectDestinationInstrumentOptions | undefined;
 }

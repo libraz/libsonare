@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { ErrorCode, init, type PlaybackRendererConfig } from '../dist/index.js';
 import {
   init as initWorklet,
@@ -7,6 +7,11 @@ import {
   SonarePlaybackNode,
   SonarePlaybackWorkletProcessor,
 } from '../dist/worklet.js';
+import type { PlaybackRendererConfig as SourcePlaybackRendererConfig } from '../src/index.js';
+import type {
+  SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorOptions,
+} from '../src/worklet.js';
 
 const QUANTUM = 128;
 const SPEAKERS_5_1_AUTO: PlaybackRendererConfig = {
@@ -69,6 +74,18 @@ function fakeNode(posted: unknown[] = []) {
 }
 
 describe('SonarePlaybackWorkletProcessor', () => {
+  it('types playback processor config as a renderer record', () => {
+    expectTypeOf<SonarePlaybackWorkletProcessorOptions['config']>().toEqualTypeOf<
+      SourcePlaybackRendererConfig | undefined
+    >();
+  });
+
+  it('types playback node config as a renderer record', () => {
+    expectTypeOf<SonarePlaybackNodeOptions['config']>().toEqualTypeOf<
+      SourcePlaybackRendererConfig | undefined
+    >();
+  });
+
   beforeAll(async () => {
     await init();
     await initWorklet();

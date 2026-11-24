@@ -9287,19 +9287,19 @@ entry = "./analysis"
 [[entry]]
 kind = "function"
 old = "chordFunctionalAnalysis"
-changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields)"
+changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields). Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/chord_functions.test.ts::defaults to the triads-only, HMM, CQT configuration"
 
 [[entry]]
 kind = "function"
 old = "chordFunctionalAnalysis"
-changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields)"
+changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields). Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/chord_functions.test.ts::defaults to the triads-only, HMM, CQT configuration"
 
 [[entry]]
 kind = "function"
@@ -9397,19 +9397,19 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectChords"
-changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest"
+changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/chord_functions.test.ts::defaults to the triads-only, HMM, CQT configuration"
 
 [[entry]]
 kind = "function"
 old = "detectChords"
-changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest"
+changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/chord_functions.test.ts::defaults to the triads-only, HMM, CQT configuration"
 
 [[entry]]
 kind = "function"
@@ -9431,19 +9431,19 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/analysis-tuning.test.ts::measures the tuning by default and reads the triads and key from it"
 
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/analysis-tuning.test.ts::measures the tuning by default and reads the triads and key from it"
 
 [[entry]]
 kind = "function"
@@ -9456,19 +9456,19 @@ test = "bindings/wasm/tests/tuning-auto.test.ts::refuses a reference that is nei
 [[entry]]
 kind = "function"
 old = "detectKeyCandidates"
-changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest"
+changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/tuning-auto.test.ts::lets the key candidates take a tuning, measured by default"
 
 [[entry]]
 kind = "function"
 old = "detectKeyCandidates"
-changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest"
+changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference."
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+test = "bindings/wasm/tests/tuning-auto.test.ts::lets the key candidates take a tuning, measured by default"
 
 [[entry]]
 kind = "function"
@@ -14892,10 +14892,10 @@ test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setLoop"
-changed = "setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled)"
+changed = "setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled). Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError."
 domain = "engine"
 rule = "no-positional-bools"
-test = "bindings/wasm/tests/surface/engine.test.ts::takes the loop as one object"
+test = "bindings/wasm/tests/engine-capture-timing.test.ts::accepts an offset of exactly one loop pass and refuses one sample more"
 
 [[entry]]
 kind = "method"
@@ -15340,7 +15340,7 @@ rule = "typed-results"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripEqBand"
-removed = "Call setStripEqBand('master', bandIndex, band)."
+removed = "Call setStripEqBand('master', bandIndex, band). The default master strip can now be edited before any explicit strip settings. An insert still must exist before it can be toggled."
 domain = "engine"
 rule = "typed-results"
 
@@ -15375,7 +15375,7 @@ rule = "strip-ref"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripInsertBypassed"
-changed = "setStripInsertBypassed(ref (a track id or 'master'), insertIndex, { bypassed, resetOnBypass? }) replaces setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass)"
+changed = "setStripInsertBypassed(ref (a track id or 'master'), insertIndex, { bypassed, resetOnBypass? }) replaces setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass). A nonexistent insert index is a RangeError instead of InvalidState."
 to = "RealtimeEngine.setStripInsertBypassed"
 domain = "engine"
 rule = "no-positional-bools"
@@ -15384,14 +15384,14 @@ test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and inser
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripInsertBypassed"
-removed = "Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? })."
+removed = "Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? }). A nonexistent insert index is a RangeError instead of InvalidState."
 domain = "engine"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripInsertBypassed"
-changed = "setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass)"
+changed = "setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass). A nonexistent insert index is a RangeError instead of InvalidState."
 to = "RealtimeEngine.setBusInsertBypassed"
 domain = "engine"
 rule = "no-positional-bools"
@@ -15594,7 +15594,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::keys a strip insert from a s
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setCaptureBuffer"
-removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch."
+removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError."
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -15615,7 +15615,7 @@ rule = "engine-vocabulary"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setRecordOffsetSamples"
-removed = "Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup."
+removed = "Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError."
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -16657,11 +16657,11 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keys track solo, mut
 [[entry]]
 kind = "method"
 old = "SonareEngine.setTrackLanes"
-changed = "takes readonly EngineTrackLane[]; a bare track id is a TypeError"
+changed = "takes readonly EngineTrackLane[]; a bare track id is a TypeError. A valid non-stereo lane layout is refused as SonareError NotSupported before posting, rather than RangeError."
 domain = "engine"
 rule = "one-positional-form"
 entry = "./worklet"
-test = "bindings/wasm/tests/surface/engine-worklet.test.ts::declares lanes as descriptors and routes to the master with null"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::refuses a non-stereo lane layout before posting to the worklet"
 
 [[entry]]
 kind = "method"
@@ -18070,10 +18070,10 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "hpss"
-changed = "one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'|'sampleRate'>)); request form takes HpssRequest; returns HpssResult"
+changed = "one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'|'sampleRate'>)); request form takes HpssRequest; returns HpssResult. An out-of-domain kernel is a RangeError instead of SonareError InvalidParameter."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+test = "bindings/wasm/tests/hpss-kernel-ceiling.test.ts::refuses an out-of-domain kernel in hpss and Audio.hpss with RangeError"
 
 [[entry]]
 kind = "function"
@@ -18194,18 +18194,18 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "roomGeometryFromEstimate"
-changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest)"
+changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest). A submitted estimate without measurable room size is a RangeError instead of SonareError InvalidParameter."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/request-unknown-keys.test.ts::synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares"
+test = "bindings/wasm/tests/acoustic.test.ts::refuses an estimate with no measurable room"
 
 [[entry]]
 kind = "function"
 old = "synthesizeRir"
-changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest)"
+changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest). Catch RangeError for an out-of-room source or listener. Read the named coordinate domain; the previous coded InvalidParameter and diagnostic id are gone. Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/request-unknown-keys.test.ts::synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares"
+test = "bindings/wasm/tests/acoustic.test.ts::throws a RangeError for invalid geometry"
 
 [[entry]]
 kind = "function"
@@ -18293,10 +18293,10 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "EstimateRoomRequest"
-changed = "`sampleRate` is now required"
+changed = "Supply sampleRate explicitly and use impulseResponse in place of impulse_response for mode."
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::EstimateRoomRequest requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -18850,10 +18850,10 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "extractNotes"
-changed = "one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[]"
+changed = "one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+test = "bindings/wasm/tests/argument-refusal-class.test.ts::refuses a missing frameRate on the note entry points with a TypeError"
 
 [[entry]]
 kind = "function"
@@ -18866,10 +18866,10 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "mergeNotes"
-changed = "one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[]"
+changed = "one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+test = "bindings/wasm/tests/argument-refusal-class.test.ts::refuses a missing frameRate on the note entry points with a TypeError"
 
 [[entry]]
 kind = "function"
@@ -18953,10 +18953,10 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "splitNote"
-changed = "one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[]"
+changed = "one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError."
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+test = "bindings/wasm/tests/argument-refusal-class.test.ts::refuses a missing frameRate on the note entry points with a TypeError"
 
 [[entry]]
 kind = "function"
@@ -18977,10 +18977,10 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed p
 [[entry]]
 kind = "method"
 old = "Audio.hpss"
-changed = "hpss(options?: Omit<HpssRequest,'samples'|'sampleRate'>)"
+changed = "hpss(options?: Omit<HpssRequest,'samples'|'sampleRate'>). An out-of-domain kernel is a RangeError instead of SonareError InvalidParameter."
 domain = "core"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+test = "bindings/wasm/tests/hpss-kernel-ceiling.test.ts::refuses an out-of-domain kernel in hpss and Audio.hpss with RangeError"
 
 [[entry]]
 kind = "method"
@@ -21123,10 +21123,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.lastBounceCompileResult"
-changed = "lastBounceCompileResult returns the same { diagnostics } shape as compile"
+changed = "lastBounceCompileResult returns the same { diagnostics } shape as compile. Check for undefined before the first bounce; only a completed attempt has a diagnostics record."
 domain = "project"
 rule = "typed-results"
-test = "bindings/wasm/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+test = "bindings/wasm/tests/project-mixer-counts.test.ts::reports no last bounce compile result on a project no bounce has run on"
 
 [[entry]]
 kind = "method"
@@ -21177,9 +21177,11 @@ rule = "num-channels"
 [[entry]]
 kind = "field"
 old = "ProjectTempoCandidate.timeSignature"
-new = "ProjectTempoCandidate.firstTimeSignature"
+changed = "Read the first time signature from firstTimeSignature. This result field is readonly. Copy the record before replacing the field."
 domain = "project"
-rule = "typed-results"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all tempo candidate fields readonly"
+to = "ProjectTempoCandidate.firstTimeSignature"
 
 [[entry]]
 kind = "field"
@@ -21373,9 +21375,11 @@ rule = "string-closed-sets"
 [[entry]]
 kind = "field"
 old = "EngineBounceResult.interleaved"
-new = "EngineBounceResult.channels"
+changed = "Read the planar channels from channels, one Float32Array per channel. This result field is readonly. Copy the record before replacing the field."
 domain = "engine"
-rule = "planar-channels"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps the bounce result fields readonly"
+to = "EngineBounceResult.channels"
 
 [[entry]]
 kind = "field"
@@ -21613,10 +21617,10 @@ rule = "one-positional-form"
 [[entry]]
 kind = "field"
 old = "VocalApplyRequest.expectedGeneration"
-changed = "now optional; omitted means the draft's current generation"
+changed = "now optional; omitted means the draft's current generation. Catch RangeError for an empty operation list. The expectedGeneration may be omitted, so the same call is no longer refused as a missing generation TypeError."
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/vocal_edit.test.ts::expectedGeneration is omitted"
+test = "bindings/wasm/tests/vocal_edit.test.ts::applies against the draft generation when expectedGeneration is omitted"
 
 [[entry]]
 kind = "field"
@@ -25707,10 +25711,10 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringApplyProce
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?}"
+changed = "StreamingMasteringChainConfig extends MasteringChainConfigInput {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?}. Set repair.denoise.enabled in place of a bare repair.denoise boolean."
 domain = "mastering"
 rule = "construction"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringChainConfig is one flat constructor input"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringChainConfig uses a denoise options record"
 
 [[entry]]
 kind = "type"
@@ -29633,10 +29637,10 @@ test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfig"
-changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError. Set repair.denoise.enabled in place of a bare repair.denoise boolean."
 domain = "mastering"
 rule = "config-keys"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as an argument"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::MasteringChainConfig uses a denoise options record"
 
 [[entry]]
 kind = "type"
@@ -30400,10 +30404,10 @@ test = "bindings/wasm/tests/audio-metering-equivalence.test.ts::the metering met
 [[entry]]
 kind = "method"
 old = "StreamingRetune.setConfig"
-changed = "the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix)"
+changed = "the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). A finite pitch or mix outside its domain and a grain size outside the supported multiples are now refused instead of clamped or rounded."
 domain = "effects"
 rule = "individual"
-test = "bindings/wasm/tests/streaming-retune.test.ts::refuses an unknown config key by name on the constructor and setConfig"
+test = "bindings/wasm/tests/input-validation-guards.test.ts::refuses a finite out-of-range control instead of clamping it"
 
 [[entry]]
 kind = "field"
@@ -37256,3 +37260,712 @@ changed = "Accepts a readonly list and requires startPpq and endPpq on each chor
 domain = "project"
 rule = "individual"
 test = "bindings/wasm/tests/project.test.ts::requires chord endpoints and names invalid nested fields"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogPresets"
+changed = "Result records expose readonly fields or arrays. Copy the record or array before mutating it. Affected types: CapabilityCatalog, CapabilityCatalogChain, CapabilityCatalogChainList, CapabilityCatalogChainStage, CapabilityCatalogPresets, MasteringInsertParamChoice, MasteringInsertParamDependency, MasteringInsertSlot, MasteringInsertTiming, ProjectClip, ProjectMarker, ProjectSource, ProjectTrack."
+domain = "core"
+rule = "individual"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps catalog, insert, and project results readonly"
+
+[[entry]]
+kind = "type"
+old = "AnalysisResult"
+changed = "Check dynamics.dynamicRangeDb and dynamics.crestFactor for absence before numeric use and read loudness range from its renamed field. Read meanFrequencyHz and vibratoRateHz and allow unmeasured melody fields to be absent."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves unmeasured analysis fields absent"
+
+[[entry]]
+kind = "method"
+old = "Audio.crestFactorDb"
+changed = "Check the result for undefined before using it as a number; silence has no crest factor."
+domain = "core"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/audio-metering-equivalence.test.ts::returns no crest factor for silence"
+
+[[entry]]
+kind = "type"
+old = "DynamicsResult"
+changed = "Handle undefined in crestFactor, dynamicRangeDb."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves unmeasured dynamics fields absent"
+
+[[entry]]
+kind = "type"
+old = "EngineMeterTelemetry"
+changed = "Read the peak, RMS and true-peak arrays by channel; the separate left/right fields are gone. Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs."
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::uses per-channel engine meter arrays and optional stereo readings"
+
+[[entry]]
+kind = "type"
+old = "LufsResult"
+changed = "Handle undefined in maxMomentaryLufs, maxShortTermLufs, momentaryLufs, shortTermLufs."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves short-window loudness results absent"
+
+[[entry]]
+kind = "type"
+old = "MasteringLoudnessSummary"
+changed = "Handle undefined in maxMomentaryLufs, maxShortTermLufs."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves short-window mastering summary values absent"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairAnalysis"
+changed = "Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves repair analysis channels and defects absent until measured"
+
+[[entry]]
+kind = "type"
+old = "MasteringStreamingPreviewPlatform"
+changed = "Handle undefined in normalizationGainDb."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves an unavailable streaming normalization gain absent"
+
+[[entry]]
+kind = "type"
+old = "MixMeterSnapshot"
+changed = "Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves unmeasured mix meter readings absent"
+
+[[entry]]
+kind = "type"
+old = "NoiseDetection"
+changed = "Handle undefined in floorDbfs."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves an unavailable noise floor absent"
+
+[[entry]]
+kind = "type"
+old = "ProjectClip"
+changed = "Check loopLengthPpq for undefined before using it and copy the record before editing the field. Read loopMode as ProjectLoopMode and copy the record before editing. Read sourceKind as ProjectSourceKind and copy the record before editing."
+domain = "project"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps optional clip loop length and token fields"
+
+[[entry]]
+kind = "type"
+old = "ProjectSource"
+changed = "Check contentHash for undefined before using it and copy the record before editing the field. Check externalStemRole for undefined before using it and copy the record before editing the field. Read kind as ProjectSourceKind and copy the record before editing."
+domain = "project"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps optional source metadata and a source kind token"
+
+[[entry]]
+kind = "type"
+old = "ReverbDetection"
+changed = "Handle undefined in latePredictability."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves reverb predictability absent when the predictor does not run"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryEstimate"
+changed = "Handle undefined in heightM, lengthM, widthM."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves unavailable room dimensions absent"
+
+[[entry]]
+kind = "type"
+old = "StreamingLoudnessGainResult"
+changed = "Handle undefined in loudnessStaticGainDb."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves a missing streaming loudness gain absent"
+
+[[entry]]
+kind = "type"
+old = "ProjectLoopMode"
+changed = "Pass off or loop in place of numeric ordinals."
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/project-token-tables.test.ts::uses string tokens for project loop modes"
+
+[[entry]]
+kind = "type"
+old = "ProjectTrackKind"
+changed = "Pass audio, midi or aux in place of numeric ordinals."
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/project-token-tables.test.ts::uses string tokens for project track kinds"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneOptions.strength"
+to = "AutoTuneOptions.retuneAmount"
+changed = "strength -> retuneAmount, the name pitchCorrectTimevarying uses for the same correction strength"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogMasteringPreset"
+new = "MasteringPresetCatalogEntry"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogParameter"
+new = "MasteringInsertParamInfo"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogProcessor"
+new = "MasteringProcessorCatalogEntry"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "EqBand"
+new = "EqBandInput"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.deesser.bandpassQ"
+to = "MasteringChainConfig.dynamics.deesser.bandPassQ"
+changed = "renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ"
+domain = "mastering"
+rule = "high-pass"
+entry = "./analysis"
+test = "bindings/wasm/tests/insert-key-spellings.test.ts::reads the de-esser band Q in a chain document"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrack.left"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo)"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrack.right"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo)"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackRequest.channels"
+new = "RenderPlaybackRequest.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackResult.channels"
+new = "RenderPlaybackResult.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./analysis"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.delete"
+removed = "call destroy()"
+domain = "mastering"
+rule = "teardown"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "BindWebMidiOptions"
+changed = "Use ProjectMidiCcBinding rows with ccNumber in place of controller; channel can be omitted for any channel."
+domain = "engine"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/engine.test.ts::ProjectMidiCcBinding uses ccNumber and an optional channel"
+
+[[entry]]
+kind = "type"
+old = "DecomposeNotePitchRequest"
+changed = "Omit voiced or use undefined instead of passing null."
+domain = "effects"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::DecomposeNotePitchRequest uses absence for an omitted voiced track"
+
+[[entry]]
+kind = "type"
+old = "EngineBounceOptions"
+changed = "Supply numChannels and use a dither token in place of an ordinal."
+domain = "engine"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/engine.test.ts::EngineBounceOptions requires numChannels and uses a dither token"
+
+[[entry]]
+kind = "type"
+old = "EngineClip"
+changed = "Use ProjectWarpMode tokens and a ClipPageProvider object in place of numeric warp modes or structural provider IDs. Pass a ClipPageProvider instance; bare IDs and structural { id } objects are no longer accepted."
+domain = "engine"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/engine.test.ts::EngineClip uses warp tokens and a ClipPageProvider instance"
+
+[[entry]]
+kind = "type"
+old = "EngineGraphSpec"
+changed = "Use tokens for graph node type and connection mix."
+domain = "engine"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/engine.test.ts::EngineGraphSpec uses graph tokens"
+
+[[entry]]
+kind = "type"
+old = "ExternalSeparatedStem"
+changed = "Pass mono or stereo instead of numeric channel-layout ordinals."
+domain = "project"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/project.test.ts::ExternalSeparatedStem uses mono and stereo layouts"
+
+[[entry]]
+kind = "type"
+old = "ExtractNotesRequest"
+changed = "Omit voicedProb or use undefined instead of passing null."
+domain = "effects"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::ExtractNotesRequest uses absence for voicedProb"
+
+[[entry]]
+kind = "type"
+old = "MergeNotesRequest"
+changed = "Omit voiced or use undefined instead of passing null. Omit voicedProb or use undefined instead of passing null."
+domain = "effects"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::MergeNotesRequest uses absence for voiced and voicedProb"
+
+[[entry]]
+kind = "type"
+old = "PlaybackTargetConfig"
+changed = "Use left, right, center, leftSurround, rightSurround, leftSideSurround and rightSideSurround as speaker keys."
+domain = "engine"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/engine.test.ts::PlaybackTargetConfig uses speaker role names"
+
+[[entry]]
+kind = "type"
+old = "RenderNotesRequest"
+changed = "Omit voiced or use undefined instead of passing null."
+domain = "effects"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::RenderNotesRequest uses absence for voiced"
+
+[[entry]]
+kind = "type"
+old = "RoomEstimateOptions"
+changed = "Use the mode token impulseResponse in place of impulse_response."
+domain = "effects"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::RoomEstimateOptions uses the current mode tokens"
+
+[[entry]]
+kind = "class"
+old = "SonareError"
+changed = "Pass (code, message, options?) instead of (code, codeName, message); codeName is derived from the ErrorCode."
+domain = "core"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/core-audio.test.ts::derives codeName from (code, message, options)"
+
+[[entry]]
+kind = "class"
+old = "StreamAnalyzer"
+changed = "Pass an explicit StreamConfig to the constructor."
+domain = "analysis"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/analysis-stream.test.ts::StreamAnalyzer takes an explicit StreamConfig"
+
+[[entry]]
+kind = "class"
+old = "StreamingEqualizer"
+changed = "Pass an explicit StreamingEqualizerConfig to the constructor."
+domain = "mastering"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::takes a StreamingEqualizerConfig object"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.magnitudeResponse"
+changed = "Pass lower-camel-case placement tokens such as stereo in place of Stereo."
+domain = "mastering"
+rule = "input-types"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.magnitudeResponse takes the current placement token"
+
+[[entry]]
+kind = "function"
+old = "attachOpfsClipStream"
+changed = "When passing a ClipPageStreamer, pass the options second and omit the separate engine argument."
+domain = "project"
+rule = "input-types"
+test = "bindings/wasm/tests/clip_page_streamer.test.ts::uses a streamer and options without a separate engine argument"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.create"
+changed = "Pass SonareEngineOptions explicitly; omission is no longer accepted."
+domain = "engine"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::requires options when creating SonareEngine"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.pushMidiUmp"
+changed = "Pass UmpWords in place of a bare number."
+domain = "engine"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::requires UmpWords for SonareEngine.pushMidiUmp"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackNodeOptions"
+changed = "Use optional PlaybackRendererConfig | undefined for config in place of the released optional string | PlaybackRendererConfig | undefined shape."
+domain = "engine"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_playback.test.ts::types playback node config as a renderer record"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackWorkletProcessorOptions"
+changed = "Use optional PlaybackRendererConfig | undefined for config in place of the released optional string | PlaybackRendererConfig | undefined shape."
+domain = "engine"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_playback.test.ts::types playback processor config as a renderer record"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.create"
+changed = "Pass SonareRealtimeEngineNodeOptions explicitly; omission is no longer accepted."
+domain = "engine"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::requires options when creating SonareRealtimeEngineNode"
+
+[[entry]]
+kind = "class"
+old = "SonareRealtimeVoiceChangerWorkletProcessor"
+changed = "Pass SonareRealtimeVoiceChangerWorkletProcessorOptions explicitly; omission is no longer accepted."
+domain = "effects"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_voice_changer.test.ts::requires processor options in its constructor"
+
+[[entry]]
+kind = "type"
+old = "SonareStreamAnalyzerNodeOptions"
+changed = "Use window name tokens in the optional stream configuration; numeric window ordinals are removed."
+domain = "analysis"
+rule = "input-types"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet/stream-analyzer-node.test.ts::types the optional stream window as a name token"
+
+[[entry]]
+kind = "type"
+old = "EngineTelemetry"
+changed = "Read type and error as tokens and graphLatencySamples in place of graphLatencySamplesQ8."
+domain = "engine"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/engine.test.ts::EngineTelemetry uses named kinds and graphLatencySamples"
+
+[[entry]]
+kind = "type"
+old = "EngineTransportState"
+changed = "Use barIndex instead of barCount."
+domain = "engine"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/engine.test.ts::EngineTransportState exposes barIndex"
+
+[[entry]]
+kind = "type"
+old = "MasteringAmpPresetCatalogEntry"
+changed = "Read named optional amplifier parameters, and handle absence instead of indexing an arbitrary string key."
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MasteringAmpPresetCatalogEntry exposes named optional amplifier parameters"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamUnit"
+changed = "Handle the added dBTP, midiNote and bpm units in exhaustive switches over catalog units."
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::MasteringInsertParamUnit includes dBTP, midiNote and bpm"
+
+[[entry]]
+kind = "type"
+old = "ProjectMarker"
+changed = "Read kind as ProjectMarkerKind and copy the record before editing."
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/project.test.ts::ProjectMarker uses a kind token and readonly results"
+
+[[entry]]
+kind = "type"
+old = "ProjectTrack"
+changed = "Read kind as ProjectTrackKind and copy the record before editing."
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/project.test.ts::ProjectTrack uses a kind token and readonly results"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.stats"
+changed = "Use the typed StreamStats record and its current field names rather than the previous stats record."
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/analysis-stream.test.ts::StreamAnalyzer.stats returns the named StreamStats record"
+
+[[entry]]
+kind = "type"
+old = "SynthParamInfo"
+changed = "Handle the added dBTP, midiNote and bpm units in exhaustive switches over synth parameter units."
+domain = "engine"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/project.test.ts::SynthParamInfo units include dBTP, midiNote and bpm"
+
+[[entry]]
+kind = "class"
+old = "VocalEditWorkerSession"
+changed = "Read notes, analysis and capabilities from session.created; that record omits sessionId and token and uses capabilities.abiVersion. The session still exposes sessionId and token."
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::VocalEditWorkerCreated carries its initial result fields"
+
+[[entry]]
+kind = "field"
+old = "EstimateMeterRequest.compoundSubdivisionThreshold"
+changed = "the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula"
+domain = "analysis"
+rule = "library-owned-defaults"
+entry = "./analysis"
+test = "bindings/wasm/tests/meter-estimation.test.ts::uses 0.5 as the default compound subdivision threshold"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerPreset"
+changed = "Use schemaVersion 4 in place of 1."
+domain = "effects"
+rule = "typed-results"
+entry = "./analysis"
+test = "bindings/wasm/tests/voice-changer-schema-contract.test.ts::RealtimeVoiceChangerPreset uses schema version 4"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerPresetMetadata"
+changed = "Use schemaVersion 4 in place of 1."
+domain = "effects"
+rule = "typed-results"
+entry = "./analysis"
+test = "bindings/wasm/tests/voice-changer-schema-contract.test.ts::RealtimeVoiceChangerPresetMetadata uses schema version 4"
+
+[[entry]]
+kind = "type"
+old = "WorkletTransport"
+changed = "Accept WorkletMeterSnapshot channel-array measurements and handle absent values in the meter callback."
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet-wide-meters.test.ts::delivers channel arrays and absent plane values to meter callbacks"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.sampleRate"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "engine"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps the bounce result fields readonly"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.integratedLufs"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "engine"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps the bounce result fields readonly"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoCandidate.bpm"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all tempo candidate fields readonly"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoCandidate.confidence"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all tempo candidate fields readonly"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoCandidate.label"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all tempo candidate fields readonly"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoCandidate.timeSignatureCount"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all tempo candidate fields readonly"
+
+[[entry]]
+kind = "field"
+old = "VocalStateToken.sessionEpoch"
+changed = "Read this counter as a readonly canonical decimal string. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all vocal state token fields readonly"
+
+[[entry]]
+kind = "field"
+old = "VocalStateToken.revision"
+changed = "Read this counter as a readonly canonical decimal string. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all vocal state token fields readonly"
+
+[[entry]]
+kind = "field"
+old = "VocalStateToken.draftId"
+changed = "Read this counter as a readonly canonical decimal string. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all vocal state token fields readonly"
+
+[[entry]]
+kind = "field"
+old = "VocalStateToken.generation"
+changed = "Read this counter as a readonly canonical decimal string. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all vocal state token fields readonly"
+
+[[entry]]
+kind = "field"
+old = "VocalStateToken.requestId"
+changed = "Read this counter as a readonly canonical decimal string. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all vocal state token fields readonly"
+
+[[entry]]
+kind = "field"
+old = "VocalStateToken.profileId"
+changed = "This result field is readonly. Copy the record before replacing the field."
+domain = "project"
+rule = "frozen-results"
+test = "bindings/wasm/tests/result-absence-types.test.ts::keeps all vocal state token fields readonly"
+
+[[entry]]
+kind = "function"
+old = "roomMorphStereo"
+changed = "A listener whose receiver pair falls outside the room with explicitly supplied spacing yields RangeError naming receiverSpacingM rather than SonareError InvalidParameter. An omitted spacing may be reduced to fit. Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default."
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/acoustic.test.ts::renders with an omitted spacing where the default pair would leave the room"
+
+[[entry]]
+kind = "function"
+old = "noteToHz"
+changed = "Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available."
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/features.test.ts::noteToHz refuses an unknown name with a RangeError"
+
+[[entry]]
+kind = "function"
+old = "noteToHz"
+changed = "Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available."
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/features.test.ts::noteToHz refuses an unknown name with a RangeError"
+
+[[entry]]
+kind = "function"
+old = "hzToNote"
+changed = "Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available."
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/features.test.ts::hzToNote refuses a non-positive frequency with a RangeError"
+
+[[entry]]
+kind = "function"
+old = "hzToNote"
+changed = "Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available."
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/features.test.ts::hzToNote refuses a non-positive frequency with a RangeError"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.processPlanar"
+changed = "Invalid input channel counts are RangeError rather than coded SonareError. Non-finite samples in an otherwise valid block are still replaced and counted."
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/playback.test.ts::follows the input channel count under \"auto\" and reports it as plain data"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.renderOffline"
+changed = "Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError."
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/playback.test.ts::refuses a wrong channel count and non-finite input in renderOffline"
+
+[[entry]]
+kind = "function"
+old = "roomMorph"
+changed = "Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default."
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/acoustic.test.ts::routes air absorption into the room-morph target room"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.receiverSpacingM"
+changed = "Omitted receiverSpacingM is up to 0.5 m, reduced when necessary to keep both receivers in the room. An explicit 0.5 m retains the fixed geometry and can be refused."
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/acoustic.test.ts::renders with an omitted spacing where the default pair would leave the room"

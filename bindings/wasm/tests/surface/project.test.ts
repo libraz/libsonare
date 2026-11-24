@@ -1,5 +1,17 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Project, ProjectTimeline } from '../../dist/index.js';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  type ExternalSeparatedStem,
+  init,
+  type MasteringInsertParamUnit,
+  Project,
+  type ProjectMarker,
+  type ProjectMarkerKind,
+  type ProjectStemLayout,
+  ProjectTimeline,
+  type ProjectTrack,
+  type ProjectTrackKind,
+  type SynthParamInfo,
+} from '../../dist/index.js';
 
 const SR = 48000;
 
@@ -47,6 +59,63 @@ function clicks(bpm: number, seconds: number): Float32Array {
 
 beforeAll(async () => {
   await init();
+});
+
+describe('public project result type spellings', () => {
+  it('ExternalSeparatedStem uses mono and stereo layouts', () => {
+    expectTypeOf<ExternalSeparatedStem['layout']>().toEqualTypeOf<ProjectStemLayout>();
+    expectTypeOf<ProjectStemLayout>().toEqualTypeOf<'mono' | 'stereo'>();
+    const stem: ExternalSeparatedStem = {
+      name: 'stem',
+      layout: 'stereo',
+      channels: [new Float32Array(), new Float32Array()],
+    };
+    expect(stem.channels).toHaveLength(2);
+  });
+
+  it('ProjectMarker uses a kind token and readonly results', () => {
+    expectTypeOf<ProjectMarker['kind']>().toEqualTypeOf<ProjectMarkerKind>();
+    expectTypeOf<ProjectMarkerKind>().toEqualTypeOf<
+      'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature'
+    >();
+    const marker: ProjectMarker = {
+      id: 1,
+      ppq: 0,
+      kind: 'marker',
+      keyFifths: 0,
+      keyMinor: false,
+    };
+    const attemptedWrite = () => {
+      // @ts-expect-error read results are readonly
+      marker.kind = 'text';
+    };
+    expect(attemptedWrite).toBeTypeOf('function');
+  });
+
+  it('ProjectTrack uses a kind token and readonly results', () => {
+    expectTypeOf<ProjectTrack['kind']>().toEqualTypeOf<ProjectTrackKind>();
+    expectTypeOf<ProjectTrackKind>().toEqualTypeOf<'audio' | 'midi' | 'aux'>();
+    const track: ProjectTrack = {
+      id: 1,
+      kind: 'audio',
+      midiDestinationId: 0,
+      gain: 1,
+      pan: 0,
+      mute: false,
+      solo: false,
+      name: 'track',
+    };
+    const attemptedWrite = () => {
+      // @ts-expect-error read results are readonly
+      track.kind = 'midi';
+    };
+    expect(attemptedWrite).toBeTypeOf('function');
+  });
+
+  it('SynthParamInfo units include dBTP, midiNote and bpm', () => {
+    expectTypeOf<SynthParamInfo['unit']>().toEqualTypeOf<MasteringInsertParamUnit>();
+    expectTypeOf<'dBTP' | 'midiNote' | 'bpm'>().toMatchTypeOf<SynthParamInfo['unit']>();
+  });
 });
 
 describe('construction', () => {

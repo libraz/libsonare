@@ -4,6 +4,7 @@ import type {
   MasteringAudioProfile,
   MasteringChainConfig,
   MasteringChainResult,
+  MasteringInsertParamUnit,
   MasteringNormalizeLoudnessResult,
   MasteringPlatform,
   MasteringResult,
@@ -694,6 +695,32 @@ describe('chain config: nested form only, tokens only', () => {
     expectTypeOf<
       NonNullable<NonNullable<NonNullable<MasteringChainConfig['repair']>['denoise']>['mode']>
     >().toEqualTypeOf<'logMmse' | 'mmseStsa' | 'spectralSubtraction'>();
+  });
+});
+
+describe('configuration type spellings', () => {
+  it('MasteringChainConfig uses a denoise options record', () => {
+    type Denoise = NonNullable<NonNullable<MasteringChainConfig['repair']>['denoise']>;
+    expectTypeOf<Denoise>().not.toEqualTypeOf<boolean>();
+    expectTypeOf<Denoise>().toHaveProperty('enabled');
+    const config: MasteringChainConfig = { repair: { denoise: { enabled: true } } };
+    expect(config.repair?.denoise?.enabled).toBe(true);
+  });
+
+  it('StreamingMasteringChainConfig uses a denoise options record', () => {
+    type Denoise = NonNullable<NonNullable<StreamingMasteringChainConfig['repair']>['denoise']>;
+    expectTypeOf<Denoise>().not.toEqualTypeOf<boolean>();
+    expectTypeOf<Denoise>().toHaveProperty('enabled');
+    const config: StreamingMasteringChainConfig = {
+      sampleRate,
+      numChannels: 1,
+      repair: { denoise: { enabled: true } },
+    };
+    expect(config.repair?.denoise?.enabled).toBe(true);
+  });
+
+  it('MasteringInsertParamUnit includes dBTP, midiNote and bpm', () => {
+    expectTypeOf<'dBTP' | 'midiNote' | 'bpm'>().toMatchTypeOf<MasteringInsertParamUnit>();
   });
 });
 

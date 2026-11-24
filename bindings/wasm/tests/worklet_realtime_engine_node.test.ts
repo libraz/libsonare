@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { vi } from 'vitest';
+import { expectTypeOf, vi } from 'vitest';
 import { ErrorCode } from '../src/errors';
+import type { UmpWords } from '../src/index.js';
 import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
+import type {
+  SonareEngineOptions,
+  SonareRealtimeEngineNodeOptions,
+  SonareEngine as SourceSonareEngine,
+  SonareRealtimeEngineNode as SourceSonareRealtimeEngineNode,
+} from '../src/worklet.js';
 import { SONARE_ENGINE_ROWS } from './_list_budget_rows';
 import {
   describe,
@@ -40,6 +47,22 @@ type OfflineEngineOption = NonNullable<
 
 describe('SonareRealtimeEngineNode', () => {
   setupWorklet();
+
+  it('requires options when creating SonareEngine', () => {
+    expectTypeOf<Parameters<typeof SourceSonareEngine.create>>().toEqualTypeOf<
+      [context: BaseAudioContext, options: SonareEngineOptions]
+    >();
+  });
+
+  it('requires UmpWords for SonareEngine.pushMidiUmp', () => {
+    expectTypeOf<Parameters<SourceSonareEngine['pushMidiUmp']>[1]>().toEqualTypeOf<UmpWords>();
+  });
+
+  it('requires options when creating SonareRealtimeEngineNode', () => {
+    expectTypeOf<Parameters<typeof SourceSonareRealtimeEngineNode.create>>().toEqualTypeOf<
+      [context: BaseAudioContext, options: SonareRealtimeEngineNodeOptions]
+    >();
+  });
 
   describe('SonareRealtimeEngineNode', () => {
     const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>

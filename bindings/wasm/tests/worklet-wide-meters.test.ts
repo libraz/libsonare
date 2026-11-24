@@ -4,13 +4,14 @@
  * snapshots carry per-plane arrays, and the interval gate is per target.
  */
 
+import { expectTypeOf } from 'vitest';
 import { type MixSceneStrip, RealtimeEngine } from '../dist/index.js';
 import {
   SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
   SONARE_METER_RING_MAX_CHANNELS,
   SONARE_METER_RING_PLANES_OFFSET,
 } from '../src/worklet/meter-rings';
-import type { WorkletMeterSnapshot } from '../src/worklet/protocol';
+import type { WorkletMeterSnapshot, WorkletTransport } from '../src/worklet.js';
 import {
   createMeterRingBuffer,
   describe,
@@ -109,6 +110,15 @@ function expectPlanes(
 
 describe('wide meters on the live worklet engine', () => {
   setupWorklet();
+
+  it('delivers channel arrays and absent plane values to meter callbacks', () => {
+    type MeterCallbackValue = Parameters<NonNullable<WorkletTransport['onMeter']>>[0];
+    expectTypeOf<MeterCallbackValue['peakDb']>().toEqualTypeOf<(number | undefined)[]>();
+    expectTypeOf<MeterCallbackValue['numChannels']>().toEqualTypeOf<number>();
+    expectTypeOf<MeterCallbackValue['rmsDb']>().toEqualTypeOf<(number | undefined)[]>();
+    expectTypeOf<MeterCallbackValue['truePeakDbtp']>().toEqualTypeOf<(number | undefined)[]>();
+    expectTypeOf<MeterCallbackValue['inputPeakDb']>().toEqualTypeOf<(number | undefined)[]>();
+  });
 
   it('delivers every plane of a 5.1 bus over postMessage', () => {
     const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);

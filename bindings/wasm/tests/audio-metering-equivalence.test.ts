@@ -64,6 +64,11 @@ describe('Audio metering methods (WASM)', () => {
     expect(crest).toBe(meteringCrestFactorDb(samples, SR));
   });
 
+  it('returns no crest factor for silence', () => {
+    const audio = Audio.fromBuffer(new Float32Array(2048), SR);
+    expect(audio.crestFactorDb()).toBeUndefined();
+  });
+
   it('silenceRatio matches with explicit and default frame/hop arguments', () => {
     const samples = sine(440, 1);
     const audio = Audio.fromBuffer(samples, SR);

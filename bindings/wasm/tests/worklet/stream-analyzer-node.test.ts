@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { init, type Matrix2D, StreamAnalyzer, type StreamFrames } from '../../dist/index.js';
 import {
   init as initWorklet,
@@ -6,6 +6,8 @@ import {
   SonareStreamAnalyzerNode,
   SonareStreamAnalyzerWorkletProcessor,
 } from '../../dist/worklet.js';
+import type { WindowType } from '../../src/index.js';
+import type { SonareStreamAnalyzerNodeOptions } from '../../src/worklet.js';
 
 const QUANTUM = 128;
 
@@ -239,6 +241,12 @@ describe('SonareStreamAnalyzerNode', () => {
     await initWorklet();
   });
 
+  it('types the optional stream window as a name token', () => {
+    expectTypeOf<NonNullable<SonareStreamAnalyzerNodeOptions['config']>['window']>().toEqualTypeOf<
+      WindowType | undefined
+    >();
+  });
+
   function fakeNode() {
     const posted: Posted[] = [];
     const node = {
@@ -287,6 +295,18 @@ describe('SonareStreamAnalyzerNode', () => {
         nodeFactory: factory as never,
       }),
     ).rejects.toThrow(RangeError);
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it('refuses a numeric stream window ordinal', async () => {
+    const factory = vi.fn();
+    await expect(
+      SonareStreamAnalyzerNode.create({ sampleRate: 22050 } as BaseAudioContext, {
+        config: { ...CONFIG, window: 2 as never },
+        chunkFrames: CHUNK,
+        nodeFactory: factory as never,
+      }),
+    ).rejects.toThrow(TypeError);
     expect(factory).not.toHaveBeenCalled();
   });
 

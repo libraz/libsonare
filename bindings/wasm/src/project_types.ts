@@ -699,15 +699,15 @@ export interface ProjectAnalyzeTempoRequest extends ProjectTempoOptions {
 /** A ranked primary/half/double tempo hypothesis returned by {@link Project.analyzeTempo}. */
 export interface ProjectTempoCandidate {
   /** Tempo in beats per minute. */
-  bpm: number;
+  readonly bpm: number;
   /** Ranking confidence. */
-  confidence: number;
+  readonly confidence: number;
   /** Which hypothesis the candidate is. */
-  label: 'primary' | 'half' | 'double';
+  readonly label: 'primary' | 'half' | 'double';
   /** Number of time-signature segments the detected meter has. */
-  timeSignatureCount: number;
+  readonly timeSignatureCount: number;
   /** The detected meter's first time signature. */
-  firstTimeSignature: ProjectTimeSignatureSegment;
+  readonly firstTimeSignature: ProjectTimeSignatureSegment;
 }
 
 /** Mode of a {@link ProjectKeySegment}: a {@link KeyMode} or `'unknown'`. */

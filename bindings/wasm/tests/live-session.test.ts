@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, LiveSession, RealtimeEngine } from '../dist/index.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  LiveSession,
+  type LiveSessionConfig,
+  RealtimeEngine,
+} from '../src/index.js';
 
 const PROCESSING_SOURCE = readFileSync(
   new URL('../../../src/wasm/bindings/realtime/processing.cpp', import.meta.url),
@@ -51,7 +58,10 @@ describe('WASM LiveSession stub', () => {
   it('reports NotSupported with the compiled-out reason before device enumeration or open', () => {
     codedStub(() => LiveSession.audioDevices(), 'LiveSession.audioDevices');
     codedStub(() => LiveSession.midiSources(), 'LiveSession.midiSources');
-    codedStub(() => new LiveSession({} as RealtimeEngine, {}), 'LiveSession');
+    expectTypeOf<ConstructorParameters<typeof LiveSession>>().toEqualTypeOf<
+      [config: LiveSessionConfig & { readonly engine: RealtimeEngine }]
+    >();
+    codedStub(() => new LiveSession({ engine: {} as RealtimeEngine }), 'LiveSession');
   });
 
   it('keeps the lifecycle and captured MIDI entry names present as coded stubs', () => {

@@ -143,6 +143,25 @@ describe('WASM estimateMeter', () => {
     expect(measuredZero.timeSignature.denominator).toBe(4);
   });
 
+  it('uses 0.5 as the default compound subdivision threshold', () => {
+    const observations = beatSeries(3, 8);
+    const mean =
+      observations.accent.reduce((sum, value) => sum + value, 0) / observations.accent.length;
+    const request = {
+      observations: {
+        ...observations,
+        subdivisionAccent: Array.from({ length: observations.accent.length - 1 }, () => mean * 0.7),
+      },
+      candidateNumerators: [3],
+    };
+    const defaultMeter = estimateMeter(request);
+    expect(defaultMeter.timeSignature).toMatchObject({ numerator: 6, denominator: 8 });
+    expect(defaultMeter).toEqual(estimateMeter({ ...request, compoundSubdivisionThreshold: 0.5 }));
+    expect(
+      estimateMeter({ ...request, compoundSubdivisionThreshold: 0.85 }).timeSignature,
+    ).toMatchObject({ numerator: 3, denominator: 4 });
+  });
+
   it('reports additive grouping and a fallback below eight beats', () => {
     const candidateNumerators = [3, 4, 5, 6, 7, 9, 11, 13];
     for (const grouping of [

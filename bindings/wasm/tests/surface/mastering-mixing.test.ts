@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AutomationCurve,
   ChannelLayout,
+  MasteringAmpPresetCatalogEntry,
+  MasteringProcessorParams,
   MeterTap,
   MixAssistantTrackProfile,
   MixBusRole,
@@ -80,6 +82,23 @@ function assistantTracks() {
 describe('mastering mixing surface', () => {
   beforeAll(async () => {
     await init();
+  });
+
+  it('MasteringAmpPresetCatalogEntry exposes named optional amplifier parameters', () => {
+    expectTypeOf<MasteringAmpPresetCatalogEntry['params']>().toEqualTypeOf<
+      MasteringProcessorParams<'saturation.ampSim'>
+    >();
+    expectTypeOf<MasteringAmpPresetCatalogEntry['params']['bassDb']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<
+      Extract<keyof MasteringAmpPresetCatalogEntry['params'], 'arbitraryParameterName'>
+    >().toEqualTypeOf<never>();
+    const presets = sonare.masteringAmpPresetCatalog();
+    expect(presets.length).toBeGreaterThan(0);
+    for (const preset of presets) {
+      expect(preset).toHaveProperty('params');
+    }
   });
 
   describe('removed names are not exported', () => {

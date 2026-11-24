@@ -25,7 +25,13 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { extractPercussiveEvents, hpss, init, renderPercussiveEvents } from '../dist/index.js';
+import {
+  Audio,
+  extractPercussiveEvents,
+  hpss,
+  init,
+  renderPercussiveEvents,
+} from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 22050;
@@ -181,6 +187,21 @@ beforeAll(async () => {
 });
 
 describe('HPSS kernel ceiling', () => {
+  it('refuses an out-of-domain kernel in hpss and Audio.hpss with RangeError', () => {
+    const options = { kernelHarmonic: FIRST_ABOVE_CEILING };
+    expectKernelRefusal(
+      capture(() => hpss({ samples: tone, sampleRate, ...options })),
+      'hpss',
+      'kernelHarmonic',
+    );
+    const error = expectArgumentRefusal(
+      capture(() => Audio.fromBuffer(tone, sampleRate).hpss(options)),
+    );
+    expect(error.message).toBe(
+      `Audio.hpss: kernelHarmonic must be an odd integer in [1, ${CEILING}]`,
+    );
+  });
+
   for (const entry of entries) {
     for (const direction of directions) {
       for (const kernel of [INT_MAX, FIRST_ABOVE_CEILING]) {

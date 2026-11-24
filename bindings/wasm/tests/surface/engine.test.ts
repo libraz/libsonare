@@ -1,10 +1,25 @@
 import { readFileSync } from 'node:fs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  type ClipPageProvider,
+  type EngineBounceOptions,
+  type EngineClip,
+  type EngineDither,
+  type EngineGraphMix,
+  type EngineGraphNodeType,
+  type EngineGraphSpec,
+  type EngineTelemetry,
+  type EngineTelemetryError,
+  type EngineTelemetryType,
+  type EngineTransportState,
   ErrorCode,
   init,
   isSonareError,
   PART_RIG_ALL_PARTS,
+  type PlaybackChannelRole,
+  type PlaybackTargetConfig,
+  type ProjectMidiCcBinding,
+  type ProjectWarpMode,
   RealtimeEngine,
   SampleBank,
 } from '../../dist/index.js';
@@ -51,6 +66,73 @@ function caught(fn: () => unknown): unknown {
 function loose(engine: RealtimeEngine): Record<string, (...args: unknown[]) => unknown> {
   return engine as unknown as Record<string, (...args: unknown[]) => unknown>;
 }
+
+describe('public request and result type spellings', () => {
+  it('ProjectMidiCcBinding uses ccNumber and an optional channel', () => {
+    expectTypeOf<ProjectMidiCcBinding>().toEqualTypeOf<{
+      ccNumber: number;
+      channel?: number;
+      kind?: 'controlChange7' | 'controlChange14' | 'rpn' | 'nrpn';
+      ccLsbNumber?: number;
+      selectorMsb?: number;
+      selectorLsb?: number;
+      paramId: number;
+      minValue?: number;
+      maxValue?: number;
+      consume?: boolean;
+    }>();
+  });
+
+  it('EngineBounceOptions requires numChannels and uses a dither token', () => {
+    expectTypeOf<EngineBounceOptions['numChannels']>().toEqualTypeOf<number>();
+    expectTypeOf<EngineBounceOptions['dither']>().toEqualTypeOf<EngineDither | undefined>();
+    // @ts-expect-error channel count is required
+    const missing: EngineBounceOptions = { totalFrames: 128 };
+    expect(missing).toBeDefined();
+  });
+
+  it('EngineClip uses warp tokens and a ClipPageProvider instance', () => {
+    expectTypeOf<EngineClip['warpMode']>().toEqualTypeOf<ProjectWarpMode | undefined>();
+    expectTypeOf<EngineClip['pageProvider']>().toEqualTypeOf<ClipPageProvider | undefined>();
+    const acceptsProvider = (pageProvider: ClipPageProvider): EngineClip => ({
+      startPpq: 0,
+      pageProvider,
+    });
+    expectTypeOf(acceptsProvider).toEqualTypeOf<(pageProvider: ClipPageProvider) => EngineClip>();
+    // @ts-expect-error structural provider ids are not accepted
+    const structural: EngineClip = { startPpq: 0, pageProvider: { id: 1 } };
+    expect(structural).toBeDefined();
+  });
+
+  it('EngineGraphSpec uses graph tokens', () => {
+    expectTypeOf<EngineGraphSpec['nodes'][number]['type']>().toEqualTypeOf<
+      EngineGraphNodeType | undefined
+    >();
+    expectTypeOf<EngineGraphSpec['connections'][number]['mix']>().toEqualTypeOf<
+      EngineGraphMix | undefined
+    >();
+  });
+
+  it('PlaybackTargetConfig uses speaker role names', () => {
+    expectTypeOf<keyof NonNullable<PlaybackTargetConfig['speakers']>>().toEqualTypeOf<
+      Exclude<PlaybackChannelRole, 'lfe'>
+    >();
+  });
+
+  it('EngineTelemetry uses named kinds and graphLatencySamples', () => {
+    expectTypeOf<EngineTelemetry['type']>().toEqualTypeOf<EngineTelemetryType>();
+    expectTypeOf<EngineTelemetry['error']>().toEqualTypeOf<EngineTelemetryError>();
+    expectTypeOf<
+      Extract<keyof EngineTelemetry, 'graphLatencySamples'>
+    >().toEqualTypeOf<'graphLatencySamples'>();
+    expectTypeOf<Extract<keyof EngineTelemetry, 'graphLatencySamplesQ8'>>().toEqualTypeOf<never>();
+  });
+
+  it('EngineTransportState exposes barIndex', () => {
+    expectTypeOf<EngineTransportState['barIndex']>().toEqualTypeOf<number>();
+    expectTypeOf<keyof EngineTransportState>().not.toMatchTypeOf<'barCount'>();
+  });
+});
 
 beforeAll(async () => {
   await init();
