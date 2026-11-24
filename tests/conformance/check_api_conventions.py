@@ -1351,6 +1351,12 @@ def _c_unset_returns(body: str, setters: set[str]) -> list[tuple[int, str]]:
     return bad
 
 
+# Read-only accessors of the error channel: stamping an error there would overwrite what they report.
+_C_ERROR_CHANNEL_ACCESSORS: dict[str, str] = {
+    "sonare_last_diagnostic": "reads one recorded diagnostic; a refused index or struct must leave the record intact",
+}
+
+
 def _c_error_path_files(root: Path) -> list[dict]:
     """One record per C-ABI source file, counting error returns that set no message."""
     paths = sorted((root / "src" / "c_api").glob("*.cpp"))
@@ -1366,7 +1372,7 @@ def _c_error_path_files(root: Path) -> list[dict]:
         entries = _c_entry_bodies(code)
         for name, offset, body in entries:
             # Audio-thread entries keep a bare code: they may not write the error channel.
-            if "SONARE_C_RT_API_ENTRY" in body:
+            if "SONARE_C_RT_API_ENTRY" in body or name in _C_ERROR_CHANNEL_ACCESSORS:
                 continue
             for at, _ in _c_unset_returns(body, setters):
                 unset.append(f"{name}:{code.count(chr(10), 0, offset + at) + 1}")
@@ -1540,7 +1546,6 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/mixing_strip.cpp": 4,
     "src/c_api/project_midi.cpp": 8,
     "src/c_api/sonare_c_mastering_repair.cpp": 1,
-    "src/c_api/sonare_c_memory.cpp": 1,
     "src/c_api/sonare_c_polyphony.cpp": 3,
     "src/c_api/sonare_c_sample_bank.cpp": 1,
     "src/c_api/sonare_c_voice_changer.cpp": 1,

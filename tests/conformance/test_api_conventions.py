@@ -1170,6 +1170,20 @@ class CErrorPathRule(unittest.TestCase):
         rt = self.BAD.replace("SONARE_C_API_ENTRY", "SONARE_C_RT_API_ENTRY")
         self.assertFalse(self.judge(good=self.GOOD, rt=rt).failed)
 
+    def test_an_error_channel_accessor_keeps_its_bare_code(self) -> None:
+        accessor = self.BAD.replace("sonare_bad", "sonare_last_diagnostic")
+        self.assertFalse(self.judge(good=self.GOOD, accessor=accessor).failed)
+
+    def test_every_error_channel_accessor_is_a_c_abi_entry(self) -> None:
+        defined = {
+            name
+            for path in sorted((check.ROOT / "src" / "c_api").glob("*.cpp"))
+            for name, _, _ in check._c_entry_bodies(
+                check._c_blank(path.read_text(encoding="utf-8"))
+            )
+        }
+        self.assertEqual(sorted(set(check._C_ERROR_CHANNEL_ACCESSORS) - defined), [])
+
     def test_pending_entry_holding_the_measured_count_defers(self) -> None:
         verdict = self.judge({"c:src/c_api/bad.cpp": 1}, bad=self.BAD)
         self.assertEqual(verdict.deferred, ["c:src/c_api/bad.cpp"])
