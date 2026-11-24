@@ -14,8 +14,6 @@ if TYPE_CHECKING:
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
-    SONARE_ERROR_INVALID_PARAMETER,
-    SonareError,
     _apply_voice_sets,
     _audio_array,
     _catalog_token,
@@ -90,7 +88,8 @@ from ._cli_options import (
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._effects_level import _DEFAULT_NORMALIZE_TARGET_DB
-from ._runtime import _get_lib, _render_as_given
+from ._ffi import SONARE_ERROR_INVALID_PARAMETER
+from ._runtime import SonareError, _get_lib, _render_as_given
 
 
 def _hpss_refusal(args: argparse.Namespace) -> str | None:
@@ -645,9 +644,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             # A built-in preset is named by its library id in any letter case.
             builtin = _catalog_token(preset_id, realtime_voice_changer_preset_names())
             preset = (
-                json.loads(realtime_voice_changer_preset_json(builtin))
-                if assignments
-                else builtin
+                json.loads(realtime_voice_changer_preset_json(builtin)) if assignments else builtin
             )
         # A plain string is the catalog id; a mapping or _VoicePresetDocument is a document.
         writes: list[tuple[tuple[str, ...], tuple[str, ...], str, int]] = []
@@ -737,13 +734,11 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
                 text = fh.read()
             text_or_preset = _apply_voice_sets(text, args.set, provenance=writes)
             text = (
-                json.dumps(text_or_preset)
-                if isinstance(text_or_preset, dict)
-                else text_or_preset
+                json.dumps(text_or_preset) if isinstance(text_or_preset, dict) else text_or_preset
             )
-    except _DuplicateJsonKeyError as error:
-        payload = {"ok": False, "error": error.text}
-        print(_strict_json_dumps(payload) if args.json else error.text)
+    except _DuplicateJsonKeyError as duplicate:
+        payload = {"ok": False, "error": duplicate.text}
+        print(_strict_json_dumps(payload) if args.json else duplicate.text)
         return EXIT_INVALID_PARAMETER
 
     mapped_override = False

@@ -946,8 +946,7 @@ def _json_key_path(path: tuple[tuple[bool, str], ...], key: str) -> str:
 
 def _escape_json_key(value: str) -> str:
     return "".join(
-        f"\\x{ord(char):02x}" if ord(char) < 0x20 or ord(char) == 0x7F else char
-        for char in value
+        f"\\x{ord(char):02x}" if ord(char) < 0x20 or ord(char) == 0x7F else char for char in value
     )
 
 
@@ -1149,9 +1148,7 @@ def _set_nested_value(
             return
         # A later write replaces this subtree, so earlier ownership beneath it
         # no longer describes the effective overlay.
-        provenance[:] = [
-            item for item in provenance if not _voice_path_prefix(target, item[0])
-        ]
+        provenance[:] = [item for item in provenance if not _voice_path_prefix(target, item[0])]
         provenance.append((target, assigned, path, order))
 
     for part in parts[:-1]:
@@ -1185,11 +1182,7 @@ class _VoiceSetSubjectMapper:
                 self._count_document_paths(child, path)
         elif isinstance(value, list):
             for index, child in enumerate(value):
-                indexed = (
-                    (*prefix[:-1], prefix[-1] + f"[{index}]")
-                    if prefix
-                    else (f"[{index}]",)
-                )
+                indexed = (*prefix[:-1], prefix[-1] + f"[{index}]") if prefix else (f"[{index}]",)
                 self._count_document_paths(child, indexed)
 
     def __call__(self, subject: str) -> str | None:
