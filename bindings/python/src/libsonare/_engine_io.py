@@ -242,7 +242,6 @@ class _EngineIoMixin:
         _check(_get_lib().sonare_engine_capture_status(self._require_handle(), ctypes.byref(raw)))
         return EngineCaptureStatus(
             captured_frames=int(raw.captured_frames),
-            overflow_count=int(raw.overflow_count),
             dropped_frames=int(raw.dropped_frames),
             armed=bool(raw.armed),
             punch_enabled=bool(raw.punch_enabled),

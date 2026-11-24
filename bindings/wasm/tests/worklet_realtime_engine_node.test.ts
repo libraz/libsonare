@@ -3346,7 +3346,6 @@ describe('SonareRealtimeEngineNode', () => {
                     ok: true,
                     status: {
                       capturedFrames: 128,
-                      overflowCount: 0,
                       droppedFrames: 0,
                       armed: true,
                       punchEnabled: false,

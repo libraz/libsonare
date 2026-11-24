@@ -843,10 +843,13 @@ describe('capture', () => {
       engine.play();
       engine.process([new Float32Array(BLOCK)]);
 
-      expect(engine.captureStatus()).toMatchObject({
+      expect(engine.captureStatus()).toEqual({
         capturedFrames: 16,
-        overflowCount: BLOCK - 16,
         droppedFrames: BLOCK - 16,
+        armed: true,
+        punchEnabled: false,
+        source: 'output',
+        recordOffsetSamples: 0,
       });
       engine.process([new Float32Array(BLOCK)]);
       expect(engine.captureStatus().droppedFrames).toBe(2 * BLOCK - 16);

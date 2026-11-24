@@ -269,7 +269,6 @@ SonareError sonare_engine_capture_status(const SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out);
   out->captured_frames = engine->engine.captured_frames();
-  out->overflow_count = engine->engine.capture_overflow_count();
   out->armed = engine->engine.capture_armed() ? 1 : 0;
   out->punch_enabled = engine->engine.capture_punch_enabled() ? 1 : 0;
   out->source = engine->engine.capture_source() == engine::CaptureSource::kInput

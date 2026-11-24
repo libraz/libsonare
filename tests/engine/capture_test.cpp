@@ -10,7 +10,7 @@ namespace sonare::engine {
 
 struct CaptureLossTestAccess {
   static void seed(CaptureSink& owner, uint64_t count) {
-    owner.overflow_count_.store(count, std::memory_order_relaxed);
+    owner.dropped_frames_.store(count, std::memory_order_relaxed);
   }
 };
 
@@ -36,7 +36,7 @@ TEST_CASE("CaptureSink captures only armed punch range with sample accuracy", "[
   REQUIRE(cap_l[3] == 5.0f);
   REQUIRE(cap_r[0] == 12.0f);
   REQUIRE(cap_r[3] == 15.0f);
-  REQUIRE(sink.overflow_count() == 0);
+  REQUIRE(sink.dropped_frames() == 0);
 }
 
 TEST_CASE("CaptureSink records overflow without writing beyond capacity",
@@ -52,15 +52,25 @@ TEST_CASE("CaptureSink records overflow without writing beyond capacity",
   sink.arm(true);
   constexpr uint64_t kInitialDrops = std::numeric_limits<uint32_t>::max();
   sonare::engine::CaptureLossTestAccess::seed(sink, kInitialDrops);
-  REQUIRE(sink.overflow_count() == kInitialDrops);
+  REQUIRE(sink.dropped_frames() == kInitialDrops);
   sink.process(input, 2, 4, 0);
 
   REQUIRE(sink.captured_frames() == 2);
-  REQUIRE(sink.overflow_count() == kInitialDrops + 2);
-  REQUIRE(sink.dropped_frames() == 2);
+  REQUIRE(sink.dropped_frames() == kInitialDrops + 2);
+  sink.process(input, 2, 4, 4);
+  REQUIRE(sink.captured_frames() == 2);
+  REQUIRE(sink.dropped_frames() == kInitialDrops + 6);
   REQUIRE(capture_left[0] == 1.0f);
   REQUIRE(capture_left[1] == 2.0f);
   REQUIRE(capture_right == capture_left);
+
+  sink.arm(false);
+  sink.reset();
+  sink.arm(true);
+  REQUIRE(sink.captured_frames() == 0);
+  REQUIRE(sink.dropped_frames() == 0);
+  sink.process(input, 2, 4, 8);
+  REQUIRE(sink.dropped_frames() == 2);
 }
 
 TEST_CASE("CaptureSink stops recording when disarmed mid-region", "[engine][capture]") {
@@ -90,7 +100,7 @@ TEST_CASE("CaptureSink stops recording when disarmed mid-region", "[engine][capt
   REQUIRE(cap_l[3] == 3.0f);
   // The slot after the disarm point was never written.
   REQUIRE(cap_l[4] == -1.0f);
-  REQUIRE(sink.overflow_count() == 0);
+  REQUIRE(sink.dropped_frames() == 0);
 }
 
 TEST_CASE("CaptureSink publishes each control-thread setter to readers", "[engine][capture]") {

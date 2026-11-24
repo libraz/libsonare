@@ -1013,7 +1013,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareEngineCaptureStatus.overflow_count` | the running tally is a uint64_t instead of a uint32_t |
 | `SonareTransportState.sample_rate` | the sample rate is an int instead of a double |
 | `sonare_engine_clip_page_request_overflow_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
 | `sonare_engine_configure_scope_telemetry(band_count)` | the count is a size_t instead of an unsigned int |
@@ -1077,6 +1076,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareEngineCaptureStatus.overflow_count` | removed: read dropped_frames, the cumulative number of frames discarded while the capture buffer was full since the last capture reset |
 | `sonare_engine_load_soundfont` | `sonare_engine_load_sound_font` |
 | `sonare_engine_midi_cc_binding_count` | removed: call sonare_engine_midi_cc_bindings, read list.count and release the snapshot with sonare_free_midi_cc_binding_list |
 
@@ -1093,6 +1093,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SONARE_SYNTH_ENGINE_MODE_COUNT` | The synth-engine mode count changes from 18 to 19. Size tables from the current header constant and account for the additional mode. |
 | `SonareEngineBounceResult` | Appends quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the count only when present. |
+| `SonareEngineCaptureStatus` | the struct removes overflow_count and retains dropped_frames as the sole loss tally; recompile C consumers and update the layout mirror |
 | `SonareTransportState.bar_count` | `SonareTransportState.bar_index` |
 | `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
@@ -3730,6 +3731,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineCaptureStatus.overflow_count` | removed: read dropped_frames, the number of frames discarded while the capture buffer was full since the last capture reset |
 | `EngineTelemetry.audibleTimelineSample` | removed: read audible_timeline_sample |
 | `EngineTelemetry.graphLatencySamplesQ8` | removed: read graph_latency_samples_q8 |
 | `EngineTelemetry.renderFrame` | removed: read render_frame |
@@ -3763,7 +3765,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `EngineCaptureStatus` | The exported dataclass constructor now requires dropped_frames as a seventh argument. Supply the capture buffer's cumulative dropped-frame count. |
+| `EngineCaptureStatus` | The exported dataclass replaces overflow_count with dropped_frames, the cumulative number of frames discarded while the capture buffer was full since the last capture reset; its constructor remains six arguments. |
 | `EngineMarker.id` | required on EngineMarker, the stored record; pass an EngineMarkerInput with id omitted to have set_markers allocate the lowest id above every id the engine has stored or assigned that the list does not carry |
 | `EngineMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...)); a marker without an id is an EngineMarkerInput |
 | `Mixer.add_bus(bus_id)` | `Mixer.add_bus(id)`: renamed id, the name the Node and WASM mixers use |
@@ -6946,7 +6948,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `EngineCaptureStatus` | Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
 | `RealtimeEngine.drainExternalMidi` | Read ExternalMidiEvent rows and handle an absent destinationId for broadcast events. |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
@@ -7215,6 +7216,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineAutomationPointCurve` | removed: use AutomationCurve and pass the curve name such as exponential; ordinals are refused |
+| `EngineCaptureStatus.overflowCount` | removed: read droppedFrames, the number of frames discarded while the capture buffer was full since the last capture reset |
 | `EngineMidiEvent.data0` | removed: set word0 |
 | `EngineMidiEvent.data1` | removed: set word1 |
 | `EngineTransportState.isPlaying` | removed: read playing |
@@ -12273,7 +12275,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `EngineCaptureStatus` | Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers. |
 | `EngineTelemetry` | Read type and error as tokens and graphLatencySamples in place of graphLatencySamplesQ8. |
 | `EngineTransportState` | Use barIndex instead of barCount. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
@@ -12287,7 +12288,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | `RealtimeEngine.setStripEqBand` |
 | `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
-| `SonareEngine.captureStatus` (`./worklet`) | The capture response includes droppedFrames as a number, beside overflowCount. |
+| `SonareEngine.captureStatus` (`./worklet`) | The capture response reports droppedFrames as the sole loss tally: frames discarded while the capture buffer was full since the last capture reset. |
 | `SonareEngine.setBusStripJson` (`./worklet`) | `SonareEngine.setBusStrip` |
 | `SonareEngine.setMasterStripJson` (`./worklet`) | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
 | `SonareEngine.setMidiFx(configJson)` (`./worklet`) | removed: pass it as config in MidiFxConfig |
@@ -12706,6 +12707,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineCaptureStatus.overflowCount` | removed: read droppedFrames, the number of frames discarded while the capture buffer was full since the last capture reset |
 | `EngineMidiEvent.data0` | removed: set word0 |
 | `EngineMidiEvent.data1` | removed: set word1 |
 | `SonareEngine.automationParamId` (`./worklet`) | `SonareEngine.resolveStripAutomationId` |

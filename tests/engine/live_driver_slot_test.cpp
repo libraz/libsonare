@@ -97,7 +97,6 @@ TEST_CASE("Input capture counts dropped frames after capacity is reached",
   input = raw;
   engine.process(audio, 1, kFrames);
   CHECK(engine.capture_dropped_frames() == 2 * kFrames - kCapacity);
-  CHECK(engine.capture_overflow_count() == 2 * kFrames - kCapacity);
   CHECK(captured.back() == kSentinel);
 
   engine.set_capture_armed(false);

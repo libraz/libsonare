@@ -436,7 +436,7 @@ describe('Sonare WASM Module', () => {
       expect(capturedBlock[0][0]).toBeCloseTo(0.75, 4);
       const captureStatus = engine.captureStatus();
       expect(captureStatus.capturedFrames).toBe(128);
-      expect(captureStatus.overflowCount).toBe(0);
+      expect(captureStatus.droppedFrames).toBe(0);
       expect(captureStatus.source).toBe('output');
       expect(captureStatus.recordOffsetSamples).toBe(0);
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.75, 4);

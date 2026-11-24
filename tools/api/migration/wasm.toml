@@ -37255,17 +37255,16 @@ rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/project.test.ts::round-trips absent Roman numerals and refuses a specified empty numeral"
 
 [[entry]]
-kind = "type"
-old = "EngineCaptureStatus"
-changed = "Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers."
+kind = "field"
+old = "EngineCaptureStatus.overflowCount"
+removed = "read droppedFrames, the number of frames discarded while the capture buffer was full since the last capture reset"
 domain = "engine"
-rule = "typed-results"
-test = "bindings/wasm/tests/surface/engine.test.ts::reports capture frames dropped after the buffer fills"
+rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "SonareEngine.captureStatus"
-changed = "The capture response includes droppedFrames as a number, beside overflowCount."
+changed = "The capture response reports droppedFrames as the sole loss tally: frames discarded while the capture buffer was full since the last capture reset."
 domain = "engine"
 rule = "typed-results"
 entry = "./worklet"

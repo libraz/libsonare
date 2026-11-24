@@ -3688,10 +3688,17 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "field"
 old = "SonareEngineCaptureStatus.overflow_count"
-changed = "the running tally is a uint64_t instead of a uint32_t"
+removed = "read dropped_frames, the cumulative number of frames discarded while the capture buffer was full since the last capture reset"
 domain = "engine"
-rule = "c-count-types"
-test = "tests/engine/capture_test.cpp::CaptureSink records overflow without writing beyond capacity"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineCaptureStatus"
+changed = "the struct removes overflow_count and retains dropped_frames as the sole loss tally; recompile C consumers and update the layout mirror"
+domain = "engine"
+rule = "individual"
+test = "tests/api/sonare_c_engine_voice_test.cpp::C capture status counts and resets dropped frames"
 
 [[entry]]
 kind = "field"

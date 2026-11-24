@@ -537,7 +537,6 @@ class SonareEngineCaptureStatus(CStruct):
 
     _fields_ = [
         ("captured_frames", ctypes.c_int64),
-        ("overflow_count", ctypes.c_uint64),
         ("armed", ctypes.c_int),
         ("punch_enabled", ctypes.c_int),
         ("source", ctypes.c_int),

@@ -593,8 +593,6 @@ class EngineCaptureStatus:
 
     captured_frames: int
     """Number of frames captured so far."""
-    overflow_count: int
-    """Number of capture overflows since the sink was prepared."""
     armed: bool
     """Whether the recording sink is armed."""
     punch_enabled: bool
@@ -604,7 +602,7 @@ class EngineCaptureStatus:
     record_offset_samples: int
     """Capture alignment offset in samples relative to the punch start."""
     dropped_frames: int
-    """Number of frames discarded after the capture buffer filled."""
+    """Frames discarded since the last capture reset because the capture buffer was full."""
 
 
 EngineDither: TypeAlias = Literal["rpdf", "tpdf", "noiseShaped"]

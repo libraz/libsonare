@@ -17,7 +17,6 @@ export const BLOCK = 128;
 
 export interface NativeCaptureStatus {
   capturedFrames: number;
-  overflowCount: number;
   droppedFrames: number;
   armed: boolean;
   punchEnabled: boolean;

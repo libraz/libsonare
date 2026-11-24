@@ -32,6 +32,7 @@ import type {
   DynamicsProcessorResult,
   DynamicsResult,
   EngineBounceResult,
+  EngineCaptureStatus,
   MasteringInsertParamChoice,
   MasteringInsertParamDependency,
   MasteringInsertParamInfo,
@@ -98,7 +99,21 @@ const meterEstimate = {
   unobservedBeats: [0, 6],
 } satisfies MeterEstimate;
 
+const engineCaptureStatus = {
+  capturedFrames: 128,
+  droppedFrames: 32,
+  armed: true,
+  punchEnabled: false,
+  source: 'output',
+  recordOffsetSamples: 0,
+} satisfies EngineCaptureStatus;
+
 describe('shared public type shapes', () => {
+  it('EngineCaptureStatus is the shape the shared corpus declares', () => {
+    expect(Object.keys(engineCaptureStatus).sort()).toEqual(
+      [...shapes.types.EngineCaptureStatus].sort(),
+    );
+  });
   it('MeterEstimate is the shape the shared corpus declares', () => {
     expect(Object.keys(meterEstimate).sort()).toEqual([...shapes.types.MeterEstimate].sort());
   });

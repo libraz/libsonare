@@ -1165,7 +1165,6 @@ export class SonareRealtimeEngineWorkletProcessor {
             ok: true,
             status: {
               capturedFrames: status.capturedFrames,
-              overflowCount: status.overflowCount,
               droppedFrames: status.droppedFrames,
               armed: status.armed,
               punchEnabled: status.punchEnabled,

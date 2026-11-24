@@ -12,6 +12,14 @@
       "rmsDb"
     ],
     "DynamicsProcessorResult": ["latencySamples", "samples"],
+    "EngineCaptureStatus": [
+      "armed",
+      "capturedFrames",
+      "droppedFrames",
+      "punchEnabled",
+      "recordOffsetSamples",
+      "source"
+    ],
     "MeterEstimate": [
       "candidateScores",
       "candidates",

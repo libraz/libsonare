@@ -888,7 +888,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   SonareEngineCaptureStatus capture_status{};
   REQUIRE(sonare_engine_capture_status(engine, &capture_status) == SONARE_OK);
   REQUIRE(capture_status.captured_frames == 128);
-  REQUIRE(capture_status.overflow_count == 0);
+  REQUIRE(capture_status.dropped_frames == 0);
   REQUIRE(capture_status.armed == 1);
   REQUIRE(capture_status.source == SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT);
   REQUIRE(capture_status.record_offset_samples == 0);
@@ -1065,7 +1065,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   }
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
   REQUIRE(status.captured_frames == 64);
-  REQUIRE(status.overflow_count == 0);
+  REQUIRE(status.dropped_frames == 0);
   REQUIRE(capture_left[63] == Catch::Approx(0.25f).margin(0.0001f));
   REQUIRE(capture_left[64] == Catch::Approx(0.0f).margin(0.0001f));
 
@@ -1100,21 +1100,26 @@ TEST_CASE("C capture status counts and resets dropped frames", "[c_api][capture]
   REQUIRE(sonare_engine_play(engine.get(), -1) == SONARE_OK);
   std::array<float, 8> audio{};
   float* channels[] = {audio.data()};
-  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, audio.size()) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, audio.size()) == SONARE_OK);
-
   SonareEngineCaptureStatus status{};
+  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, audio.size()) == SONARE_OK);
   REQUIRE(sonare_engine_capture_status(engine.get(), &status) == SONARE_OK);
   CHECK(status.captured_frames == 4);
-  CHECK(status.overflow_count == 12);
+  CHECK(status.dropped_frames == 4);
+
+  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, audio.size()) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine.get(), &status) == SONARE_OK);
+  CHECK(status.captured_frames == 4);
   CHECK(status.dropped_frames == 12);
 
   REQUIRE(sonare_engine_arm_capture(engine.get(), 0) == SONARE_OK);
   REQUIRE(sonare_engine_reset_capture(engine.get()) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine.get(), 1) == SONARE_OK);
   REQUIRE(sonare_engine_capture_status(engine.get(), &status) == SONARE_OK);
   CHECK(status.captured_frames == 0);
-  CHECK(status.overflow_count == 0);
   CHECK(status.dropped_frames == 0);
+  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, audio.size()) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine.get(), &status) == SONARE_OK);
+  CHECK(status.dropped_frames == 4);
 }
 
 TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api][capture]") {

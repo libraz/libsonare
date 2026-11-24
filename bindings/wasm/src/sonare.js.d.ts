@@ -1280,7 +1280,6 @@ export interface WasmEngineScopeTelemetry {
 
 export interface WasmEngineCaptureStatus {
   capturedFrames: number;
-  overflowCount: number;
   droppedFrames: number;
   armed: boolean;
   punchEnabled: boolean;

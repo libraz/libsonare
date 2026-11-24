@@ -67,7 +67,6 @@ TEST_CASE("engine read-only queries accept const handles", "[c_api][engine][cons
 #endif
   REQUIRE(pages == 0);
   REQUIRE(stretch == 0);
-  REQUIRE(capture.overflow_count == 0);
   REQUIRE(capture.dropped_frames == 0);
   REQUIRE(external_midi == 0);
   sonare_free_midi_cc_binding_list(&bindings);

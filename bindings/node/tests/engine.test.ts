@@ -390,7 +390,7 @@ describe('RealtimeEngine native binding', () => {
     expect(right[0]).toBeCloseTo(-0.25, 4);
     const captureStatus = engine.captureStatus();
     expect(captureStatus.capturedFrames).toBe(128);
-    expect(captureStatus.overflowCount).toBe(0);
+    expect(captureStatus.droppedFrames).toBe(0);
     expect(captureStatus.armed).toBe(true);
     expect(captureStatus.source).toBe('output');
     expect(captureStatus.recordOffsetSamples).toBe(0);

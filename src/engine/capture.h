@@ -55,9 +55,6 @@ class CaptureSink {
   int64_t captured_frames() const noexcept {
     return captured_frames_.load(std::memory_order_acquire);
   }
-  uint64_t overflow_count() const noexcept {
-    return overflow_count_.load(std::memory_order_relaxed);
-  }
   uint64_t dropped_frames() const noexcept {
     return dropped_frames_.load(std::memory_order_relaxed);
   }
@@ -109,10 +106,8 @@ class CaptureSink {
   mutable rt::SeqlockCell<Control>::Reader control_reader_ = control_.reader();
 
   std::atomic<int64_t> captured_frames_{0};
-  // Atomic: process() (audio thread) bumps it while overflow_count() is polled
-  // cross-thread (control thread, via RealtimeEngine::capture_overflow_count()).
+  // The audio thread publishes discarded frames for control-thread readers.
   static_assert(std::atomic<uint64_t>::is_always_lock_free);
-  std::atomic<uint64_t> overflow_count_{0};
   std::atomic<uint64_t> dropped_frames_{0};
 };
 

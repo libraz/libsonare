@@ -7084,9 +7084,16 @@ rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
 
 [[entry]]
+kind = "field"
+old = "EngineCaptureStatus.overflow_count"
+removed = "read dropped_frames, the number of frames discarded while the capture buffer was full since the last capture reset"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
 kind = "type"
 old = "EngineCaptureStatus"
-changed = "The exported dataclass constructor now requires dropped_frames as a seventh argument. Supply the capture buffer's cumulative dropped-frame count."
+changed = "The exported dataclass replaces overflow_count with dropped_frames, the cumulative number of frames discarded while the capture buffer was full since the last capture reset; its constructor remains six arguments."
 domain = "engine"
 rule = "individual"
 test = "bindings/python/tests/test_engine_telemetry.py::test_capture_status_is_a_frozen_exported_record"

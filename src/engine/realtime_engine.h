@@ -897,7 +897,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   InputMonitorState input_monitor() const noexcept { return input_monitor_.load(); }
   void reset_capture() noexcept;
   int64_t captured_frames() const noexcept { return capture_sink_.captured_frames(); }
-  uint64_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
   uint64_t capture_dropped_frames() const noexcept { return capture_sink_.dropped_frames(); }
   bool capture_armed() const noexcept { return capture_sink_.armed(); }
   bool capture_punch_enabled() const noexcept { return capture_sink_.punch_enabled(); }

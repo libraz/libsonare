@@ -20187,12 +20187,11 @@ rule = "absent-not-sentinel"
 test = "bindings/node/tests/project.test.ts::refuses an empty Roman numeral without changing chord annotations"
 
 [[entry]]
-kind = "type"
-old = "EngineCaptureStatus"
-changed = "Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers."
+kind = "field"
+old = "EngineCaptureStatus.overflowCount"
+removed = "read droppedFrames, the number of frames discarded while the capture buffer was full since the last capture reset"
 domain = "engine"
-rule = "typed-results"
-test = "bindings/node/tests/engine-capture.test.ts::reports accumulated dropped capture frames and resets them"
+rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
