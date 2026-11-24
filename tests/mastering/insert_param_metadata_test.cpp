@@ -1623,7 +1623,8 @@ TEST_CASE("the parameter info of any catalog id is the catalog's params", "[mast
     CHECK(json::dump(json::Value(param_info(id))) ==
           json::dump(json::Value(repair_param_info(id))));
   }
-  CHECK(param_info("repair.noSuchStage").empty());
+  CHECK_THROWS_WITH(param_info("repair.noSuchStage"),
+                    "unknown insert processor: repair.noSuchStage");
 }
 
 TEST_CASE("an equalizer band is bounded by the Nyquist frequency of the rate it is built for",

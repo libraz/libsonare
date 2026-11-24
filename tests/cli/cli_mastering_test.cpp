@@ -566,6 +566,33 @@ TEST_CASE("CLI mastering --params keys the processor does not read", "[cli][mast
   std::remove(eq_out.c_str());
 }
 
+TEST_CASE("CLI mastering-processor preflights only insert metadata",
+          "[cli][mastering][insert-preflight]") {
+  const std::string input = unique_temp_path("_offline_processor.wav");
+  create_test_wav(input);
+  const SplitResult offline =
+      exec_command_split(CLI + " mastering-processor " + input +
+                         " --processor repair.declick --params threshold=2 --json -q");
+  INFO(offline.err);
+  REQUIRE(offline.exit_code == 0);
+  CHECK(sonare::util::json::parse_strict(offline.out)["processor"].as_string() == "repair.declick");
+  std::remove(input.c_str());
+
+  const SplitResult unknown =
+      exec_command_split(CLI + " mastering-processor " + input +
+                         " --processor not.a.real.processor --params threshold=2 -q");
+  CHECK(unknown.exit_code == 2);
+  CHECK(unknown.out.empty());
+  std::string expected = "Error: argument --processor: must be one of ";
+  const auto processors = sonare::mastering::api::processor_names();
+  for (size_t i = 0; i < processors.size(); ++i) {
+    if (i != 0) expected += ", ";
+    expected += processors[i];
+  }
+  expected += "\nTry 'sonare-cli --help'.\n";
+  CHECK(unknown.err == expected);
+}
+
 TEST_CASE("CLI mastering and repair refuse an unknown chain key before the read",
           "[cli][mastering]") {
   create_test_wav(TEST_WAV);

@@ -36,6 +36,7 @@
 #include "engine/strip_spec.h"
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/retired_names.h"
 #include "util/json.h"
 #endif
 #endif
@@ -422,6 +423,12 @@ void validate_mix_automation(const CompiledTimeline& timeline, CompileResult* re
       continue;
     }
 #if defined(SONARE_WITH_MASTERING)
+    static const auto insert_names = mastering::api::insert_factory_names();
+    if (std::find(insert_names.begin(), insert_names.end(), *processor) == insert_names.end()) {
+      diagnose("unknown insert processor: " + *processor +
+               mastering::api::retired_processor_note(*processor));
+      continue;
+    }
     const auto catalog = util::json::parse(
         sonare::mastering::api::insert_param_info_json_at_rate(*processor, timeline.sample_rate));
     const auto& params = catalog.as_array();

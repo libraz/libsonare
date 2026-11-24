@@ -43,7 +43,23 @@ std::vector<std::string> construction_keys(const ParamMap& params) {
 
 }  // namespace
 
+void require_insert_metadata_processor(const std::string& name, bool insert_only) {
+  static const auto inserts = insert_factory_names();
+  if (std::find(inserts.begin(), inserts.end(), name) != inserts.end()) return;
+  if (!insert_only) {
+    static const auto offline = processor_names();
+    static const auto pairs = pair_processor_names();
+    if (std::find(offline.begin(), offline.end(), name) != offline.end() ||
+        std::find(pairs.begin(), pairs.end(), name) != pairs.end()) {
+      return;
+    }
+  }
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "unknown insert processor: " + name + retired_processor_note(name));
+}
+
 std::vector<std::string> insert_param_names(const std::string& name) {
+  require_insert_metadata_processor(name, /*insert_only=*/true);
   // Build the processor against an empty param map: every config builder probes
   // or declares the keys it reads (falling back to defaults when absent), so
   // those are exactly the parameter names this processor consumes. The
@@ -1355,6 +1371,7 @@ std::string insert_slot_info_json(const std::string& name) {
 }
 
 std::string insert_param_info_json(const std::string& name) {
+  require_insert_metadata_processor(name);
   // Measuring the bounds costs one processor construction per probe point, so a
   // repeat query — and the capability catalog, which asks for every insert —
   // reads a memo instead of probing again. Thread-local because the C ABI's own
@@ -1368,6 +1385,7 @@ std::string insert_param_info_json(const std::string& name) {
 }
 
 std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate) {
+  require_insert_metadata_processor(name);
   // Keyed apart from the rate-less memo, so the rate-less answer never depends on
   // an earlier call.
   static thread_local std::unordered_map<std::string, std::string> memo;
@@ -1380,6 +1398,7 @@ std::string insert_param_info_json_at_rate(const std::string& name, double sampl
 }
 
 std::string insert_param_info_json_measured_per_key(const std::string& name, double sample_rate) {
+  require_insert_metadata_processor(name);
   return info_or_repair(
       build_insert_param_info_json(name, sample_rate, /*share_indexed_verdicts=*/false), name);
 }

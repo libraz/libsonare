@@ -97,13 +97,16 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
 /// @brief Names that make_insert() can build (a stable, sorted list).
 std::vector<std::string> insert_factory_names();
 
+/// @brief Refuses a name absent from the processor catalog, or the insert registry when requested.
+/// @details Call before validating other arguments of a metadata query.
+void require_insert_metadata_processor(const std::string& name, bool insert_only = false);
+
 /// @brief Parameter names a given insert processor reads, for tooling/validation.
 /// @param name Processor name (see make_insert()).
 /// @return The camelCase param keys the processor consumes for a default
 ///         configuration, sorted. Band/sub-band processors additionally enumerate
-///         their indexed `band{i}.<field>` keys. Returns an empty list for an
-///         unknown @p name (or a name whose insert needs an unavailable build
-///         feature, e.g. FX).
+///         their indexed `band{i}.<field>` keys.
+/// @throws SonareException(InvalidParameter) if @p name is absent from the insert registry.
 std::vector<std::string> insert_param_names(const std::string& name);
 
 /// @brief Parameter descriptors for an insert processor.
@@ -124,8 +127,8 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         entry carries every field, with `null` where a value could not be
 ///         measured, except the four `domain*` fields only a coupled number carries.
 ///         A repair stage with no insert form is served by repair_param_info_json(), so
-///         the answer is the catalog's `params` for every catalog id. Returns `[]` for an unknown
-///         @p name.
+///         the answer is the catalog's `params` for every catalog id.
+/// @throws SonareException(InvalidParameter) if @p name is absent from the processor catalog.
 std::string insert_param_info_json(const std::string& name);
 
 /// @brief Parameter descriptors for a repair stage, in the shape of insert_param_info_json().

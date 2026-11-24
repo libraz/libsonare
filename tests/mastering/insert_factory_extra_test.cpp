@@ -1095,9 +1095,46 @@ TEST_CASE("insert_param_names enumerates the keys a processor reads",
   REQUIRE(ListContains(parametric, "band0.frequencyHz"));
   REQUIRE(ListContains(parametric, "band0.gainDb"));
   REQUIRE(ListContains(parametric, "band0.q"));
+}
 
-  // An unknown name yields no parameter names (rather than throwing).
-  REQUIRE(insert_param_names("not.a.real.processor").empty());
+TEST_CASE("insert parameter metadata refuses undeclared processors",
+          "[mastering][insert_factory][insert-metadata-refusal]") {
+  const auto check = [](const auto& query, const char* name, const char* message) {
+    try {
+      (void)query(name);
+      FAIL_CHECK("expected the metadata query to refuse the processor");
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == message);
+    }
+  };
+  const auto names = [](const std::string& name) { return insert_param_names(name); };
+  const auto info = [](const std::string& name) { return insert_param_info_json(name); };
+  const auto info_at_rate = [](const std::string& name) {
+    return sonare::mastering::api::insert_param_info_json_at_rate(
+        name, sonare::mastering::api::kInsertProbeSampleRate);
+  };
+  SECTION("unknown id") {
+    constexpr char kName[] = "not.a.real.processor";
+    constexpr char kMessage[] = "unknown insert processor: not.a.real.processor";
+    check(names, kName, kMessage);
+    check(info, kName, kMessage);
+    check(info_at_rate, kName, kMessage);
+  }
+  SECTION("retired id") {
+    constexpr char kName[] = "eq.pultec";
+    constexpr char kMessage[] = "unknown insert processor: eq.pultec (renamed to eq.passiveTube)";
+    check(names, kName, kMessage);
+    check(info, kName, kMessage);
+    check(info_at_rate, kName, kMessage);
+  }
+  SECTION("declared ids") {
+    CHECK(ListContains(names("dynamics.compressor"), "thresholdDb"));
+    CHECK(info("dynamics.compressor").find("\"name\":\"thresholdDb\"") != std::string::npos);
+    CHECK(info_at_rate("dynamics.compressor").find("\"name\":\"thresholdDb\"") !=
+          std::string::npos);
+    CHECK(info("repair.declick").find("\"name\":\"threshold\"") != std::string::npos);
+  }
 }
 
 TEST_CASE("make_insert reports supplied keys the processor ignored",
@@ -2112,7 +2149,8 @@ TEST_CASE("renamed processors refuse their former ids and name the current one",
   for (const auto& [retired, current] : renamed) {
     INFO(retired);
     REQUIRE(make_insert(retired, "{}") == nullptr);
-    REQUIRE(sonare::mastering::api::insert_param_names(retired).empty());
+    REQUIRE_THROWS_WITH(insert_param_names(retired),
+                        "unknown insert processor: " + retired + " (renamed to " + current + ")");
     REQUIRE_THROWS_WITH(sonare::mastering::api::insert_timing(retired, "{}", 48000.0),
                         ContainsSubstring(retired) && ContainsSubstring(current));
     const std::vector<sonare::mastering::api::Param> no_params;

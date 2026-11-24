@@ -1,6 +1,5 @@
 #include <sonare/sonare_c.h>
 
-#include <algorithm>
 #include <array>
 #include <cstring>
 #include <memory>
@@ -13,7 +12,6 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
-#include "mastering/api/retired_names.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/match/ab_switcher.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -34,25 +32,6 @@ namespace {
 const std::vector<std::string>& insert_names() {
   static const auto names = mastering::api::insert_factory_names();
   return names;
-}
-
-const std::vector<std::string>& processor_catalog_names() {
-  static const auto names = [] {
-    auto ids = mastering::api::processor_names();
-    const auto pairs = mastering::api::pair_processor_names();
-    ids.insert(ids.end(), pairs.begin(), pairs.end());
-    ids.insert(ids.end(), insert_names().begin(), insert_names().end());
-    return ids;
-  }();
-  return names;
-}
-
-void require_metadata_insert(const std::string& insert, const std::vector<std::string>& names) {
-  if (std::find(names.begin(), names.end(), insert) == names.end()) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "unknown insert processor: " + insert + mastering::api::retired_processor_note(insert));
-  }
 }
 
 sonare::util::json::Array newline_name_array(const char* names) {
@@ -514,7 +493,6 @@ const char* sonare_mastering_insert_param_names(const char* insert) {
     refuse_null("insert");
     return nullptr;
   }
-  require_metadata_insert(insert, insert_names());
   const auto list = sonare::mastering::api::insert_param_names(insert);
   for (size_t index = 0; index < list.size(); ++index) {
     if (index > 0) names += '\n';
@@ -530,16 +508,17 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
   SONARE_C_ZERO_OUTS(out_json);
   SONARE_C_REQUIRE_NONNULL(insert);
   SONARE_C_TRY
-  require_metadata_insert(insert, processor_catalog_names());
+  const std::string name = insert;
+  mastering::api::require_insert_metadata_processor(name);
   if (sample_rate != 0 && (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_REQUIRE_NONNULL(out_json);
-  *out_json = copy_string(sample_rate == 0 ? sonare::mastering::api::insert_param_info_json(insert)
-                                           : sonare::mastering::api::insert_param_info_json_at_rate(
-                                                 insert, sample_rate));
+  *out_json = copy_string(
+      sample_rate == 0 ? sonare::mastering::api::insert_param_info_json(name)
+                       : sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate));
   return SONARE_OK;
   SONARE_C_CATCH
 }

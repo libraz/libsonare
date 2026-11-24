@@ -2156,6 +2156,67 @@ TEST_CASE("compiler reports typed lane and reserved-route diagnostics", "[arrang
 #endif  // SONARE_WITH_MIXING
 }
 
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_MASTERING)
+TEST_CASE("compiler diagnoses undeclared inserts targeted by automation",
+          "[arrangement][compile-insert-metadata]") {
+  const auto compile = [](const std::string& processor, arr::CompileResult& result) {
+    Fixture fixture = make_fixture(128);
+    auto* track = fixture.project.find_track_mutable(fixture.track_id);
+    REQUIRE(track != nullptr);
+    track->channel_strip_ref = "strip";
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Strip strip;
+    strip.id = track->channel_strip_ref;
+    sonare::mixing::api::Insert insert;
+    insert.processor_name = processor;
+    strip.inserts.push_back(std::move(insert));
+    scene.strips.push_back(std::move(strip));
+    fixture.project.set_scene(std::move(scene));
+
+    sonare::automation::AutomationTargetIdentity identity;
+    identity.insert_index = 0;
+    identity.processor = processor;
+    identity.param_name = "thresholdDb";
+    sonare::automation::AutomationLane lane(
+        0, sonare::automation::AutomationTargetKind::kTrackInsertParam, std::move(identity));
+    lane.set_lane_id(1);
+    lane.set_points({{0.0, -18.0f, sonare::automation::CurveType::Hold}});
+    track->automation_lanes.push_back(std::move(lane));
+
+    REQUIRE_NOTHROW(result = arr::compile(fixture.project, fixture.midi, fixture.audio));
+    return fixture.track_id;
+  };
+  const auto refuse = [&](const std::string& processor, const std::string& text) {
+    arr::CompileResult result;
+    const arr::TrackId track_id = compile(processor, result);
+    CHECK(result.has_errors());
+    CHECK_FALSE(result.timeline.has_value());
+    const auto diagnostic =
+        std::find_if(result.diagnostics.begin(), result.diagnostics.end(), [&](const auto& entry) {
+          return entry.code == arr::Diagnostic::Code::kAutomationTargetUnrouted &&
+                 entry.severity == arr::Diagnostic::Severity::kError && entry.target_id == track_id;
+        });
+    REQUIRE(diagnostic != result.diagnostics.end());
+    CHECK(diagnostic->message ==
+          "insert parameter 'thresholdDb' on track " + std::to_string(track_id) + ": " + text);
+  };
+
+  SECTION("unknown insert") {
+    refuse("not.a.real.processor", "unknown insert processor: not.a.real.processor");
+  }
+  SECTION("retired insert") {
+    refuse("eq.pultec", "unknown insert processor: eq.pultec (renamed to eq.passiveTube)");
+  }
+  SECTION("declared insert") {
+    arr::CompileResult result;
+    compile("dynamics.compressor", result);
+    REQUIRE(result.timeline.has_value());
+    CHECK_FALSE(result.has_errors());
+    REQUIRE(result.timeline->mixer.automation_bindings.size() == 1);
+  }
+}
+#endif
+
 TEST_CASE("compiler reports adopted opaque lanes without a built-in route", "[arrangement]") {
   const auto add_lane = [](arr::Track* track, uint32_t target,
                            sonare::automation::AutomationTargetKind kind =

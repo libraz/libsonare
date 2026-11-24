@@ -30,12 +30,12 @@ std::string params_grammar_refusal(const std::string& text) {
 // Refuses a supplied --params key the named processor does not read.
 //
 // insert_param_names() builds the processor against an empty map and reports
-// every key its config builder probed, so a supplied key outside that set took
-// no effect at all. The list is sorted, which makes the membership test a binary
-// search. A name with no published key set is left alone: only a realtime insert
-// can be probed this way, so an empty list means "not an insert", not "reads nothing".
+// every key its config builder probed. Offline-only processors use their own
+// parameter reader, so the insert query applies only to registered inserts.
 std::string unknown_processor_params_refusal(const std::string& processor,
                                              const std::string& text) {
+  static const auto inserts = mastering::api::insert_factory_names();
+  if (std::find(inserts.begin(), inserts.end(), processor) == inserts.end()) return {};
   const std::vector<std::string> known = mastering::api::insert_param_names(processor);
   if (known.empty()) return {};
   std::stringstream stream(text);
