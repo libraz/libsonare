@@ -10,6 +10,7 @@
 #include "support/alloc_guard.h"
 #include "support/c_strings.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 // Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
@@ -22,6 +23,7 @@ SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
 }
 
 }  // namespace
+#endif
 
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {

@@ -23,7 +23,9 @@ std::string last_message() {
 
 constexpr int kRate = 22050;
 constexpr size_t kLength = 2048;
+#if defined(SONARE_WITH_PITCH_EDITOR)
 constexpr size_t kFrames = 10;
+#endif
 
 std::vector<float> make_samples() {
   std::vector<float> samples(kLength);

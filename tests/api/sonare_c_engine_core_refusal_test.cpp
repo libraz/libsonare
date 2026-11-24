@@ -14,6 +14,7 @@
 
 #include "util/refusal_predicates.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 // Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
@@ -26,6 +27,7 @@ SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
 }
 
 }  // namespace
+#endif
 
 namespace {
 

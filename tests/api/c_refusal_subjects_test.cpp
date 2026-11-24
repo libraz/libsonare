@@ -663,6 +663,7 @@ TEST_CASE("the effects and metering entries refuse their own members", "[c_api][
   CHECK(last_message() == "samples_per_bucket must be an integer of at least 1");
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 SonareMidiRouteConfig route_config(int group, int channel, int remap) {
   SonareMidiRouteConfig config;
@@ -713,6 +714,7 @@ TEST_CASE("the project MIDI entries name a route field and a bank outside their 
   CHECK(sonare_project_set_program(project, clip, 0, 0, 0, -1) == SONARE_OK);
   sonare_project_destroy(project);
 }
+#endif
 
 namespace {
 
@@ -1188,6 +1190,9 @@ void check_spelling_rows(const Overrides& rows, const Spell& spelled_last_refusa
         spelling_row_drivers().find(std::string(row.entry) + "." + std::string(row.subject));
     REQUIRE(driver != spelling_row_drivers().end());
     if (!driver->second.run) continue;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+    if (entry == "align_take_to_reference" || entry.rfind("project_", 0) == 0) continue;
+#endif
     driver->second.run();
     const std::string root = driver->second.c_root;
     const std::string c_subject =
@@ -1396,6 +1401,7 @@ TEST_CASE("an empty interleaved buffer names the array over its channel count",
   }
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("an empty SMF or MIDI Clip File buffer is refused as empty, not as left out",
           "[c_api][project]") {
   using ImportEntry = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
@@ -1407,6 +1413,7 @@ TEST_CASE("an empty SMF or MIDI Clip File buffer is refused as empty, not as lef
     CHECK(last_message() == "bytes must not be empty");
   }
 }
+#endif
 
 namespace {
 

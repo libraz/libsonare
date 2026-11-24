@@ -15,6 +15,7 @@
 #include "support/project_bounce.h"
 #endif
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 // Bounces with one kind of hosted-instrument list set on a copy of the options.
@@ -42,6 +43,7 @@ SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
 }
 
 }  // namespace
+#endif
 
 namespace {
 

@@ -1563,6 +1563,7 @@ TEST_CASE("TimeStretch replacement drops old audio and unchanged publication sta
   }
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("Compiled comp fragments have independent TimeStretch synthesis state",
           "[engine][arrangement][audio_workflow]") {
   namespace arr = sonare::arrangement;
@@ -1614,6 +1615,7 @@ TEST_CASE("Compiled comp fragments have independent TimeStretch synthesis state"
   }
   CHECK(reference_energy > 1);
 }
+#endif
 
 TEST_CASE("TimeStretch keeps continuity when equal owned content is recompiled",
           "[engine][audio_workflow]") {

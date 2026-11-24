@@ -1562,11 +1562,13 @@ TEST_CASE("sonare streaming retune exports deterministic feature-off stubs",
   // Every call must report the capability boundary rather than accidentally
   // validating arguments or reaching an unlinked StreamingRetune symbol.
   SonareStreamingRetune* retune = nullptr;
-  REQUIRE(sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune) == SONARE_OK);
-  REQUIRE(retune == nullptr);
-  const char* detail = sonare_last_error_message();
-  REQUIRE(detail != nullptr);
-  REQUIRE(detail[0] != '\0');
+  REQUIRE(sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(retune == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_last_error_message() != nullptr);
+  CHECK(std::string(sonare_last_error_message()) == "voice changer support is not compiled in");
+  REQUIRE(sonare_last_error_reason() != nullptr);
+  CHECK(std::string(sonare_last_error_reason()) == "notCompiledIn");
 
   sonare_streaming_retune_destroy(nullptr);
   REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000, 128) == SONARE_ERROR_NOT_SUPPORTED);

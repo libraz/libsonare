@@ -20,6 +20,7 @@
 #include "c_api/sonare_c_engine_internal.h"
 #include "sonare_c_test_helpers.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 // Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
@@ -32,6 +33,7 @@ SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
 }
 
 }  // namespace
+#endif
 
 namespace {
 

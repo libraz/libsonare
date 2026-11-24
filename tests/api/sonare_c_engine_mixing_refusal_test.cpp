@@ -27,7 +27,9 @@ SonareEngine* make_engine() {
 }
 
 // A whole mixer scene, which a strip setter refuses by the keys a strip does not take.
+#if defined(SONARE_WITH_MIXING)
 constexpr const char* kWholeScene = R"({"version":2,"strips":[],"buses":[],"connections":[]})";
+#endif
 
 }  // namespace
 

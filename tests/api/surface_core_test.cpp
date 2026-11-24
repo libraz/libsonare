@@ -87,6 +87,7 @@ TEST_CASE("Each ABI counter accessor returns its macro", "[surface][core]") {
   CHECK(sonare_abi_version() == SONARE_ABI_VERSION);
 }
 
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 std::vector<std::pair<std::string, std::string>> diagnostic_codes_and_messages() {
@@ -102,6 +103,7 @@ std::vector<std::pair<std::string, std::string>> diagnostic_codes_and_messages()
 }
 
 }  // namespace
+#endif
 
 TEST_CASE("sonare_diagnostic_init sets the struct size and empty strings", "[surface][core]") {
   SonareDiagnostic diagnostic;

@@ -31,6 +31,7 @@ namespace song = sonare::test::structure_song;
 
 namespace {
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 /// Detected form and per-section start/end/type, for assertion messages.
 std::string describe(const SectionAnalyzer& analyzer) {
   std::ostringstream out;
@@ -40,6 +41,7 @@ std::string describe(const SectionAnalyzer& analyzer) {
   }
   return out.str();
 }
+#endif
 
 /// Whether every true boundary has exactly one detected boundary within @p tolerance_sec and
 /// no detected boundary is left over.
@@ -54,6 +56,7 @@ bool boundaries_match(const std::vector<float>& detected, const std::vector<floa
   return true;
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 std::vector<float> internal_boundaries(const SectionAnalyzer& analyzer) {
   std::vector<float> out;
   const auto& sections = analyzer.sections();
@@ -72,6 +75,7 @@ std::vector<SectionType> detected_labels(const SectionAnalyzer& analyzer) {
   for (const Section& s : analyzer.sections()) out.push_back(s.type);
   return out;
 }
+#endif
 
 /// Whether @p groups partitions the sections exactly as @p truth does (numbering aside).
 bool same_partition(const std::vector<int>& groups, const std::vector<int>& truth) {
@@ -84,6 +88,7 @@ bool same_partition(const std::vector<int>& groups, const std::vector<int>& trut
   return true;
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 std::vector<int> true_groups() {
   std::vector<int> out;
   for (const auto& section : song::truth()) out.push_back(section.group);
@@ -103,6 +108,7 @@ void check_layout(const Audio& audio, float tolerance_sec) {
   CHECK(same_partition(detected_groups(analyzer), true_groups()));
   CHECK(detected_labels(analyzer) == true_labels());
 }
+#endif
 
 }  // namespace
 
@@ -155,6 +161,7 @@ TEST_CASE("Structure song score matches its truth table", "[section_structure_fi
   }
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("Structure song layout at 44100 Hz", "[section_structure_render][.][slow]") {
   check_layout(song::rendered_audio(), 0.5f);
 }
@@ -177,6 +184,7 @@ TEST_CASE("Structure song with a modulated last chorus", "[section_structure_ren
   CHECK(last_chorus->type != SectionType::Outro);
   CHECK(last_chorus->type != SectionType::Bridge);
 }
+#endif
 
 namespace {
 

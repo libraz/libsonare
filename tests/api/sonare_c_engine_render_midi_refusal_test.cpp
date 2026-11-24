@@ -570,8 +570,13 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
   CHECK(last_error() == "inserts_json must not be NULL when mode is chain");
   CHECK(sonare_engine_set_part_rig(engine, 7, 0, 0, "[]") == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "inserts_json must be NULL unless mode is chain");
+#if defined(SONARE_WITH_ARRANGEMENT)
   CHECK(sonare_engine_set_part_rig(engine, 7, 0, 2, "[]") == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "inserts must hold 1 to 8 entries for a chain rig");
+#else
+  CHECK(sonare_engine_set_part_rig(engine, 7, 0, 2, "[]") == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(last_error() == "arrangement support is not compiled in");
+#endif
 
   // Drain buffer shorter than one lowered record.
   constexpr size_t kLowered =

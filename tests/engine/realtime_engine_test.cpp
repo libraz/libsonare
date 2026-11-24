@@ -468,6 +468,7 @@ TEST_CASE("RealtimeEngine re-prepares an installed graph for a larger block and 
 }
 #endif
 
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_GRAPH)
 namespace {
 
 // Renders 128 frames, freezes the same span from frame 0, then replays it from
@@ -502,6 +503,7 @@ sonare::engine::ClipSchedule constant_quarter_clip(const float* const* channels)
 }
 
 }  // namespace
+#endif
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine freeze leaves a non-unity master live and applied once",

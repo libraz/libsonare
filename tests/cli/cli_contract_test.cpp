@@ -2352,11 +2352,13 @@ class StatedDefaultFixtures {
         [](const std::string& path) { create_stepped_level_wav(path); });
     add("@noisy@", "_stated_noisy.wav", [](const std::string& path) { create_noisy_wav(path); });
     add("@out@", "_stated_out.wav", nullptr);
+#if defined(SONARE_WITH_ARRANGEMENT)
     add("@project@", "_stated_project.json", [](const std::string& path) {
       REQUIRE(exec_command(CLI + " project new -o " + path + " -q").first == 0);
     });
     add("@reference_smf@", "_stated_reference.mid",
         [](const std::string& path) { create_reference_smf(path, {{0.0, 1.0, 60}}, 4.0); });
+#endif
     // A tone has no decay to measure, so the room analyses read a synthesized impulse response.
     add("@rir@", "_stated_rir.wav", [](const std::string& path) {
       REQUIRE(exec_command(CLI + " synthesize-rir -o " + path + " --max-sec 0.5 -q").first == 0);
@@ -2386,9 +2388,11 @@ class StatedDefaultFixtures {
       create_blocked_level_wav(
           path, {{0.0f, 0.3f}, {0.5f, 0.4f}, {0.003f, 0.3f}, {0.5f, 0.4f}, {0.0f, 0.3f}});
     });
+#if defined(SONARE_WITH_ARRANGEMENT)
     add("@takes@", "_stated_takes.json",
         [](const std::string& path) { create_takes_project(path); });
     add("@takes_out@", "_stated_takes_out.json", nullptr);
+#endif
     add("@short_notes@", "_stated_short_notes.wav",
         [](const std::string& path) { create_short_notes_wav(path); });
   }

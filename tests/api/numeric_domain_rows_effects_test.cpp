@@ -1326,9 +1326,18 @@ TEST_CASE("an effects value inside its row's domain is not refused under the row
            "is unavailable for encoding in this build",
            !sonare::audio_encode_format_available("mp3")},
 #if !defined(SONARE_WITH_ARRANGEMENT)
-          {"engine_articulation", "channel", SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
-          {"engine_set_articulation", "channel", SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
-          {"engine_load_sound_font", "size", SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
+          {"engine_articulation", "channel", SONARE_ERROR_NOT_SUPPORTED, "",
+           "arrangement support is not compiled in"},
+          {"engine_bind_midi_cc", "binding.cc_number", SONARE_ERROR_NOT_SUPPORTED, "",
+           "arrangement support is not compiled in"},
+          {"engine_bind_midi_cc", "binding.param_id", SONARE_ERROR_NOT_SUPPORTED, "",
+           "arrangement support is not compiled in"},
+          {"engine_load_sound_font", "size", SONARE_ERROR_NOT_SUPPORTED, "",
+           "arrangement support is not compiled in"},
+          {"engine_push_midi_sysex", "size", SONARE_ERROR_NOT_SUPPORTED, "",
+           "arrangement support is not compiled in"},
+          {"engine_set_articulation", "channel", SONARE_ERROR_NOT_SUPPORTED, "",
+           "arrangement support is not compiled in"},
 #endif
 #if !defined(SONARE_WITH_MIXING)
           {"engine_set_track_strip_channel_delay_samples", "delay_samples",

@@ -31,6 +31,7 @@ SonareMidiCcBinding binding_for(uint8_t channel, uint8_t cc, uint32_t param_id) 
   return binding;
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 struct InactiveFieldCase {
   const char* name;
   uint8_t SonareMidiCcBinding::*member;
@@ -62,7 +63,6 @@ void check_inactive_field_refusal(const std::string& field_subject, const std::s
         field_subject + " must be 0 unless " + kind_subject + " is " + allowed_kind);
 }
 
-#if defined(SONARE_WITH_ARRANGEMENT)
 auto binding_identity(const SonareMidiCcBinding& binding) {
   return std::tie(binding.channel, binding.kind, binding.cc_number, binding.cc_lsb_number,
                   binding.selector_msb, binding.selector_lsb);
