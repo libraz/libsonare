@@ -17,7 +17,7 @@ from typing import Any, Self
 
 import numpy as np
 
-from ._errors import _entry, _invalid_state, _malformed_output, _refuse
+from ._errors import _entry, _invalid_state, _malformed_output
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._ffi_types_vocal import (
     SonareVocalAnalysisResult,
@@ -475,8 +475,6 @@ class VocalEditSession(_HandleOwner):
             lib, max_history_bytes, max_cache_bytes, max_undo_depth, max_render_jobs
         )
         state_bytes = bytes(state)
-        if not state_bytes:
-            raise _refuse("state must not be empty")
         payload = (ctypes.c_uint8 * len(state_bytes)).from_buffer_copy(state_bytes)
         handle = ctypes.c_void_p()
         _vocal_check(

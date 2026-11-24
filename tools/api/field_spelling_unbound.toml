@@ -106,7 +106,6 @@ python = 0
 "vocal_session_history.can_undo" = "output"
 "vocal_session_notes.result" = "output"
 "vocal_session_redo.result" = "output"
-"vocal_session_restore.session" = "output"
 "vocal_session_revision.revision" = "output"
 "vocal_session_source_to_destination.destination_sample" = "output"
 "vocal_session_token.token" = "output"

@@ -490,6 +490,35 @@ def test_closing_a_session_disposes_its_live_drafts() -> None:
     draft.close()
 
 
+def test_restore_refuses_a_malformed_or_empty_state_as_an_invalid_format() -> None:
+    source, analysis = _source_and_analysis()
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
+        state = bytes(session.export_state())
+    for malformed in (b"X" + state[1:], b""):
+        with pytest.raises(VocalEditError) as caught:
+            VocalEditSession.restore(source, 16_000, malformed)
+        assert caught.value.code == ErrorCode.INVALID_FORMAT
+        assert not isinstance(caught.value, SonareValueError)
+        assert caught.value.detail.reason == "invalidInput"
+
+
+def test_a_native_token_conflict_names_the_callers_keyword() -> None:
+    source, analysis = _source_and_analysis()
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
+        with pytest.raises(VocalEditError) as caught:
+            session.begin_edit(expected_revision=1)
+        assert caught.value.code == ErrorCode.INVALID_STATE
+        assert caught.value.detail == VocalErrorDetail(
+            "revisionConflict", "expected_revision", "1", "0", "1", "0"
+        )
+        with session.begin_edit() as draft:
+            stale = draft.token().generation + 1
+            with pytest.raises(VocalEditError) as caught:
+                draft.apply([], expected_generation=stale)
+            assert caught.value.detail.reason == "revisionConflict"
+            assert caught.value.detail.field == "expected_generation"
+
+
 def test_draft_apply_requires_expected_generation() -> None:
     source, analysis = _source_and_analysis()
     with (

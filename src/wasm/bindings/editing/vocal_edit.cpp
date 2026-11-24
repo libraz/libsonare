@@ -23,6 +23,7 @@
 
 #include "c_api/editing_input_domains.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -973,7 +974,11 @@ val js_vocal_edit_last_error_detail() {
   val result = val::object();
   result.set("sequence", std::to_string(vocal_error_sequence));
   result.set("reason", detail.reason);
-  result.set("field", std::string(detail.field));
+  std::string field(detail.field);
+  if (detail.reason == SONARE_VOCAL_REASON_REVISION_CONFLICT) {
+    field = sonare::util::check::camel_path(field);
+  }
+  result.set("field", field);
   result.set("expected", textOrNumber(detail.expected_text, detail.expected));
   result.set("actual", textOrNumber(detail.actual_text, detail.actual));
   result.set("expectedText", std::string(detail.expected_text));

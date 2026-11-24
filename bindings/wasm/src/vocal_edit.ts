@@ -1,5 +1,5 @@
 import { ErrorCode } from './errors.js';
-import { ordinalToken } from './internal/core_tokens.js';
+import { ordinalToken, skewError } from './internal/core_tokens.js';
 import {
   codedError,
   entryClass,
@@ -48,6 +48,23 @@ import {
   type SampleBound,
 } from './validation.js';
 
+type NativeVocalNote = Omit<VocalNote, 'analysisFrameStart' | 'analysisFrameEnd' | 'edit'> & {
+  analysisFrameStart: string;
+  analysisFrameEnd: string;
+  edit: Omit<VocalNote['edit'], 'amplitudeEnvelope'> & { amplitudeEnvelope: Float32Array };
+};
+
+type NativeVocalNotesResult = Omit<VocalNotesResult, 'notes'> & { notes: NativeVocalNote[] };
+
+type NativeVocalRenderResult = Omit<
+  VocalRenderResult,
+  'cacheHitUnits' | 'dryPassedFrames' | 'limitedCorrectionFrames'
+> & {
+  cacheHitUnits: string;
+  dryPassedFrames: string;
+  limitedCorrectionFrames: string;
+};
+
 /** Native symbols registered by the full vocal-edit WASM binding. */
 export interface VocalWasmExports {
   vocalEditAbiVersion: () => number;
@@ -59,8 +76,8 @@ export interface VocalWasmExports {
     options: unknown,
   ) => number;
   vocalEditSessionDestroy: (handle: number) => void;
-  vocalEditSessionNotes: (handle: number) => VocalNotesResult;
-  vocalEditDraftNotes: (handle: number) => VocalNotesResult;
+  vocalEditSessionNotes: (handle: number) => NativeVocalNotesResult;
+  vocalEditDraftNotes: (handle: number) => NativeVocalNotesResult;
   vocalEditSessionToken: (handle: number) => VocalStateToken;
   vocalEditDraftToken: (handle: number) => VocalStateToken;
   vocalEditSessionAnalysis: (handle: number) => VocalAnalysis;
@@ -97,7 +114,7 @@ export interface VocalWasmExports {
     startSample: number,
     endSample: number,
     requestId: string,
-  ) => VocalRenderResult;
+  ) => NativeVocalRenderResult;
   vocalEditRenderJobBegin: (
     handle: number,
     startSample: number,
@@ -105,7 +122,7 @@ export interface VocalWasmExports {
     requestId: string,
   ) => number;
   vocalEditRenderJobNext: (handle: number) => boolean;
-  vocalEditRenderJobFinalize: (handle: number) => VocalRenderResult;
+  vocalEditRenderJobFinalize: (handle: number) => NativeVocalRenderResult;
   vocalEditRenderJobAbort: (handle: number) => void;
   vocalEditRenderJobDestroy: (handle: number) => void;
   vocalEditSessionExportState: (handle: number) => Uint8Array;
@@ -243,12 +260,14 @@ function requireToken(value: string | undefined, field: string, fallback = '0'):
 }
 
 /** A 64-bit counter the native module reports as decimal text, as a safe-integer count. */
-function requireCount(value: unknown, field: string): number {
-  const count = typeof value === 'string' ? Number(value) : value;
-  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
-    throw refuse(`${field} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
+function copyCount(value: unknown, field: string): number {
+  if (typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)) {
+    const count = Number(value);
+    if (Number.isSafeInteger(count)) {
+      return count;
+    }
   }
-  return count;
+  throw skewError(`${field} is not exactly representable as a number`);
 }
 
 function resolveRevision(options: VocalRevisionOptions, fallback: string): string {
@@ -382,11 +401,11 @@ function copyRange(range: VocalRange): VocalRange {
   return { startSample: range.startSample, endSample: range.endSample };
 }
 
-function copyNotes(value: VocalNotesResult): VocalNotesResult {
+function copyNotes(value: NativeVocalNotesResult): VocalNotesResult {
   const notes: VocalNote[] = Array.from(value.notes, (note) => ({
     ...note,
-    analysisFrameStart: requireCount(note.analysisFrameStart, 'analysisFrameStart'),
-    analysisFrameEnd: requireCount(note.analysisFrameEnd, 'analysisFrameEnd'),
+    analysisFrameStart: copyCount(note.analysisFrameStart, 'analysisFrameStart'),
+    analysisFrameEnd: copyCount(note.analysisFrameEnd, 'analysisFrameEnd'),
     amplitude: new Float32Array(note.amplitude),
     edit: {
       ...note.edit,
@@ -445,15 +464,15 @@ function copyPitch(value: VocalPitchEvaluation): VocalPitchEvaluation {
   };
 }
 
-function copyRender(value: VocalRenderResult): VocalRenderResult {
+function copyRender(value: NativeVocalRenderResult): VocalRenderResult {
   return {
     samples: new Float32Array(value.samples),
     startSample: value.startSample,
     token: copyToken(value.token),
     processedRanges: Array.from(value.processedRanges, copyRange),
-    cacheHitUnits: requireCount(value.cacheHitUnits, 'cacheHitUnits'),
-    dryPassedFrames: requireCount(value.dryPassedFrames, 'dryPassedFrames'),
-    limitedCorrectionFrames: requireCount(value.limitedCorrectionFrames, 'limitedCorrectionFrames'),
+    cacheHitUnits: copyCount(value.cacheHitUnits, 'cacheHitUnits'),
+    dryPassedFrames: copyCount(value.dryPassedFrames, 'dryPassedFrames'),
+    limitedCorrectionFrames: copyCount(value.limitedCorrectionFrames, 'limitedCorrectionFrames'),
   };
 }
 

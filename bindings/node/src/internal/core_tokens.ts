@@ -11,6 +11,17 @@ export function skewError(text: string): SonareError {
   return codedError(ErrorCode.InvalidFormat, text);
 }
 
+/** Decodes a native count emitted as canonical unsigned decimal text. */
+export function copyCount(value: unknown, field: string): number {
+  if (typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)) {
+    const count = Number(value);
+    if (Number.isSafeInteger(count)) {
+      return count;
+    }
+  }
+  throw skewError(`${field} is not exactly representable as a number`);
+}
+
 /** The failure for an ordinal outside the table of @p noun. */
 export function unknownOrdinal(noun: string, ordinal: unknown): SonareError {
   return skewError(`unknown ${noun} ordinal: ${String(ordinal)}`);

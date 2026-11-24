@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { ErrorCode } from '../src/errors.js';
 import { Project } from '../src/project.js';
 import type { VocalCreateRequest } from '../src/types_vocal_edit.js';
 import type {
@@ -475,7 +476,7 @@ describe('Node Project vocal edit helpers', () => {
       const sourceId = project.sources()[0].id;
       project.setAudioSourceMetadata({ sourceId, contentHash: `sha256:${sourceDigest}` });
 
-      const applied = project.applyVocalEdit({
+      const applyRequest = {
         clipId,
         expectedSourceId: sourceId,
         expectedSourceSampleRate: REAL_SAMPLE_RATE,
@@ -487,7 +488,15 @@ describe('Node Project vocal edit helpers', () => {
         renderedSampleRate: REAL_SAMPLE_RATE,
         renderToken: session.token,
         vocalState: session.exportState(),
-      });
+      };
+      const malformed = applyRequest.vocalState.slice();
+      malformed[0] = 0x58;
+      expect(() => project?.applyVocalEdit({ ...applyRequest, vocalState: malformed })).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      );
+      expect(project.vocalEditDependencies()).toEqual([]);
+
+      const applied = project.applyVocalEdit(applyRequest);
       expect(applied).not.toHaveProperty('takeId');
       expect(applied).toMatchObject({
         clipId,

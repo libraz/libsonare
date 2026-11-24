@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   capabilities,
   createVocalEditSession,
@@ -9,6 +9,8 @@ import {
   type VocalNoteEdit,
   vocalEditAbiVersion,
 } from '../src/index.js';
+import { copyCount } from '../src/internal/core_tokens.js';
+import { addon } from '../src/native.js';
 
 const SAMPLE_RATE = 16000;
 const FRAME_LENGTH = 256;
@@ -86,6 +88,101 @@ describe('Node vocal edit facade', () => {
     expect(capabilities().features.vocalEdit).toBe(true);
     expect(Number.isInteger(vocalEditAbiVersion())).toBe(true);
     expect(vocalEditAbiVersion() ?? 0).toBeGreaterThan(0);
+  });
+
+  it('keeps the vocal-edit feature flag at module scope only', () => {
+    const session = createVocalEditSession(request());
+    try {
+      const features = capabilities().features;
+      expect(Object.hasOwn(features, 'vocalEdit')).toBe(true);
+      expect(features.vocalEdit).toBe(true);
+      const result = session.capabilities();
+      expect(Object.hasOwn(result, 'vocalEdit')).toBe(false);
+      expect(Object.hasOwn(result, 'abiVersion')).toBe(true);
+      expect(typeof result.abiVersion).toBe('number');
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('decodes native note and render counts and preserves the Node envelope array', () => {
+    const input = request();
+    const native = addon.createVocalEditSession(input);
+    const session = createVocalEditSession(input);
+    const range = { startSample: 64, endSample: 320 };
+    const snapshot = session.captureRenderSnapshot();
+    const nativeSnapshot = native.captureRenderSnapshot();
+    try {
+      const note = session.notes().notes[0];
+      const nativeNotes = native.notes();
+      const nativeNote = nativeNotes.notes[0];
+      expect(nativeNote).toBeDefined();
+      expect(note).toBeDefined();
+      for (const key of ['analysisFrameStart', 'analysisFrameEnd'] as const) {
+        expect(Object.hasOwn(nativeNote, key)).toBe(true);
+        expect(typeof nativeNote[key]).toBe('string');
+        expect(Object.hasOwn(note, key)).toBe(true);
+        expect(typeof note[key]).toBe('number');
+        expect(Number.isSafeInteger(note[key])).toBe(true);
+        expect(String(note[key])).toBe(nativeNote[key]);
+      }
+      expect(note.analysisFrameEnd).toBeGreaterThan(note.analysisFrameStart);
+      expect(Object.hasOwn(nativeNote.edit, 'amplitudeEnvelope')).toBe(true);
+      expect(nativeNote.edit.amplitudeEnvelope).toBeInstanceOf(Array);
+      expect(note.edit.amplitudeEnvelope).toEqual(nativeNote.edit.amplitudeEnvelope);
+
+      const result = snapshot.render({ range });
+      const nativeResult = nativeSnapshot.render(range);
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      for (const key of ['cacheHitUnits', 'dryPassedFrames', 'limitedCorrectionFrames'] as const) {
+        expect(Object.hasOwn(nativeResult, key)).toBe(true);
+        expect(typeof nativeResult[key]).toBe('string');
+        expect(Object.hasOwn(result, key)).toBe(true);
+        expect(typeof result[key]).toBe('number');
+        expect(Number.isSafeInteger(result[key])).toBe(true);
+        expect(String(result[key])).toBe(nativeResult[key]);
+      }
+
+      const badNotes = vi.spyOn(Object.getPrototypeOf(native), 'notes').mockReturnValue({
+        ...nativeNotes,
+        notes: [{ ...nativeNote, analysisFrameStart: '1e2' }, ...nativeNotes.notes.slice(1)],
+      });
+      const badRender = vi
+        .spyOn(Object.getPrototypeOf(nativeSnapshot), 'render')
+        .mockReturnValue({ ...nativeResult, cacheHitUnits: '9007199254740992' });
+      try {
+        expect(() => session.notes()).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.InvalidFormat,
+            message: expect.stringContaining('analysisFrameStart'),
+          }),
+        );
+        expect(() => snapshot.render({ range })).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.InvalidFormat,
+            message: expect.stringContaining('cacheHitUnits'),
+          }),
+        );
+      } finally {
+        badRender.mockRestore();
+        badNotes.mockRestore();
+      }
+    } finally {
+      nativeSnapshot.destroy();
+      snapshot.destroy();
+      session.destroy();
+      native.destroy();
+    }
+  });
+
+  it('refuses unreadable native count values as InvalidFormat', () => {
+    expect(copyCount('0', 'cacheHitUnits')).toBe(0);
+    expect(copyCount('9007199254740991', 'cacheHitUnits')).toBe(Number.MAX_SAFE_INTEGER);
+    for (const value of [undefined, 1, '', '-1', '01', '1e2', '1.5', '9007199254740992']) {
+      expect(() => copyCount(value, 'cacheHitUnits')).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      );
+    }
   });
 
   it('copies source and supplied analysis before returning the session', () => {
@@ -319,7 +416,7 @@ describe('Node vocal edit facade', () => {
       expect(error).toMatchObject({
         detail: {
           reason: 'revisionConflict',
-          field: 'generation',
+          field: 'expectedGeneration',
           expectedText: '999999999999999999',
           actualText: '1',
         },
@@ -640,6 +737,19 @@ describe('Node vocal edit facade', () => {
       draft.cancel();
     } finally {
       session.destroy();
+    }
+  });
+
+  it('refuses a malformed or empty vocal state as an invalid format', () => {
+    const session = createVocalEditSession(request());
+    const state = session.exportState();
+    session.destroy();
+    const malformed = state.slice();
+    malformed[0] = 0x58;
+    for (const bad of [malformed, new Uint8Array(0)]) {
+      expect(() =>
+        restoreVocalEditSession({ samples: sine(), sampleRate: SAMPLE_RATE, state: bad }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
     }
   });
 

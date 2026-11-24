@@ -65,6 +65,51 @@ describe('WASM vocal edit facade', () => {
     }
   });
 
+  it('exposes decimal counts and typed envelopes natively, then projects them for callers', () => {
+    const request = { samples: tone(SAMPLE_RATE), sampleRate: SAMPLE_RATE };
+    const native = getSonareModule();
+    const handle = native.vocalEditSessionCreate(request.samples, request.sampleRate, request);
+    try {
+      const [note] = native.vocalEditSessionNotes(handle).notes;
+      expect(note.analysisFrameStart).toBeTypeOf('string');
+      expect(note.analysisFrameEnd).toBeTypeOf('string');
+      expect(note.edit.amplitudeEnvelope).toBeInstanceOf(Float32Array);
+      expect(Object.hasOwn(native.vocalEditSessionCapabilities(handle), 'vocalEdit')).toBe(false);
+
+      const snapshot = native.vocalEditCaptureSnapshot(handle, false);
+      try {
+        const render = native.vocalEditSnapshotRender(snapshot, 0, request.samples.length, '0');
+        expect(render.cacheHitUnits).toBeTypeOf('string');
+        expect(render.dryPassedFrames).toBeTypeOf('string');
+        expect(render.limitedCorrectionFrames).toBeTypeOf('string');
+      } finally {
+        native.vocalEditSnapshotDestroy(snapshot);
+      }
+    } finally {
+      native.vocalEditSessionDestroy(handle);
+    }
+
+    const session = createVocalEditSession(request);
+    try {
+      const [note] = session.notes().notes;
+      expect(note.analysisFrameStart).toBeTypeOf('number');
+      expect(note.analysisFrameEnd).toBeTypeOf('number');
+      expect(Array.isArray(note.edit.amplitudeEnvelope)).toBe(true);
+      expect(Object.hasOwn(session.capabilities(), 'vocalEdit')).toBe(false);
+      const snapshot = session.captureRenderSnapshot();
+      try {
+        const rendered = snapshot.render({});
+        expect(rendered.cacheHitUnits).toBeTypeOf('number');
+        expect(rendered.dryPassedFrames).toBeTypeOf('number');
+        expect(rendered.limitedCorrectionFrames).toBeTypeOf('number');
+      } finally {
+        snapshot.destroy();
+      }
+    } finally {
+      session.destroy();
+    }
+  });
+
   it('rejects non-finite PCM before creating a native handle', () => {
     const samples = tone(512);
     samples[17] = Number.NaN;
@@ -108,7 +153,7 @@ describe('WASM vocal edit facade', () => {
         expect((error as SonareError).code).toBe(ErrorCode.InvalidState);
         expect((error as SonareError & { detail?: VocalErrorDetail }).detail).toEqual({
           reason: 'revisionConflict',
-          field: 'revision',
+          field: 'expectedRevision',
           expected: '1',
           actual: '0',
           expectedText: '1',
@@ -360,6 +405,19 @@ describe('WASM vocal edit facade', () => {
       acceptedRequest,
     );
     native.vocalEditSessionDestroy(handle);
+  });
+
+  it('refuses a malformed or empty vocal state as an invalid format', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    const state = session.exportState();
+    session.destroy();
+    const malformed = state.slice();
+    malformed[0] = 0x58;
+    for (const bad of [malformed, new Uint8Array(0)]) {
+      expect(() =>
+        restoreVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE, state: bad }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+    }
   });
 
   it('refuses a sample rate outside the supported range on create and restore', () => {

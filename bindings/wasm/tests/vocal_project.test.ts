@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
+import { ErrorCode } from '../src/errors';
 import type { VocalStateToken } from '../src/public_types_vocal_edit';
 import type {
   ProjectVocalEditApplyRequest,
@@ -485,7 +486,7 @@ describe('WASM Project vocal edit adapter', () => {
         sourceId: clip.sourceId,
         contentHash: `sha256:${session.analysis().sourceSha256}`,
       });
-      const applied = project.applyVocalEdit({
+      const applyRequest = {
         clipId,
         expectedSourceId: clip.sourceId,
         expectedSourceSampleRate: sampleRate,
@@ -497,7 +498,14 @@ describe('WASM Project vocal edit adapter', () => {
         renderedSampleRate: sampleRate,
         renderToken: rendered.token,
         vocalState: session.exportState(),
-      });
+      };
+      const malformed = applyRequest.vocalState.slice();
+      malformed[0] = 0x58;
+      expect(() => project.applyVocalEdit({ ...applyRequest, vocalState: malformed })).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      );
+      expect(project.vocalEditDependencies()).toEqual([]);
+      const applied = project.applyVocalEdit(applyRequest);
       expect(applied).toMatchObject({
         clipId,
         sidecarKey: `libsonare.vocal-edit/clip/${clipId}/take/0`,

@@ -12,7 +12,7 @@ import textwrap
 import numpy as np
 import pytest
 
-from libsonare._errors import SonareError
+from libsonare._errors import ErrorCode, SonareError
 from libsonare._ffi_types_vocal_project import (
     SonareProjectVocalEditApplyDesc,
     SonareProjectVocalEditApplyResult,
@@ -436,6 +436,36 @@ def test_a_rendered_length_mismatch_is_refused_by_the_core_in_the_callers_words(
     assert str(raised.value) == (
         "Project.apply_vocal_edit: rendered_mono length must equal expected_source_sample_count"
     )
+
+
+def test_apply_refuses_a_malformed_sve1_as_an_invalid_format() -> None:
+    source, sample_rate, source_sha256, rendered, (state, token) = _source_and_render()
+    malformed = b"X" + bytes(state)[1:]
+    with Project.create() as project:
+        project.set_sample_rate(sample_rate)
+        track_id = project.add_track()
+        clip_id = project.add_clip(
+            track_id, 0.0, 1.0, audio=source, audio_channels=1, audio_sample_rate=sample_rate
+        )
+        clip = project.clips()[0]
+        project.set_audio_source_metadata(clip.source_id, f"sha256:{source_sha256.hex()}", None)
+        with pytest.raises(SonareError) as raised:
+            project.apply_vocal_edit(
+                clip_id=clip_id,
+                expected_source_id=clip.source_id,
+                expected_source_sample_rate=sample_rate,
+                expected_source_sample_count=source.size,
+                expected_source_sha256=source_sha256.hex(),
+                expected_clip_length_ppq=clip.length_ppq,
+                expected_source_offset_ppq=clip.source_offset_ppq,
+                rendered_mono=rendered,
+                rendered_sample_rate=sample_rate,
+                render_token=token,
+                sve1=malformed,
+            )
+        assert raised.value.code == ErrorCode.INVALID_FORMAT
+        assert not isinstance(raised.value, SonareValueError)
+        assert project.vocal_edit_dependencies() == ()
 
 
 def test_apply_digest_is_case_insensitive() -> None:

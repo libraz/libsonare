@@ -1,5 +1,5 @@
 import { ErrorCode, isSonareError, type SonareError } from './errors.js';
-import { ordinalToken } from './internal/core_tokens.js';
+import { copyCount, ordinalToken } from './internal/core_tokens.js';
 import {
   codedError,
   entryClass,
@@ -145,7 +145,7 @@ function vocalReasonName(value: unknown): VocalReason {
   return ordinalToken(VOCAL_REASONS, value, 'vocal reason');
 }
 
-/** Moves the addon's flat reason fields on a vocal failure into one `detail` record. */
+/** Moves the addon's flat reason fields, with caller-spelled conflict subjects, into `detail`. */
 function attachVocalDetail(error: unknown): unknown {
   if (typeof error !== 'object' || error === null) {
     return error;
@@ -197,8 +197,8 @@ function convertNotesResult(value: NativeNotes): VocalNotesResult {
   return {
     notes: value.notes.map((note) => ({
       ...note,
-      analysisFrameStart: Number(note.analysisFrameStart),
-      analysisFrameEnd: Number(note.analysisFrameEnd),
+      analysisFrameStart: copyCount(note.analysisFrameStart, 'analysisFrameStart'),
+      analysisFrameEnd: copyCount(note.analysisFrameEnd, 'analysisFrameEnd'),
     })),
     transitions: value.transitions.slice(),
   };
@@ -867,9 +867,9 @@ function clonePitchEvaluation(value: VocalPitchEvaluation): VocalPitchEvaluation
 function convertRenderResult(value: NativeRenderResult): VocalRenderResult {
   return {
     ...value,
-    cacheHitUnits: Number(value.cacheHitUnits),
-    dryPassedFrames: Number(value.dryPassedFrames),
-    limitedCorrectionFrames: Number(value.limitedCorrectionFrames),
+    cacheHitUnits: copyCount(value.cacheHitUnits, 'cacheHitUnits'),
+    dryPassedFrames: copyCount(value.dryPassedFrames, 'dryPassedFrames'),
+    limitedCorrectionFrames: copyCount(value.limitedCorrectionFrames, 'limitedCorrectionFrames'),
     samples: new Float32Array(value.samples),
     processedRanges: value.processedRanges.map((range) => ({ ...range })),
     token: { ...value.token },

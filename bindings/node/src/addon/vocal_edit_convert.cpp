@@ -17,6 +17,7 @@
 #include "core/audio.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_node::vocal_edit_detail {
 
@@ -556,7 +557,6 @@ Napi::Object CapabilitiesToObject(Napi::Env env, const SonareVocalCapabilities& 
              Napi::Boolean::New(env, capabilities.analysis_cancellable != 0));
   object.Set("minimumFormantShiftSemitones", capabilities.minimum_formant_shift_semitones);
   object.Set("maximumFormantShiftSemitones", capabilities.maximum_formant_shift_semitones);
-  object.Set("vocalEdit", true);
   return object;
 }
 
@@ -640,7 +640,11 @@ Napi::Error MakeVocalError(Napi::Env env, SonareError error,
     sonare_node::AttachRefusal(env, object, *shown, sonare_node::LastRefusalEntry());
   }
   object.Set("reason", detail == nullptr ? 0u : detail->reason);
-  object.Set("field", detail == nullptr ? "" : detail->field);
+  std::string field = detail == nullptr ? "" : detail->field;
+  if (detail != nullptr && detail->reason == SONARE_VOCAL_REASON_REVISION_CONFLICT) {
+    field = sonare::util::check::camel_path(field);
+  }
+  object.Set("field", field);
   object.Set("expected", detail == nullptr
                              ? "0"
                              : (detail->expected_text[0] == '\0' ? Uint64String(detail->expected)
