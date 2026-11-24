@@ -36,7 +36,9 @@ typedef struct {
   int apply_gain_at_input_rate;
 } SonareMasteringConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_mastering_config_init(SonareMasteringConfig* config);
 
 /// @brief Mono audio and loudness measurements from the one-shot and named-processor entries.
@@ -1266,7 +1268,9 @@ typedef struct {
   float residual_ratio;      ///< residual / signal threshold (default 8.0)
 } SonareDeclickConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_declick_config_init(SonareDeclickConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::DenoiseClassicalConfig.
@@ -1289,7 +1293,9 @@ typedef struct {
   int gain_smoothing;               ///< 0/1 (default 1)
 } SonareDenoiseClassicalConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::ClickDetection. Counts runs,
@@ -1308,6 +1314,7 @@ typedef struct {
 ///   one the repair would act on; a cheaper threshold-only scan would report runs
 ///   it leaves alone. The repair also acts on runs inside a transient, which are
 ///   not counted here.
+/// @param samples Nonempty input buffer.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
                                                   int sample_rate,
@@ -1566,7 +1573,9 @@ typedef struct {
   int32_t link_channels;
 } SonareDeclipConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_declip_config_init(SonareDeclipConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
@@ -1601,6 +1610,7 @@ typedef struct {
 ///   top, so zero is not proof the material was never clipped. Resampling and
 ///   lossy coding do it, and so does a stereo downmix -- detect each channel
 ///   before mixing them, not after.
+/// @param samples Nonempty input buffer.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
                                                     int sample_rate,
@@ -1692,7 +1702,9 @@ typedef struct {
   int levels;            ///< wavelet decomposition levels (default 4)
 } SonareDecrackleConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_decrackle_config_init(SonareDecrackleConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::CrackleDetection.
@@ -1711,6 +1723,7 @@ typedef struct {
 } SonareCrackleDetection;
 
 /// @brief Measures crackle without repairing.
+/// @param samples Nonempty input buffer.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
                                                    int sample_rate,
@@ -1801,7 +1814,9 @@ typedef struct {
   int mode;               ///< SONARE_DEHUM_MODE_* (default SUBTRACT)
 } SonareDehumConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_dehum_config_init(SonareDehumConfig* config);
 
 /// Longest harmonic series a dehum pass tracks, and the length of
@@ -1837,6 +1852,7 @@ typedef struct {
 } SonareHumDetection;
 
 /// @brief Measures hum without filtering.
+/// @param samples Nonempty input buffer.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
                                                const SonareDehumConfig* config,
@@ -1925,7 +1941,9 @@ typedef struct {
   float wpe_strength;      ///< WPE blend weight (default 0.7)
 } SonareDereverbClassicalConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::ReverbDetection.
@@ -2118,7 +2136,9 @@ typedef struct {
   float window_ms;         ///< analysis window in milliseconds (default 400)
 } SonareTrimSilenceConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config);
 
 /// @brief One half-open sample range, in input-buffer coordinates.
@@ -2213,6 +2233,8 @@ typedef struct {
 ///   to the buffer, so it can never reach past either end; a pass that kept
 ///   nothing is not padded. A count above 960000 (5 s at 192 kHz) is rejected,
 ///   which is also where a negative one that crossed a language boundary lands.
+/// @param left Nonempty left channel.
+/// @param right Nonempty right channel.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const float* right,
                                                         size_t length, int sample_rate,
@@ -2237,6 +2259,7 @@ typedef struct {
 /// @brief Offline silence trimmer (peak threshold or LUFS-gated).
 /// @details @c out->samples is heap-allocated; release it with @ref
 /// sonare_free_trim_silence_result.
+/// @param samples Nonempty input buffer.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
                                                  int sample_rate,
@@ -2344,7 +2367,9 @@ typedef struct {
   float pdr_release_scale;  ///< Program-dependent release multiplier; default 1.0.
 } SonareCompressorConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_compressor_config_init(SonareCompressorConfig* config);
 
 /// @brief Offline feed-forward compressor. Processes the buffer in place
@@ -2370,7 +2395,9 @@ typedef struct {
   float key_high_pass_hz;  ///< Detector high-pass corner, Hz; 0 disables it (default).
 } SonareGateConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_gate_config_init(SonareGateConfig* config);
 
 /// @brief Offline noise gate. Output buffer is heap-allocated; release with
@@ -2395,7 +2422,9 @@ typedef struct {
   float lookahead_ms;       ///< Lookahead delay, ms; 0 disables it (default).
 } SonareTransientShaperConfig;
 
-/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @brief With mastering support enabled, writes the library defaults and @c sizeof(*config)
+///        to @p config. Without mastering support, it zeroes the fields and sets @c struct_size.
+///        A NULL @p config is ignored.
 void sonare_transient_shaper_config_init(SonareTransientShaperConfig* config);
 
 /// @brief Offline transient shaper (envelope-difference based). Output buffer

@@ -283,7 +283,7 @@ std::string dump_cli_contract_json() {
 // ============================================================================
 
 void print_usage(const char* prog, std::ostream& out) {
-  out << "Usage: " << prog << " <command> [options] <audio_file> [-o output]\n\n";
+  out << "Usage: " << prog << " <command> [options] [arguments]\n\n";
 
   out << "ANALYSIS COMMANDS:\n";
   for (const auto& cmd : get_commands()) {
@@ -301,11 +301,12 @@ void print_usage(const char* prog, std::ostream& out) {
       << "  --quiet, -q        Suppress progress output\n"
       << "  --help, -h         Show help\n"
       << "  -o, --output       Output file path\n"
-      << "  --n-fft <int>      FFT size (default: 2048; where supported)\n"
-      << "  --hop-length <int> Hop length (default: 512; where supported)\n"
-      << "  --n-mels <int>     Mel bands (default: 128; mel/timbre/inversion commands)\n"
+      << "  --n-fft <int>      FFT size (where supported)\n"
+      << "  --hop-length <int> Hop length (where supported)\n"
+      << "  --n-mels <int>     Mel bands (where supported)\n"
       << "  --fmin-hz <hz>     Lowest band frequency (spectral and synthesis commands)\n"
       << "  --fmax-hz <hz>     Highest band frequency (spectral and synthesis commands)\n"
+      << "\nUse " << prog << " <command> --help for command-specific defaults.\n"
       << "\nExamples:\n"
       << "  " << prog << " analyze music.mp3\n"
       << "  " << prog << " bpm music.wav --json\n"
@@ -345,8 +346,8 @@ void print_command_usage(const char* prog, const CommandInfo& command,
   }
   if (command.name == "voice-preset-validate") {
     std::cout
-        << "\nA preset the library refuses is a verdict here, not a refused input: it prints "
-           "ok false and exits 3, where voice-change refuses the same document with exit 5.\n";
+        << "\nA preset that fails validation exits 3. With --json, the verdict has ok: false.\n"
+           "Duplicate JSON keys are refused. An invalid preset override names its --set key.\n";
   }
   if (command.name == "trim-silence") {
     std::cout << "\nThe default rule trims below an absolute -60 dBFS threshold (--threshold-db); "

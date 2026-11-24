@@ -478,6 +478,8 @@ void sonare_mfcc_options_init(SonareMfccOptions* options);
 
 /// @brief MFCC with an optional explicit Mel range (see @ref sonare_mel_spectrogram).
 /// @details A NULL @p options takes the defaults.
+///          The Mel frequency bounds are checked before the FFT geometry, and the
+///          samples are scanned for non-finite values after both.
 /// @param out Receives heap-owned arrays; free with sonare_free_mfcc_result.
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
                         size_t hop_length, int n_mels, int n_mfcc, const SonareMfccOptions* options,
@@ -802,7 +804,7 @@ SonareError sonare_poly_features(const float* samples, size_t length, int sample
 ///   @p out with sonare_free_ints.
 /// @param threshold Magnitudes <= threshold are treated as zero.
 /// @param ref_magnitude Non-zero scales @p threshold by max(|y|).
-/// @param pad Non-zero always reports index 0 as a zero-crossing.
+/// @param pad Non-zero reports index 0 as a crossing when the input has samples.
 /// @param zero_pos Non-zero treats the sign of zero as positive.
 /// @param out Receives the freshly allocated array of zero-crossing indices.
 /// @param out_count Receives the number of indices.
@@ -1337,7 +1339,8 @@ SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sam
                              size_t hop_length, size_t win_length, int center, int norm, int mode,
                              float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
-/// @note The window length is checked even for an empty onset envelope.
+/// @note The first non-finite onset sample is refused by index before the tempo or
+///       window settings are checked. The window length is checked even for an empty envelope.
 /// @note A @p win_length or @p n_bins that would make the tempogram pass 500000000 elements is
 /// refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
@@ -1366,7 +1369,8 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
 
 /// @brief Fourier (FFT-based) tempogram of an onset envelope.
 /// @details Returns a magnitude matrix [n_bins x n_frames] row-major, where
-///   n_bins = win_length / 2 + 1 (derivable as out_length / out_n_frames).
+///   n_bins = win_length / 2 + 1 using integer division. An empty envelope
+///   yields zero frames.
 /// @note Free @p out with @ref sonare_free_floats.
 /// @note A @p win_length that would make the tempogram pass 500000000 elements is refused with
 /// @c SONARE_ERROR_INVALID_PARAMETER naming it.

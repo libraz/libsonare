@@ -138,7 +138,8 @@ typedef struct {
   int32_t true_peak_oversample;  ///< True-peak oversample factor, 4 (default) or 8
 } SonareMixerAddStripOptions;
 
-/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+/// @brief With mixing support enabled, writes the defaults and @c struct_size. Without mixing
+///        support, it zeroes the fields and sets @c struct_size. A NULL @p options is ignored.
 void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options);
 
 /// Adds a strip whose pre/post meters are configured up front.
@@ -489,7 +490,8 @@ typedef struct {
   int32_t true_peak_oversample;  ///< True-peak oversample factor, 4 (default) or 8
 } SonareMixerMasterMeterConfig;
 
-/// @brief Sets struct_size and every SonareMixerMasterMeterConfig default. NULL is a no-op.
+/// @brief With mixing support enabled, writes the defaults and @c struct_size. Without mixing
+///        support, it zeroes the fields and sets @c struct_size. NULL is a no-op.
 void sonare_mixer_master_meter_config_init(SonareMixerMasterMeterConfig* config);
 
 /// @brief Turns the master-output meter on or off and sets what it measures.
