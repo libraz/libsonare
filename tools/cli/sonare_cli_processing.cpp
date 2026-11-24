@@ -371,8 +371,8 @@ void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& no
   }
   if (parsed.note < 0 || static_cast<size_t>(parsed.note) >= notes.size()) {
     throw SonareParameterRefusal::predicate(
-              ErrorCode::InvalidParameter, subject,
-              "must name a note index in [0, " + std::to_string(notes.size() - 1) + "]")
+        ErrorCode::InvalidParameter, subject,
+        "must name a note index in [0, " + std::to_string(notes.size() - 1) + "]")
         .as_caller_spelled();
   }
   auto& edit = notes[static_cast<size_t>(parsed.note)].edit;
@@ -470,8 +470,7 @@ int cmd_polyphonic_render(const CliArgs& args, const Audio& audio) {
   for (const auto& assignment : assignments) {
     const PolyphonicEdit parsed = parse_polyphonic_edit(assignment);
     const std::string path = assignment.substr(0, assignment.find('='));
-    caller_paths["analysis.notes[" + std::to_string(parsed.note) + "].edit." + parsed.field] =
-        path;
+    caller_paths["analysis.notes[" + std::to_string(parsed.note) + "].edit." + parsed.field] = path;
     apply_polyphonic_note_edit(analysis.notes, parsed, path);
   }
 

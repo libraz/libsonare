@@ -254,7 +254,8 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
   overrides.insert(overrides.end(), user_overrides.begin(), user_overrides.end());
   if (!overrides.empty()) {
     with_cli_bag_refusals("--params", user_overrides, [&] {
-      mastering::api::apply_chain_config_overrides(repair_config, overrides.data(), overrides.size());
+      mastering::api::apply_chain_config_overrides(repair_config, overrides.data(),
+                                                   overrides.size());
     });
   }
 

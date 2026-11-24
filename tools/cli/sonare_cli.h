@@ -104,11 +104,11 @@
 #include "sonare_cli_console.h"
 #include "sonare_cli_json.h"
 #include "sonare_cli_registry.h"
+#include "util/exception.h"
 #include "util/frame.h"
 #include "util/json.h"
 #include "util/padding.h"
 #include "util/peak.h"
-#include "util/exception.h"
 #include "util/vector_normalize.h"
 
 using namespace sonare;
@@ -141,7 +141,7 @@ std::string read_plain_text_file(const std::string& path);
 /// @brief Throws a failed C entry's refusal as the library's coded error; a non-null @p root is
 ///        dropped from the front of each refusal subject.
 [[noreturn]] void throw_c_failure(SonareError err, const char* root,
-                                 const char* bag_flag = nullptr);
+                                  const char* bag_flag = nullptr);
 /// Runs one library call and respells only structured subjects matching fields supplied in the
 /// named CLI bag; unrelated subjects retain their library spelling.
 template <typename Parameters, typename Function>
@@ -157,8 +157,7 @@ decltype(auto) with_cli_bag_refusals(std::string_view flag, const Parameters& pa
           constexpr std::string_view root = "params.";
           if (key.compare(0, root.size(), root) == 0) key.erase(0, root.size());
           for (const auto& parameter : parameters) {
-            if (parameter.key == key ||
-                (key == "n_fft" && parameter.key == "nFft") ||
+            if (parameter.key == key || (key == "n_fft" && parameter.key == "nFft") ||
                 (key == "hop_length" && parameter.key == "hopLength")) {
               return cli_bag_subject(flag, parameter.key);
             }

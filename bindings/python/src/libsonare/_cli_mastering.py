@@ -906,8 +906,7 @@ def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
     except ValueError as exc:
         message = str(exc)
         if subject == "argument --platforms" and (
-            message.startswith("unknown key --platforms ")
-            or message.startswith("--platforms ")
+            message.startswith("unknown key --platforms ") or message.startswith("--platforms ")
         ):
             raise ValueError(message) from None
         raise ValueError(f"{subject}: {message}") from None

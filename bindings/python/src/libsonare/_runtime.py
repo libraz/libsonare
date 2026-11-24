@@ -75,8 +75,8 @@ _ERROR_REASON_TOKENS = frozenset(get_args(ErrorReason))
 
 # CLI wrappers can respell selected structured subjects without changing the
 # Python API's normal C-to-Python spelling. The scope is one synchronous call.
-_CLI_REFUSAL_SUBJECTS: contextvars.ContextVar[Mapping[str, str] | None] = (
-    contextvars.ContextVar("sonare_cli_refusal_subjects", default=None)
+_CLI_REFUSAL_SUBJECTS: contextvars.ContextVar[Mapping[str, str] | None] = contextvars.ContextVar(
+    "sonare_cli_refusal_subjects", default=None
 )
 
 

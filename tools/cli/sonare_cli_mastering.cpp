@@ -364,7 +364,8 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     });
   } else if (!overrides.empty()) {
     with_cli_bag_refusals("--params", overrides, [&] {
-      mastering::api::apply_chain_config_overrides(chain_config, overrides.data(), overrides.size());
+      mastering::api::apply_chain_config_overrides(chain_config, overrides.data(),
+                                                   overrides.size());
     });
   }
 
@@ -663,16 +664,16 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
   if (stereo) {
     const StereoPlanes planes = load_stereo_planes(args, audio);
     const auto result = with_cli_bag_refusals("--params", params, [&] {
-      return mastering::api::apply_named_processor_stereo(
-          "eq.equalizer", planes.left.data(), planes.right.data(), planes.left.size(),
-          audio.sample_rate(), params);
+      return mastering::api::apply_named_processor_stereo("eq.equalizer", planes.left.data(),
+                                                          planes.right.data(), planes.left.size(),
+                                                          audio.sample_rate(), params);
     });
     report(result, write_mastering_output(args, result, bits));
     return 0;
   }
   const auto result = with_cli_bag_refusals("--params", params, [&] {
-    return mastering::api::apply_named_processor(
-        "eq.equalizer", audio.data(), audio.size(), audio.sample_rate(), params);
+    return mastering::api::apply_named_processor("eq.equalizer", audio.data(), audio.size(),
+                                                 audio.sample_rate(), params);
   });
   report(result, write_mastering_output(args, result, bits));
   return 0;
@@ -871,8 +872,8 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
     const std::string result = with_cli_bag_refusals("--params", params, [&] {
       return analysis_json_for_cli(mastering::api::analyze_named_pair(
           analysis, source.left.data(), source.right.data(), source.left.size(),
-          reference_left.data(), reference_right.data(), reference_left.size(),
-          audio.sample_rate(), reference_rate, params));
+          reference_left.data(), reference_right.data(), reference_left.size(), audio.sample_rate(),
+          reference_rate, params));
     });
     std::cout << result << "\n";
   }

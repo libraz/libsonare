@@ -274,9 +274,10 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
       auto [code, output] =
           exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json 2>&1");
       CHECK(code == 2);
-      CHECK_THAT(output, ContainsSubstring("unknown key --params target_platform (expected "
-                                           "ceilingDbtp, enableRepair, preferStreamingSafe, preset, "
-                                           "speechMonoAmount, targetLufs, targetPlatform)"));
+      CHECK_THAT(output,
+                 ContainsSubstring("unknown key --params target_platform (expected "
+                                   "ceilingDbtp, enableRepair, preferStreamingSafe, preset, "
+                                   "speechMonoAmount, targetLufs, targetPlatform)"));
     }
   }
 
@@ -301,7 +302,8 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
 
   SECTION("mastering-suggest refuses invalid param values before the read") {
     const std::string presets =
-        "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
+        "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, "
+        "youtube, "
         "broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, "
         "techno, metal, trap, rnb, jazz, kpop, trance, gameOst";
     const std::string platforms =
@@ -629,7 +631,8 @@ TEST_CASE("CLI numeric mastering parameter bags refuse invalid values before the
     const auto result = exec_command_split(CLI + " " + command + " --params " + key + "=abc");
     CHECK(result.exit_code == 2);
     CHECK(result.out.empty());
-    CHECK_THAT(result.err, ContainsSubstring("Error: --params " + key + " must be a finite number\n"));
+    CHECK_THAT(result.err,
+               ContainsSubstring("Error: --params " + key + " must be a finite number\n"));
   }
 }
 
@@ -794,27 +797,24 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
             : R"([{"name":"custom","target_lufs":-14,")" + old_key + R"(":-1}])";
     const SplitResult refused = run(record);
     CHECK(refused.exit_code == 2);
-    CHECK_THAT(refused.err,
-               ContainsSubstring("unknown key --platforms [0]." + old_key +
-                                 " (expected ceiling_dbtp, name, target_lufs)"));
+    CHECK_THAT(refused.err, ContainsSubstring("unknown key --platforms [0]." + old_key +
+                                              " (expected ceiling_dbtp, name, target_lufs)"));
   }
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
   CHECK(missing.exit_code == 2);
-  CHECK_THAT(missing.err,
-             ContainsSubstring("--platforms [0].ceiling_dbtp must be given"));
+  CHECK_THAT(missing.err, ContainsSubstring("--platforms [0].ceiling_dbtp must be given"));
 
   const SplitResult mistyped = run(R"([{"name":"custom","target_lufs":"loud","ceiling_dbtp":-1}])");
   CHECK(mistyped.exit_code == 2);
-  CHECK_THAT(mistyped.err,
-             ContainsSubstring("--platforms [0].target_lufs must be a number"));
+  CHECK_THAT(mistyped.err, ContainsSubstring("--platforms [0].target_lufs must be a number"));
 
   const SplitResult unknown =
       run(R"([{"name":"custom","target_lufs":-14,"ceiling_dbtp":-1,"x":1}])");
   CHECK(unknown.exit_code == 2);
-  CHECK_THAT(
-      unknown.err,
-      ContainsSubstring("unknown key --platforms [0].x (expected ceiling_dbtp, name, target_lufs)"));
+  CHECK_THAT(unknown.err,
+             ContainsSubstring(
+                 "unknown key --platforms [0].x (expected ceiling_dbtp, name, target_lufs)"));
 
   // A file is read with the input, so the same document is refused after it, by its source.
   const std::string document = unique_temp_path("_platforms.json");
@@ -1646,8 +1646,7 @@ TEST_CASE("CLI repair --params stays inside the repair config", "[cli][mastering
                                      "-o " +
                                      TEST_OUT + " -q");
   REQUIRE(code == 2);
-  REQUIRE_THAT(output,
-               ContainsSubstring("--params loudness.enabled must be a repair.* field"));
+  REQUIRE_THAT(output, ContainsSubstring("--params loudness.enabled must be a repair.* field"));
 
   auto [ok_code, ok_output] = exec_command(
       CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
@@ -2035,7 +2034,8 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
       {"suggest-mix --input " + missing + " --params hopLength=2147483648",
        "--params hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params enable_eq=1",
-       "unknown key --params enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, "
+       "unknown key --params enable_eq (expected enableBalance, enableDynamics, enableEq, "
+       "enableGain, "
        "enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, "
        "nFft, suggestionStrength, targetTrackLufs, tempoBpm)"},
       {"suggest-mix --input " + missing + " --params nosuchkey=1",

@@ -227,8 +227,8 @@ static bool parse_edit_flag(const std::string& subject, const std::string& value
   if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") return true;
   if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") return false;
   throw sonare::SonareParameterRefusal::predicate(
-            sonare::ErrorCode::InvalidParameter, subject,
-            "must be one of true, 1, yes, on, false, 0, no, off")
+      sonare::ErrorCode::InvalidParameter, subject,
+      "must be one of true, 1, yes, on, false, 0, no, off")
       .as_caller_spelled();
 }
 
@@ -261,12 +261,17 @@ PolyphonicEdit parse_polyphonic_edit(const std::string& assignment) {
              field == "vibrato_depth_change" || field == "drift_change") {
     edit.number = parse_float_text(field_subject, value);
   } else {
-    const std::vector<std::string> accepted = {
-        "pitch_shift_semitones", "gain_db", "time_offset_samples", "time_stretch_ratio",
-        "formant_shift_semitones", "vibrato_depth_change", "drift_change", "muted"};
+    const std::vector<std::string> accepted = {"pitch_shift_semitones",
+                                               "gain_db",
+                                               "time_offset_samples",
+                                               "time_stretch_ratio",
+                                               "formant_shift_semitones",
+                                               "vibrato_depth_change",
+                                               "drift_change",
+                                               "muted"};
     throw sonare::SonareParameterRefusal::unknown(
-              sonare::ErrorCode::InvalidParameter, field_subject,
-              sonare::util::json::schema::expected_keys(accepted))
+        sonare::ErrorCode::InvalidParameter, field_subject,
+        sonare::util::json::schema::expected_keys(accepted))
         .as_caller_spelled();
   }
   return edit;

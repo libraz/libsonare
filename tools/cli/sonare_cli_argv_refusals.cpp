@@ -136,9 +136,8 @@ double read_assistant_number(const std::string& key, const std::string& text) {
   } catch (const std::invalid_argument&) {
     // Both assistants use the same refusal for a value the numeric transport cannot read.
   }
-  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
-                                          cli_bag_subject("--params", key),
-                                          "must be a finite number")
+  throw SonareParameterRefusal::predicate(
+      ErrorCode::InvalidParameter, cli_bag_subject("--params", key), "must be a finite number")
       .as_caller_spelled();
 }
 
@@ -186,9 +185,9 @@ std::string mix_assistant_value_refusal(const std::string& key, double value) {
     mixing::assistant::mix_assistant_config_from_params(&param, 1);
   } catch (const SonareParameterRefusal& refusal) {
     return refusal
-        .respelled(refusal.code(),
-                   [&](const std::string& subject) { return cli_bag_subject("--params", subject); },
-                   true)
+        .respelled(
+            refusal.code(),
+            [&](const std::string& subject) { return cli_bag_subject("--params", subject); }, true)
         .what();
   } catch (const SonareException& refusal) {
     return refusal.what();
@@ -237,11 +236,10 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
       }
     } catch (const SonareParameterRefusal& refusal) {
       return refusal
-          .respelled(refusal.code(),
-                     [&](const std::string& subject) {
-                       return cli_bag_subject("--params", subject);
-                     },
-                     true)
+          .respelled(
+              refusal.code(),
+              [&](const std::string& subject) { return cli_bag_subject("--params", subject); },
+              true)
           .what();
     } catch (const std::exception& refusal) {
       return refusal.what();
@@ -307,8 +305,8 @@ void validate_assistant_param_value(const std::string& key, const std::string& v
     message += separator + token;
     separator = ", ";
   }
-  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
-                                          cli_bag_subject("--params", key), message.substr(key.size() + 1))
+  throw SonareParameterRefusal::predicate(
+      ErrorCode::InvalidParameter, cli_bag_subject("--params", key), message.substr(key.size() + 1))
       .as_caller_spelled();
 }
 
@@ -326,11 +324,9 @@ std::string assistant_params_refusal(const CliArgs& args) {
       validate_assistant_param_key(key);
     } catch (const SonareParameterRefusal& refusal) {
       return refusal
-          .respelled(refusal.code(),
-                     [](const std::string& subject) {
-                       return cli_bag_subject("--params", subject);
-                     },
-                     true)
+          .respelled(
+              refusal.code(),
+              [](const std::string& subject) { return cli_bag_subject("--params", subject); }, true)
           .what();
     } catch (const std::exception& refusal) {
       return refusal.what();
