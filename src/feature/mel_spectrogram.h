@@ -33,7 +33,7 @@ struct MelConfig {
   // Mel filterbank settings
   int n_mels = 128;                ///< Number of Mel bands
   float fmin = 0.0f;               ///< Minimum frequency in Hz
-  float fmax = 0.0f;               ///< Maximum frequency in Hz (0 = sr/2)
+  float fmax = 0.0f;               ///< Maximum frequency in Hz, at most Nyquist (0 = Nyquist).
   bool htk = false;                ///< Use HTK formula instead of Slaney
   MelNorm norm = MelNorm::Slaney;  ///< Normalization type
 
@@ -78,16 +78,6 @@ struct MelConfig {
     return config;
   }
 };
-
-/// @brief Refuses mel band edges outside the argument domain every public surface shares.
-/// @details 0 is the default spelling of each (fmax 0 is the Nyquist). The filterbank refuses an
-///          fmax at or below fmin itself, but replaces a negative or non-finite fmax with the
-///          Nyquist and builds bands below 0 Hz for a negative fmin, so those are refused here.
-/// @throws SonareParameterRefusal(InvalidParameter) unless both are finite and non-negative.
-inline void validate_mel_bounds(float fmin, float fmax) {
-  util::check::at_least(fmin, 0.0, "fmin");
-  util::check::at_least(fmax, 0.0, "fmax");
-}
 
 /// @brief Mel spectrogram representation with optional MFCC computation.
 /// @details Computes and caches Mel spectrogram from audio or STFT.

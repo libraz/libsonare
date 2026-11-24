@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <limits>
 #include <random>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -638,6 +639,27 @@ TEST_CASE("pitch_tuning uses ceil() for the histogram bin count like librosa", "
   const float freq = sonare::constants::kA4Hz * std::pow(2.0f, -0.3822f / 12.0f);
   const float tuning = pitch_tuning({freq}, 0.03f, 12);
   REQUIRE_THAT(tuning, WithinAbs(-0.3824f, 0.01f));
+}
+
+TEST_CASE("pitch_tuning keeps NaN as unvoiced and refuses either infinity by index",
+          "[domain-signal]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float a4 = sonare::constants::kA4Hz;
+  const float half_bin_flat = a4 * std::pow(2.0f, -0.5f / 12.0f);
+  const std::vector<float> with_unvoiced{half_bin_flat, nan, 0.0f, -1.0f};
+  CHECK_THAT(pitch_tuning(with_unvoiced, 0.01f, 12), WithinAbs(-0.5f, 1.0e-6f));
+  CHECK(pitch_tuning({nan, 0.0f, -1.0f}, 0.01f, 12) == 0.0f);
+
+  const float infinity = std::numeric_limits<float>::infinity();
+  for (const float value : {infinity, -infinity}) {
+    try {
+      (void)pitch_tuning({a4, value}, 0.01f, 12);
+      FAIL_CHECK("infinite frequency was accepted");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(error.what() == std::string("frequencies contains a non-finite sample at index 1"));
+    }
+  }
 }
 
 TEST_CASE("estimate_tuning uses a global magnitude median", "[pitch]") {

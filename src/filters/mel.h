@@ -35,10 +35,21 @@ inline constexpr util::check::NumericDomain kMelBandsDomain =
 struct MelFilterConfig {
   int n_mels = 128;                ///< Number of Mel bands; in [1, @ref kMaxMelBands]
   float fmin = 0.0f;               ///< Minimum frequency in Hz
-  float fmax = 0.0f;               ///< Maximum frequency in Hz (0 = sr/2)
+  float fmax = 0.0f;               ///< Maximum frequency in Hz, at most Nyquist (0 = Nyquist).
   bool htk = false;                ///< Use HTK formula instead of Slaney
   MelNorm norm = MelNorm::Slaney;  ///< Normalization type
 };
+
+/// @brief Refuses a negative or non-finite Mel frequency bound.
+/// @throws SonareParameterRefusal(InvalidParameter) unless both bounds are finite and non-negative.
+inline void validate_mel_bounds(float fmin, float fmax) {
+  util::check::at_least(fmin, 0.0, "fmin");
+  util::check::at_least(fmax, 0.0, "fmax");
+}
+
+/// @brief Validates and resolves a Mel band: 0 <= fmin < fmax <= Nyquist.
+/// @details A zero fmax requests Nyquist. The sample rate must already be valid.
+float validate_mel_bounds(float fmin, float fmax, int sample_rate);
 
 /// @brief Computes frequency points equally spaced on the Mel scale.
 /// @param n_points Number of points, endpoints included; one point is fmin alone

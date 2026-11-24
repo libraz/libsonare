@@ -12,9 +12,11 @@
 #include <complex>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "feature/inverse.h"
+#include "feature/onset.h"
 #include "feature/rhythm.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
@@ -1187,6 +1189,57 @@ TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral]
                     "factors must be finite and greater than 0");
   CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>(3, 0.5f), 8, 22050, 512, factors),
                     "tempogram must hold at least win_length values");
+}
+
+TEST_CASE("cyclic tempogram refuses a non-finite supplied envelope", "[domain-signal]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const std::vector<float> envelope{0.0f, nan, 0.0f, 0.0f};
+  TempogramConfig tempogram_config;
+  tempogram_config.win_length = 4;
+  tempogram_config.hop_length = 1;
+
+  CHECK_THROWS_WITH(cyclic_tempogram(envelope, 22050, tempogram_config, 30.0f, 12),
+                    "onset_envelope contains a non-finite sample at index 1");
+
+  TempogramConfig bad_window = tempogram_config;
+  bad_window.win_length = 1;
+  try {
+    (void)cyclic_tempogram({}, 22050, bad_window, 30.0f, 12);
+    FAIL_CHECK("cyclic tempogram accepted an invalid window for an empty envelope");
+  } catch (const SonareException& error) {
+    CHECK(error.code() == ErrorCode::InvalidParameter);
+    CHECK(error.what() == std::string("win_length must be an integer in [2, 12288]"));
+  }
+}
+
+TEST_CASE("cyclic tempogram Audio overload matches its measured envelope", "[domain-signal]") {
+  std::vector<float> samples(32768);
+  const float amplitudes[] = {0.05f, 0.8f, 0.1f, 0.9f, 0.2f, 0.7f, 0.05f, 1.0f};
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    const float time = static_cast<float>(i) / 22050.0f;
+    samples[i] =
+        amplitudes[(i / 4096) % 8] * std::sin(2.0f * sonare::constants::kPi * 440.0f * time);
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), 22050);
+  const auto envelope = compute_onset_strength(audio, MelConfig(), OnsetConfig());
+  REQUIRE(!envelope.empty());
+  REQUIRE(std::all_of(envelope.begin(), envelope.end(),
+                      [](float value) { return std::isfinite(value); }));
+  REQUIRE(std::any_of(envelope.begin(), envelope.end(), [](float value) { return value > 0.0f; }));
+
+  TempogramConfig config;
+  config.win_length = 8;
+  const auto from_audio = cyclic_tempogram(audio, config, 30.0f, 12);
+  const auto from_envelope = cyclic_tempogram(envelope, audio.sample_rate(), config, 30.0f, 12);
+  REQUIRE(from_audio.size() == from_envelope.size());
+  REQUIRE(!from_audio.empty());
+  REQUIRE(std::all_of(from_audio.begin(), from_audio.end(),
+                      [](float value) { return std::isfinite(value); }));
+  REQUIRE(
+      std::any_of(from_audio.begin(), from_audio.end(), [](float value) { return value > 0.0f; }));
+  for (std::size_t i = 0; i < from_audio.size(); ++i) {
+    CHECK_THAT(from_audio[i], WithinAbs(from_envelope[i], 1.0e-6f));
+  }
 }
 
 TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral][refusal]") {

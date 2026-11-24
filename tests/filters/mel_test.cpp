@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -153,33 +154,28 @@ TEST_CASE("create_mel_filterbank triangular", "[mel]") {
   }
 }
 
-TEST_CASE("create_mel_filterbank clamps fmax above Nyquist", "[mel]") {
-  int sr = 22050;
-  int n_fft = 2048;
-  int n_bins = n_fft / 2 + 1;
+TEST_CASE("create_mel_filterbank refuses an upper edge above Nyquist", "[mel][domain-mel]") {
+  constexpr int sr = 22050;
+  constexpr int n_fft = 2048;
+  constexpr float nyquist = sr / 2.0f;
 
-  // fmax = sr is above Nyquist (sr/2). librosa only warns; the builder clamps to
-  // Nyquist instead of throwing, so a request for the full band succeeds.
-  MelFilterConfig above;
-  above.n_mels = 40;
-  above.fmax = static_cast<float>(sr);
+  MelFilterConfig config;
+  config.n_mels = 40;
+  config.fmax = nyquist + 1.0f;
+  CHECK_THROWS_WITH(create_mel_filterbank(sr, n_fft, config),
+                    "fmax must be finite and at most 11025");
+  CHECK_THROWS_WITH(get_mel_filterbank_cached(sr, n_fft, config),
+                    "fmax must be finite and at most 11025");
 
-  std::vector<float> fb_above;
-  REQUIRE_NOTHROW(fb_above = create_mel_filterbank(sr, n_fft, above));
-  REQUIRE(fb_above.size() == static_cast<size_t>(above.n_mels * n_bins));
+  config.fmax = nyquist;
+  const auto supported = create_mel_filterbank(sr, n_fft, config);
+  CHECK(supported.size() == static_cast<size_t>(config.n_mels * (n_fft / 2 + 1)));
+  config.fmax = 0.0f;
+  CHECK(create_mel_filterbank(sr, n_fft, config) == supported);
 
-  // The clamped request is equivalent to explicitly asking for Nyquist.
-  MelFilterConfig nyquist = above;
-  nyquist.fmax = static_cast<float>(sr) / 2.0f;
-  std::vector<float> fb_nyquist = create_mel_filterbank(sr, n_fft, nyquist);
-  REQUIRE(fb_above == fb_nyquist);
-
-  // fmax <= fmin after clamping still throws (degenerate band).
-  MelFilterConfig degenerate;
-  degenerate.n_mels = 40;
-  degenerate.fmin = static_cast<float>(sr);  // >= Nyquist ceiling after clamp
-  degenerate.fmax = static_cast<float>(sr) * 2.0f;
-  REQUIRE_THROWS_AS(create_mel_filterbank(sr, n_fft, degenerate), sonare::SonareException);
+  config.fmax = static_cast<float>(std::numeric_limits<int>::max() / 2.0);
+  CHECK_THROWS_AS(create_mel_filterbank(std::numeric_limits<int>::max(), n_fft, config),
+                  SonareException);
 }
 
 TEST_CASE("create_mel_filterbank Slaney normalization", "[mel]") {

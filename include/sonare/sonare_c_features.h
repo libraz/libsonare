@@ -385,7 +385,8 @@ typedef struct {
   /// bound is rejected with @c SONARE_ERROR_INVALID_PARAMETER rather than resolving to the
   /// default. Default 0.
   float fmin_hz;
-  /// Maximum Mel frequency in Hz (0.0 = sr/2), same rejection as @c fmin_hz. Default 0.
+  /// Maximum Mel frequency in Hz (0.0 = Nyquist). Must be finite, at most Nyquist, and
+  /// greater than @c fmin_hz after resolving 0. Default 0.
   float fmax_hz;
   /// Non-zero uses the HTK Mel formula instead of Slaney. Default 0.
   int32_t htk;
@@ -411,7 +412,7 @@ typedef struct {
   /// Lower edge of the lowest band in Hz; finite and at least 0. Default 0.
   float fmin_hz;
   /// Upper edge of the highest band in Hz; finite and at least 0, where 0 reads as the Nyquist
-  /// and a value above the Nyquist is held at it. Must exceed @c fmin_hz once resolved. Default 0.
+  /// and the resolved edge must exceed @c fmin_hz and be at most Nyquist. Default 0.
   float fmax_hz;
   /// Non-zero uses the HTK mel formula instead of Slaney's. Default 0.
   int32_t htk;
@@ -462,7 +463,7 @@ typedef struct {
   uint32_t struct_size;
   /// Minimum Mel frequency in Hz; as @ref SonareMelSpectrogramOptions. Default 0.
   float fmin_hz;
-  /// Maximum Mel frequency in Hz (0.0 = sr/2). Default 0.
+  /// Maximum Mel frequency in Hz; as @ref SonareMelSpectrogramOptions. Default 0.
   float fmax_hz;
   /// Non-zero uses the HTK Mel formula instead of Slaney. Default 0.
   int32_t htk;
@@ -533,7 +534,8 @@ void sonare_mel_to_stft_options_init(SonareMelToStftOptions* options);
 /// @param sample_rate Sample rate of the audio that produced @p mel (Hz).
 /// @param n_fft FFT size of the source STFT (sets output bins = n_fft/2 + 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
-/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
+/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = Nyquist), finite and at most Nyquist.
+///        The resolved edge must exceed @p fmin_hz.
 /// @param options NULL takes the defaults (Slaney).
 /// @param out Receives an [(n_fft/2 + 1) x n_frames] STFT magnitude matrix (not squared).
 SonareError sonare_mel_to_stft(const float* mel, size_t input_length, int n_mels, int n_frames,
@@ -563,7 +565,8 @@ void sonare_mel_to_audio_options_init(SonareMelToAudioOptions* options);
 /// @param hop_length Hop length used for reconstruction, or 0 for a
 /// quarter of @p n_fft (at least 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
-/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
+/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = Nyquist), finite and at most Nyquist.
+///        The resolved edge must exceed @p fmin_hz.
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
 /// @param options NULL takes the defaults (Slaney).
 /// @param out Receives the reconstructed audio samples (caller frees with
@@ -633,7 +636,8 @@ void sonare_mfcc_to_audio_options_init(SonareMfccToAudioOptions* options);
 /// @param hop_length Hop length used for reconstruction, or 0 for a
 /// quarter of @p n_fft (at least 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
-/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
+/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = Nyquist), finite and at most Nyquist.
+///        The resolved edge must exceed @p fmin_hz.
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
 /// @param options NULL takes the defaults (Slaney, no lifter).
 /// @param out Receives the reconstructed audio samples (caller frees with
@@ -812,7 +816,8 @@ SonareError sonare_onset_backtrack(const int* events, size_t event_count, const 
                                    size_t energy_count, int** out, size_t* out_count);
 
 /// @brief Per-octave tuning offset estimated from a list of detected pitches.
-/// @details Mirrors librosa.pitch_tuning. Non-positive frequencies are ignored.
+/// @details Mirrors librosa.pitch_tuning. NaN represents an unvoiced pitch and is ignored;
+///          finite non-positive frequencies are ignored, while either infinity is refused by index.
 /// @param frequencies Detected pitch frequencies in Hz.
 /// @param length Number of frequencies.
 /// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
@@ -1329,6 +1334,7 @@ SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sam
                              size_t hop_length, size_t win_length, int center, int norm, int mode,
                              float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note The window length is checked even for an empty onset envelope.
 /// @note A @p win_length or @p n_bins that would make the tempogram pass 500000000 elements is
 /// refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,

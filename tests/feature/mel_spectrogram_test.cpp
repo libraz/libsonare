@@ -7,6 +7,8 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "feature/inverse.h"
@@ -63,6 +65,88 @@ TEST_CASE("MelSpectrogram entry points name their required inputs",
   const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
   CHECK_THROWS_WITH(MelSpectrogram::from_spectrogram(spec, 0, MelFilterConfig()),
                     Catch::Matchers::ContainsSubstring("sample_rate must be an integer"));
+}
+
+TEST_CASE("Mel filterbank entry points validate both resolved bounds", "[domain-signal]") {
+  const auto require_refusal = [](auto&& operation, const std::string& message) {
+    try {
+      operation();
+      FAIL_CHECK("invalid Mel bounds were accepted");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(error.what() == message);
+    }
+  };
+
+  MelFilterConfig config;
+  config.n_mels = 8;
+  constexpr const char* invalid_rate = "sample_rate must be an integer in [1, 2147483647]";
+  require_refusal([&] { (void)create_mel_filterbank(0, 1024, config); }, invalid_rate);
+  require_refusal([&] { (void)get_mel_filterbank_cached(0, 1024, config); }, invalid_rate);
+  config.fmin = -1.0f;
+  require_refusal([&] { (void)create_mel_filterbank(22050, 1024, config); },
+                  "fmin must be finite and at least 0");
+  require_refusal([&] { (void)get_mel_filterbank_cached(22050, 1024, config); },
+                  "fmin must be finite and at least 0");
+
+  MelConfig mel_config;
+  mel_config.n_fft = 128;
+  mel_config.hop_length = 32;
+  mel_config.n_mels = 8;
+  mel_config.fmin = config.fmin;
+  const Audio audio = create_test_audio();
+  const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
+  const std::vector<float> mel(8 * 4, 1.0f);
+  const std::vector<float> mfcc(4 * 4, 0.0f);
+  require_refusal([&] { (void)MelSpectrogram::compute(audio, mel_config); },
+                  "fmin must be finite and at least 0");
+  require_refusal([&] { (void)mel_to_audio(mel.data(), 8, 4, mel_config, 1, 22050); },
+                  "fmin must be finite and at least 0");
+  require_refusal([&] { (void)mfcc_to_audio(mfcc.data(), 4, 4, mel_config, 1, 22050); },
+                  "fmin must be finite and at least 0");
+
+  config.fmin = 0.0f;
+  for (const float invalid_fmax :
+       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    config.fmax = invalid_fmax;
+    require_refusal([&] { (void)create_mel_filterbank(22050, 1024, config); },
+                    "fmax must be finite and at least 0");
+    require_refusal([&] { (void)get_mel_filterbank_cached(22050, 1024, config); },
+                    "fmax must be finite and at least 0");
+    require_refusal([&] { (void)MelSpectrogram::from_spectrogram(spec, 22050, config); },
+                    "fmax must be finite and at least 0");
+  }
+
+  config.fmax = 0.0f;
+  const auto default_range = create_mel_filterbank(22050, 1024, config);
+  MelFilterConfig nyquist_config = config;
+  nyquist_config.fmax = 11025.0f;
+  CHECK(get_mel_filterbank_cached(22050, 1024, config) ==
+        get_mel_filterbank_cached(22050, 1024, nyquist_config));
+  CHECK(MelSpectrogram::from_spectrogram(spec, 22050, config).n_mels() == 8);
+
+  config.fmin = 11025.0f;
+  require_refusal([&] { (void)create_mel_filterbank(22050, 1024, config); },
+                  "fmax must be greater than fmin");
+  require_refusal([&] { (void)get_mel_filterbank_cached(22050, 1024, config); },
+                  "fmax must be greater than fmin");
+
+  config.fmin = 0.0f;
+  config.fmax = 22050.0f;
+  const std::string over_nyquist = "fmax must be finite and at most 11025";
+  require_refusal([&] { (void)create_mel_filterbank(22050, 1024, config); }, over_nyquist);
+  require_refusal([&] { (void)get_mel_filterbank_cached(22050, 1024, config); }, over_nyquist);
+  require_refusal([&] { (void)MelSpectrogram::from_spectrogram(spec, 22050, config); },
+                  over_nyquist);
+  mel_config.fmin = 0.0f;
+  mel_config.fmax = config.fmax;
+  require_refusal([&] { (void)MelSpectrogram::compute(audio, mel_config); }, over_nyquist);
+  require_refusal([&] { (void)mel_to_audio(mel.data(), 8, 4, mel_config, 1, 22050); },
+                  over_nyquist);
+  require_refusal([&] { (void)mfcc_to_audio(mfcc.data(), 4, 4, mel_config, 1, 22050); },
+                  over_nyquist);
+  CHECK(default_range == *get_mel_filterbank_cached(22050, 1024, nyquist_config));
 }
 
 TEST_CASE("MelSpectrogram from_spectrogram", "[mel_spectrogram]") {

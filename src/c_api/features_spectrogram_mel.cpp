@@ -7,13 +7,13 @@
 
 namespace {
 
-MelConfig make_mel_config(int n_fft, size_t hop_length, int n_mels, float fmin, float fmax,
-                          int htk) {
+MelConfig make_mel_config(int n_fft, size_t hop_length, int n_mels, float fmin, float fmax, int htk,
+                          int sample_rate) {
   MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = core_length(hop_length);
   config.n_mels = n_mels;
-  with_c_names(kMelOptionsRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
+  with_c_names(kMelOptionsRangeNames, [&] { validate_mel_bounds(fmin, fmax, sample_rate); });
   config.fmin = fmin;
   config.fmax = fmax;
   config.htk = htk != 0;
@@ -99,7 +99,7 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
   return run_offline(
       "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz,
-                                                 resolved.fmax_hz, resolved.htk);
+                                                 resolved.fmax_hz, resolved.htk, sample_rate);
         MelSpectrogram mel = with_c_names(kMelOptionsRangeNames,
                                           [&] { return MelSpectrogram::compute(audio, config); });
 
@@ -150,15 +150,9 @@ SonareError sonare_mel_filterbank(int sample_rate, int n_fft, int n_mels,
         check::integer_within(n_fft, sonare::kStftNFftDomain, "n_fft");
         check::integer_within(n_mels, sonare::kMelBandsDomain, "n_mels");
         with_c_names(kMelOptionsRangeNames,
-                     [&] { validate_mel_bounds(resolved.fmin_hz, resolved.fmax_hz); });
+                     [&] { validate_mel_bounds(resolved.fmin_hz, resolved.fmax_hz, sample_rate); });
         check::integer_in_range(resolved.norm, SONARE_MEL_NORM_NONE, SONARE_MEL_NORM_SLANEY,
                                 "options.norm");
-        const float nyquist = static_cast<float>(sample_rate) / 2.0f;
-        const bool read_as_nyquist = resolved.fmax_hz == 0.0f || resolved.fmax_hz > nyquist;
-        if ((read_as_nyquist ? nyquist : resolved.fmax_hz) <= resolved.fmin_hz) {
-          check::refuse_relation({"options.fmax_hz", "options.fmin_hz"},
-                                 "{0} must be greater than {1}");
-        }
       });
       err != SONARE_OK) {
     return err;
@@ -233,7 +227,7 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   return run_offline(
       "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz,
-                                                 resolved.fmax_hz, resolved.htk);
+                                                 resolved.fmax_hz, resolved.htk, sample_rate);
         MelSpectrogram mel = with_c_names(kMelOptionsRangeNames,
                                           [&] { return MelSpectrogram::compute(audio, config); });
         std::vector<float> mfcc_data = mel.mfcc(n_mfcc, resolved.lifter);

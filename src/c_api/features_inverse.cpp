@@ -212,7 +212,7 @@ SonareError sonare_mel_to_stft(const float* mel, size_t input_length, int n_mels
   }
 
   SONARE_C_TRY
-  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin_hz, fmax_hz); });
+  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin_hz, fmax_hz, sample_rate); });
   SONARE_C_REQUIRE_NONNULL(out);
   MelConfig config;
   config.n_mels = n_mels;
@@ -261,7 +261,7 @@ SonareError sonare_mel_to_audio(const float* mel, size_t input_length, int n_mel
   }
 
   SONARE_C_TRY
-  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin_hz, fmax_hz); });
+  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin_hz, fmax_hz, sample_rate); });
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   MelConfig config;
@@ -462,7 +462,7 @@ SonareError sonare_mfcc_to_audio(const float* coefficients, size_t input_length,
   }
 
   SONARE_C_TRY
-  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin_hz, fmax_hz); });
+  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin_hz, fmax_hz, sample_rate); });
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   MelConfig config;

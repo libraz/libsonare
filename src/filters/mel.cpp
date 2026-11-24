@@ -7,6 +7,7 @@
 #include "util/exception.h"
 #include "util/lru_cache.h"
 #include "util/parameter_checks.h"
+#include "util/zero_is_default.h"
 
 namespace sonare {
 
@@ -52,7 +53,25 @@ struct MelFilterbankCacheKeyHash {
 /// @brief Maximum number of cached Mel filterbanks.
 constexpr size_t kMaxMelCacheSize = 8;
 
+float checked_mel_filterbank_fmax(int sr, int n_fft, const MelFilterConfig& config) {
+  util::check::integer_within<int>(sr, kMelSampleRateDomain, "sample_rate");
+  util::check::integer_within<int>(n_fft, kMelFftSizeDomain, "n_fft");
+  util::check::integer_within<int>(config.n_mels, kMelBandsDomain, "n_mels");
+  return validate_mel_bounds(config.fmin, config.fmax, sr);
+}
+
 }  // namespace
+
+float validate_mel_bounds(float fmin, float fmax, int sample_rate) {
+  validate_mel_bounds(fmin, fmax);
+  const double nyquist = static_cast<double>(sample_rate) / 2.0;
+  util::check::at_most(fmax, nyquist, "fmax");
+  const float resolved_fmax = ZeroIsDefault(fmax).or_default(static_cast<float>(nyquist));
+  if (!(resolved_fmax > fmin)) {
+    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be greater than {1}");
+  }
+  return resolved_fmax;
+}
 
 std::vector<float> mel_frequency_points(int n_points, float fmin, float fmax, bool htk) {
   util::check::integer_within<int>(n_points, kMelFrequencyCountDomain, "n_points");
@@ -75,27 +94,9 @@ std::vector<float> mel_frequency_points(int n_points, float fmin, float fmax, bo
 }
 
 std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfig& config) {
-  util::check::integer_within<int>(sr, kMelSampleRateDomain, "sample_rate");
-  util::check::integer_within<int>(n_fft, kMelFftSizeDomain, "n_fft");
-  util::check::integer_within<int>(config.n_mels, kMelBandsDomain, "n_mels");
-
-  int n_bins = n_fft / 2 + 1;
-  const float nyquist = static_cast<float>(sr) / 2.0f;
-  float fmax = config.fmax > 0 ? config.fmax : nyquist;
-  // librosa allows fmax above Nyquist (it only warns); clamp to Nyquist rather
-  // than hard-erroring so a request for the full band does not fail. Bins above
-  // Nyquist do not exist, so Nyquist is the meaningful ceiling. This intentionally
-  // diverges from librosa when a super-Nyquist fmax is requested: librosa spreads
-  // the mel band centers up to the requested fmax (changing the spacing even below
-  // Nyquist), whereas we anchor the top band at Nyquist. Revisit only if strict
-  // above-Nyquist librosa parity becomes a requirement.
-  if (fmax > nyquist) {
-    fmax = nyquist;
-  }
-  float fmin = config.fmin;
-
-  if (!(fmax > fmin))
-    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be greater than {1}");
+  const float fmax = checked_mel_filterbank_fmax(sr, n_fft, config);
+  const float fmin = config.fmin;
+  const int n_bins = n_fft / 2 + 1;
 
   /// Get the band edges: n_mels centres plus the two outer edges
   std::vector<float> mel_freqs = mel_frequency_points(config.n_mels + 2, fmin, fmax, config.htk);
@@ -150,12 +151,7 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
 
 std::shared_ptr<const std::vector<float>> get_mel_filterbank_cached(int sr, int n_fft,
                                                                     const MelFilterConfig& config) {
-  // Normalize fmax: 0 means sr/2 — collapse to that explicit value so callers
-  // who pass 0 hit the same cache entry as callers who pass sr/2. Clamp the
-  // same way create_mel_filterbank does, so super-Nyquist requests reuse the
-  // effective-Nyquist entry instead of rebuilding an identical filterbank.
-  float fmax = config.fmax > 0.0f ? config.fmax : static_cast<float>(sr) / 2.0f;
-  fmax = std::min(fmax, static_cast<float>(sr) / 2.0f);
+  const float fmax = checked_mel_filterbank_fmax(sr, n_fft, config);
   MelFilterbankCacheKey key{sr, n_fft, config.n_mels, config.fmin, fmax, config.htk, config.norm};
 
   // Cache shared_ptrs to immutable filterbanks: create_mel_filterbank is the

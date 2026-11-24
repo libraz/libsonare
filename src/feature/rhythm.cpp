@@ -219,14 +219,22 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
   return detail::fourier_tempogram_of_envelope(env, config);
 }
 
-std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
-                                    const TempogramConfig& config, float bpm_min, int n_bins) {
+namespace {
+
+std::vector<float> cyclic_tempogram_impl(const std::vector<float>& onset_envelope, int sr,
+                                         const TempogramConfig& config, float bpm_min, int n_bins,
+                                         bool validate_envelope) {
   util::check::integer_within<int>(sr, kRhythmCountDomain, "sample_rate");
+  util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
   util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   // Finite, not merely positive: a non-finite bpm_min makes the phase below NaN, and
   // the cast to a bin index is undefined before std::clamp ever sees the value.
   util::check::greater_than(bpm_min, 0.0, "bpm_min");
   util::check::integer_within<int>(n_bins, kRhythmCountDomain, "n_bins");
+  if (validate_envelope) {
+    validate_offline_audio_samples("onset_envelope", onset_envelope.data(), onset_envelope.size(),
+                                   0);
+  }
   if (onset_envelope.empty()) return {};
 
   // NOTE: custom / approximate phase-fold, NOT librosa-compatible. Each Fourier
@@ -261,6 +269,13 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
   return cyclic;
 }
 
+}  // namespace
+
+std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
+                                    const TempogramConfig& config, float bpm_min, int n_bins) {
+  return cyclic_tempogram_impl(onset_envelope, sr, config, bpm_min, n_bins, true);
+}
+
 std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& config,
                                     float bpm_min, int n_bins) {
   MelConfig mel_cfg;
@@ -268,7 +283,7 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
   OnsetConfig onset_cfg;
   onset_cfg.center = config.center;
   const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
-  return cyclic_tempogram(env, audio.sample_rate(), config, bpm_min, n_bins);
+  return cyclic_tempogram_impl(env, audio.sample_rate(), config, bpm_min, n_bins, false);
 }
 
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {

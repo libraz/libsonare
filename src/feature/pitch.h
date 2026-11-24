@@ -140,7 +140,8 @@ PiptrackResult piptrack(const Audio& audio, int n_fft = 2048, int hop_length = 5
 void validate_tuning_params(float resolution, int bins_per_octave);
 
 /// @brief Estimates a per-octave tuning offset from a list of detected pitches.
-/// @param frequencies Detected pitch frequencies (Hz). Non-positive values are ignored.
+/// @param frequencies Detected pitch frequencies (Hz). NaN marks an unvoiced pitch and is ignored;
+///        finite non-positive values are ignored, and either infinity is refused by index.
 /// @param resolution Tuning resolution in fractions of a bin (default 0.01 = 1 cent).
 /// @param bins_per_octave Number of pitch bins per octave (default 12).
 /// @return Tuning offset in fractions of a bin (range [-0.5, 0.5)). Exactly

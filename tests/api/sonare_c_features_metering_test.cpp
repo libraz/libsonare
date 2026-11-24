@@ -1925,3 +1925,81 @@ TEST_CASE("the mel family refuses an empty band range by naming both bounds", "[
   CHECK(mel_refusal_subjects() == std::vector<std::string>{"fmax_hz", "fmin_hz"});
   CHECK(audio == nullptr);
 }
+
+TEST_CASE("the C Mel family refuses fmax above Nyquist by name", "[c_api][domain-mel]") {
+  constexpr int rate = 22050;
+  constexpr float outside = rate / 2.0f + 1.0f;
+  const auto refused = [](SonareError status, const char* subject) {
+    CHECK(status == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string(subject) + " must be finite and at most 11025");
+  };
+
+  float* out = nullptr;
+  size_t length = 99;
+  int rows = 99;
+  int cols = 99;
+  SonareMelFilterbankOptions options;
+  sonare_mel_filterbank_options_init(&options);
+  options.fmax_hz = outside;
+  const SonareError filterbank =
+      sonare_mel_filterbank(rate, 128, 8, &options, &out, &length, &rows, &cols);
+  refused(filterbank, "options.fmax_hz");
+  CHECK(out == nullptr);
+  CHECK(length == 0);
+  CHECK(rows == 0);
+  CHECK(cols == 0);
+  if (out) sonare_free_floats(out);
+  out = nullptr;
+
+  const std::vector<float> samples(1024, 0.0f);
+  SonareMelSpectrogramOptions spec_options;
+  sonare_mel_spectrogram_options_init(&spec_options);
+  spec_options.fmax_hz = outside;
+  SonareMelResult spec{};
+  refused(sonare_mel_spectrogram(samples.data(), samples.size(), rate, 128, 32, 8, &spec_options,
+                                 &spec),
+          "options.fmax_hz");
+  sonare_free_mel_result(&spec);
+
+  SonareMfccOptions mfcc_options;
+  sonare_mfcc_options_init(&mfcc_options);
+  mfcc_options.fmax_hz = outside;
+  SonareMfccResult mfcc{};
+  refused(sonare_mfcc(samples.data(), samples.size(), rate, 128, 32, 8, 4, &mfcc_options, &mfcc),
+          "options.fmax_hz");
+  sonare_free_mfcc_result(&mfcc);
+
+  const std::vector<float> mel(8 * 4, 1.0f);
+  SonareInverseResult inverse{};
+  refused(
+      sonare_mel_to_stft(mel.data(), mel.size(), 8, 4, rate, 128, 0.0f, outside, nullptr, &inverse),
+      "fmax_hz");
+  sonare_free_inverse_result(&inverse);
+  refused(sonare_mel_to_audio(mel.data(), mel.size(), 8, 4, rate, 128, 32, 0.0f, outside, 1,
+                              nullptr, &out, &length),
+          "fmax_hz");
+  CHECK(out == nullptr);
+  if (out) sonare_free_floats(out);
+  out = nullptr;
+
+  const std::vector<float> coefficients(4 * 4, 0.0f);
+  refused(sonare_mfcc_to_audio(coefficients.data(), coefficients.size(), 4, 4, 8, rate, 128, 32,
+                               0.0f, outside, 1, nullptr, &out, &length),
+          "fmax_hz");
+  CHECK(out == nullptr);
+  if (out) sonare_free_floats(out);
+}
+
+TEST_CASE("streaming Mel uses the bandwidth of the analysis stream", "[c_api][domain-mel]") {
+  SonareStreamConfig config;
+  sonare_stream_config_init(&config);
+  config.sample_rate = 22050;
+  config.compute_mel = 1;
+  config.fmax_hz = 12000.0f;
+  SonareStreamAnalyzer* analyzer = nullptr;
+  REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+  CHECK(analyzer != nullptr);
+  sonare_stream_analyzer_destroy(analyzer);
+}

@@ -164,9 +164,9 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     MelFilterConfig mel_config;
     mel_config.n_mels = config_.n_mels;
     mel_config.fmin = config_.fmin;
-    mel_config.fmax = needs_resampling_ ? std::min(config_.effective_fmax(),
-                                                   static_cast<float>(internal_sample_rate_) * 0.5f)
-                                        : config_.effective_fmax();
+    // Fit the requested analysis band to the bandwidth of the internal stream.
+    mel_config.fmax =
+        std::min(config_.effective_fmax(), static_cast<float>(internal_sample_rate_) * 0.5f);
     mel_filterbank_ = create_mel_filterbank(internal_sample_rate_, fft_length_, mel_config);
   }
 

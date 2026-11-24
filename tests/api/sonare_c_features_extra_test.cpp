@@ -413,6 +413,27 @@ TEST_CASE("RMS feature output remains null on final allocation failure",
 }
 #endif
 
+TEST_CASE("C cyclic tempogram validates the window for an empty envelope",
+          "[c_api][features][domain-signal]") {
+  float unused = 0.0f;
+  float* out = &unused;
+  size_t count = 99;
+  int frames = 99;
+  CHECK(sonare_cyclic_tempogram(&unused, 0, kSampleRate, 1, 0, 30.0f, 12, &out, &count, &frames) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "win_length must be an integer in [2, 12288]");
+  CHECK(out == nullptr);
+  CHECK(count == 0);
+  CHECK(frames == 0);
+
+  REQUIRE(sonare_cyclic_tempogram(&unused, 0, kSampleRate, 1, 2, 30.0f, 12, &out, &count,
+                                  &frames) == SONARE_OK);
+  CHECK(out == nullptr);
+  CHECK(count == 0);
+  CHECK(frames == 0);
+}
+
 TEST_CASE("sonare_pitch_tuning", "[c_api][features]") {
   SECTION("returns a tuning offset in [-0.5, 0.5)") {
     // Frequencies exactly on equal-tempered pitches -> tuning near 0.
@@ -436,6 +457,26 @@ TEST_CASE("sonare_pitch_tuning", "[c_api][features]") {
     float tuning = 0.0f;
     REQUIRE(sonare_pitch_tuning(&half_bin_flat, 1, 0.01f, 12, &tuning) == SONARE_OK);
     REQUIRE(tuning == Catch::Approx(-0.5f).margin(1e-6f));
+  }
+
+  SECTION("NaN is unvoiced, while both infinities refuse by index and clear output") {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float half_bin_flat = 440.0f * std::pow(2.0f, -0.5f / 12.0f);
+    const float mixed[] = {half_bin_flat, nan, 0.0f, -1.0f};
+    float tuning = 0.25f;
+    REQUIRE(sonare_pitch_tuning(mixed, 4, 0.01f, 12, &tuning) == SONARE_OK);
+    CHECK(tuning == Catch::Approx(-0.5f).margin(1.0e-6f));
+
+    for (const float infinity :
+         {std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()}) {
+      const float invalid[] = {440.0f, infinity};
+      tuning = 0.25f;
+      CHECK(sonare_pitch_tuning(invalid, 2, 0.01f, 12, &tuning) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "frequencies contains a non-finite sample at index 1");
+      CHECK(tuning == 0.0f);
+    }
   }
 
   SECTION("rejects null out and invalid params") {

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <string>
 
 #include "core/convert.h"
 #include "core/fft.h"
@@ -813,13 +814,19 @@ void validate_tuning_params(float resolution, int bins_per_octave) {
 
 float pitch_tuning(const std::vector<float>& frequencies, float resolution, int bins_per_octave) {
   validate_tuning_params(resolution, bins_per_octave);
+  for (std::size_t i = 0; i < frequencies.size(); ++i) {
+    if (std::isinf(frequencies[i])) {
+      util::check::refuse("frequencies",
+                          "contains a non-finite sample at index " + std::to_string(i));
+    }
+  }
 
   // Convert to log-frequency bin offsets relative to A4.
   // librosa: residual = mod(bins_per_octave * log2(freq/440) + 0.5, 1.0) - 0.5
   std::vector<float> residuals;
   residuals.reserve(frequencies.size());
   for (float f : frequencies) {
-    if (f <= 0.0f || !std::isfinite(f)) continue;
+    if (std::isnan(f) || f <= 0.0f) continue;
     // In double, like librosa. The fold below turns on a >= 0.5 comparison, and
     // a float log2 puts a pitch exactly half a bin flat on the wrong side of it:
     // the residual comes out at 0.4999998 instead of 0.5000002, so it is not

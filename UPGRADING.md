@@ -131,8 +131,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonarePolyphonicConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_polyphonic_config_init, after which every field is read literally and range-checked (a 0 is a 0, so min_frame_peak_ratio, min_separation_cents, min_ridge_peak_ratio and min_ridge_duration_ms take 0 directly and refuse a negative); reattack_ratio moves beside the other tracking fields; win_length 0 (n_fft), max_refine_hz 0 (derived) and reattack_ratio 0 (no split) keep their named meanings |
 | `SonareTranscribeConfig.reattack_ratio` | 0 now means no split (1.x: 0 was the default 2.0 and a negative value meant no split); a non-zero value must be finite and above 1 |
 | `sonare_griffin_lim` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
-| `sonare_mel_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct |
-| `sonare_mfcc_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct |
+| `sonare_mel_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist |
+| `sonare_mfcc_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist |
 | `sonare_note_segments` | takes (f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced is non-NULL, and voiced flags read as 0/1 probabilities |
 | `sonare_vqt` | gamma is NaN for the automatic ERB-derived value and otherwise finite and >= 0; a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER 'gamma must be finite and at least 0' |
 
@@ -251,14 +251,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_downmix_ex` | removed: call sonare_downmix with a SonareDownmixOptions filled by sonare_downmix_options_init, setting include_lfe and normalize there |
 | `sonare_downmix` | takes num_channels as size_t and a const SonareDownmixOptions* (NULL for defaults) before out_samples; initialise the options with sonare_downmix_options_init |
 | `sonare_mel_spectrogram_ex` | removed: call sonare_mel_spectrogram with SonareMelSpectrogramOptions fmin_hz, fmax_hz and htk set |
-| `sonare_mel_spectrogram` | takes const SonareMelSpectrogramOptions* options (NULL = defaults; sonare_mel_spectrogram_options_init) before out; fmin_hz, fmax_hz and htk moved into the struct |
+| `sonare_mel_spectrogram` | takes const SonareMelSpectrogramOptions* options (NULL = defaults; sonare_mel_spectrogram_options_init) before out; fmin_hz, fmax_hz and htk moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist |
 | `sonare_mel_to_audio_checked_ex` | removed: call sonare_mel_to_audio with input_length and SonareMelToAudioOptions htk set |
 | `sonare_mel_to_audio_checked` | removed: call sonare_mel_to_audio, which now takes input_length after mel |
 | `sonare_mel_to_audio_ex` | removed: call sonare_mel_to_audio with input_length and SonareMelToAudioOptions htk set |
 | `sonare_mel_to_stft_checked_ex` | removed: call sonare_mel_to_stft with input_length and SonareMelToStftOptions htk set |
 | `sonare_mel_to_stft_checked` | removed: call sonare_mel_to_stft, which now takes input_length after mel |
 | `sonare_mel_to_stft_ex` | removed: call sonare_mel_to_stft with input_length and SonareMelToStftOptions htk set |
-| `sonare_mel_to_stft` | takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToStftOptions* options (NULL = defaults; sonare_mel_to_stft_options_init) before out; htk moved into the struct |
+| `sonare_mel_to_stft` | takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToStftOptions* options (NULL = defaults; sonare_mel_to_stft_options_init) before out; htk moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist |
 | `sonare_meter_options_default` | removed: call sonare_meter_options_init(&config) on a caller-owned struct instead |
 | `sonare_mfcc_ex` | removed: call sonare_mfcc with SonareMfccOptions fmin_hz, fmax_hz, htk and lifter set |
 | `sonare_mfcc_to_audio_checked_ex2` | removed: call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk and lifter set |
@@ -270,7 +270,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_mfcc_to_mel_checked` | removed: call sonare_mfcc_to_mel, which now takes input_length after coefficients |
 | `sonare_mfcc_to_mel_ex` | removed: call sonare_mfcc_to_mel with input_length and SonareMfccToMelOptions lifter set |
 | `sonare_mfcc_to_mel` | takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToMelOptions* options (NULL = defaults; sonare_mfcc_to_mel_options_init) before out; lifter moved into the struct |
-| `sonare_mfcc` | takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct |
+| `sonare_mfcc` | takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist |
 | `sonare_music_analyze_options_default` | removed: call sonare_music_analyze_options_init(&config) on a caller-owned struct instead |
 | `sonare_nnls_chroma_ex2` | removed: call sonare_nnls_chroma with SonareNnlsChromaOptions enable_stft_blend, stft_blend_weight, stft_blend_n_fft and hop_length set |
 | `sonare_nnls_chroma_ex` | removed: call sonare_nnls_chroma with SonareNnlsChromaOptions enable_stft_blend, stft_blend_weight and stft_blend_n_fft set |
@@ -333,7 +333,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements') |
 | `sonare_cqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the reconstructed signal larger than 500000000 elements is refused by name ('hop_length must keep the reconstructed signal within 500000000 elements') |
 | `sonare_cyclic_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_cyclic_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements') |
+| `sonare_cyclic_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements'); the normal window domain is checked even for an empty onset envelope |
 | `sonare_estimate_tuning(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_fourier_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_fourier_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements') |
@@ -492,6 +492,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_chirp` | fmin_hz and fmax_hz must be finite; a linear sweep refuses a negative fmin_hz and an fmax_hz at or below 0, and an exponential sweep refuses either at or below 0, as SONARE_ERROR_INVALID_PARAMETER '<name> must be finite and greater than 0' (or 'at least 0' for a linear fmin_hz) with the outputs cleared (1.x accepted any linear value that survived the float cast) |
 | `sonare_decode_channels` | a recognized codec missing from the build returns SONARE_ERROR_NOT_SUPPORTED with reason notCompiledIn. An unrecognized container still returns SONARE_ERROR_INVALID_FORMAT. |
+| `sonare_pitch_tuning` | NaN frequencies still represent unvoiced pitches and are ignored; infinities, which were ignored in 1.x, are refused with SONARE_ERROR_INVALID_PARAMETER and an indexed frequencies diagnostic |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
 | `sonare_polyphonic_set_note_edit(envelope)` | `sonare_polyphonic_set_note_edit(amplitude_envelope)` |
 | `sonare_polyphonic_set_note_edit(envelope_count)` | `sonare_polyphonic_set_note_edit(amplitude_envelope_count)` |

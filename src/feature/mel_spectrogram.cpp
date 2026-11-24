@@ -53,12 +53,8 @@ MelSpectrogram MelSpectrogram::from_spectrogram(const Spectrogram& spec, int sr,
   int n_mels = mel_config.n_mels;
 
   // Create Mel filterbank (cached — same (sr, n_fft, config) hits the same entry).
-  MelFilterConfig config = mel_config;
-  if (config.fmax <= 0.0f) {
-    config.fmax = static_cast<float>(sr) / 2.0f;
-  }
   std::shared_ptr<const std::vector<float>> filterbank =
-      get_mel_filterbank_cached(sr, spec.n_fft(), config);
+      get_mel_filterbank_cached(sr, spec.n_fft(), mel_config);
 
   // Apply filterbank to power spectrum
   const std::vector<float>& power = spec.power();

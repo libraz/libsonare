@@ -2361,18 +2361,18 @@ test = "tests/conformance/core_validation_refusals_test.cpp::griffin_lim derives
 [[entry]]
 kind = "function"
 old = "sonare_mel_to_audio"
-changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
+test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
 
 [[entry]]
 kind = "function"
 old = "sonare_mfcc_to_audio"
-changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
 
 [[entry]]
 kind = "export"
@@ -3204,7 +3204,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_cyclic_tempogram(win_length)"
-changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements')"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements'); the normal window domain is checked even for an empty onset envelope"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -4259,26 +4259,26 @@ test = "tests/api/sonare_c_music_test.cpp::sonare_detect_chords chroma_method ra
 [[entry]]
 kind = "function"
 old = "sonare_mel_spectrogram"
-changed = "takes const SonareMelSpectrogramOptions* options (NULL = defaults; sonare_mel_spectrogram_options_init) before out; fmin_hz, fmax_hz and htk moved into the struct"
+changed = "takes const SonareMelSpectrogramOptions* options (NULL = defaults; sonare_mel_spectrogram_options_init) before out; fmin_hz, fmax_hz and htk moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_mel_spectrogram exposes a custom Mel range from pure C"
+test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
 
 [[entry]]
 kind = "function"
 old = "sonare_mel_to_stft"
-changed = "takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToStftOptions* options (NULL = defaults; sonare_mel_to_stft_options_init) before out; htk moved into the struct"
+changed = "takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToStftOptions* options (NULL = defaults; sonare_mel_to_stft_options_init) before out; htk moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_features_metering_test.cpp::mel and MFCC results carry the parameters that invert them"
+test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
 
 [[entry]]
 kind = "function"
 old = "sonare_mfcc"
-changed = "takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct"
+changed = "takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_features_metering_test.cpp::sonare mel range is applied or refused rather than defaulted"
+test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
 
 [[entry]]
 kind = "function"
@@ -6207,6 +6207,14 @@ changed = "a x_cols that would make the similarity matrix larger than 2147483647
 domain = "analysis"
 rule = "work-size-limit"
 test = "tests/api/c_refusal_subjects_test.cpp::sonare_segment_cross_similarity refuses an x_cols"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_tuning"
+changed = "NaN frequencies still represent unvoiced pitches and are ignored; infinities, which were ignored in 1.x, are refused with SONARE_ERROR_INVALID_PARAMETER and an indexed frequencies diagnostic"
+domain = "analysis"
+rule = "individual"
+test = "tests/api/sonare_c_features_extra_test.cpp::sonare_pitch_tuning"
 
 [[entry]]
 kind = "option"
