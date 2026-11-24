@@ -571,7 +571,7 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
                                      return candidate.full_key == full_key;
                                    });
   if (target == impl_->parameter_targets.end()) {
-    // A retired spelling is refused here, naming the current key.
+    // A retired spelling is refused here as an unknown key with the accepted-key list.
     std::string retired_check_storage;
     (void)canonical_chain_param_key(full_key, &retired_check_storage);
     throw SonareException(ErrorCode::InvalidParameter,

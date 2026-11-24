@@ -196,14 +196,21 @@ std::optional<std::string> mastering_enum_names(const std::string& processor,
 ///   - `stages`: each chain stage in execution order, `{prefix, processor, form, enabledKey}`; the
 ///     keys `<prefix>.<leaf>` are `processor`'s parameters in its `form` ("offline": the catalog's
 ///     `offlineParams` when the entry has them, else its `params`), or chain-only when both are
-///     null.
+///     null. The multiband stage retains its processor link, but its vocabulary comes from the
+///     chain-only crossover parameters and the indexed lists below, not the standalone processor.
 ///   - `lists`: the multiband stage's indexed lists, `{key, processor, form, minItems, maxItems}`;
-///   an
-///     element `<key>.<i>` is the chain param `key` when `processor` is null, otherwise
-///     `<key>.<i>.<field>` is the processor's `field`.
-///   - `params`: the keys no processor describes, in the shape of insert_param_info_json(), with
-///     bounds measured through the chain's own parser and validator.
+///     Append `.{i}` to a list key or substitute its embedded `{i}`. A numeric list uses the
+///     chain parameter descriptor with the same name. A processor list appends `.<field>` to
+///     address a processor parameter. The zero-based decimal index is below `maxItems`.
+///     Editing a scalar cutoff also requires that index to exist in the current configuration.
+///   - `params`: chain-only parameter descriptors in the shape of insert_param_info_json(),
+///     with bounds measured through the chain's parser and validator.
 std::string chain_catalog_json();
+
+/// @brief Sorted expected flat keys for a chain parameter reader's unknown-key refusal.
+/// @details Derived from the chain stages, offline readers, lists and chain-only declarations
+///          that also write chain_catalog_json(), without measuring parameter bounds.
+const std::string& chain_expected_keys();
 
 /// Rate and block size an insert is prepared at when the catalog measures it.
 inline constexpr double kInsertProbeSampleRate = 48000.0;

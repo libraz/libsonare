@@ -20,6 +20,7 @@
 #include "mastering/api/retired_names.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/json_schema.h"
 #include "util/number_format.h"
 
 namespace sonare::mastering::api {
@@ -155,6 +156,22 @@ constexpr ChainStage kChainStages[] = {
 constexpr const char* kChainBandList = "dynamics.multibandComp.bands";
 constexpr const char* kChainBandProcessor = "dynamics.compressor";
 constexpr const char* kChainCutoffList = "dynamics.multibandComp.crossover.cutoffsHz";
+constexpr const char* kChainCutoffScalarPattern = "dynamics.multibandComp.cutoff{i}Hz";
+constexpr std::size_t kChainMinCutoffs = kMinMultibandBands - 1u;
+constexpr std::size_t kChainMaxCutoffs = kMaxMultibandBands - 1u;
+
+struct ChainList {
+  const char* key;
+  const char* processor;
+  std::size_t min_items;
+  std::size_t max_items;
+};
+
+constexpr ChainList kChainLists[] = {
+    {kChainCutoffList, nullptr, kChainMinCutoffs, kChainMaxCutoffs},
+    {kChainBandList, kChainBandProcessor, kMinMultibandBands, kMaxMultibandBands},
+    {kChainCutoffScalarPattern, nullptr, kChainMinCutoffs, kChainMaxCutoffs},
+};
 
 // The name the chain-only keys are measured under; no processor id starts with '#'.
 constexpr const char* kChainOnlyProbe = "#chain";
@@ -210,12 +227,12 @@ bool read_chain_only_config(const ParamMap& params) {
                   static_cast<double>(detail::read_enum(params, mode_key.c_str(), crossover.mode)));
   // A cutoff element has no single default: declared, not read.
   const std::pair<std::string, detail::ParamMeta> undefaulted[] = {
-      {kChainCutoffList, detail::kHzLog}};
+      {kChainCutoffList, detail::kHzLog}, {kChainCutoffScalarPattern, detail::kHzLog}};
   for (const auto& [key, meta] : undefaulted) {
     detail::declare_number(params, key, meta);
     const auto given = params.find(key);
     if (given == params.end()) continue;
-    supplied.push_back(Param{key == kChainCutoffList ? key + ".0" : key, given->second});
+    supplied.push_back(Param{std::string(kChainCutoffList) + ".0", given->second});
   }
   validate_mastering_chain_config(parse_chain_config_params(supplied.data(), supplied.size()));
   return true;
@@ -1211,7 +1228,60 @@ std::string chain_only_param_info_json() {
   return out;
 }
 
+std::vector<std::string> offline_key_names(const std::string& name) {
+  ParamMap params;
+  {
+    const OfflineFormMeasurement offline;
+    if (read_offline_config(name, params)) return construction_keys(params);
+  }
+  return insert_param_names(name);
+}
+
+std::string chain_expected_key_suffix() {
+  // Chain-only declarations include the stage enable keys and crossover fields.
+  ParamMap chain_only;
+  (void)read_chain_only_config(chain_only);
+  std::vector<std::string> keys = construction_keys(chain_only);
+
+  // Stage field names come from the same offline readers used by the catalog.
+  // The multiband stage keeps its processor link, but its key space is described
+  // by the chain-only crossover and the indexed lists below.
+  for (const ChainStage& stage : kChainStages) {
+    keys.push_back(chain_enabled_key(stage));
+    if (stage.processor == nullptr || std::string(stage.prefix) == "dynamics.multibandComp")
+      continue;
+    for (const std::string& field : offline_key_names(stage.processor)) {
+      keys.push_back(std::string(stage.prefix) + "." + field);
+    }
+  }
+
+  // A list's accepted grammar is published by its row and its processor's
+  // offline field declarations, with no second list/range table here.
+  for (const ChainList& list : kChainLists) {
+    const std::string key = list.key;
+    if (list.processor == nullptr) {
+      if (key.find("{i}") == std::string::npos) {
+        keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+        keys.push_back(key + ".{i}");
+      } else {
+        keys.push_back(key);
+      }
+    } else {
+      for (const std::string& field : offline_key_names(list.processor)) {
+        keys.push_back(key + ".{i}." + field);
+      }
+    }
+  }
+
+  return sonare::util::json::schema::expected_keys(keys);
+}
+
 }  // namespace
+
+const std::string& chain_expected_keys() {
+  static const std::string expected = chain_expected_key_suffix();
+  return expected;
+}
 
 std::string chain_catalog_json() {
   std::string out = "{\"stages\":[";
@@ -1231,16 +1301,22 @@ std::string chain_catalog_json() {
     append_json_string(out, chain_enabled_key(stage));
     out += '}';
   }
-  out += "],\"lists\":[{\"key\":";
-  append_json_string(out, kChainCutoffList);
-  out +=
-      ",\"processor\":null,\"form\":null,\"minItems\":" + std::to_string(kMinMultibandBands - 1u) +
-      ",\"maxItems\":" + std::to_string(kMaxMultibandBands - 1u) + "},{\"key\":";
-  append_json_string(out, kChainBandList);
-  out += ",\"processor\":";
-  append_json_string(out, kChainBandProcessor);
-  out += ",\"form\":\"offline\",\"minItems\":" + std::to_string(kMinMultibandBands) +
-         ",\"maxItems\":" + std::to_string(kMaxMultibandBands) + "}],\"params\":";
+  out += "],\"lists\":[";
+  for (const ChainList& list : kChainLists) {
+    if (out.back() != '[') out += ',';
+    out += "{\"key\":";
+    append_json_string(out, list.key);
+    out += ",\"processor\":";
+    if (list.processor == nullptr) {
+      out += "null";
+    } else {
+      append_json_string(out, list.processor);
+    }
+    out += list.processor == nullptr ? ",\"form\":null" : ",\"form\":\"offline\"";
+    out += ",\"minItems\":" + std::to_string(list.min_items) +
+           ",\"maxItems\":" + std::to_string(list.max_items) + "}";
+  }
+  out += "],\"params\":";
   out += chain_only_param_info_json();
   out += '}';
   return out;

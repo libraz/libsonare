@@ -366,6 +366,7 @@ if(BUILD_MASTERING)
     mastering/assistant_test.cpp
     mastering/band_state_non_finite_recovery_test.cpp
     mastering/chain_test.cpp
+    mastering/chain_overrides_keys_test.cpp
     mastering/chain_latency_test.cpp
     mastering/common_test.cpp
     mastering/mastering_ab_match_test.cpp

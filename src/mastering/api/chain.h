@@ -606,9 +606,9 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 /// @brief The internal spelling of a flat chain key.
 /// @details `bands.<i>.<field>` becomes `band<i>.<field>`; every other current key is returned
 ///          as given. A retired spelling (`repair.nFft`, `eq.tiltDb`, a bare `slope`,
-///          `band<i>.<field>`, `lowCutoffHz`, the low/mid/high shorthand, ...) is refused with
-///          the current key named. Whether the result names a field is decided where it is
-///          applied.
+///          `band<i>.<field>`, `lowCutoffHz`, the low/mid/high shorthand, ...) is refused as an
+///          unknown key with the accepted-key list appended. Whether the result names a field
+///          is decided where it is applied.
 /// @param storage Holds a rewritten key; the return refers to it or to @p key.
 /// @throws SonareException (InvalidParameter) for a retired spelling.
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage);

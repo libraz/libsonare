@@ -13,6 +13,7 @@
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "mastering/common/loudness_measure.h"
@@ -1191,7 +1192,9 @@ TEST_CASE("sonare_mastering_chain_config_from_json refuses a document as Invalid
   char* json = nullptr;
   REQUIRE(sonare_mastering_chain_config_from_json(R"({"version":2,"params":{"eq.tiltDb":1}})",
                                                   &json) == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(std::string(sonare_last_error_message()) == "unknown key params.eq.tiltDb");
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "unknown key params.eq.tiltDb (expected " +
+              sonare::mastering::api::chain_expected_keys() + ")");
   REQUIRE(sonare_mastering_chain_config_from_json(nullptr, &json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(json == nullptr);
@@ -1227,11 +1230,14 @@ TEST_CASE("the capability catalog's chain lists bound the multiband lists", "[c_
   REQUIRE(chain.find("aliases") == nullptr);
 
   const auto& lists = chain["lists"].as_array();
-  REQUIRE(lists.size() == 2);
+  REQUIRE(lists.size() == 3);
   REQUIRE(lists[0]["minItems"].as_int() == static_cast<int>(api::kMinMultibandBands - 1));
   REQUIRE(lists[0]["maxItems"].as_int() == static_cast<int>(api::kMaxMultibandBands - 1));
   REQUIRE(lists[1]["minItems"].as_int() == static_cast<int>(api::kMinMultibandBands));
   REQUIRE(lists[1]["maxItems"].as_int() == static_cast<int>(api::kMaxMultibandBands));
+  REQUIRE(lists[2]["key"].as_string() == "dynamics.multibandComp.cutoff{i}Hz");
+  REQUIRE(lists[2]["minItems"].as_int() == static_cast<int>(api::kMinMultibandBands - 1));
+  REQUIRE(lists[2]["maxItems"].as_int() == static_cast<int>(api::kMaxMultibandBands - 1));
 }
 
 TEST_CASE("the capability catalog's chain-only params are measured through the chain",

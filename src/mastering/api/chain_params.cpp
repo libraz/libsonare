@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/param_field_tables.h"
 #include "util/exception.h"
 
@@ -220,7 +221,8 @@ bool retired_chain_key(const std::string& key) {
 
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage) {
   if (retired_chain_key(key)) {
-    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key).as_caller_spelled();
+    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key, chain_expected_keys())
+        .as_caller_spelled();
   }
   if (internal_multiband_key(key, storage)) return *storage;
   return key;
@@ -868,7 +870,8 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   } catch (const FieldValueRefusal& refusal) {
     rethrow_keyed(refusal, key);
   }
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key).as_caller_spelled();
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key, chain_expected_keys())
+      .as_caller_spelled();
 }
 
 // Two phases so the result never depends on key order: a `crossover.cutoffsHz.<i>` set first

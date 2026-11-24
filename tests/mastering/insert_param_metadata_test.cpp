@@ -2065,7 +2065,9 @@ TEST_CASE("an enum parameter's name resolves to the number the flat lists carry"
   for (const std::string retired : {"dynamics.multibandComp.slope", "dynamics.multibandComp.mode",
                                     "dynamics.multibandComp.band3.detector"}) {
     INFO(retired);
-    CHECK_THROWS_WITH(mastering_enum_value("", retired, "lr2"), "unknown key " + retired);
+    CHECK_THROWS_WITH(mastering_enum_value("", retired, "lr2"),
+                      "unknown key " + retired + " (expected " +
+                          sonare::mastering::api::chain_expected_keys() + ")");
   }
   CHECK_FALSE(mastering_enum_value("", "dynamics.multibandComp.cutoff0Hz", "x").has_value());
   CHECK_FALSE(mastering_enum_value("", "dynamics.compressor.ratio", "x").has_value());

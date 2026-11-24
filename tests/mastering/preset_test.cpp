@@ -439,7 +439,8 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
       FAIL("expected a refusal");
     } catch (const sonare::SonareException& error) {
       CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
-      CHECK(std::string(error.what()) == "unknown key " + path);
+      CHECK(std::string(error.what()) ==
+            "unknown key " + path + " (expected " + chain_expected_keys() + ")");
     }
   }
   refused(R"({"params":{},"extra":1})", "unknown key extra");
@@ -469,8 +470,10 @@ TEST_CASE("every document entry reads the same document and refuses as a documen
            [](const std::string& d) {
              (void)chain_config_overrides_from_json(preset_config(Preset::Pop), d);
            }}) {
-    require_refused_with([&] { read(R"({"params":{"eq.tilt.noSuchKey":1}})"); },
-                         "unknown key params.eq.tilt.noSuchKey", sonare::ErrorCode::InvalidFormat);
+    require_refused_with(
+        [&] { read(R"({"params":{"eq.tilt.noSuchKey":1}})"); },
+        "unknown key params.eq.tilt.noSuchKey (expected " + chain_expected_keys() + ")",
+        sonare::ErrorCode::InvalidFormat);
     require_refused_with([&] { read(R"({"params":{"eq.tilt.tiltDb":null}})"); },
                          "params.eq.tilt.tiltDb must be a number, a boolean or a token",
                          sonare::ErrorCode::InvalidFormat);

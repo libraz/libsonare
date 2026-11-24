@@ -615,6 +615,10 @@ std::pair<ErrorCode, std::string> refusal_of(Call&& call) {
   return {ErrorCode::Ok, std::string()};
 }
 
+std::string unknown_chain_key(const std::string& key) {
+  return "unknown key " + key + " (expected " + chain_expected_keys() + ")";
+}
+
 std::pair<ErrorCode, std::string> dot_key_refusal(const char* key, double value) {
   const Param params[] = {{key, value}};
   return refusal_of([&] { (void)parse_chain_config_params(params, 1); });
@@ -627,12 +631,12 @@ TEST_CASE("The linear denoise floor spelling is refused as an unknown key", "[ma
     CAPTURE(key);
     const auto [code, message] = dot_key_refusal(key, 0.1);
     REQUIRE(code == ErrorCode::InvalidParameter);
-    REQUIRE(message == std::string("unknown key ") + key);
+    REQUIRE(message == unknown_chain_key(key));
   }
   const std::string document = "{\"version\":2,\"params\":{\"repair.denoise.gainFloor\":0.1}}";
   const auto [code, message] = refusal_of([&] { (void)chain_config_from_json(document); });
   REQUIRE(code == ErrorCode::InvalidFormat);
-  REQUIRE(message == "unknown key params.repair.denoise.gainFloor");
+  REQUIRE(message == unknown_chain_key("params.repair.denoise.gainFloor"));
 
   Param current[] = {{"repair.denoise.reductionDb", 12.0}};
   REQUIRE_THAT(parse_chain_config_params(current, 1).repair.denoise.config.reduction_db,
@@ -660,13 +664,13 @@ TEST_CASE("The declip threshold is a dBFS key", "[mastering][chain]") {
 
   const auto [code, message] = dot_key_refusal("repair.declip.clipThreshold", 0.9);
   REQUIRE(code == ErrorCode::InvalidParameter);
-  REQUIRE(message == "unknown key repair.declip.clipThreshold");
+  REQUIRE(message == unknown_chain_key("repair.declip.clipThreshold"));
   const auto [doc_code, doc_message] = refusal_of([] {
     (void)chain_config_from_json(
         "{\"version\":2,\"params\":{\"repair.declip.clipThreshold\":0.9}}");
   });
   REQUIRE(doc_code == ErrorCode::InvalidFormat);
-  REQUIRE(doc_message == "unknown key params.repair.declip.clipThreshold");
+  REQUIRE(doc_message == unknown_chain_key("params.repair.declip.clipThreshold"));
 }
 
 TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering][chain]") {
@@ -702,13 +706,13 @@ TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering]
     CAPTURE(old_key);
     const auto [code, message] = dot_key_refusal(old_key, 1.0);
     REQUIRE(code == ErrorCode::InvalidParameter);
-    REQUIRE(message == std::string("unknown key ") + old_key);
+    REQUIRE(message == unknown_chain_key(old_key));
     const auto [doc_code, doc_message] = refusal_of([&] {
       (void)chain_config_from_json(std::string("{\"version\":2,\"params\":{\"") + old_key +
                                    "\":1}}");
     });
     REQUIRE(doc_code == ErrorCode::InvalidFormat);
-    REQUIRE(doc_message == std::string("unknown key params.") + old_key);
+    REQUIRE(doc_message == unknown_chain_key(std::string("params.") + old_key));
   }
 }
 
@@ -742,7 +746,7 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
     const std::string old_key = std::string("dynamics.multibandComp.bands.1.") + old_field;
     const auto [code, message] = dot_key_refusal(old_key.c_str(), 1.0);
     REQUIRE(code == ErrorCode::InvalidParameter);
-    REQUIRE(message == "unknown key " + old_key);
+    REQUIRE(message == unknown_chain_key(old_key));
 
     // The same field inside a band record of the structured document.
     std::string with_old_field = document;
@@ -2415,9 +2419,9 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.lowCutoffHz", 250.0),
                       SonareException);
     REQUIRE_THROWS_WITH(chain.set_parameter("dynamics.multibandComp.lowThresholdDb", -20.0),
-                        "unknown key dynamics.multibandComp.lowThresholdDb");
+                        unknown_chain_key("dynamics.multibandComp.lowThresholdDb"));
     REQUIRE_THROWS_WITH(chain.set_parameter("dynamics.multibandComp.band0.thresholdDb", -20.0),
-                        "unknown key dynamics.multibandComp.band0.thresholdDb");
+                        unknown_chain_key("dynamics.multibandComp.band0.thresholdDb"));
     REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.lowMakeupGainDb", 2.0),
                       SonareException);
     REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.band3ThresholdDb", -20.0),
@@ -3347,7 +3351,7 @@ TEST_CASE("flat multiband scalar spellings and shorthand edit in place",
         FAIL("expected an InvalidParameter refusal");
       } catch (const SonareException& error) {
         CHECK(error.code() == ErrorCode::InvalidParameter);
-        CHECK(std::string(error.what()) == "unknown key " + old_full);
+        CHECK(std::string(error.what()) == unknown_chain_key(old_full));
       }
     }
   }
