@@ -82,11 +82,20 @@ class TestCompressor:
         ).samples
         assert float(np.max(np.abs(keyed))) > float(np.max(np.abs(plain)))
 
-    @pytest.mark.parametrize("corner", [0.0, -1.0])
-    def test_refuses_a_sidechain_high_pass_that_is_not_positive(self, corner: float) -> None:
+    def test_zero_sidechain_high_pass_bypasses_the_filter(self) -> None:
+        x = sine(60.0, 0.5, sr=SR, amp=0.8)
+        implicit = mastering_dynamics_compressor(x, SR, threshold_db=-30.0, ratio=8.0)
+        explicit = mastering_dynamics_compressor(
+            x, SR, threshold_db=-30.0, ratio=8.0, sidechain_high_pass_hz=0.0
+        )
+
+        assert explicit.latency_samples == implicit.latency_samples
+        np.testing.assert_allclose(explicit.samples, implicit.samples, rtol=1e-6, atol=1e-8)
+
+    def test_refuses_a_negative_sidechain_high_pass(self) -> None:
         x = sine(440.0, 0.1, sr=SR, amp=0.5)
-        with pytest.raises(SonareValueError, match="sidechain_high_pass_hz"):
-            mastering_dynamics_compressor(x, SR, sidechain_high_pass_hz=corner)
+        with pytest.raises(SonareValueError, match="sidechain_high_pass_hz must be at least 0"):
+            mastering_dynamics_compressor(x, SR, sidechain_high_pass_hz=-1.0)
 
     def test_empty_input_raises(self) -> None:
         with pytest.raises(ValueError, match="samples must not be empty"):

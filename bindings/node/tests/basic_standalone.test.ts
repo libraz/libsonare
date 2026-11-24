@@ -491,7 +491,7 @@ describe('standalone functions', () => {
     });
     expect(framed.rows).toBe(2);
     expect(framed.cols).toBe(3);
-    expect(Array.from(framed.data)).toEqual([1, 2, 2, 3, 3, 4]);
+    expect(Array.from(framed.data)).toEqual([1, 2, 3, 2, 3, 4]);
     expect(
       Array.from(fixLength({ values: new Float32Array([1, 2]), targetSize: 4, padValue: -1 })),
     ).toEqual([1, 2, -1, -1]);

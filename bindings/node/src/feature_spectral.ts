@@ -43,10 +43,19 @@ export interface StftRequest {
 }
 
 /** Request for {@link spectralCentroid}. */
-export type SpectralCentroidRequest = StftRequest;
+export interface SpectralCentroidRequest {
+  /** Mono audio samples. */
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
+  sampleRate: number;
+  /** Even FFT size in samples. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+}
 
 /** Request for {@link spectralFlatness}. */
-export type SpectralFlatnessRequest = StftRequest;
+export type SpectralFlatnessRequest = SpectralCentroidRequest;
 
 /** Request for {@link melFilterbank}. */
 export interface MelFilterbankRequest {

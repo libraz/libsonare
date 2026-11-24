@@ -33,9 +33,10 @@ import {
   type RoomEstimateResult,
   masteringRepairDereverbConfigForRoom as wasmDereverbConfigForRoom,
   detectOnsets as wasmDetectOnsets,
+  frameSignal as wasmFrameSignal,
   init as wasmInit,
 } from '../../wasm/dist/index.js';
-import { detectOnsets } from '../src/index.js';
+import { detectOnsets, frameSignal } from '../src/index.js';
 
 const SAMPLE_RATE = 22050;
 
@@ -224,5 +225,23 @@ describe('the room measurement volume is read one way on both surfaces', () => {
     const byDefault = wasmLateDelayMs();
     expect(wasmLateDelayMs(Number.NaN)).toBe(byDefault);
     expect(wasmLateDelayMs(Number.POSITIVE_INFINITY)).toBe(byDefault);
+  });
+});
+
+it('stores overlapping frames in the same matrix columns on Node and WASM', () => {
+  const samples = new Float32Array([1, 2, 3, 4]);
+  const options = { frameLength: 2, hopLength: 1 };
+  const node = frameSignal(samples, SAMPLE_RATE, options);
+  const wasm = wasmFrameSignal(samples, SAMPLE_RATE, options);
+  expect(node.rows).toBe(2);
+  expect(node.cols).toBe(3);
+  expect(wasm.rows).toBe(node.rows);
+  expect(wasm.cols).toBe(node.cols);
+  const expected = [1, 2, 3, 2, 3, 4];
+  expect(node.data).toHaveLength(expected.length);
+  expect(wasm.data).toHaveLength(expected.length);
+  expected.forEach((sample, index) => {
+    expect(node.data[index]).toBeCloseTo(sample, 6);
+    expect(wasm.data[index]).toBeCloseTo(sample, 6);
   });
 });

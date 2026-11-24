@@ -430,8 +430,16 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioSamples(request.samples, request, 'samples', true);
-    const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
-    return toMatrix2D(r.frames, request.frameLength, r.nFrames);
+    const { frameLength, hopLength } = request;
+    const { frames, nFrames } = addon.frameSignal(request.samples, frameLength, hopLength);
+    // The native buffer stores each frame contiguously; the matrix stores frames down columns.
+    const data = new Float32Array(frames.length);
+    for (let frame = 0; frame < nFrames; ++frame) {
+      for (let sample = 0; sample < frameLength; ++sample) {
+        data[sample * nFrames + frame] = frames[frame * frameLength + sample] as number;
+      }
+    }
+    return toMatrix2D(data, frameLength, nFrames);
   });
 }
 

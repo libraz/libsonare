@@ -51,12 +51,11 @@ def _gate_range_db(value: object, name: str) -> float | ctypes.c_float:
     return _narrow_float(value, name)
 
 
-def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
-    """Narrow a given high-pass corner, refusing one outside its domain by name."""
+def _high_pass_corner(value: object, name: str) -> float:
+    """Narrow a given high-pass corner; 0 bypasses the filter."""
     corner = _narrow_double(value, name)
-    if corner < 0 or (positive and corner == 0):
-        bound = "greater than 0" if positive else "at least 0"
-        raise _refuse(f"{name} must be {bound} (omit it for no high-pass)")
+    if corner < 0:
+        raise _refuse(f"{name} must be at least 0 (omit it for no high-pass)")
     return corner
 
 
@@ -124,8 +123,8 @@ def mastering_dynamics_compressor(
         makeup_gain_db: Static makeup gain in dB (default 0).
         auto_makeup: Whether to enable automatic makeup gain (default False).
         detector: Level detector, ``"peak"``, ``"rms"`` or ``"logRms"`` (default ``"rms"``).
-        sidechain_high_pass_hz: Sidechain high-pass corner in Hz, above 0.
-            ``None`` (the default) leaves the sidechain unfiltered.
+        sidechain_high_pass_hz: Sidechain high-pass corner in Hz, finite and
+            nonnegative. Zero or ``None`` (the default) leaves the sidechain unfiltered.
         pdr_time_ms: Program-dependent release time in ms (default 0).
         pdr_release_scale: PDR release multiplier (default 1.0).
 
@@ -145,7 +144,7 @@ def mastering_dynamics_compressor(
         # The C config reads a 0 Hz corner as no sidechain filter.
         sidechain_high_pass_hz=0.0
         if sidechain_high_pass_hz is None
-        else _high_pass_corner(sidechain_high_pass_hz, "sidechain_high_pass_hz", positive=True),
+        else _high_pass_corner(sidechain_high_pass_hz, "sidechain_high_pass_hz"),
         pdr_time_ms=_narrow_double(pdr_time_ms, "pdr_time_ms"),
         pdr_release_scale=_narrow_double(pdr_release_scale, "pdr_release_scale"),
     )
@@ -199,7 +198,7 @@ def mastering_dynamics_gate(
         close_threshold_db=_narrow_double(close_threshold_db, "close_threshold_db"),
         key_high_pass_hz=0.0
         if key_high_pass_hz is None
-        else _high_pass_corner(key_high_pass_hz, "key_high_pass_hz", positive=False),
+        else _high_pass_corner(key_high_pass_hz, "key_high_pass_hz"),
     )
     return _run_dynamics(
         _get_lib().sonare_mastering_dynamics_gate,

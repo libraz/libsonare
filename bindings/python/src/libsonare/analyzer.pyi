@@ -2086,7 +2086,7 @@ def mastering_dynamics_compressor(
     makeup_gain_db: float = 0.0,
     auto_makeup: bool = False,
     detector: CompressorDetector = "rms",
-    sidechain_high_pass_hz: float | None = None,
+    sidechain_high_pass_hz: float | None = None,  # 0 also disables the filter.
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
 ) -> DynamicsProcessorResult: ...
