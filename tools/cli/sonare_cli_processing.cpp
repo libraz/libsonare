@@ -801,9 +801,8 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     if (args.has("preset-json")) {
       config_text = read_plain_text_file(args.get_string("preset-json"));
     } else if (args.has("preset-pack")) {
-      config_text =
-          find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
-                                    requested_preset);
+      config_text = find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
+                                              requested_preset);
     } else {
       // A built-in id is a parameter, so an unknown or empty one is refused as one.
       const auto id =
@@ -811,8 +810,7 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
       config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
     }
     if (args.has("set")) {
-      config_text =
-          apply_voice_preset_sets(config_text, args.get_string_list("set"), &set_overlay);
+      config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"), &set_overlay);
     }
 
     // The library's one preset reader, as the C ABI and Python use it: an unknown,
@@ -949,8 +947,7 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
       config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
     }
     if (args.has("set")) {
-      config_text =
-          apply_voice_preset_sets(config_text, args.get_string_list("set"), &set_overlay);
+      config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"), &set_overlay);
     }
   } catch (const CliDuplicateDocumentError& duplicate) {
     error = duplicate.what();

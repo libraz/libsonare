@@ -703,10 +703,9 @@ std::string realtime_voice_changer_field_path(std::string_view member,
 /// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones * mix / 12)
 ///          and must lie in [kFormantFactorMin, kFormantFactorMax]. On failure @p error is
 ///          @ref absolute_formant_reach_refusal's text in @p spelling.
-bool formant_warp_is_reachable(
-    const RealtimeVoiceChangerConfig& config, std::string* error,
-    ConfigFieldSpelling spelling = ConfigFieldSpelling::Member,
-    std::optional<SonareParameterRefusal>* out_refusal = nullptr);
+bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
+                               ConfigFieldSpelling spelling = ConfigFieldSpelling::Member,
+                               std::optional<SonareParameterRefusal>* out_refusal = nullptr);
 
 /// @brief Validates a configuration: every field finite and inside its documented range.
 /// @details Returns false, with @p error reading "<path> must ..." (e.g. "formant.factor must be

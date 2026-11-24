@@ -164,8 +164,8 @@ void object_steps(const sonare::util::json::Value& object, const char* section, 
   }
   for (std::size_t i = 0; i < items.size(); ++i) {
     if (!items[i].is_number()) {
-      refuse(SonareParameterRefusal::wrong_type(
-          ErrorCode::InvalidFormat, schema::index_path(path, i), "must be a number"));
+      refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat,
+                                                schema::index_path(path, i), "must be a number"));
     }
     steps[i] = json_number_to_int(items[i].as_number(), steps[i]);
   }
@@ -181,8 +181,8 @@ int object_enum_value(const sonare::util::json::Value& object, const char* secti
   }
   int parsed = fallback;
   if (!enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
-    refuse(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidFormat, path, "must be " + enum_spelling_list(rows, count)));
+    refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, path,
+                                             "must be " + enum_spelling_list(rows, count)));
   }
   return parsed;
 }
@@ -219,8 +219,7 @@ FormantMode object_formant_mode(const sonare::util::json::Value& object, const c
   }
   FormantMode mode;
   if (formant_mode_from_spelling(value->as_string(), &mode)) return mode;
-  refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, path,
-                                           kFormantModePredicate));
+  refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, path, kFormantModePredicate));
 }
 
 bool object_bool(const sonare::util::json::Value& object, const char* section, const char* key,
@@ -407,8 +406,8 @@ bool has_allowed_keys(const sonare::util::json::Value& object,
                       ConfigErrorSink& sink) {
   if (!object.is_object()) {
     const std::string subject = path.empty() ? "the document" : std::string(path);
-    sink.refuse(SonareParameterRefusal::wrong_type(
-        ErrorCode::InvalidFormat, subject, "must be an object"));
+    sink.refuse(
+        SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, subject, "must be an object"));
     return false;
   }
   for (const auto& [key, _value] : object.as_object()) {
@@ -423,9 +422,9 @@ bool has_allowed_keys(const sonare::util::json::Value& object,
       std::vector<std::string> accepted;
       accepted.reserve(keys.size());
       for (std::string_view item : keys) accepted.emplace_back(item);
-      sink.refuse(SonareParameterRefusal::unknown(
-          ErrorCode::InvalidFormat, schema::child_path(path, key),
-          schema::expected_keys(accepted)));
+      sink.refuse(SonareParameterRefusal::unknown(ErrorCode::InvalidFormat,
+                                                  schema::child_path(path, key),
+                                                  schema::expected_keys(accepted)));
       return false;
     }
   }
@@ -435,8 +434,8 @@ bool has_allowed_keys(const sonare::util::json::Value& object,
 bool require_key(const sonare::util::json::Value& object, const char* key, std::string_view path,
                  ConfigErrorSink& sink) {
   if (object.find(key) != nullptr) return true;
-  sink.refuse(SonareParameterRefusal::predicate(
-      ErrorCode::InvalidFormat, schema::child_path(path, key), "must be given"));
+  sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat,
+                                                schema::child_path(path, key), "must be given"));
   return false;
 }
 
@@ -449,8 +448,8 @@ bool require_number(const sonare::util::json::Value& object, const char* key, do
     return false;
   }
   if (!value->is_number()) {
-    sink.refuse(SonareParameterRefusal::wrong_type(
-        ErrorCode::InvalidFormat, at, "must be a number"));
+    sink.refuse(
+        SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, at, "must be a number"));
     return false;
   }
   const double number = value->as_number();
@@ -473,16 +472,16 @@ bool require_string(const sonare::util::json::Value& object, const char* key, st
     return false;
   }
   if (!value->is_string()) {
-    sink.refuse(SonareParameterRefusal::wrong_type(
-        ErrorCode::InvalidFormat, at, "must be a string"));
+    sink.refuse(
+        SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, at, "must be a string"));
     return false;
   }
   const auto& text = value->as_string();
   if (text.size() < min_len || text.size() > max_len) {
-    sink.refuse(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidFormat, at,
-        "must be a string of " + std::to_string(min_len) + " to " +
-            std::to_string(max_len) + " characters"));
+    sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, at,
+                                                  "must be a string of " + std::to_string(min_len) +
+                                                      " to " + std::to_string(max_len) +
+                                                      " characters"));
     return false;
   }
   return true;
@@ -520,9 +519,9 @@ bool require_enum_in(const sonare::util::json::Value& object, const char* key, c
       enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
     return true;
   }
-  sink.refuse(SonareParameterRefusal::predicate(
-      ErrorCode::InvalidFormat, schema::child_path(path, key),
-      "must be " + enum_spelling_list(rows, count)));
+  sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat,
+                                                schema::child_path(path, key),
+                                                "must be " + enum_spelling_list(rows, count)));
   return false;
 }
 
@@ -590,8 +589,8 @@ template <std::size_t N>
 bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec (&fields)[N],
                         std::string_view path, ConfigErrorSink& sink) {
   if (!object.is_object()) {
-    sink.refuse(SonareParameterRefusal::wrong_type(
-        ErrorCode::InvalidFormat, std::string(path), "must be an object"));
+    sink.refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, std::string(path),
+                                                   "must be an object"));
     return false;
   }
   for (const auto& [key, _value] : object.as_object()) {
@@ -605,9 +604,9 @@ bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec
     if (!allowed) {
       std::vector<std::string> accepted;
       for (const FieldSpec& field : fields) accepted.emplace_back(field.key);
-      sink.refuse(SonareParameterRefusal::unknown(
-          ErrorCode::InvalidFormat, schema::child_path(path, key),
-          schema::expected_keys(accepted)));
+      sink.refuse(SonareParameterRefusal::unknown(ErrorCode::InvalidFormat,
+                                                  schema::child_path(path, key),
+                                                  schema::expected_keys(accepted)));
       return false;
     }
   }
@@ -635,7 +634,8 @@ bool validate_range_section(const sonare::util::json::Value& section, const char
 // A section checked only when present.
 template <std::size_t N>
 bool validate_optional_section(const sonare::util::json::Value& parent, const char* key,
-                               const char* path, const FieldSpec (&fields)[N], ConfigErrorSink& sink) {
+                               const char* path, const FieldSpec (&fields)[N],
+                               ConfigErrorSink& sink) {
   const auto* section = parent.find(key);
   return section == nullptr || validate_range_section(*section, path, fields, sink);
 }
@@ -762,8 +762,7 @@ constexpr FieldSpec kMidiFields[] = {
 
 // The voice transformer sections of a dsp object. Present sections are validated in full.
 bool validate_transform_sections(const sonare::util::json::Value& dsp, ConfigErrorSink& sink) {
-  if (!validate_optional_section(dsp, "voiceEngine", "dsp.voiceEngine", kVoiceEngineFields,
-                                 sink) ||
+  if (!validate_optional_section(dsp, "voiceEngine", "dsp.voiceEngine", kVoiceEngineFields, sink) ||
       !validate_optional_section(dsp, "pitchCorrection", "dsp.pitchCorrection",
                                  kPitchCorrectionFields, sink)) {
     return false;
@@ -830,8 +829,7 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, ConfigErrorSink&
       !validate_range_section(*dsp.find("formant"), "dsp.formant", kFormantFields, sink) ||
       !validate_range_section(*dsp.find("eq"), "dsp.eq", kEqFields, sink) ||
       !validate_range_section(*dsp.find("gate"), "dsp.gate", kGateFields, sink) ||
-      !validate_range_section(*dsp.find("compressor"), "dsp.compressor", kCompressorFields,
-                              sink) ||
+      !validate_range_section(*dsp.find("compressor"), "dsp.compressor", kCompressorFields, sink) ||
       !validate_range_section(*dsp.find("deesser"), "dsp.deesser", kDeesserFields, sink) ||
       !validate_range_section(*dsp.find("reverb"), "dsp.reverb", kReverbFields, sink) ||
       !validate_range_section(*dsp.find("limiter"), "dsp.limiter", kLimiterFields, sink)) {
@@ -906,7 +904,7 @@ bool is_step_triple(const sonare::util::json::Value& value) {
 
 // Reads a document whose keys and types were already checked; the config validator runs after it.
 RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& root,
-                                                ConfigErrorSink& sink) {
+                                              ConfigErrorSink& sink) {
   RealtimeVoiceChangerConfig c;
   if (const auto* macros = root.find("macros")) {
     if (!apply_macro_section(*macros, &c, sink)) sink.throw_failure();
@@ -1134,8 +1132,8 @@ RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& r
 
 // The preset document reader: every key known, every required key given, every value typed and
 // in its domain, then the whole configuration through the config validator.
-bool read_preset_document(const sonare::util::json::Value& root,
-                          RealtimeVoiceChangerConfig* config, ConfigErrorSink& sink) {
+bool read_preset_document(const sonare::util::json::Value& root, RealtimeVoiceChangerConfig* config,
+                          ConfigErrorSink& sink) {
   if (!has_allowed_keys(root,
                         {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"},
                         "", sink)) {
@@ -1146,8 +1144,8 @@ bool read_preset_document(const sonare::util::json::Value& root,
   }
   const auto& schema_version = *root.find("schemaVersion");
   if (!schema_version.is_number()) {
-    sink.refuse(SonareParameterRefusal::wrong_type(
-        ErrorCode::InvalidFormat, "schemaVersion", "must be a number"));
+    sink.refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, "schemaVersion",
+                                                   "must be a number"));
     return false;
   }
   if (const double n = schema_version.as_number();
@@ -1165,9 +1163,10 @@ bool read_preset_document(const sonare::util::json::Value& root,
   }
   if (!require_string(root, "id", 1, 96, "", sink)) return false;
   if (!is_valid_preset_id(root.find("id")->as_string())) {
-    sink.refuse(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidFormat, "id",
-        "must start with a lowercase letter or a digit and hold only letters, digits, '.', '_' and '-'"));
+    sink.refuse(
+        SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, "id",
+                                          "must start with a lowercase letter or a digit and hold "
+                                          "only letters, digits, '.', '_' and '-'"));
     return false;
   }
   if (!require_string(root, "name", 1, 96, "", sink)) return false;
@@ -1199,9 +1198,9 @@ bool read_preset_document(const sonare::util::json::Value& root,
   const auto* dsp = root.find("dsp");
   const auto* macros = root.find("macros");
   if ((dsp == nullptr) == (macros == nullptr)) {
-    sink.refuse(SonareParameterRefusal::relation(
-        ErrorCode::InvalidFormat, {"dsp", "macros"},
-        "the document must hold exactly one of {0} and {1}"));
+    sink.refuse(
+        SonareParameterRefusal::relation(ErrorCode::InvalidFormat, {"dsp", "macros"},
+                                         "the document must hold exactly one of {0} and {1}"));
     return false;
   }
   if (dsp != nullptr && !validate_dsp_section(*dsp, sink)) return false;
@@ -1213,8 +1212,10 @@ bool read_preset_document(const sonare::util::json::Value& root,
           *config, nullptr, &validation_error,
           dsp != nullptr ? ConfigFieldSpelling::PresetDocument : ConfigFieldSpelling::Member,
           &refusal)) {
-    if (refusal) sink.refuse(*refusal);
-    else sink.raw(validation_error);
+    if (refusal)
+      sink.refuse(*refusal);
+    else
+      sink.raw(validation_error);
     return false;
   }
   return true;
@@ -1279,22 +1280,23 @@ bool validate_realtime_voice_changer_preset_json(
   }
 }
 
-bool realtime_voice_changer_config_from_input(
-    std::string_view text, RealtimeVoiceChangerConfig* config, std::string* error,
-    std::optional<SonareParameterRefusal>* out_refusal) {
+bool realtime_voice_changer_config_from_input(std::string_view text,
+                                              RealtimeVoiceChangerConfig* config,
+                                              std::string* error,
+                                              std::optional<SonareParameterRefusal>* out_refusal) {
   if (config) *config = {};
   ConfigErrorSink sink(error, out_refusal);
   if (!config) {
-    sink.refuse(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidFormat, "output config", "must not be null"));
+    sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, "output config",
+                                                  "must not be null"));
     return false;
   }
 
   try {
     const std::string input = trim_copy(text);
     if (input.empty()) {
-      sink.refuse(SonareParameterRefusal::predicate(
-          ErrorCode::InvalidFormat, "voice changer config", "must not be empty"));
+      sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat,
+                                                    "voice changer config", "must not be empty"));
       return false;
     }
     if (input.front() != '{') {
@@ -1433,11 +1435,11 @@ bool realtime_voice_changer_config_from_input(
                                : kind == Kind::Boolean ? _value.is_bool()
                                                        : _value.is_number();
             if (!typed) {
-              sink.refuse(SonareParameterRefusal::wrong_type(
-                  ErrorCode::InvalidFormat, key,
-                  kind == Kind::String ? "must be a string"
-                  : kind == Kind::Boolean ? "must be a boolean"
-                                          : "must be a number"));
+              sink.refuse(
+                  SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, key,
+                                                     kind == Kind::String    ? "must be a string"
+                                                     : kind == Kind::Boolean ? "must be a boolean"
+                                                                             : "must be a number"));
               return false;
             }
           }
@@ -1446,18 +1448,18 @@ bool realtime_voice_changer_config_from_input(
         // The automatic grain is the absent key; a present one is a whole size in range.
         if (key == "retuneGrainSizeSamples") {
           if (!_value.is_number()) {
-            sink.refuse(SonareParameterRefusal::wrong_type(
-                ErrorCode::InvalidFormat, key, "must be a number"));
+            sink.refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, key,
+                                                           "must be a number"));
             return false;
           }
           if (_value.as_number() == 0.0) {
-            sink.refuse(SonareParameterRefusal::predicate(
-                ErrorCode::InvalidFormat, key, kGrainZeroPredicate));
+            sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, key,
+                                                          kGrainZeroPredicate));
             return false;
           }
           if (!grain_in_domain(_value.as_number())) {
-            sink.refuse(SonareParameterRefusal::predicate(
-                ErrorCode::InvalidFormat, key, grain_domain_predicate()));
+            sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, key,
+                                                          grain_domain_predicate()));
             return false;
           }
           allowed = true;
@@ -1465,8 +1467,8 @@ bool realtime_voice_changer_config_from_input(
         // formantMode is optional: documents written before the mode existed omit it.
         if (key == "formantMode") {
           if (!_value.is_string()) {
-            sink.refuse(SonareParameterRefusal::wrong_type(
-                ErrorCode::InvalidFormat, key, "must be a string"));
+            sink.refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, key,
+                                                           "must be a string"));
             return false;
           }
           allowed = true;
@@ -1476,8 +1478,8 @@ bool realtime_voice_changer_config_from_input(
           accepted.insert(accepted.end(), kTransformKeys.begin(), kTransformKeys.end());
           accepted.emplace_back("retuneGrainSizeSamples");
           accepted.emplace_back("formantMode");
-          sink.refuse(SonareParameterRefusal::unknown(
-              ErrorCode::InvalidFormat, key, schema::expected_keys(accepted)));
+          sink.refuse(SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, key,
+                                                      schema::expected_keys(accepted)));
           return false;
         }
       }
@@ -1511,8 +1513,10 @@ bool realtime_voice_changer_config_from_input(
       std::optional<SonareParameterRefusal> refusal;
       if (!validate_realtime_voice_changer_config(parsed, nullptr, &validation_error,
                                                   ConfigFieldSpelling::FlatPod, &refusal)) {
-        if (refusal) sink.refuse(*refusal);
-        else sink.raw(validation_error);
+        if (refusal)
+          sink.refuse(*refusal);
+        else
+          sink.raw(validation_error);
         return false;
       }
       *config = parsed;

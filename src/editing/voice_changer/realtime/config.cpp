@@ -103,10 +103,10 @@ void publish_refusal(const SonareParameterRefusal& refusal, std::string* error,
 
 }  // namespace
 
-bool validate_realtime_voice_changer_config(
-    const RealtimeVoiceChangerConfig& config, RealtimeVoiceChangerConfig* normalized,
-    std::string* error, ConfigFieldSpelling spelling,
-    std::optional<SonareParameterRefusal>* out_refusal) {
+bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
+                                            RealtimeVoiceChangerConfig* normalized,
+                                            std::string* error, ConfigFieldSpelling spelling,
+                                            std::optional<SonareParameterRefusal>* out_refusal) {
   if (error) error->clear();
   if (out_refusal) out_refusal->reset();
   bool ok = true;
@@ -120,19 +120,19 @@ bool validate_realtime_voice_changer_config(
     if (!ok || (value >= static_cast<float>(range.lo) && value <= static_cast<float>(range.hi))) {
       return;
     }
-    reject(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, path(name), schema::range_predicate(range.lo, range.hi)));
+    reject(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path(name),
+                                             schema::range_predicate(range.lo, range.hi)));
   });
   if (ok && config.formant_mode != FormantMode::Relative &&
       config.formant_mode != FormantMode::Absolute) {
-    reject(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, path("formant.mode"), "must be 'relative' or 'absolute'"));
+    reject(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path("formant.mode"),
+                                             "must be 'relative' or 'absolute'"));
   }
   if (ok) {
     std::optional<SonareParameterRefusal> refusal;
     streaming_retune_config_problem(
-        config.retune, nullptr,
-        {"retune.pitchSemitones", "retune.mix", "retune.grainSizeSamples"}, &refusal);
+        config.retune, nullptr, {"retune.pitchSemitones", "retune.mix", "retune.grainSizeSamples"},
+        &refusal);
     if (refusal) {
       reject(refusal->respelled(
           refusal->code(), [&](const std::string& subject) { return path(subject); }, false));
@@ -140,14 +140,13 @@ bool validate_realtime_voice_changer_config(
   }
   visit_enum_fields(config, [&](const char* name, bool declared) {
     if (!ok || declared) return;
-    reject(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, path(name), "must name a declared value"));
+    reject(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path(name),
+                                             "must name a declared value"));
   });
   visit_integer_fields(config, [&](const char* name, const int& value, const Range& range) {
     if (!ok || (value >= static_cast<int>(range.lo) && value <= static_cast<int>(range.hi))) return;
-    reject(SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, path(name),
-        schema::integer_range_predicate(range.lo, range.hi)));
+    reject(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path(name),
+                                             schema::integer_range_predicate(range.lo, range.hi)));
   });
 
   // The grain engine has no f0, so name both it and the selected feature that requires one.
@@ -166,8 +165,7 @@ bool validate_realtime_voice_changer_config(
     if (!field.empty()) {
       reject(SonareParameterRefusal::relation(
           ErrorCode::InvalidParameter, {path("voiceEngine.engine"), path(field)},
-          "{0} must be 'psola' for {1}" + requirement +
-              ": the grain engine tracks no f0"));
+          "{0} must be 'psola' for {1}" + requirement + ": the grain engine tracks no f0"));
     }
   }
   // Only a tempo delay can outrun the line: an echo's own delay range ends at its length.
@@ -190,9 +188,9 @@ bool validate_realtime_voice_changer_config(
   return ok;
 }
 
-bool formant_warp_is_reachable(
-    const RealtimeVoiceChangerConfig& config, std::string* error,
-    ConfigFieldSpelling spelling, std::optional<SonareParameterRefusal>* out_refusal) {
+bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
+                               ConfigFieldSpelling spelling,
+                               std::optional<SonareParameterRefusal>* out_refusal) {
   if (error) error->clear();
   if (out_refusal) out_refusal->reset();
   if (config.formant_mode != FormantMode::Absolute ||
