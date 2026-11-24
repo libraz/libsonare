@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "support/alloc_guard.h"
+
 namespace {
 
 std::string last_message() {
@@ -305,6 +307,35 @@ TEST_CASE("the correction config is refused member by member", "[c_api][engine_r
         "config.scale_reference_midi must be finite and in [-3.4028235e38, 3.4028235e38]");
 }
 
+TEST_CASE("time-varying pitch correction clears outputs before refusing in argument order",
+          "[c_api][engine_refusal][pitch_correction_publication]") {
+  const std::vector<float> samples = make_samples();
+  const std::vector<float> f0(kFrames, 220.0f);
+  constexpr size_t hop = 512;
+  size_t out_length = kLength;
+  float sentinel = 0.0f;
+  float* out = &sentinel;
+
+  CHECK(sonare_pitch_correct_timevarying(samples.data(), kLength, kRate, f0.data(), nullptr,
+                                         nullptr, kFrames, hop, nullptr, nullptr,
+                                         &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+  CHECK(out_length == 0);
+
+  CHECK(sonare_pitch_correct_timevarying(samples.data(), kLength, kRate, f0.data(), nullptr,
+                                         nullptr, kFrames, hop, nullptr, &out,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_length must not be NULL");
+  CHECK(out == nullptr);
+
+  out_length = kLength;
+  CHECK(sonare_pitch_correct_timevarying(samples.data(), kLength, kRate, nullptr, nullptr, nullptr,
+                                         kFrames, hop, nullptr, nullptr,
+                                         &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_hz must not be NULL");
+  CHECK(out_length == 0);
+}
+
 TEST_CASE("sonare_auto_tune refuses its key, config and outputs by name",
           "[c_api][engine_refusal]") {
   const std::vector<float> samples = make_samples();
@@ -339,6 +370,99 @@ TEST_CASE("sonare_auto_tune refuses its key, config and outputs by name",
   CHECK(sonare_auto_tune(samples.data(), kLength, kRate, nullptr, &config, &out, &out_length,
                          &out_key) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.retune_speed_ms must be finite and at least 0");
+}
+
+TEST_CASE("pitch correction siblings clear outputs before refusing arguments",
+          "[c_api][engine_refusal][pitch_sibling_publication]") {
+  const auto samples = make_samples();
+  const std::vector<float> f0(kFrames, 220.0f);
+  constexpr size_t hop = 512;
+  float sentinel = 0.0f;
+  float* out = &sentinel;
+  size_t out_length = kLength;
+
+  CHECK(sonare_pitch_correct_to_midi(samples.data(), kLength, kRate, -1.0f, 62.0f, nullptr,
+                                     &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "current_midi must be finite and in [0, 127]");
+  CHECK(out_length == 0);
+
+  CHECK(sonare_pitch_correct_to_midi(samples.data(), kLength, kRate, 60.0f, 62.0f, &out, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_length must not be NULL");
+  CHECK(out == nullptr);
+
+  out_length = kLength;
+  CHECK(sonare_pitch_correct_to_midi_timevarying(samples.data(), kLength, kRate, nullptr, nullptr,
+                                                 nullptr, kFrames, hop, 62.0f, nullptr,
+                                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_hz must not be NULL");
+  CHECK(out_length == 0);
+
+  out = &sentinel;
+  CHECK(sonare_pitch_correct_to_midi_timevarying(samples.data(), kLength, kRate, f0.data(), nullptr,
+                                                 nullptr, kFrames, hop, 62.0f, &out,
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_length must not be NULL");
+  CHECK(out == nullptr);
+
+  const SonareKey bad_key{static_cast<SonarePitchClass>(12), SONARE_MODE_MINOR, 1.0f};
+  SonareKey out_key{SONARE_PITCH_A, SONARE_MODE_MINOR, 1.0f};
+  out_length = kLength;
+  CHECK(sonare_auto_tune(samples.data(), kLength, kRate, &bad_key, nullptr, nullptr, &out_length,
+                         &out_key) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "key.root must name a declared value");
+  CHECK(out_length == 0);
+  CHECK(out_key.confidence == 0.0f);
+
+  out = &sentinel;
+  out_length = kLength;
+  CHECK(sonare_auto_tune(samples.data(), kLength, kRate, nullptr, nullptr, &out, &out_length,
+                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_key must not be NULL");
+  CHECK(out == nullptr);
+  CHECK(out_length == 0);
+}
+
+TEST_CASE("auto-tune waits for the audio allocation before publishing the key",
+          "[c_api][engine_refusal][pitch_sibling_publication]") {
+  const auto samples = make_samples();
+  const SonareKey key{SONARE_PITCH_A, SONARE_MODE_MINOR, 1.0f};
+  SonareKey out_key{};
+  float* out = nullptr;
+  size_t out_length = 0;
+  const auto run = [&] {
+    return sonare_auto_tune(samples.data(), kLength, kRate, &key, nullptr, &out, &out_length,
+                            &out_key);
+  };
+
+  REQUIRE(run() == SONARE_OK);
+  sonare_free_floats(out);
+  size_t allocations = 0;
+  SonareError error = SONARE_ERROR_UNKNOWN;
+  {
+    sonare::test::AllocationGuard count;
+    error = run();
+    allocations = count.count();
+  }
+  REQUIRE(error == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_key.root == key.root);
+  REQUIRE(out_key.mode == key.mode);
+  REQUIRE(out_key.confidence == 1.0f);
+  REQUIRE(allocations > 0);
+  sonare_free_floats(out);
+
+  {
+    sonare::test::AllocationFailureAtGuard fail_audio_copy(allocations);
+    error = run();
+  }
+  CHECK(error == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(out == nullptr);
+  CHECK(out_length == 0);
+  CHECK(out_key.root == SonareKey{}.root);
+  CHECK(out_key.mode == SonareKey{}.mode);
+  CHECK(out_key.confidence == 0.0f);
+  sonare_free_floats(out);
 }
 
 TEST_CASE("the note extraction entries refuse the track and config by name",

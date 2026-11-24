@@ -2,6 +2,7 @@
 /// @brief Feature and metering C API tests.
 
 #include <algorithm>
+#include <array>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstring>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include "sonare_c_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "support/c_strings.h"
 
 TEST_CASE("sonare_onset_strength", "[c_api]") {
@@ -107,6 +109,66 @@ TEST_CASE("C CQT reports the effective gamma", "[c_api][feature]") {
   const float alpha = (step - 1.0f) / (step + 1.0f);
   CHECK(result.gamma == Catch::Approx(24.7f * alpha / 0.108f));
   sonare_free_cqt_result(&result);
+}
+
+TEST_CASE("C constant-Q transforms clear results when the final allocation fails",
+          "[c_api][feature][cqt_publication]") {
+  constexpr int rate = 22050;
+  constexpr size_t hop = 256;
+  constexpr float fmin_hz = 55.0f;
+  constexpr int bins = 36;
+  constexpr int bins_per_octave = 12;
+  constexpr float filter_scale = 1.0f;
+  const auto samples = generate_sine(440.0f, rate, 0.25f);
+
+  const auto check_output = [&](auto transform) {
+    SonareCqtResult result{};
+    REQUIRE(transform(&result) == SONARE_OK);
+    sonare_free_cqt_result(&result);
+
+    size_t allocations = 0;
+    SonareError error = SONARE_ERROR_UNKNOWN;
+    {
+      sonare::test::AllocationGuard count;
+      error = transform(&result);
+      allocations = count.count();
+    }
+    REQUIRE(error == SONARE_OK);
+    REQUIRE(result.magnitude != nullptr);
+    REQUIRE(result.frequencies != nullptr);
+    REQUIRE(allocations >= 2);
+    sonare_free_cqt_result(&result);
+
+    result.n_bins = bins;
+    result.gamma = fmin_hz;
+    {
+      sonare::test::AllocationFailureAtGuard fail_final(allocations);
+      error = transform(&result);
+    }
+    CHECK(error == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(result.magnitude == nullptr);
+    CHECK(result.frequencies == nullptr);
+    CHECK(result.n_bins == 0);
+    CHECK(result.n_frames == 0);
+    CHECK(result.hop_length == 0);
+    CHECK(result.sample_rate == 0);
+    CHECK(result.gamma == 0.0f);
+    sonare_free_cqt_result(&result);
+  };
+
+  const std::array cqt_transforms{sonare_cqt, sonare_pseudo_cqt, sonare_hybrid_cqt};
+  for (size_t i = 0; i < cqt_transforms.size(); ++i) {
+    CAPTURE(i);
+    check_output([&](SonareCqtResult* out) {
+      return cqt_transforms[i](samples.data(), samples.size(), rate, hop, fmin_hz, bins,
+                               bins_per_octave, filter_scale, out);
+    });
+  }
+  check_output([&](SonareCqtResult* out) {
+    constexpr float gamma_hz = 7.5f;
+    return sonare_vqt(samples.data(), samples.size(), rate, hop, fmin_hz, bins, bins_per_octave,
+                      filter_scale, gamma_hz, out);
+  });
 }
 
 TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {

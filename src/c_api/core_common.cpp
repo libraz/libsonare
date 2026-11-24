@@ -146,22 +146,13 @@ void fill_chord_result(const std::vector<Chord>& chords, float tuning,
 }
 
 SonareError fill_cqt_result(const CqtResult& result, SonareCqtResult* out) {
-  *out = {};
-  out->n_bins = result.n_bins();
-  out->n_frames = result.n_frames();
-  out->hop_length = result.hop_length();
-  out->sample_rate = result.sample_rate();
-  const std::vector<float>& magnitude = result.magnitude();
-  if (!magnitude.empty()) {
-    auto mag = std::make_unique<float[]>(magnitude.size());
-    std::copy(magnitude.begin(), magnitude.end(), mag.get());
-    out->magnitude = mag.release();
-  }
-  const std::vector<float>& freqs = result.frequencies();
-  if (!freqs.empty()) {
-    auto fr = std::make_unique<float[]>(freqs.size());
-    std::copy(freqs.begin(), freqs.end(), fr.get());
-    out->frequencies = fr.release();
-  }
+  StagedOutput<SonareCqtResult, &sonare_free_cqt_result> staged;
+  staged->n_bins = result.n_bins();
+  staged->n_frames = result.n_frames();
+  staged->hop_length = result.hop_length();
+  staged->sample_rate = result.sample_rate();
+  staged->magnitude = copy_vector(result.magnitude());
+  staged->frequencies = copy_vector(result.frequencies());
+  staged.publish(out);
   return SONARE_OK;
 }
