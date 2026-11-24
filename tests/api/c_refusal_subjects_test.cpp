@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "../../bindings/node/src/addon/field_spelling.h"
+#include "core/pcen.h"
 #include "util/constants.h"
 #include "wasm/field_spelling.h"
 
@@ -751,6 +752,16 @@ struct SpellingDriver {
   const char* c_root = "";
 };
 
+void refuse_pcen_dimension(int bins, int frames) {
+  const sonare::PcenConfig config;
+  const float value = 1.0f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_pcen(&value, bins, frames, config.sr, static_cast<size_t>(config.hop_length),
+                      config.time_constant, config.gain, config.bias, config.power, config.eps,
+                      &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 /// Drives one C entry to a refusal naming the subject its spelling-table row renames, keyed
 /// "<entry>.<subject>"; null for a row no value of that subject is refused under.
 const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
@@ -1049,6 +1060,13 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
       {"metering_spectrum_frame.frame_offset", {nullptr}},
       // A null buffer is refused as an unreadable document, never as a parameter.
       {"note_targets_from_smf.bytes", {nullptr}},
+      {"pcen.n_bins", {[] { refuse_pcen_dimension(0, 1); }}},
+      {"pcen.n_frames", {[] { refuse_pcen_dimension(1, 0); }}},
+      {"playback_loudness_meter_create.channels", {[] {
+         SonarePlaybackLoudnessMeter* meter = nullptr;
+         REQUIRE(sonare_playback_loudness_meter_create(3, 48000, &meter) ==
+                 SONARE_ERROR_INVALID_PARAMETER);
+       }}},
       {"playback_loudness_meter_push_interleaved.in", {[] {
          SonarePlaybackLoudnessMeter* raw = nullptr;
          REQUIRE(sonare_playback_loudness_meter_create(2, 48000, &raw) == SONARE_OK);
