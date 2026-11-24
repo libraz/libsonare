@@ -526,7 +526,7 @@ SonareError sonare_vocal_session_export_state(const SonareVocalSession* session,
                                               SonareVocalStateBytes* state);
 /// @brief Restores a session from exported state over the same source audio
 ///   (@p sample_rate in [8000, 384000] Hz).
-/// @param session Receives the session, or NULL on failure. Release it with
+/// @param out_session Receives the session, or NULL on failure. Release it with
 ///   sonare_vocal_session_destroy, which accepts NULL.
 /// @param options Runtime limits, or NULL for the defaults sonare_vocal_restore_options_init
 ///   writes (the same defaults sonare_vocal_create_options_init writes).
@@ -535,7 +535,7 @@ SonareError sonare_vocal_session_export_state(const SonareVocalSession* session,
 SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, int channels,
                                          int sample_rate, const uint8_t* state, uint64_t size,
                                          const SonareVocalRestoreOptions* options,
-                                         SonareVocalSession** session);
+                                         SonareVocalSession** out_session);
 
 /// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_free_vocal_notes_result(SonareVocalNotesResult* result);

@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -280,6 +281,107 @@ TEST_CASE("vocal session creation refuses the source buffer before a NULL sessio
   REQUIRE(sonare_vocal_session_restore(nullptr, 1024, 1, kRate, nullptr, 0, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples");
+}
+
+TEST_CASE("vocal source and options refusals name the first invalid argument",
+          "[c_api][header_order][vocal_subjects]") {
+  const auto samples = make_samples();
+  SonareVocalCreateOptions options;
+  sonare_vocal_create_options_init(&options);
+  options.struct_size = 0;
+  SonareVocalRestoreOptions restore_options;
+  sonare_vocal_restore_options_init(&restore_options);
+  restore_options.struct_size = 0;
+  const auto check_source_detail = [](const char* expected) {
+    SonareVocalErrorDetail detail;
+    sonare_vocal_error_detail_init(&detail);
+    sonare_vocal_last_error_detail(&detail);
+    CHECK(detail.reason == SONARE_VOCAL_REASON_INVALID_INPUT);
+    CHECK(std::string(detail.field) == expected);
+    CHECK(last_message() == "positive mono source required");
+  };
+  REQUIRE(sonare_vocal_session_create(samples.data(), 0, 2, 0, &options, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  check_source_detail("frames");
+  REQUIRE(sonare_vocal_session_restore(samples.data(), samples.size(), 2, 0, nullptr, 1,
+                                       &restore_options,
+                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  check_source_detail("channels");
+  REQUIRE(sonare_vocal_session_create(samples.data(), samples.size(), 1, kRate, &options,
+                                      nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.struct_size");
+  REQUIRE(sonare_vocal_session_restore(samples.data(), samples.size(), 1, kRate, nullptr, 0,
+                                       &restore_options,
+                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.struct_size");
+  REQUIRE(sonare_vocal_session_restore(samples.data(), samples.size(), 1, kRate, nullptr, 0,
+                                       nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_session");
+}
+
+TEST_CASE("vocal output and stale token refusals use declared names",
+          "[c_api][header_order][vocal_subjects]") {
+  const auto samples = make_samples();
+  SonareVocalSession* raw = nullptr;
+  REQUIRE(sonare_vocal_session_create(samples.data(), samples.size(), 1, kRate, nullptr, &raw) ==
+          SONARE_OK);
+  const std::unique_ptr<SonareVocalSession, decltype(&sonare_vocal_session_destroy)> session(
+      raw, sonare_vocal_session_destroy);
+  const auto check_refusal = [](SonareError code, const char* subject) {
+    CHECK(code == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == subject);
+  };
+  const auto check_conflict = [](SonareError code, const char* subject, uint64_t actual) {
+    CHECK(code == SONARE_ERROR_INVALID_STATE);
+    CHECK(last_message() == "revision or generation conflict");
+    SonareVocalErrorDetail detail;
+    sonare_vocal_error_detail_init(&detail);
+    sonare_vocal_last_error_detail(&detail);
+    CHECK(detail.reason == SONARE_VOCAL_REASON_REVISION_CONFLICT);
+    CHECK(std::string(detail.field) == subject);
+    CHECK(detail.expected == 99);
+    CHECK(detail.actual == actual);
+  };
+  check_refusal(sonare_vocal_session_output_length(raw, nullptr), "samples");
+  check_refusal(sonare_vocal_session_notes(raw, nullptr), "result");
+  SonareVocalNotesResult notes{};
+  notes.note_count = 7;
+  check_refusal(sonare_vocal_session_notes(raw, &notes), "result.struct_size");
+  CHECK(notes.note_count == 7);
+  check_refusal(sonare_vocal_session_export_state(raw, nullptr), "state");
+  SonareVocalStateBytes state{};
+  check_refusal(sonare_vocal_session_export_state(raw, &state), "state.struct_size");
+  check_refusal(sonare_vocal_session_begin_edit(raw, 99, nullptr), "out_draft");
+  check_refusal(sonare_vocal_session_source_to_destination(raw, 0, 0, nullptr),
+                "destination_sample");
+  check_refusal(sonare_vocal_session_destination_to_source(raw, 0, 0, nullptr), "source_sample");
+  check_refusal(sonare_vocal_session_capture_snapshot(raw, nullptr), "snapshot");
+
+  SonareVocalSnapshot* raw_snapshot = nullptr;
+  REQUIRE(sonare_vocal_session_capture_snapshot(raw, &raw_snapshot) == SONARE_OK);
+  const std::unique_ptr<SonareVocalSnapshot, decltype(&sonare_vocal_snapshot_destroy)> snapshot(
+      raw_snapshot, sonare_vocal_snapshot_destroy);
+  check_refusal(sonare_vocal_snapshot_output_length(raw_snapshot, nullptr), "samples");
+  check_refusal(sonare_vocal_render_job_begin(raw_snapshot, {0, 1}, 0, nullptr), "job");
+
+  SonareVocalDraft* raw_draft = nullptr;
+  check_conflict(sonare_vocal_session_begin_edit(raw, 99, &raw_draft), "expected_revision", 0);
+  REQUIRE(raw_draft == nullptr);
+  SonareVocalEditResult result;
+  sonare_vocal_edit_result_init(&result);
+  check_conflict(sonare_vocal_session_undo(raw, 99, &result), "expected_revision", 0);
+  check_conflict(sonare_vocal_session_redo(raw, 99, &result), "expected_revision", 0);
+  REQUIRE(sonare_vocal_session_begin_edit(raw, 0, &raw_draft) == SONARE_OK);
+  const std::unique_ptr<SonareVocalDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+      raw_draft, sonare_vocal_draft_destroy);
+  check_refusal(sonare_vocal_draft_source_to_destination(raw_draft, 0, 0, nullptr),
+                "destination_sample");
+  check_refusal(sonare_vocal_draft_destination_to_source(raw_draft, 0, 0, nullptr),
+                "source_sample");
+  check_refusal(sonare_vocal_draft_capture_snapshot(raw_draft, nullptr), "snapshot");
+  check_conflict(sonare_vocal_draft_apply(raw_draft, 99, nullptr, 0, &result),
+                 "expected_generation", 1);
+  check_conflict(sonare_vocal_draft_commit(raw_draft, 99, &result), "expected_revision", 0);
 }
 
 #endif  // SONARE_WITH_PITCH_EDITOR
