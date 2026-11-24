@@ -16,6 +16,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -1232,8 +1233,11 @@ TEST_CASE("coupled brass bell recomputes radiation makeup on live brightness",
       // two-pole |T| falls as the corner squared below it and the makeup takes
       // it to the 0.35th power, so the ramp's pole error carries through at 2 x 0.35.
       const float pole_error = 3.0e-6f / fresh.coefficients.radiate_alpha;
+      // The two float makeup values and the division also round at the scale of
+      // the reference. Include that error in the relative ramp comparison.
+      constexpr float kMakeupRoundoff = 4.0f * std::numeric_limits<float>::epsilon();
       CHECK((snap ? scale_error : scale_error / fresh.radiation_scale) <
-            (snap ? 1.0e-5f : 2.0f * 0.35f * pole_error));
+            (snap ? 1.0e-5f : 2.0f * 0.35f * pole_error + kMakeupRoundoff));
       CHECK(fresh.tail_rms > 1.0e-3f);
       CHECK(moved.tail_rms > 0.8f * fresh.tail_rms);
     }

@@ -432,13 +432,13 @@ struct Disagreement {
   std::size_t worst_index = 0;
 };
 
-Disagreement disagreement_of(const std::vector<float>& got, const std::vector<float>& want) {
+Disagreement disagreement_of(const std::vector<float>& got, const std::vector<float>& want,
+                             long long noise_ulps = 0) {
   Disagreement d;
   d.total = got.size();
   for (std::size_t i = 0; i < got.size(); ++i) {
-    if (got[i] == want[i]) continue;
-    ++d.count;
     const long long u = ulp_distance(got[i], want[i]);
+    if (u > noise_ulps) ++d.count;
     if (u > d.worst_ulps) {
       d.worst_ulps = u;
       d.worst_index = i;
@@ -467,16 +467,21 @@ void require_ulp_bounded(const std::vector<float>& got, const std::vector<float>
   REQUIRE(d.worst_ulps <= max_ulps);
 }
 
-/// @brief Bounds how many cells of two results may disagree, placing no bound on how far.
-/// @details The count is what separates per-TU codegen noise from a wrong traversal order in an
-///          array that carries no exactness claim; the ulp distance does not separate them.
+/// @brief Bounds how many cells differ by more than the per-cell rounding floor.
+/// @details A wrong traversal can stay within the largest allowed ULP distance
+///          while moving many more cells than compiler rounding alone.
 void require_cell_count_bounded(const std::vector<float>& got, const std::vector<float>& want,
-                                std::size_t max_cells) {
+                                long long noise_ulps, std::size_t max_cells) {
   REQUIRE(got.size() == want.size());
-  const Disagreement d = disagreement_of(got, want);
-  CAPTURE(d.total, d.count, max_cells, d.worst_ulps);
+  const Disagreement d = disagreement_of(got, want, noise_ulps);
+  CAPTURE(d.total, d.count, noise_ulps, max_cells, d.worst_ulps);
   REQUIRE(d.count <= max_cells);
 }
+
+constexpr long long kMaxUlpsH = 8;
+constexpr long long kMaxUlpsW = 16;
+constexpr std::size_t kMaxCellsAboveOneUlpH = 16;
+constexpr std::size_t kMaxCellsAboveTwoUlpsW = 5;
 
 /// @brief Relative Frobenius error of the factorisation, ||S - W H|| / ||S||.
 /// @details Accumulated in double so the comparison between iteration counts is not itself
@@ -684,15 +689,9 @@ std::vector<float> oracle_nn_filter(const float* S, int n_features, int n_frames
 }  // namespace
 
 TEST_CASE("decompose matches a frame-major oracle on H at one update step", "[util][decompose]") {
-  // H is compared exactly and W is not, and that asymmetry is the point: the H update is the
-  // traversal this case guards, and reversing its feature loop moves 48 of 87 H cells. The
-  // oracle is a reimplementation in another translation unit and FMA contraction is decided per
-  // TU, so nothing makes W exact -- but W's disagreement is bounded on both axes, because the
-  // count separates codegen from a wrong order where no ulp distance can. One iteration,
-  // because both shapes round alike on the seed and part on its image: divergence starts at
-  // step 2.
-  constexpr long long kMaxUlpsW = 16;     // codegen reaches 3 ulp; a wrong row stride, 1.7e6
-  constexpr std::size_t kMaxCellsW = 16;  // codegen moves 9 of 39 cells; a reversed order, 26
+  // The two loop layouts can fuse different operations. Bound the local error
+  // in both factors, then bound how many cells exceed the rounding floor so a
+  // reversed feature traversal still shows up.
 
   const int n_features = 13;
   const int n_frames = 29;
@@ -708,9 +707,10 @@ TEST_CASE("decompose matches a frame-major oracle on H at one update step", "[ut
           decompose(S.data(), n_features, n_frames, n_components, 1, "mu", beta, init);
       const DecomposeResult want =
           oracle_decompose(S.data(), n_features, n_frames, n_components, 1, beta, init);
-      require_bit_equal(got.H, want.H);
+      require_ulp_bounded(got.H, want.H, kMaxUlpsH);
       require_ulp_bounded(got.W, want.W, kMaxUlpsW);
-      require_cell_count_bounded(got.W, want.W, kMaxCellsW);
+      require_cell_count_bounded(got.H, want.H, 1, kMaxCellsAboveOneUlpH);
+      require_cell_count_bounded(got.W, want.W, 2, kMaxCellsAboveTwoUlpsW);
     }
   }
 }
@@ -722,13 +722,8 @@ TEST_CASE("decompose matches the oracle on a second update step", "[util][decomp
   // step and nowhere earlier. Measured: an accumulating buffer leaves H exact at one
   // iteration and moves all 87 cells at two.
   //
-  // Two steps are compared without inheriting the first step's drift by seeding the oracle
-  // from the library's own n_iter=1 result, which is exactly the state the library's second
-  // iteration begins from. What is left is one update step from a shared seed, which is the
-  // comparison the case above shows comes back exact; H is exact here for all four
-  // beta/init combinations. W is bounded on both axes for the reason given there.
-  constexpr long long kMaxUlpsW = 16;     // codegen reaches 2 ulp here; a wrong row stride, 1.7e6
-  constexpr std::size_t kMaxCellsW = 16;  // codegen moves 7 of 39 cells; a reversed order, 26
+  // Seed the oracle from n_iter=1 so both paths start the second update from
+  // the same state. Bound the remaining single-update error as above.
 
   const int n_features = 13;
   const int n_frames = 29;
@@ -744,9 +739,10 @@ TEST_CASE("decompose matches the oracle on a second update step", "[util][decomp
           decompose(S.data(), n_features, n_frames, n_components, 2, "mu", beta, init);
       const DecomposeResult want =
           oracle_mu_steps(S.data(), seed, n_features, n_frames, n_components, 1, beta);
-      require_bit_equal(got.H, want.H);
+      require_ulp_bounded(got.H, want.H, kMaxUlpsH);
       require_ulp_bounded(got.W, want.W, kMaxUlpsW);
-      require_cell_count_bounded(got.W, want.W, kMaxCellsW);
+      require_cell_count_bounded(got.H, want.H, 1, kMaxCellsAboveOneUlpH);
+      require_cell_count_bounded(got.W, want.W, 2, kMaxCellsAboveTwoUlpsW);
     }
   }
 }
@@ -757,9 +753,6 @@ TEST_CASE("decompose matches the oracle on single-row and single-column inputs",
   // long or its accumulator holds one frame, so neither a reversed feature order nor a wrong
   // row stride moves a single value (0 of 2 and 0 of 9 for both). What is left is that the
   // index arithmetic still addresses the right cells where one extent collapses.
-  // W is ulp-bounded rather than exact for the reason given in the case above; it happens to
-  // be exact at these extents today, which is not something to depend on.
-  constexpr long long kMaxUlpsW = 16;
 
   SECTION("one frame") {
     const int n_features = 7;
@@ -768,7 +761,7 @@ TEST_CASE("decompose matches the oracle on single-row and single-column inputs",
         decompose(S.data(), n_features, 1, /*n_components=*/2, 1, "mu", 2.0f, "random");
     const DecomposeResult want =
         oracle_decompose(S.data(), n_features, 1, /*n_components=*/2, 1, 2.0f, "random");
-    require_bit_equal(got.H, want.H);
+    require_ulp_bounded(got.H, want.H, kMaxUlpsH);
     require_ulp_bounded(got.W, want.W, kMaxUlpsW);
   }
 
@@ -779,7 +772,7 @@ TEST_CASE("decompose matches the oracle on single-row and single-column inputs",
         decompose(S.data(), 1, n_frames, /*n_components=*/1, 1, "mu", 2.0f, "random");
     const DecomposeResult want =
         oracle_decompose(S.data(), 1, n_frames, /*n_components=*/1, 1, 2.0f, "random");
-    require_bit_equal(got.H, want.H);
+    require_ulp_bounded(got.H, want.H, kMaxUlpsH);
     require_ulp_bounded(got.W, want.W, kMaxUlpsW);
   }
 }

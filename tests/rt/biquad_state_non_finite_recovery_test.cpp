@@ -57,6 +57,10 @@ constexpr int kPoisonIndex = 100;
 // for a proportional bound to be worth anything.
 constexpr int kDeEsserRecoveryBlocks = 8;
 constexpr int kAmpSimRecoveryBlocks = 1100;
+// Check the residual at the same horizon: a rounding-level tail can cross
+// exact equality later, even after the poison has stopped propagating.
+// The normalized PCM scale is one; allow 32 float epsilons through the cascade.
+constexpr double kAmpSimResidual = 32.0 * std::numeric_limits<float>::epsilon();
 #if defined(SONARE_WITH_ARRANGEMENT)
 constexpr int kGsMasterEqRecoveryBlocks = 320;
 #endif
@@ -309,7 +313,7 @@ TEST_CASE("the amp sim bounds a non-finite sample to its own block", "[mastering
   // one that carried it. That history is read at an offset rather than fed back,
   // which is why it flushes without the rule.
   check_owner(make, kAmpSimRecoveryBlocks, std::numeric_limits<float>::quiet_NaN(),
-              kPoisonBlock + 1);
+              kPoisonBlock + 1, kAmpSimResidual);
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)

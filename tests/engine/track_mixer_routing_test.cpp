@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -485,6 +486,18 @@ TEST_CASE("Track mixer aligns a key taken from a latent bus with the keyed bus i
 TEST_CASE("Track mixer keys a bus insert ahead of the source's engine-only fader",
           "[track_mixer_routing]") {
   constexpr int kBlocks = 12;
+  // Generate the same fixture in the render and the subtraction. Keep phase
+  // arithmetic in double so the inline and indirect callers only round once to
+  // float, even when the compiler contracts one caller's multiply/add.
+  constexpr Signal fixture = [](uint32_t track, int channel, int64_t frame) {
+    const double step =
+        0.013 * static_cast<double>(track % 7 + 1) + 0.019 * static_cast<double>(channel);
+    return static_cast<float>(0.4 * std::sin(step * static_cast<double>(frame)));
+  };
+  const Planes source = dry(20, kBlocks, fixture);
+  // Subtracting the source from the rounded master has error at the source
+  // scale, even when the keyed bus that remains is much quieter.
+  const float roundoff = 4.0f * std::numeric_limits<float>::epsilon() * peak(source);
   // Bus 2 carries lane 30 through a ducker; the key is lane 20 (straight to the
   // master) or bus 1 (lane 20 inside it). Lane 20's contribution is removed
   // from the master so the keyed bus alone is compared.
@@ -502,8 +515,8 @@ TEST_CASE("Track mixer keys a bus insert ahead of the source's engine-only fader
     }
     if (bind) REQUIRE(m.set_bus_sidechain(2, 0, kind, via_bus ? 1u : 20u));
     m.settle_smoothers();
-    const Planes master = render(m, {20, 30}, 2, kBlocks);
-    return minus(master, scaled(dry(20, kBlocks), sonare::db_to_linear(source_fader_db)));
+    const Planes master = render(m, {20, 30}, 2, kBlocks, fixture);
+    return minus(master, scaled(source, sonare::db_to_linear(source_fader_db)));
   };
   for (SidechainSourceKind kind : {SidechainSourceKind::Track, SidechainSourceKind::Bus}) {
     const Planes unkeyed = run(kind, 0.0f, false);
@@ -512,14 +525,13 @@ TEST_CASE("Track mixer keys a bus insert ahead of the source's engine-only fader
     const size_t settle = static_cast<size_t>(4 * kBlock);
     REQUIRE(rms_db(unkeyed[0], settle) > -40.0);
     CHECK(rms_db(unkeyed[0], settle) - rms_db(keyed[0], settle) >= 1.0);
-    // Removing the source contribution leaves float residue near 1e-7.
-    Planes a = keyed;
-    Planes b = keyed_quiet_source;
+    const Planes& a = keyed;
+    const Planes& b = keyed_quiet_source;
     float diff = 0.0f;
     for (size_t c = 0; c < 2; ++c) {
       for (size_t i = 0; i < a[c].size(); ++i) diff = std::max(diff, std::abs(a[c][i] - b[c][i]));
     }
-    CHECK(diff <= 1.0e-6f);
+    CHECK(diff <= roundoff);
   }
 }
 

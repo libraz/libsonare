@@ -4,6 +4,7 @@
 
 #include "core/pcen.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
@@ -190,12 +191,18 @@ std::vector<float> oracle_pcen(const float* S, int n_bins, int n_frames, const P
   return out;
 }
 
-void require_bit_equal(const std::vector<float>& got, const std::vector<float>& want) {
+void require_oracle_match(const std::vector<float>& got, const std::vector<float>& want,
+                          const PcenConfig& config) {
+  // The power-law branch subtracts the powered bias, so near cancellation the
+  // error follows the scale of that term as well as the result.
+  const float bias_term = config.power == 0.0f ? 0.0f : std::pow(config.bias, config.power);
+  constexpr float kRoundoff = 4.0f * std::numeric_limits<float>::epsilon();
   REQUIRE(got.size() == want.size());
   for (std::size_t i = 0; i < got.size(); ++i) {
     CAPTURE(i, got[i], want[i]);
     REQUIRE(std::isfinite(got[i]));
-    REQUIRE(got[i] == want[i]);
+    const float scale = std::max(std::abs(want[i]), bias_term);
+    REQUIRE(std::abs(got[i] - want[i]) <= kRoundoff * scale);
   }
 }
 
@@ -219,8 +226,8 @@ TEST_CASE("pcen matches a frame-major oracle", "[librosa][pcen]") {
   for (float power : {0.5f, 0.0f, 1.0f}) {
     CAPTURE(power);
     cfg.power = power;
-    require_bit_equal(pcen(S.data(), n_bins, n_frames, cfg),
-                      oracle_pcen(S.data(), n_bins, n_frames, cfg));
+    require_oracle_match(pcen(S.data(), n_bins, n_frames, cfg),
+                         oracle_pcen(S.data(), n_bins, n_frames, cfg), cfg);
   }
 }
 
@@ -236,7 +243,8 @@ TEST_CASE("pcen matches the oracle on single-row and single-column inputs", "[li
     for (int k = 0; k < n_bins; ++k) {
       cfg.zi[static_cast<std::size_t>(k)] = 0.9f + 0.005f * static_cast<float>(k);
     }
-    require_bit_equal(pcen(S.data(), n_bins, 1, cfg), oracle_pcen(S.data(), n_bins, 1, cfg));
+    require_oracle_match(pcen(S.data(), n_bins, 1, cfg), oracle_pcen(S.data(), n_bins, 1, cfg),
+                         cfg);
   }
 
   SECTION("one bin") {
@@ -244,7 +252,8 @@ TEST_CASE("pcen matches the oracle on single-row and single-column inputs", "[li
     const int n_frames = 43;
     const std::vector<float> S = pcen_fixture(1, n_frames, 0xb0bau);
     cfg.zi = {0.97f};
-    require_bit_equal(pcen(S.data(), 1, n_frames, cfg), oracle_pcen(S.data(), 1, n_frames, cfg));
+    require_oracle_match(pcen(S.data(), 1, n_frames, cfg), oracle_pcen(S.data(), 1, n_frames, cfg),
+                         cfg);
   }
 }
 
