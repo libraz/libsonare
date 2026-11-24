@@ -51,6 +51,7 @@ from ._runtime import (
     _get_lib,
     _midi_fx_config_json,
     _resolve_render_frame,
+    _Respelling,
     _to_c_int,
     _to_c_int64,
     _to_c_size_t,
@@ -393,7 +394,9 @@ class _EngineMidiMixin:
             lib.sonare_engine_set_synth_instrument(
                 self._require_handle(),
                 ctypes.byref(binding),
-            )
+            ),
+            flattened="binding",
+            respelled={"patch.preset": _Respelling("patch")} if isinstance(patch, str) else None,
         )
 
     @_entry("RealtimeEngine.resolve_instrument_automation_id")

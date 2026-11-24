@@ -14,9 +14,8 @@
 /// edit, the per-frame voice count, and per note a pitch, a level and a salience
 /// curve.
 ///
-/// Nothing here catches -- a refusal is a SonareException, which the module wrapper
-/// turns into a SonareError -- so there is no catch arm for emscripten's default
-/// DISABLE_EXCEPTION_CATCHING to elide.
+/// The analysis entry respells core refusals using the C mapping before the module
+/// wrapper translates the exception to JS.
 
 #ifdef __EMSCRIPTEN__
 
@@ -26,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/polyphonic_analysis_names.h"
 #include "c_api/transcribe_input_domains.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/polyphony/polyphonic_edit.h"
@@ -125,8 +125,14 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
 editing::polyphony::PolyphonicAnalysis analyzeFromVal(const char* name, val samples,
                                                       int sample_rate, val config) {
   const editing::polyphony::PolyphonicEditConfig resolved = configFromVal(config);
-  return editing::polyphony::analyze_polyphonic(loadValidatedAudio(name, samples, sample_rate),
-                                                resolved);
+  const Audio audio = loadValidatedAudio(name, samples, sample_rate);
+  try {
+    return sonare_c_detail::with_c_names(sonare_c_detail::kPolyphonicAnalysisNames, [&] {
+      return editing::polyphony::analyze_polyphonic(audio, resolved);
+    });
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    throw sonare_field_spelling::wasm::Spelled(refusal, "polyphonic_analyze");
+  }
 }
 
 }  // namespace

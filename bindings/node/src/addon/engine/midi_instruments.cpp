@@ -189,7 +189,7 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
   }
   const SonareError bind_err = sonare_engine_set_synth_instrument(engine_, &binding);
   if (bind_err != SONARE_OK && !env.IsExceptionPending()) {
-    sonare_node::ThrowLastSonareError(env, "", bind_err);
+    sonare_node::ThrowSonareErrorFlattening(env, bind_err, "binding");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

@@ -236,6 +236,7 @@ describe('audio codec and spectral phase', () => {
       code: ErrorCode.NotSupported,
       reason: 'notCompiledIn',
       entry: 'encodeAudio',
+      message: 'encodeAudio: format is unavailable for encoding in this build',
     });
     expect(Object.hasOwn(error as object, 'reason')).toBe(true);
     expect(Object.hasOwn(error as object, 'entry')).toBe(true);
@@ -378,9 +379,9 @@ describe('audio codec and spectral phase', () => {
 
   it('carries native unavailable-format reasons from decoding and tag reads', () => {
     const flacHeader = new Uint8Array([0x66, 0x4c, 0x61, 0x43]);
-    for (const [entry, call] of [
-      ['decodeChannels', () => decodeChannels(flacHeader)],
-      ['readAudioTags', () => readAudioTags(flacHeader)],
+    for (const [entry, operation, call] of [
+      ['decodeChannels', 'decoding', () => decodeChannels(flacHeader)],
+      ['readAudioTags', 'tag reading', () => readAudioTags(flacHeader)],
     ] as const) {
       let error: unknown;
       try {
@@ -393,6 +394,7 @@ describe('audio codec and spectral phase', () => {
         code: ErrorCode.NotSupported,
         reason: 'notCompiledIn',
         entry,
+        message: `${entry}: data uses a format unavailable for ${operation} in this build`,
       });
     }
   });

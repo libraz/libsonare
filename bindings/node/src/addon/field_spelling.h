@@ -223,7 +223,7 @@ struct DocumentRoot {
 // (C entry key, document prefix, caller root): the facade puts the caller's object in the
 // document slot the prefix names, so a path under it is the caller's path under the root.
 inline constexpr std::array<DocumentRoot, 1> kDocumentRoots = {{
-    {"encode_audio", "tags.", "tags."},
+    {"encode_audio", "options.tags.", "tags."},
 }};
 
 // @p subject re-rooted under the caller's root when it lies in entry @p entry's document slot.

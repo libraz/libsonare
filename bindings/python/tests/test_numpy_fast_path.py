@@ -15,12 +15,8 @@ Coverage:
 3. ``RealtimeVoiceChanger`` returns ``numpy.ndarray`` from ``process_mono``
    and ``process_interleaved`` and produces deterministic output regardless
    of whether the caller passes ``list[float]`` or ``np.ndarray``.
-4. A loose timing budget proves that processing a one-million-sample buffer
-   through ``RealtimeVoiceChanger`` (the worst-case offline path) completes
-   in well under a second on stock CI hardware. The threshold is generous
-   to avoid flakiness — the previous element-wise implementation took
-   *seconds* on the same buffer, so any regression to the slow path will
-   blow past this budget.
+4. Offline voice rendering copies its output without indexing the ctypes
+   pointer once per sample.
 """
 
 from __future__ import annotations
@@ -28,7 +24,6 @@ from __future__ import annotations
 import ctypes
 import math
 import pathlib
-import time
 
 import numpy as np
 import pytest
@@ -290,30 +285,29 @@ def test_realtime_voice_changer_render_returns_ndarray() -> None:
     assert len(out) == len(samples)
 
 
-# ---------------------------------------------------------------------------
-# Timing budget — proves we are NOT on the per-element ctypes path.
-# ---------------------------------------------------------------------------
+def test_voice_render_copies_output_without_ctypes_element_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    float_pointer = ctypes.POINTER(ctypes.c_float)
+    getitem = float_pointer.__getitem__
+    element_reads = 0
 
+    def count_read(pointer, index):
+        nonlocal element_reads
+        element_reads += 1
+        return getitem(pointer, index)
 
-def test_large_buffer_processes_under_budget() -> None:
-    """A 1 M-sample buffer must process in well under 1 second.
+    monkeypatch.setattr(float_pointer, "__getitem__", count_read)
+    sample_rate = 48000
+    samples = _sine(4096, sr=sample_rate)
+    out = libsonare.realtime_voice_changer_render(
+        samples, sample_rate=sample_rate, config="neutralMonitor"
+    )
 
-    The previous per-element ``[float(c_out[i]) for i in range(length)]``
-    implementation took multiple seconds on the same buffer; numpy zero-copy
-    should complete in tens of milliseconds. We allow a very generous 2 s
-    ceiling so the test is not flaky on slow CI runners — any regression to
-    the old element-wise marshalling path will blow far past this budget.
-    """
-    sr = 48000
-    n = 1_000_000
-    samples = _sine(n, sr=sr)
-    start = time.perf_counter()
-    out = libsonare.realtime_voice_changer_render(samples, sample_rate=sr, config="neutralMonitor")
-    elapsed = time.perf_counter() - start
     assert isinstance(out, np.ndarray)
-    assert out.shape == (n,)
-    # Surface the actual timing in the failure message for diagnostics.
-    assert elapsed < 2.0, f"processing 1M samples took {elapsed:.3f}s (budget 2.0s)"
+    assert out.dtype == np.float32
+    assert out.shape == samples.shape
+    assert element_reads == 0
 
 
 def _count_float32_coercions(call, *args, **kwargs) -> tuple[int, int]:

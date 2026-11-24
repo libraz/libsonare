@@ -206,6 +206,7 @@ def mastering_dynamics_gate(
         samples,
         sample_rate,
         config,
+        flattened="config",
     )
 
 

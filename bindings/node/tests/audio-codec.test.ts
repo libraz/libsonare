@@ -251,22 +251,38 @@ describe('audio tags and in-memory encoding', () => {
 
   it('keeps coded format refusals and their reason on SonareError', () => {
     const supported = new Set([...capabilities().encode.builtin, ...capabilities().encode.ffmpeg]);
-    const unavailable = ['flac', 'mp3', 'ogg', 'opus', 'm4a'].find(
-      (format) => !supported.has(format),
-    );
-    if (unavailable !== undefined) {
-      let caught: unknown;
-      try {
-        encodeAudio({ channels, sampleRate, format: unavailable as never });
-      } catch (error) {
-        caught = error;
+    for (const format of ['flac', 'mp3', 'ogg', 'opus', 'm4a'] as const) {
+      if (supported.has(format)) {
+        continue;
       }
+      const caught = thrownBy(() => encodeAudio({ channels, sampleRate, format }));
       expect(isSonareError(caught)).toBe(true);
       const error = caught as SonareError;
       expect(error.code).toBe(ErrorCode.NotSupported);
       expect(error.reason).toBe('notCompiledIn');
       expect(Object.hasOwn(error, 'reason')).toBe(true);
       expect(error.entry).toBe('encodeAudio');
+      expect(error.message).toBe('encodeAudio: format is unavailable for encoding in this build');
+    }
+  });
+
+  it('names data when its decoder or tag reader is unavailable', () => {
+    if (capabilities().decode.ffmpeg.includes('flac')) {
+      return;
+    }
+    const flacHeader = new Uint8Array([0x66, 0x4c, 0x61, 0x43]);
+    for (const [entry, operation, call] of [
+      ['decodeChannels', 'decoding', () => decodeChannels(flacHeader)],
+      ['readAudioTags', 'tag reading', () => readAudioTags(flacHeader)],
+    ] as const) {
+      const caught = thrownBy(call);
+      expect(isSonareError(caught)).toBe(true);
+      expect(caught).toMatchObject({
+        code: ErrorCode.NotSupported,
+        reason: 'notCompiledIn',
+        entry,
+        message: `${entry}: data uses a format unavailable for ${operation} in this build`,
+      });
     }
   });
 

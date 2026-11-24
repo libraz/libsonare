@@ -443,7 +443,8 @@ describe('PolyphonicAnalysis config', () => {
       floors.destroy();
     }
     for (const field of ['minRidgeDurationMs', 'minSeparationCents'] as const) {
-      expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, [field]: -1 }));
+      const error = expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, [field]: -1 }));
+      expect(error.message).toBe(`analyzePolyphonic: ${field} must be finite and at least 0`);
     }
   });
 

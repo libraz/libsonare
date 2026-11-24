@@ -344,7 +344,7 @@ offset_samples = "record_offset_samples"
 
 # Caller-defined tag keys keep their spelling on every facade.
 [document_roots]
-encode_audio = ["tags.", "tags."]
+encode_audio = ["options.tags.", "tags."]
 
 # Core parameter-bag subject -> caller key. These spellings apply only to the named entry.
 [parameter_bag_keys.mixing_assistant_suggest]

@@ -201,8 +201,10 @@ describe('analyzePolyphonic', () => {
       }),
     ).toBeGreaterThanOrEqual(2);
     for (const field of ['minRidgeDurationMs', 'minSeparationCents'] as const) {
-      expect(() => withAnalysis((analysis) => analysis.noteCount, { [field]: -1 })).toThrow(
+      expectRefusal(
+        () => withAnalysis((analysis) => analysis.noteCount, { [field]: -1 }),
         RangeError,
+        new RegExp(`^analyzePolyphonic: ${field} must be finite and at least 0$`),
       );
     }
   });

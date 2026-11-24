@@ -225,7 +225,9 @@ def _render_as_given(
         elif document_root is not None:
             subject = f"{document_root}.{subject}" if subject else document_root
             in_argument = True
-        elif (rooted := document_rooted(entry, subject)) is not None:
+        elif (
+            rooted := document_rooted(entry, recorded) or document_rooted(entry, subject)
+        ) is not None:
             subject = rooted
             in_argument = True
         else:

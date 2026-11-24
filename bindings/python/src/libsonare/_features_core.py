@@ -240,7 +240,8 @@ def istft(
                 None if options is None else ctypes.byref(options),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
-            )
+            ),
+            flattened="options",
         )
         return _from_c_float_array(out, out_length.value)
 
