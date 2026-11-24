@@ -47,7 +47,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
     const auto map =
         build_tempo_map(effective_sample_rate, control_tempo_segments_, control_single_tempo_bpm_);
     state.map = map.get();
-    check_capture_loop(state);
+    check_capture_loop(state, {"sample_rate"});
   }
 
   bool clip_sysex_prepared = true;
@@ -390,7 +390,9 @@ RealtimeEngine::CaptureLoop RealtimeEngine::current_capture_loop() const noexcep
   return state;
 }
 
-void RealtimeEngine::check_capture_loop(const CaptureLoop& state) {
+void RealtimeEngine::check_capture_loop(const CaptureLoop& state,
+                                        std::initializer_list<const char*> subjects,
+                                        CaptureLoopBound bound) {
   if (!state.armed || !state.punch || !state.looping ||
       !(state.loop_end_ppq > state.loop_start_ppq)) {
     return;
@@ -399,9 +401,19 @@ void RealtimeEngine::check_capture_loop(const CaptureLoop& state) {
   const int64_t pass = numeric::saturating_sub(state.map->ppq_to_sample(state.loop_end_ppq),
                                                state.map->ppq_to_sample(state.loop_start_ppq));
   if (state.offset_samples <= pass) return;
-  util::check::refuse_relation({"record_offset_samples"},
-                               "{0} must be at most the loop length, " + std::to_string(pass) +
-                                   " samples, while capture is armed with punch on");
+
+  std::vector<std::string> recorded_subjects;
+  for (const char* subject : subjects) recorded_subjects.emplace_back(subject);
+  if (bound == CaptureLoopBound::kOffsetWithinLoop) {
+    util::check::refuse_relation(std::move(recorded_subjects),
+                                 "{0} must be at most the loop length, " + std::to_string(pass) +
+                                     " samples, while capture is armed with punch on");
+  }
+  const std::string positions = subjects.size() == 2 ? "{0} and {1}" : "{0}";
+  util::check::refuse_relation(std::move(recorded_subjects),
+                               positions + " must keep the loop at least " +
+                                   std::to_string(state.offset_samples) +
+                                   " samples long while capture is armed with punch on");
 }
 
 void RealtimeEngine::publish_tempo_map_snapshot() {
@@ -653,7 +665,7 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 void RealtimeEngine::set_tempo(double bpm) {
   util::check::within(bpm, transport::kTempoBpmDomain, "bpm");
   std::vector<transport::TempoSegment> segments{{0.0, bpm, 0.0}};
-  check_tempo_segments(segments);
+  check_tempo_segments_for_capture(segments, "bpm");
   control_single_tempo_bpm_ = bpm;
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
@@ -676,10 +688,15 @@ void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> seg
 
 void RealtimeEngine::check_tempo_segments(
     const std::vector<transport::TempoSegment>& segments) const {
+  check_tempo_segments_for_capture(segments, "segments");
+}
+
+void RealtimeEngine::check_tempo_segments_for_capture(
+    const std::vector<transport::TempoSegment>& segments, const char* subject) const {
   CaptureLoop state = current_capture_loop();
   const auto map = build_tempo_map(sample_rate_, segments, control_single_tempo_bpm_);
   state.map = map.get();
-  check_capture_loop(state);
+  check_capture_loop(state, {subject});
 }
 
 void RealtimeEngine::set_time_signature(int numerator, int denominator) {
@@ -711,7 +728,7 @@ void RealtimeEngine::set_loop(double start_ppq, double end_ppq, bool enabled) {
   state.looping = enabled;
   state.loop_start_ppq = start_ppq;
   state.loop_end_ppq = end_ppq;
-  check_capture_loop(state);
+  check_capture_loop(state, {"start_ppq", "end_ppq"});
   transport_.set_loop(start_ppq, end_ppq, enabled);
 }
 
@@ -773,7 +790,7 @@ bool RealtimeEngine::set_loop_from_markers(uint32_t start_marker_id, uint32_t en
     state.looping = true;
     state.loop_start_ppq = start.ppq;
     state.loop_end_ppq = end.ppq;
-    check_capture_loop(state);
+    check_capture_loop(state, {"start_marker_id", "end_marker_id"});
   }
   return transport_.set_loop_from_markers(start_marker_id, end_marker_id, markers_);
 }
@@ -815,14 +832,14 @@ void RealtimeEngine::set_capture_segment(CaptureSegment segment) noexcept {
 void RealtimeEngine::set_capture_armed(bool armed) {
   CaptureLoop state = current_capture_loop();
   state.armed = armed;
-  check_capture_loop(state);
+  check_capture_loop(state, {"armed"});
   capture_sink_.arm(armed);
 }
 
 void RealtimeEngine::set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled) {
   CaptureLoop state = current_capture_loop();
   state.punch = enabled;
-  check_capture_loop(state);
+  check_capture_loop(state, {"enabled"});
   capture_sink_.set_punch(start_sample, end_sample, enabled);
 }
 
@@ -831,7 +848,7 @@ void RealtimeEngine::set_capture_timing(int64_t offset_samples, int64_t punch_st
   CaptureLoop state = current_capture_loop();
   state.offset_samples = offset_samples;
   state.punch = punch_enabled;
-  check_capture_loop(state);
+  check_capture_loop(state, {"record_offset_samples"}, CaptureLoopBound::kOffsetWithinLoop);
   capture_sink_.set_punch(punch_start_sample, punch_end_sample, punch_enabled);
   record_offset_samples_.store(offset_samples, std::memory_order_release);
 }
@@ -839,7 +856,7 @@ void RealtimeEngine::set_capture_timing(int64_t offset_samples, int64_t punch_st
 void RealtimeEngine::set_record_offset_samples(int64_t offset_samples) {
   CaptureLoop state = current_capture_loop();
   state.offset_samples = offset_samples;
-  check_capture_loop(state);
+  check_capture_loop(state, {"record_offset_samples"}, CaptureLoopBound::kOffsetWithinLoop);
   record_offset_samples_.store(offset_samples, std::memory_order_release);
 }
 

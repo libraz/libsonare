@@ -2,6 +2,7 @@
 /// @brief Engine C ABI contract: version, capabilities, feature-flag
 ///        reporting, malformed JSON and the per-thread last-error channel.
 
+#include <memory>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -1345,4 +1346,61 @@ TEST_CASE("Create and prepare entries refuse a rate or block size outside their 
     REQUIRE(sonare_engine_prepare(engine, 48000, block, 1, 1, 2) == SONARE_ERROR_INVALID_PARAMETER);
   }
   sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine loop refusals name the parameters being changed",
+          "[c_api][engine][capture]") {
+  constexpr int kRate = 48000;
+  constexpr int64_t kInitialLoopSamples = 200;
+  constexpr int64_t kRecordOffsetSamples = 150;
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  const std::unique_ptr<SonareEngine, decltype(&sonare_engine_destroy)> owner(
+      engine, sonare_engine_destroy);
+  REQUIRE(sonare_engine_prepare(engine, kRate, 64, 8, 8, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 60.0) == SONARE_OK);
+  const double initial_loop_end = static_cast<double>(kInitialLoopSamples) / kRate;
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, initial_loop_end, 1) == SONARE_OK);
+
+  std::vector<float> plane(1000, 0.0f);
+  float* channels[1] = {plane.data()};
+  const SonareEngineCaptureBuffer buffer{channels, 1, static_cast<int64_t>(plane.size())};
+  REQUIRE(sonare_engine_set_capture_buffer(engine, &buffer) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 0, kInitialLoopSamples, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_record_offset_samples(engine, kRecordOffsetSamples) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 0, kInitialLoopSamples, 1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, 100.0 / kRate, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_entry() == std::string("engine_set_loop"));
+  REQUIRE(sonare_last_refusal_subject_count() == 2);
+  CHECK(sonare_last_refusal_subject(0) == std::string("start_ppq"));
+  CHECK(sonare_last_refusal_subject(1) == std::string("end_ppq"));
+  CHECK(std::string(sonare_last_error_message()) ==
+        "start_ppq and end_ppq must keep the loop at least 150 samples long while capture is armed "
+        "with punch on");
+
+  SonareTransportState state{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  CHECK(state.loop_end_ppq == initial_loop_end);
+  // A longer loop is accepted with the same stored offset.
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, 300.0 / kRate, 1) == SONARE_OK);
+
+  const SonareProjectTempoSegment faster_tempo{0.0, 240.0, 0.0};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, &faster_tempo, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_entry() == std::string("engine_set_tempo_segments"));
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(sonare_last_refusal_subject(0) == std::string("segments"));
+  CHECK(std::string(sonare_last_error_message()) ==
+        "segments must keep the loop at least 150 samples long while capture is armed with "
+        "punch on");
+
+  int64_t samples = 0;
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0, &samples) == SONARE_OK);
+  CHECK(samples == kRate);
+  const SonareProjectTempoSegment safe_tempo{0.0, 60.0, 0.0};
+  CHECK(sonare_engine_set_tempo_segments(engine, &safe_tempo, 1) == SONARE_OK);
 }

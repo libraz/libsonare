@@ -1343,10 +1343,24 @@ TEST_CASE("RealtimeEngine record offset may span one loop pass and no more",
 
 TEST_CASE("RealtimeEngine refuses every edit that would put the record offset past the loop",
           "[engine][realtime][capture]") {
-  const std::string refusal_60_over_50 =
-      "record_offset_samples must be at most the loop length, 50 samples, while capture is "
-      "armed with punch on";
-  const std::string refusal_101_over_100 =
+  const std::string shorter_loop_refusal =
+      "start_ppq and end_ppq must keep the loop at least 60 samples long while capture is armed "
+      "with punch on";
+  const std::string markers_refusal =
+      "start_marker_id and end_marker_id must keep the loop at least 60 samples long while capture "
+      "is armed with punch on";
+  const std::string tempo_refusal =
+      "bpm must keep the loop at least 60 samples long while capture is armed with punch on";
+  const std::string segments_refusal =
+      "segments must keep the loop at least 60 samples long while capture is armed with punch on";
+  const std::string rate_refusal =
+      "sample_rate must keep the loop at least 60 samples long while capture is armed with punch "
+      "on";
+  const std::string armed_refusal =
+      "armed must keep the loop at least 101 samples long while capture is armed with punch on";
+  const std::string punch_refusal =
+      "enabled must keep the loop at least 101 samples long while capture is armed with punch on";
+  const std::string offset_refusal =
       "record_offset_samples must be at most the loop length, 100 samples, while capture is "
       "armed with punch on";
   sonare::engine::RealtimeEngine engine;
@@ -1357,38 +1371,37 @@ TEST_CASE("RealtimeEngine refuses every edit that would put the record offset pa
   SECTION("a shorter loop") {
     arm_looped_capture(engine, take, 60);
     CHECK(offset_refusal_text([&] { engine.set_loop(0.0, loop_end / 2.0, true); }) ==
-          refusal_60_over_50);
+          shorter_loop_refusal);
     CHECK(loop_end_now() == loop_end);
   }
   SECTION("a shorter loop between markers") {
     arm_looped_capture(engine, take, 60);
     engine.set_markers({{0.0, 1, "a"}, {loop_end / 2.0, 2, "b"}});
     CHECK(offset_refusal_text([&] { (void)engine.set_loop_from_markers(1, 2); }) ==
-          refusal_60_over_50);
+          markers_refusal);
     CHECK(loop_end_now() == loop_end);
   }
   SECTION("a faster tempo") {
     arm_looped_capture(engine, take, 60);
-    CHECK(offset_refusal_text([&] { engine.set_tempo(120.0); }) == refusal_60_over_50);
+    CHECK(offset_refusal_text([&] { engine.set_tempo(120.0); }) == tempo_refusal);
     CHECK(engine.bpm_at_sample(0) == 60.0);
   }
   SECTION("faster tempo segments") {
     arm_looped_capture(engine, take, 60);
     CHECK(offset_refusal_text([&] { engine.set_tempo_segments({{0.0, 120.0, 0.0}}); }) ==
-          refusal_60_over_50);
+          segments_refusal);
     CHECK(engine.bpm_at_sample(0) == 60.0);
   }
   SECTION("a lower sample rate") {
     arm_looped_capture(engine, take, 60);
-    CHECK(offset_refusal_text([&] { engine.prepare(kOffsetLoopRate / 2.0, 64); }) ==
-          refusal_60_over_50);
+    CHECK(offset_refusal_text([&] { engine.prepare(kOffsetLoopRate / 2.0, 64); }) == rate_refusal);
     CHECK(engine.sample_rate() == kOffsetLoopRate);
   }
   SECTION("arming over a long offset") {
     arm_looped_capture(engine, take, 0);
     engine.set_capture_armed(false);
     engine.set_record_offset_samples(kOffsetLoopSamples + 1);
-    CHECK(offset_refusal_text([&] { engine.set_capture_armed(true); }) == refusal_101_over_100);
+    CHECK(offset_refusal_text([&] { engine.set_capture_armed(true); }) == armed_refusal);
     CHECK_FALSE(engine.capture_armed());
   }
   SECTION("turning the punch on over a long offset") {
@@ -1396,7 +1409,7 @@ TEST_CASE("RealtimeEngine refuses every edit that would put the record offset pa
     engine.set_capture_punch(0, kOffsetLoopSamples, false);
     engine.set_record_offset_samples(kOffsetLoopSamples + 1);
     CHECK(offset_refusal_text([&] { engine.set_capture_punch(0, kOffsetLoopSamples, true); }) ==
-          refusal_101_over_100);
+          punch_refusal);
     CHECK_FALSE(engine.capture_punch_enabled());
   }
   SECTION("timing set together is checked as the state it produces") {
@@ -1411,7 +1424,7 @@ TEST_CASE("RealtimeEngine refuses every edit that would put the record offset pa
     // A refused setup changes neither half, and leaves the capture armed.
     CHECK(offset_refusal_text([&] {
             engine.set_capture_timing(kOffsetLoopSamples + 1, 10, kOffsetLoopSamples, true);
-          }) == refusal_101_over_100);
+          }) == offset_refusal);
     CHECK(engine.record_offset_samples() == 40);
     CHECK(engine.capture_punch_enabled());
     CHECK(engine.capture_armed());

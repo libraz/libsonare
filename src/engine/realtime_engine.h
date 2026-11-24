@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -1546,9 +1547,13 @@ class RealtimeEngine : private ClipPageRequestSink {
     const transport::TempoMap* map = nullptr;
   };
   CaptureLoop current_capture_loop() const noexcept;
-  /// Throws InvalidParameter when @p state holds an offset past one loop pass while looping
-  /// with capture armed and the punch on.
-  static void check_capture_loop(const CaptureLoop& state);
+  enum class CaptureLoopBound { kOffsetWithinLoop, kLoopAtLeastOffset };
+  /// Throws InvalidParameter when the armed punch capture cannot fit the proposed loop.
+  static void check_capture_loop(const CaptureLoop& state,
+                                 std::initializer_list<const char*> subjects,
+                                 CaptureLoopBound bound = CaptureLoopBound::kLoopAtLeastOffset);
+  void check_tempo_segments_for_capture(const std::vector<transport::TempoSegment>& segments,
+                                        const char* subject) const;
   void adopt_tempo_map_snapshot() noexcept;
   // The whole of prepare()'s acquisition sequence. prepare() wraps it so a
   // throw from any step lands in one place. Returns false when a bound
