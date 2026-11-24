@@ -2,10 +2,23 @@
 /// @brief Realtime voice changer core behavior tests.
 
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <tuple>
 
 #include "editing/voice_changer/voice_changer_insert.h"
 #include "voice_changer_test_helpers.h"
+
+namespace sonare::editing::voice_changer {
+
+struct VoiceChangerDiscardTestAccess {
+  static void add(RealtimeVoiceChanger& changer, std::size_t count) noexcept {
+    changer.non_finite_discard_count_.add(count);
+  }
+};
+
+}  // namespace sonare::editing::voice_changer
 
 TEST_CASE("RealtimeVoiceChanger processes realtime block sizes and resets deterministically",
           "[voice_changer]") {
@@ -1144,6 +1157,34 @@ TEST_CASE("RealtimeVoiceChanger counts the input samples it substituted", "[voic
   many[40] = -std::numeric_limits<float>::infinity();
   changer.process_block(many.data(), out.data(), block);
   REQUIRE(changer.non_finite_discard_count() == 2);
+}
+
+TEST_CASE("RealtimeVoiceChanger retains discarded block counts beyond UINT32_MAX",
+          "[voice_changer][non_finite]") {
+  if (sizeof(std::size_t) <= sizeof(std::uint32_t)) SKIP("requires a wider size_t");
+  constexpr auto limit = std::numeric_limits<std::uint32_t>::max();
+  constexpr std::uint64_t beyond = std::uint64_t{limit} + 1;
+  constexpr int sample_rate = 48000;
+  constexpr int block = 64;
+  RealtimeVoiceChanger changer(realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor));
+  changer.prepare(sample_rate, block, 2);
+  VoiceChangerDiscardTestAccess::add(changer, limit);
+
+  std::vector<float> left(block, 0.01f);
+  std::vector<float> right(block, 0.01f);
+  float* channels[] = {left.data(), right.data()};
+  changer.process_block(channels, 2, block);
+  CHECK(changer.non_finite_discard_count() == limit);
+
+  left[16] = std::numeric_limits<float>::quiet_NaN();
+  right[24] = std::numeric_limits<float>::infinity();
+  changer.process_block(channels, 2, block);
+  CHECK(changer.non_finite_discard_count() == beyond);
+
+  changer.reset();
+  CHECK(changer.non_finite_discard_count() == beyond);
+  changer.prepare(sample_rate, block, 2);
+  CHECK(changer.non_finite_discard_count() == 0);
 }
 
 TEST_CASE("RealtimeVoiceChanger counts a block once however many channels carried it",

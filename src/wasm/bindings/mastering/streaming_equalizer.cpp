@@ -202,7 +202,7 @@ class EqualizerWrapper {
 
   // Number of blocks in which the EQ discarded recursive state because a
   // non-finite value had reached it. See sonare_eq_non_finite_discard_count.
-  uint32_t nonFiniteDiscardCount() const { return processor_.non_finite_discard_count(); }
+  size_t nonFiniteDiscardCount() const { return processor_.non_finite_discard_count(); }
 
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");

@@ -1,14 +1,18 @@
 /// @file mixing_meter_panner_capi_test.cpp
 /// @brief Mixing meter, panner, and C API tests.
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
+#include <memory>
 
 #include "c_api/mixing_internal.h"
 #include "mixing_test_helpers.h"
+#include "support/processor_discard_test_access.h"
 #include "util/constants.h"
 
 TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
@@ -509,6 +513,80 @@ TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sam
   REQUIRE(count == 1u);
 
   sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixing discard readers retain counts beyond UINT32_MAX", "[mixing][capi][non_finite]") {
+  if (sizeof(size_t) <= sizeof(uint32_t)) SKIP("requires a wider size_t");
+  constexpr auto limit = static_cast<size_t>(std::numeric_limits<uint32_t>::max());
+  constexpr auto beyond = static_cast<size_t>(uint64_t{1} << 32);
+  using sonare::rt::ProcessorDiscardTestAccess;
+
+  SonareMixer* raw = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &raw) == SONARE_OK);
+  const std::unique_ptr<SonareMixer, decltype(&sonare_mixer_destroy)> mixer(raw,
+                                                                            sonare_mixer_destroy);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer.get(), "track", nullptr);
+  REQUIRE(strip != nullptr);
+
+  constexpr int kBlock = 32;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  const auto fill = [&](float sample) {
+    left.fill(0.25f);
+    right.fill(0.25f);
+    left[4] = sample;
+    right[4] = sample;
+  };
+  const auto poison = std::numeric_limits<float>::quiet_NaN();
+  size_t count = 0;
+
+  SECTION("strip reads preserve the block count across EQ state loss") {
+    strip->strip.set_eq_band(
+        0, sonare::mastering::eq::EqBand(sonare::mastering::eq::EqBandType::Peak, 1000.0f, 6.0f,
+                                         2.0f, true));
+    ProcessorDiscardTestAccess::add(strip->strip, limit);
+    ProcessorDiscardTestAccess::add(strip->strip.eq(), beyond);
+
+    fill(0.25f);
+    strip->strip.process(channels, 2, kBlock);
+    REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+    CHECK(count == limit);
+
+    fill(poison);
+    strip->strip.process(channels, 2, kBlock);
+    REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+    CHECK(count == beyond);
+    const size_t eq_count = strip->strip.eq().non_finite_discard_count();
+    CHECK(eq_count == beyond + 1);
+  }
+
+  SECTION("a compiled bus retains its tally after recompiling") {
+    REQUIRE(sonare_mixer_add_bus(mixer.get(), "aux", "aux") == SONARE_OK);
+    REQUIRE(sonare_mixer_compile(mixer.get()) == SONARE_OK);
+    sonare::mixing::FxBus* fx = nullptr;
+    for (const auto& entry : mixer->bus_dsp) {
+      if (entry && entry->id == "aux") fx = &entry->fx;
+    }
+    REQUIRE(fx != nullptr);
+    ProcessorDiscardTestAccess::add(*fx, limit);
+    ProcessorDiscardTestAccess::add(fx->bus(), beyond);
+
+    fill(0.25f);
+    fx->process(channels, 2, kBlock);
+    REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer.get(), "aux", &count) == SONARE_OK);
+    CHECK(count == limit);
+
+    fill(poison);
+    fx->process(channels, 2, kBlock);
+    REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer.get(), "aux", &count) == SONARE_OK);
+    CHECK(count == beyond);
+
+    REQUIRE(sonare_mixer_add_strip(mixer.get(), "second", nullptr) != nullptr);
+    REQUIRE(sonare_mixer_compile(mixer.get()) == SONARE_OK);
+    REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer.get(), "aux", &count) == SONARE_OK);
+    CHECK(count == beyond);
+  }
 }
 
 // A NULL per-strip channel pointer is the one rejection this entry used to make

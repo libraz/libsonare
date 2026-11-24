@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
@@ -95,7 +96,7 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
   bool discarded = false;
   // Read outside the control-interval loop: the limiter runs once per chunk, and
   // the unit is one process() call.
-  const uint32_t limiter_discards = limiter_.non_finite_discard_count();
+  const std::size_t limiter_discards = limiter_.non_finite_discard_count();
   int offset = 0;
   while (offset < num_samples) {
     if (control_phase_ == 0) {

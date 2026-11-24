@@ -5,10 +5,15 @@
 #include <array>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <climits>
+#include <cstdint>
+#include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 
 #include "c_api/eq_band_json.h"
+#include "c_api/mastering_eq_internal.h"
+#include "c_api/mastering_streaming_internal.h"
 #include "c_api/sonare_c_last_refusal.h"
 #include "c_api/sonare_c_mastering_helpers.h"
 #include "core/audio.h"
@@ -25,6 +30,7 @@
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
 #include "support/c_strings.h"
+#include "support/processor_discard_test_access.h"
 #include "support/schema_paths.h"
 #include "util/db.h"
 #include "util/json.h"
@@ -2445,6 +2451,50 @@ TEST_CASE("sonare_eq_non_finite_discard_count reports the state the EQ discarded
   REQUIRE(sonare_eq_non_finite_discard_count(eq, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_eq_destroy(eq);
+}
+
+TEST_CASE("C EQ discard reader retains counts beyond UINT32_MAX",
+          "[c_api][mastering][non_finite][discard_width]") {
+  if (std::numeric_limits<size_t>::max() <= UINT32_MAX) return;
+  SonareEq* raw = nullptr;
+  REQUIRE(sonare_eq_create(48000, 512, &raw) == SONARE_OK);
+  std::unique_ptr<SonareEq, decltype(&sonare_eq_destroy)> eq(raw, sonare_eq_destroy);
+  REQUIRE(
+      sonare_eq_set_band(eq.get(), 0,
+                         R"({"type":"peak","frequencyHz":1000,"gainDb":9,"q":2,"enabled":true})") ==
+      SONARE_OK);
+  sonare::rt::ProcessorDiscardTestAccess::add(eq->processor, UINT32_MAX);
+
+  std::array<float, 64> samples{};
+  samples[8] = std::numeric_limits<float>::quiet_NaN();
+  float* channels[] = {samples.data()};
+  REQUIRE(sonare_eq_process(eq.get(), channels, 1, samples.size()) == SONARE_OK);
+
+  size_t count = 0;
+  REQUIRE(sonare_eq_non_finite_discard_count(eq.get(), &count) == SONARE_OK);
+  CHECK(count == size_t{UINT32_MAX} + 1);
+}
+
+TEST_CASE("C streaming chain discard reader retains counts beyond UINT32_MAX",
+          "[c_api][mastering][non_finite][discard_width]") {
+  if (std::numeric_limits<size_t>::max() <= UINT32_MAX) return;
+  SonareStreamingMasteringChain* raw = nullptr;
+  REQUIRE(create_chain_with_gain(R"({"eq.tilt.tiltDb":24})", 0.0f, 0.0f, &raw) == SONARE_OK);
+  std::unique_ptr<SonareStreamingMasteringChain,
+                  decltype(&sonare_streaming_mastering_chain_destroy)>
+      chain(raw, sonare_streaming_mastering_chain_destroy);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(chain.get(), 48000, 128, 1) == SONARE_OK);
+  seed_non_finite_discards(*chain->chain, UINT32_MAX);
+
+  std::array<float, 128> samples;
+  samples.fill(3.0e38f);
+  REQUIRE(sonare_streaming_mastering_chain_process_mono(chain.get(), samples.data(),
+                                                        samples.size()) == SONARE_OK);
+
+  size_t count = 0;
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(chain.get(), &count) ==
+          SONARE_OK);
+  CHECK(count == size_t{UINT32_MAX} + 1);
 }
 
 TEST_CASE("sonare_streaming_mastering_chain_non_finite_discard_count reports a lost stage",

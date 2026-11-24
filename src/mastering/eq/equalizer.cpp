@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -194,7 +195,7 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   const uint64_t iir_discards_before = iir_discards();
   // The analyser runs inside publish_spectrum_snapshot below, after the filters,
   // so its count is read on either side of that call rather than here.
-  const uint32_t spectrum_discards_before = spectrum_analyzer_.non_finite_discard_count();
+  const std::size_t spectrum_discards_before = spectrum_analyzer_.non_finite_discard_count();
 
   if (!has_dynamic_bands_ && !auto_gain_enabled_) {
     // Nothing is measured, so the stream position only has to keep its phase.

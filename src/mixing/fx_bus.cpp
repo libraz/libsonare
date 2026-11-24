@@ -1,5 +1,6 @@
 #include "mixing/fx_bus.h"
 
+#include <cstddef>
 #include <utility>
 
 #include "rt/tail_budget.h"
@@ -13,7 +14,7 @@ void FxBus::prepare(double sample_rate, int max_block_size) {
 }
 
 void FxBus::process(float* const* channels, int num_channels, int num_samples) {
-  const uint32_t discards_before = bus_.non_finite_discard_count();
+  const std::size_t discards_before = bus_.non_finite_discard_count();
   bus_.process(channels, num_channels, num_samples);
   // The delta rather than the value: this wrapper is what a host holds, so its
   // own count has to answer the same question the bus's does without becoming a

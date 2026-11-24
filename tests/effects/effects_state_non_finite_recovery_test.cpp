@@ -24,6 +24,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -267,11 +268,11 @@ void check_discard_is_counted(const Make& make, int contamination_samples) {
       // channel count is a property of the buffer the caller passed rather than
       // of the work they asked for.
       auto stepped = make();
-      uint32_t previous = 0;
+      std::size_t previous = 0;
       bool counted = false;
       for (int k = 0; k < kBlocks && !counted; ++k) {
         run_one_block(*stepped, k, poison_value, k == kPoisonBlock);
-        const uint32_t now = stepped->non_finite_discard_count();
+        const std::size_t now = stepped->non_finite_discard_count();
         if (now != previous) {
           CHECK(now - previous == 1u);
           counted = true;

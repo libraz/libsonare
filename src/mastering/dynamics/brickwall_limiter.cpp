@@ -86,7 +86,7 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
   // The recursive cells belong to the inner limiter, so the discard this
   // processor publishes is its member's. Read as a difference across the block,
   // never summed: the base counts blocks, and a member may run more than once.
-  const std::uint32_t inner_discards_before = limiter_.non_finite_discard_count();
+  const std::size_t inner_discards_before = limiter_.non_finite_discard_count();
   limiter_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
 
   const float ceiling = db_to_linear(cfg.ceiling_db);

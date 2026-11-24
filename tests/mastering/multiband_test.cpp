@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <string>
@@ -1092,7 +1093,7 @@ TEST_CASE("MultibandSaturation counts a block its crossover or a band discarded"
   // from outside only as a count, so a discard inside one is observable nowhere
   // unless this processor records it. Both channels and several members carried
   // it and the count still moves by blocks, never by member or by channel.
-  const uint32_t discards = saturation.non_finite_discard_count();
+  const std::size_t discards = saturation.non_finite_discard_count();
   REQUIRE(discards > 0u);
   REQUIRE(discards <= 2u);
 }

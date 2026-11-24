@@ -3,9 +3,9 @@
 #include <memory>
 
 #include "c_api/eq_band_json.h"
+#include "c_api/mastering_eq_internal.h"
 #include "c_api/mastering_input_domains.h"
 #include "mastering/eq/band_strings.h"
-#include "mastering/eq/equalizer.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
 #include "sonare_c_internal.h"
@@ -19,12 +19,6 @@ using namespace sonare_c_detail;
 // engine's fixed-size band_gain_db array (std::array<float, 24>).
 static_assert(SONARE_EQ_MAX_BANDS == sonare::mastering::eq::EqualizerProcessor::kMaxBands,
               "SONARE_EQ_MAX_BANDS must match EqualizerProcessor::kMaxBands");
-
-struct SonareEq {
-  sonare::mastering::eq::EqualizerProcessor processor;
-  double sample_rate = 48000.0;
-  int max_block_size = 0;
-};
 
 namespace {
 

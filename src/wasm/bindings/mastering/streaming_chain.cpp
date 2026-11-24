@@ -142,9 +142,7 @@ class StreamingMasteringChainWrapper {
   // once per call however many stages did it -- not the same measurement as
   // nonFiniteSubstitutionCount, which sums replaced samples. See
   // sonare_streaming_mastering_chain_non_finite_discard_count.
-  double nonFiniteDiscardCount() const {
-    return static_cast<double>(chain_.non_finite_discard_count());
-  }
+  size_t nonFiniteDiscardCount() const { return chain_.non_finite_discard_count(); }
 
  private:
   void ensurePreparedForFlush() const {

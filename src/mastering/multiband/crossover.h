@@ -3,6 +3,7 @@
 /// @file crossover.h
 /// @brief Stateful multiband crossover built from matched low/high-pass filter pairs.
 
+#include <cstddef>
 #include <vector>
 
 #include "rt/biquad_design.h"
@@ -78,7 +79,7 @@ class Crossover {
   ///   it carries its own. A multiband processor that owns one folds this into
   ///   its own count, because the sections it splits with are not reachable
   ///   from outside it.
-  uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
+  std::size_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
 
   void prepare(double sample_rate, int max_block_size);
   /// Prepare with an explicit upper bound on the number of input channels.
@@ -186,7 +187,7 @@ class Crossover {
   std::vector<std::vector<size_t>> fir_history_index_;
   std::vector<std::vector<float>> fir_delay_history_;
   std::vector<size_t> fir_delay_index_;
-  rt::OverflowCounter non_finite_discards_;
+  rt::NonFiniteDiscardCounter non_finite_discards_;
 };
 
 }  // namespace sonare::mastering::multiband

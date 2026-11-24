@@ -497,9 +497,10 @@ class StreamingMasteringChain {
   ///          two counters on one handle share an epoch. reset() returns the
   ///          stages' audio state but neither count: the numbers describe what
   ///          has happened, which resetting does not undo.
-  std::uint32_t non_finite_discard_count() const noexcept;
+  std::size_t non_finite_discard_count() const noexcept;
 
  private:
+  friend void seed_non_finite_discards(StreamingMasteringChain&, std::size_t) noexcept;
   void process_prevalidated(float* const* channels, int num_channels, int num_samples);
   int tail_samples() const noexcept;
 

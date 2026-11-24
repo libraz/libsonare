@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "c_api/mastering_streaming_internal.h"
 #include "core/audio.h"
-#include "mastering/api/chain.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/streaming_preview.h"
 #include "sonare_c_internal.h"
@@ -279,16 +279,6 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
 // ============================================================================
 // Streaming mastering chain
 // ============================================================================
-
-struct SonareStreamingMasteringChain {
-  std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
-  // Mirrors the last successful prepare(). The process entries scan the caller's
-  // buffer for non-finite samples before handing it to the core, so the block
-  // bound has to be known HERE: without it the scan is the first thing to
-  // dereference the buffer and would read past its end for any oversized
-  // num_samples the core would have rejected. Zero until prepare() succeeds.
-  int max_block_size = 0;
-};
 
 void sonare_streaming_mastering_chain_options_init(SonareStreamingMasteringChainOptions* options) {
   if (options == nullptr) return;

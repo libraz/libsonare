@@ -188,14 +188,14 @@ AuParameterMetadataProbeResult run_au_parameter_metadata_probe();
 /// the number of samples. No SDK object or installed plugin is required.
 struct AuNonFiniteDiscardProbeResult {
   bool ran = false;
-  uint32_t instrument_before = 0;
-  uint32_t instrument_after_clean = 0;
-  uint32_t instrument_after_poison = 0;
-  uint32_t instrument_after_many = 0;
-  uint32_t effect_before = 0;
-  uint32_t effect_after_clean = 0;
-  uint32_t effect_after_poison = 0;
-  uint32_t effect_after_many = 0;
+  std::size_t instrument_before = 0;
+  std::size_t instrument_after_clean = 0;
+  std::size_t instrument_after_poison = 0;
+  std::size_t instrument_after_many = 0;
+  std::size_t effect_before = 0;
+  std::size_t effect_after_clean = 0;
+  std::size_t effect_after_poison = 0;
+  std::size_t effect_after_many = 0;
 };
 
 AuNonFiniteDiscardProbeResult run_au_non_finite_discard_probe();

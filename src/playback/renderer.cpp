@@ -137,7 +137,7 @@ struct PlaybackRenderer::Impl {
   std::atomic<uint64_t> layout_switches{0};
   std::atomic<uint64_t> truncated_drains{0};
   std::atomic<float> limiter_gain_reduction_db{0.0f};
-  rt::OverflowCounter non_finite;
+  rt::NonFiniteDiscardCounter non_finite;
 
   bool busy(int index) const noexcept {
     return index == active || index == draining || index == fading;
@@ -492,12 +492,12 @@ bool PlaybackRenderer::process_planar(const float* const* in, int in_channels, f
     if (out[c] == nullptr) return false;
   }
 
-  uint32_t replaced = 0;
+  std::size_t replaced = 0;
   for (int c = 0; c < in_channels; ++c) {
     float* to = m.staging[static_cast<size_t>(c)].data();
     std::copy(in[c], in[c] + frames, to);
-    replaced += static_cast<uint32_t>(resolve_non_finite_run(SampleDestination::kIrreversibleOutput,
-                                                             to, static_cast<size_t>(frames)));
+    replaced += resolve_non_finite_run(SampleDestination::kIrreversibleOutput, to,
+                                       static_cast<size_t>(frames));
   }
   if (replaced > 0) m.non_finite.add(replaced);
 
@@ -520,7 +520,7 @@ bool PlaybackRenderer::process_interleaved(const float* in, int in_channels, flo
   const std::less<const void*> before;
   if (before(in, out_end) && before(out, in_end)) return false;
 
-  uint32_t replaced = 0;
+  std::size_t replaced = 0;
   for (int c = 0; c < in_channels; ++c) {
     float* to = m.staging[static_cast<size_t>(c)].data();
     for (int i = 0; i < frames; ++i) {
@@ -640,7 +640,14 @@ RendererDiagnostics PlaybackRenderer::diagnostics() const {
   return d;
 }
 
-uint32_t PlaybackRenderer::non_finite_discard_count() const noexcept {
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
+void seed_non_finite_discards(PlaybackRenderer& renderer, std::size_t count) noexcept {
+  renderer.impl_->non_finite.add(count);
+}
+
+std::size_t PlaybackRenderer::non_finite_discard_count() const noexcept {
   return impl_->non_finite.load();
 }
 

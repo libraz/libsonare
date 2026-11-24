@@ -2,10 +2,10 @@
 #include <vector>
 
 #if defined(SONARE_WITH_PLAYBACK)
+#include "c_api/playback_internal.h"
 #include "playback/config.h"
 #include "playback/hrtf_set.h"
 #include "playback/loudness_meter.h"
-#include "playback/renderer.h"
 #endif
 #include <sonare/sonare_c.h>
 
@@ -20,10 +20,6 @@ using namespace sonare_c_detail;
 #if defined(SONARE_WITH_PLAYBACK)
 struct SonareHrtfSet {
   std::unique_ptr<sonare::playback::HrtfSet> set;
-};
-
-struct SonarePlaybackRenderer {
-  std::unique_ptr<sonare::playback::PlaybackRenderer> renderer;
 };
 
 struct SonarePlaybackLoudnessMeter {

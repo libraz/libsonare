@@ -178,7 +178,7 @@ void VoiceChangerInsert::process(float* const* channels, int num_channels, int n
     changer_.process_block(planes, num_channels, length);
   }
   // One discard per process() call, whatever number of inner blocks it took.
-  const std::uint32_t discards = changer_.non_finite_discard_count();
+  const std::size_t discards = changer_.non_finite_discard_count();
   if (discards != reported_discards_) {
     reported_discards_ = discards;
     note_non_finite_discard();

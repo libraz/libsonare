@@ -1,6 +1,7 @@
 #include "mastering/eq/mid_side_eq.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -48,8 +49,8 @@ void MidSideEq::process(float* const* channels, int num_channels, int num_sample
 
   // Read outside the chunk loop: each backend runs once per chunk, and the unit
   // is one process() call.
-  const uint32_t mid_discards = mid_eq_.non_finite_discard_count();
-  const uint32_t side_discards = side_eq_.non_finite_discard_count();
+  const std::size_t mid_discards = mid_eq_.non_finite_discard_count();
+  const std::size_t side_discards = side_eq_.non_finite_discard_count();
   for (int start = 0; start < num_samples; start += chunk) {
     const int n = std::min(chunk, num_samples - start);
     stereo::encode_buffer_half(channels[0] + start, channels[1] + start, mid, side,

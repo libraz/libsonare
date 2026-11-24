@@ -1,5 +1,6 @@
 #include "mastering/eq/band_pass.h"
 
+#include <cstddef>
 #include <cstdint>
 
 #include "mastering/dynamics/channel_limits.h"
@@ -14,7 +15,7 @@ void BandPassEq::prepare(double sample_rate, int max_block_size, int max_channel
 }
 
 void BandPassEq::process(float* const* channels, int num_channels, int num_samples) {
-  const uint32_t eq_discards = eq_.non_finite_discard_count();
+  const std::size_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
   if (eq_.non_finite_discard_count() != eq_discards) note_non_finite_discard();
 }

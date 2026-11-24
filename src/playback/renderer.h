@@ -49,7 +49,7 @@ struct RendererDiagnostics {
   bool hrtf_ignored = false;  ///< an HRTF set was supplied to a speakers target
   /// Deepest last-block main/LFE limiter reduction (dB, <= 0).
   float limiter_gain_reduction_db = 0.0f;
-  uint32_t non_finite_discards = 0;
+  std::size_t non_finite_discards = 0;
 };
 
 /// Diagnostics document (`activeInputLayout`, `layoutSwitches`,
@@ -104,9 +104,10 @@ class PlaybackRenderer {
   int sample_rate() const noexcept;
   int max_block_size() const noexcept;
   RendererDiagnostics diagnostics() const;
-  uint32_t non_finite_discard_count() const noexcept;
+  std::size_t non_finite_discard_count() const noexcept;
 
  private:
+  friend void seed_non_finite_discards(PlaybackRenderer&, std::size_t) noexcept;
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

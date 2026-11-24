@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -44,8 +45,8 @@ void GraphicEq::prepare(double sample_rate, int max_block_size, int max_channels
 }
 
 void GraphicEq::process(float* const* channels, int num_channels, int num_samples) {
-  const uint32_t low_discards = low_eq_.non_finite_discard_count();
-  const uint32_t high_discards = high_eq_.non_finite_discard_count();
+  const std::size_t low_discards = low_eq_.non_finite_discard_count();
+  const std::size_t high_discards = high_eq_.non_finite_discard_count();
   low_eq_.process(channels, num_channels, num_samples);
   high_eq_.process(channels, num_channels, num_samples);
   if (low_eq_.non_finite_discard_count() != low_discards ||

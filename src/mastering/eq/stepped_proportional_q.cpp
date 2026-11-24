@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include "mastering/dynamics/channel_limits.h"
@@ -36,7 +37,7 @@ void SteppedProportionalQEq::prepare(double sample_rate, int max_block_size, int
 }
 
 void SteppedProportionalQEq::process(float* const* channels, int num_channels, int num_samples) {
-  const uint32_t eq_discards = eq_.non_finite_discard_count();
+  const std::size_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
   if (eq_.non_finite_discard_count() != eq_discards) note_non_finite_discard();
 }

@@ -359,9 +359,7 @@ class RealtimeVoiceChanger {
   ///          finite, in range and free of any error while carrying samples
   ///          unrelated to the input. A non-zero count is what says the samples
   ///          in between were not computed from what the caller supplied.
-  std::uint32_t non_finite_discard_count() const noexcept {
-    return non_finite_discard_count_.load();
-  }
+  std::size_t non_finite_discard_count() const noexcept { return non_finite_discard_count_.load(); }
   /// @brief Largest gain reduction, in dB (<= 0), the compressor, de-esser and
   ///        sample-domain limiter applied together during the last block.
   /// @details Any thread; 0 before the first block and after @ref reset. The
@@ -374,6 +372,8 @@ class RealtimeVoiceChanger {
   }
 
  private:
+  friend struct VoiceChangerDiscardTestAccess;
+
   /// Integer delay line; empty means no delay.
   struct FixedDelay {
     std::vector<float> line;
@@ -664,7 +664,7 @@ class RealtimeVoiceChanger {
 
   /// Written by the audio thread, polled by a host thread; see
   /// non_finite_discard_count().
-  rt::OverflowCounter non_finite_discard_count_{};
+  rt::NonFiniteDiscardCounter non_finite_discard_count_{};
 
   /// Written by the audio thread once per block; see last_gain_reduction_db().
   std::atomic<float> last_gain_reduction_db_{0.0f};

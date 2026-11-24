@@ -5,11 +5,14 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #if defined(SONARE_WITH_PLAYBACK)
+
+#include "c_api/playback_internal.h"
 
 namespace {
 
@@ -424,6 +427,30 @@ TEST_CASE("playback renderer diagnostics_json and non_finite_discard_count", "[p
   CHECK(discards == 0u);
 
   sonare_playback_renderer_destroy(renderer);
+}
+
+TEST_CASE("C playback discard reader retains counts beyond UINT32_MAX",
+          "[playback][capi][non_finite][discard_width]") {
+  if (std::numeric_limits<size_t>::max() <= UINT32_MAX) return;
+  constexpr int kBlock = 128;
+  std::unique_ptr<SonarePlaybackRenderer, decltype(&sonare_playback_renderer_destroy)> renderer(
+      create_renderer(speakers_5_1_config(), 48000, kBlock), sonare_playback_renderer_destroy);
+  seed_non_finite_discards(*renderer->renderer, UINT32_MAX);
+
+  std::vector<float> in(kBlock * 2, 0.0f);
+  in[3] = std::numeric_limits<float>::quiet_NaN();
+  std::vector<float> out(kBlock * 6, 0.0f);
+  REQUIRE(sonare_playback_renderer_process_interleaved(renderer.get(), in.data(), 2, out.data(), 6,
+                                                       kBlock) == SONARE_OK);
+
+  size_t count = 0;
+  REQUIRE(sonare_playback_renderer_non_finite_discard_count(renderer.get(), &count) == SONARE_OK);
+  CHECK(count == size_t{UINT32_MAX} + 1);
+
+  char* diagnostics = nullptr;
+  REQUIRE(sonare_playback_renderer_diagnostics_json(renderer.get(), &diagnostics) == SONARE_OK);
+  CHECK(text_contains(diagnostics, R"("nonFiniteDiscards":4294967296)"));
+  sonare_free_string(diagnostics);
 }
 
 TEST_CASE("sonare_playback_render_interleaved renders offline and validates its input",

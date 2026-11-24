@@ -226,7 +226,7 @@ class ProcessorBase {
   ///   built from others records one of its own when a member discarded during
   ///   its block -- summing a member's count instead would break the unit, since
   ///   a member may be driven several times per the owner's block.
-  uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
+  std::size_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
 
   // Generic host bypass state. Containers leave the audible buffer dry, with
   // any required latency alignment. They may skip process() or run it on an
@@ -393,6 +393,8 @@ class ProcessorBase {
   void note_non_finite_discard() noexcept { non_finite_discards_.bump(); }
 
  private:
+  friend struct ProcessorDiscardTestAccess;
+
   std::atomic<bool> bypassed_{false};
   std::atomic<int> detector_excluded_channel_{-1};
   struct ParameterValue {
@@ -411,7 +413,7 @@ class ProcessorBase {
   const ParameterValue* find_parameter_value(unsigned int id) const noexcept {
     return const_cast<ProcessorBase*>(this)->find_parameter_value(id);
   }
-  OverflowCounter non_finite_discards_;
+  NonFiniteDiscardCounter non_finite_discards_;
 };
 
 /// @brief Hands an owner's detector exclusion for this block to a processor it runs.

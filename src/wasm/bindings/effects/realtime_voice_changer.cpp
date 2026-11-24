@@ -324,7 +324,7 @@ class RealtimeVoiceChangerWrapper {
 
   int latencySamples() const { return changer_.latency_samples(); }
   int maxBlockSize() const { return changer_.max_block_size(); }
-  uint32_t nonFiniteDiscardCount() const { return changer_.non_finite_discard_count(); }
+  std::size_t nonFiniteDiscardCount() const { return changer_.non_finite_discard_count(); }
   uint32_t bufferGeneration() const { return buffer_generation_; }
 
   // Element-wise legacy path. NOT RT-safe for high block rates; AudioWorklet

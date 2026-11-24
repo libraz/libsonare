@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include "mastering/common/prepare_args.h"
@@ -68,7 +69,7 @@ void PassiveTubeEq::prepare(double sample_rate, int max_block_size, int max_chan
 
 void PassiveTubeEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  const uint32_t eq_discards = eq_.non_finite_discard_count();
+  const std::size_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
   bool discarded = eq_.non_finite_discard_count() != eq_discards;
   if (component_model_ == PassiveTubeComponentModel::CurveOnly && output_drive_ <= 0.0f) {

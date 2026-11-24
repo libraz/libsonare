@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -298,7 +299,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // The EQ, the inserts and the meters each run once per segment below, so the
   // deltas are read here and checked at whichever exit the block takes; either
   // way the block bumps at most once.
-  const uint32_t eq_discards_before = eq_.non_finite_discard_count();
+  const std::size_t eq_discards_before = eq_.non_finite_discard_count();
   const uint64_t member_discards_before = member_discard_sum();
   const auto note_member_discards = [this, eq_discards_before, member_discards_before]() noexcept {
     if (eq_.non_finite_discard_count() != eq_discards_before ||

@@ -2803,18 +2803,18 @@ test = "tests/api/sonare_c_mastering_test.cpp::a C mastering result carries each
 [[entry]]
 kind = "option"
 old = "sonare_eq_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t."
 domain = "mastering"
 rule = "c-count-types"
-test = "tests/api/sonare_c_mastering_test.cpp::sonare_eq_non_finite_discard_count reports the state the EQ discarded"
+test = "tests/api/sonare_c_mastering_test.cpp::C EQ discard reader retains counts beyond UINT32_MAX"
 
 [[entry]]
 kind = "option"
 old = "sonare_streaming_mastering_chain_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t."
 domain = "mastering"
 rule = "c-count-types"
-test = "tests/api/sonare_c_mastering_test.cpp::sonare_streaming_mastering_chain_non_finite_discard_count reports a lost stage"
+test = "tests/api/sonare_c_mastering_test.cpp::C streaming chain discard reader retains counts beyond UINT32_MAX"
 
 [[entry]]
 kind = "option"
@@ -2915,26 +2915,26 @@ test = "tests/api/c_bare_refusal_editing_test.cpp::the silence ratio entries nam
 [[entry]]
 kind = "option"
 old = "sonare_mixer_bus_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. A compiled bus can report more than UINT32_MAX discarded blocks on targets with a wider size_t, including after recompiling the graph."
 domain = "mastering"
 rule = "c-count-types"
-test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API reports the state a bus discarded after a non-finite sample"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing discard readers retain counts beyond UINT32_MAX"
 
 [[entry]]
 kind = "option"
 old = "sonare_strip_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t."
 domain = "mastering"
 rule = "c-count-types"
-test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API reports the state a strip discarded after a non-finite sample"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing discard readers retain counts beyond UINT32_MAX"
 
 [[entry]]
 kind = "option"
 old = "sonare_realtime_voice_changer_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t."
 domain = "effects"
 rule = "c-count-types"
-test = "tests/editing/voice_changer_preset_capi_test.cpp::realtime voice changer audio-thread entries leave the error channel untouched"
+test = "tests/editing/voice_changer_realtime_core_test.cpp::RealtimeVoiceChanger retains discarded block counts beyond UINT32_MAX"
 
 [[entry]]
 kind = "option"
@@ -4023,10 +4023,10 @@ test = "tests/bindings/binding_project_midi_test.cpp::project C surface validate
 [[entry]]
 kind = "option"
 old = "sonare_playback_renderer_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. The count of non-finite input samples replaced with zero since creation can exceed UINT32_MAX on targets with a wider size_t."
 domain = "engine"
 rule = "c-count-types"
-test = "tests/api/sonare_c_playback_test.cpp::playback renderer diagnostics_json and non_finite_discard_count"
+test = "tests/api/sonare_c_playback_test.cpp::C playback discard reader retains counts beyond UINT32_MAX"
 
 [[entry]]
 kind = "option"

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <string>
 #include <utility>
 
@@ -87,7 +88,7 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
   // Read as a delta rather than summed: the crossover is driven once per block
   // here, but a member driven in sub-blocks would contribute several of its own
   // counts to one of this processor's, and the unit is one process() call.
-  const uint32_t crossover_discards = crossover_.non_finite_discard_count();
+  const std::size_t crossover_discards = crossover_.non_finite_discard_count();
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   if (num_channels >= 2) {

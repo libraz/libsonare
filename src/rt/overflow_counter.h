@@ -12,14 +12,16 @@
 /// MUST be atomic to avoid a data race; the access is pure telemetry, so the
 /// relaxed memory order is sufficient (no other state is published through it).
 ///
-/// This is intentionally a tiny wrapper over `std::atomic<uint32_t>` rather than
+/// This is intentionally a tiny wrapper over `std::atomic<T>` rather than
 /// raw atomics scattered across modules, so the increment / load / reset idiom
 /// (and its relaxed-ordering rationale) lives in exactly one place. It is
 /// trivially RT-safe: every operation is a single relaxed atomic with no lock,
 /// no allocation and no I/O.
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 namespace sonare::rt {
 
@@ -32,25 +34,34 @@ namespace sonare::rt {
 /// the new instance at zero, because the count describes the instance that did
 /// the counting. All operations are relaxed atomics: the count is telemetry only
 /// and does not order any other memory.
-class OverflowCounter {
+template <typename T>
+class BasicOverflowCounter {
+  static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>,
+                "realtime counters require an unsigned integral type");
+  static_assert(std::atomic<T>::is_always_lock_free, "realtime counters require lock-free atomics");
+
  public:
-  OverflowCounter() = default;
+  BasicOverflowCounter() = default;
 
   /// @brief AUDIO thread: record one dropped item. RT-safe (single relaxed
   ///        atomic increment).
   void bump() noexcept { count_.fetch_add(1, std::memory_order_relaxed); }
 
   /// @brief AUDIO thread: record `n` dropped items in one step. RT-safe.
-  void add(uint32_t n) noexcept { count_.fetch_add(n, std::memory_order_relaxed); }
+  void add(T n) noexcept { count_.fetch_add(n, std::memory_order_relaxed); }
 
   /// @brief ANY thread: current total drops since construction / reset.
-  uint32_t load() const noexcept { return count_.load(std::memory_order_relaxed); }
+  T load() const noexcept { return count_.load(std::memory_order_relaxed); }
 
   /// @brief AUDIO/CONTROL thread: clear the counter back to zero.
   void reset() noexcept { count_.store(0, std::memory_order_relaxed); }
 
  private:
-  std::atomic<uint32_t> count_{0};
+  std::atomic<T> count_{0};
 };
+
+using OverflowCounter = BasicOverflowCounter<std::uint32_t>;
+/// Non-finite discard getters publish counts at the host's size_t width.
+using NonFiniteDiscardCounter = BasicOverflowCounter<std::size_t>;
 
 }  // namespace sonare::rt

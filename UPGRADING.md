@@ -639,7 +639,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_phase_vocoder(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
 | `sonare_pitch_correct_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_pitch_correct_to_midi_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. |
 | `sonare_streaming_retune_prepare(sample_rate)` | the sample rate is an int instead of a double |
 
 #### A C matrix result reports its buffer length and named dimensions
@@ -874,13 +874,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_audio_silence_ratio(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_audio_silence_ratio(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_eq_create(sample_rate)` | the sample rate is an int instead of a double |
-| `sonare_eq_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_eq_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. |
 | `sonare_metering_silence_ratio(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_metering_silence_ratio(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_mixer_bus_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
-| `sonare_streaming_mastering_chain_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_mixer_bus_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. A compiled bus can report more than UINT32_MAX discarded blocks on targets with a wider size_t, including after recompiling the graph. |
+| `sonare_streaming_mastering_chain_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. |
 | `sonare_streaming_mastering_chain_non_finite_substitution_count(out_count)` | the count is a size_t instead of a uint32_t |
-| `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. |
 
 #### Errors are coded by cause on every surface
 
@@ -1080,7 +1080,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_prepare(sample_rate)` | the sample rate is an int instead of a double |
 | `sonare_engine_warp_stretch_overflow_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
 | `sonare_midi_route_events(out_overflow_count)` | the count is a size_t instead of a uint32_t |
-| `sonare_playback_renderer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_playback_renderer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count of non-finite input samples replaced with zero since creation can exceed UINT32_MAX on targets with a wider size_t. |
 
 #### Errors are coded by cause on every surface
 

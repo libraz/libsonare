@@ -28,6 +28,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "rt/overflow_counter.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
 #include "streaming/realtime_limits.h"
@@ -101,7 +102,7 @@ struct StreamingMasteringChain::Impl {
   // the chain so the defaulted move stays defaulted: the counter owns an atomic
   // and is neither copyable nor movable, which would propagate to any owner
   // holding it by value.
-  rt::OverflowCounter non_finite_discards;
+  rt::NonFiniteDiscardCounter non_finite_discards;
 
   /// @brief Every stage's discard count added together, for the block delta in
   ///        process_prevalidated(). RT-safe: relaxed atomic loads only.
@@ -498,7 +499,14 @@ void StreamingMasteringChain::process_prevalidated(float* const* channels, int n
   if (impl_->stage_discard_sum() != stage_discards_before) impl_->non_finite_discards.bump();
 }
 
-std::uint32_t StreamingMasteringChain::non_finite_discard_count() const noexcept {
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
+void seed_non_finite_discards(StreamingMasteringChain& chain, std::size_t count) noexcept {
+  chain.impl_->non_finite_discards.add(count);
+}
+
+std::size_t StreamingMasteringChain::non_finite_discard_count() const noexcept {
   return impl_->non_finite_discards.load();
 }
 
