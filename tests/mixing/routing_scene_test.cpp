@@ -1414,8 +1414,8 @@ TEST_CASE("sonare_mastering_insert_param_names enumerates an insert's keys",
   const std::string parametric = sonare_mastering_insert_param_names("eq.parametric");
   REQUIRE(parametric.find("band0.frequencyHz") != std::string::npos);
 
-  // Unknown name -> empty string (no params, no crash).
-  REQUIRE(std::string(sonare_mastering_insert_param_names("not.a.real.processor")).empty());
+  REQUIRE(sonare_mastering_insert_param_names("not.a.real.processor") == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 // -- U1: scene EQ and bus pan ------------------------------------------------

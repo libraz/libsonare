@@ -1129,8 +1129,7 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
     pod.sysex_size = event.sysex_payload_size;
     out_events[i] = pod;
   }
-  const uint32_t capacity_overflow =
-      routed.size > out_capacity ? static_cast<uint32_t>(routed.size - out_capacity) : 0u;
+  const size_t capacity_overflow = routed.size - copied;
   *out_count = copied;
   if (out_overflowed) *out_overflowed = (routed.overflowed || capacity_overflow > 0u) ? 1 : 0;
   if (out_overflow_count) *out_overflow_count = router.overflow_count() + capacity_overflow;

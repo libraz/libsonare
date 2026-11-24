@@ -142,8 +142,7 @@ const char* sonare_mastering_insert_names(void) {
 
 const char* sonare_mastering_insert_param_names(const char* insert) {
   SONARE_C_API_ENTRY;
-  (void)insert;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering, insert);
 }
 
 SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,

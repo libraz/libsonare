@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <memory>
@@ -12,6 +13,7 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/api/retired_names.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/match/ab_switcher.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -28,6 +30,30 @@ using namespace sonare_c_detail;
 using namespace sonare_c_mastering_detail;
 
 namespace {
+
+const std::vector<std::string>& insert_names() {
+  static const auto names = mastering::api::insert_factory_names();
+  return names;
+}
+
+const std::vector<std::string>& processor_catalog_names() {
+  static const auto names = [] {
+    auto ids = mastering::api::processor_names();
+    const auto pairs = mastering::api::pair_processor_names();
+    ids.insert(ids.end(), pairs.begin(), pairs.end());
+    ids.insert(ids.end(), insert_names().begin(), insert_names().end());
+    return ids;
+  }();
+  return names;
+}
+
+void require_metadata_insert(const std::string& insert, const std::vector<std::string>& names) {
+  if (std::find(names.begin(), names.end(), insert) == names.end()) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "unknown insert processor: " + insert + mastering::api::retired_processor_note(insert));
+  }
+}
 
 sonare::util::json::Array newline_name_array(const char* names) {
   sonare::util::json::Array values;
@@ -227,8 +253,7 @@ const char* sonare_mastering_stereo_analysis_names(void) {
 
 const char* sonare_mastering_insert_names(void) {
   SONARE_C_TRY
-  static thread_local const std::string names =
-      join_names(sonare::mastering::api::insert_factory_names());
+  static thread_local const std::string names = join_names(insert_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
@@ -478,6 +503,7 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
 }  // namespace sonare_c_mastering_detail
 
 const char* sonare_mastering_insert_param_names(const char* insert) {
+  SONARE_C_API_ENTRY;
   SONARE_C_TRY
   // Unlike the no-arg *_names getters this depends on the argument, so it cannot
   // use the program-lifetime cache: recompute into a thread-local each call
@@ -485,8 +511,10 @@ const char* sonare_mastering_insert_param_names(const char* insert) {
   static thread_local std::string names;
   names.clear();
   if (insert == nullptr) {
-    return names.c_str();
+    refuse_null("insert");
+    return nullptr;
   }
+  require_metadata_insert(insert, insert_names());
   const auto list = sonare::mastering::api::insert_param_names(insert);
   for (size_t index = 0; index < list.size(); ++index) {
     if (index > 0) names += '\n';
@@ -502,6 +530,7 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
   SONARE_C_ZERO_OUTS(out_json);
   SONARE_C_REQUIRE_NONNULL(insert);
   SONARE_C_TRY
+  require_metadata_insert(insert, processor_catalog_names());
   if (sample_rate != 0 && (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());

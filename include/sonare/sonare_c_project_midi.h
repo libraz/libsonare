@@ -478,10 +478,10 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
 
 /// @brief Routes MIDI events through the RT MidiRouter filter/remap/thru logic.
 /// @details `config` may be NULL for the @ref sonare_midi_route_config_init defaults.
-///          `out_events` receives at most `out_capacity` events. Overflow due to
-///          the router fixed capacity or caller capacity is reported through
-///          `out_overflowed` / `out_overflow_count` when those pointers are not
-///          NULL. `out_count` is always required.
+///          `out_events` receives at most `out_capacity` events. `out_count` is
+///          required and counts events written this call. `out_overflow_count` counts events
+///          dropped this call due to router or caller capacity, and is zero on
+///          failure. Both overflow outputs are optional.
 ///          SysEx passes the group filter and ignores channel filtering and remapping.
 /// @param out_events Caller-owned array. Only the first @p out_count entries are written, and only
 ///        on success: the array is left untouched on failure. Output SysEx pointers borrow the

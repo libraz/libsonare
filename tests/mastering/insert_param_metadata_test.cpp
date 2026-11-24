@@ -668,7 +668,8 @@ TEST_CASE("the rate-specific descriptor query refuses a rate outside the support
 
   CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "eq.parametric", 44100) ==
         insert_param_info_json_at_rate("eq.parametric", 44100.0));
-  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "no.such.insert", 44100) == "[]");
+  CHECK(sonare_test::c_string_error(sonare_mastering_insert_param_info, "no.such.insert", 44100) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "eq.parametric", 0) ==
         insert_param_info_json("eq.parametric"));
 }

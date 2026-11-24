@@ -2106,16 +2106,16 @@ TEST_CASE(
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors",
           "[c_api][mastering]") {
-  // An unknown processor yields an empty JSON array; a null name is refused.
-  REQUIRE(sonare_test::c_string(sonare_mastering_insert_param_info, "nope.nope", 0) == "[]");
+  REQUIRE(sonare_test::c_string_error(sonare_mastering_insert_param_info, "nope.nope", 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_test::c_string_error(sonare_mastering_insert_param_info, nullptr, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
+#if !defined(SONARE_WITH_FX)
+  SKIP("FX processors not built; realtime reverb descriptors unavailable");
+#endif
   const std::string fdn =
       sonare_test::c_string(sonare_mastering_insert_param_info, "effects.reverb.fdn", 0);
-  if (fdn == "[]") {
-    SKIP("FX processors not built; realtime reverb descriptors unavailable");
-  }
   // dryWet is realtime-safe and exposed with its integer id.
   REQUIRE(fdn.find("\"name\":\"dryWet\"") != std::string::npos);
   REQUIRE(fdn.find("\"rtSafe\":true") != std::string::npos);
@@ -2132,12 +2132,10 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
 
 TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix in realtime",
           "[c_api][engine]") {
-#if defined(SONARE_WITH_MASTERING)
-  if (sonare_test::c_string(sonare_mastering_insert_param_info, "effects.reverb.fdn", 0) == "[]") {
-    SKIP("FX processors not built");
-  }
-#else
+#if !defined(SONARE_WITH_MASTERING)
   SKIP("mastering support not built");
+#elif !defined(SONARE_WITH_FX)
+  SKIP("FX processors not built");
 #endif
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;

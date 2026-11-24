@@ -293,7 +293,7 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 ///   document that is malformed, carries a version other than 2 (it may be left out), an unknown
 ///   or earlier key spelling, a path given twice, a null, an enum given as a number or an unknown
 ///   name, or a value outside its domain returns @c SONARE_ERROR_INVALID_FORMAT and names the
-///   field; @c sonare_last_error_message() names the current spelling of an earlier one.
+///   field.
 /// @param document NUL-terminated chain configuration JSON; NULL returns
 ///   @c SONARE_ERROR_INVALID_PARAMETER.
 /// The returned string must be released with sonare_free_string().
@@ -346,7 +346,7 @@ void sonare_master_audio_options_init(SonareMasterAudioOptions* options);
 ///   most 64 bands. The stage's structure is checked whether or not it is enabled. A
 ///   retired spelling (`band<i>.<field>`, a bare `slope`, `lowCutoffHz`,
 ///   `low|mid|high{ThresholdDb,Ratio,AttackMs,ReleaseMs}`, `repair.nFft`, `eq.tiltDb`, ...)
-///   is refused with the current key named.
+///   is refused as an unknown key with the accepted-key list appended.
 SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
                                 int sample_rate, const char* overrides_json,
                                 const SonareMasterAudioOptions* options,
@@ -459,8 +459,7 @@ SonareError sonare_capability_catalog_json(char** out_json);
 const char* sonare_mastering_insert_names(void);
 
 /// @brief Returns the camelCase parameter names a given insert / FX processor
-///        reads, separated by '\n' (empty string when @p insert is unknown or its
-///        insert needs an unavailable build feature).
+///        reads, separated by '\n'.
 /// @details For tools/UIs that want to validate a scene insert's params before
 ///   loading it: an unread parameter is refused and the error lists the accepted keys.
 ///   Band/sub-band processors enumerate their indexed
@@ -469,13 +468,16 @@ const char* sonare_mastering_insert_names(void);
 ///   thread-local valid only until the next API call on the same thread; the
 ///   caller must NOT free it. Returns NULL if the name list cannot be built.
 /// @param insert Insert processor name (see @ref sonare_mastering_insert_names).
+///   With mastering enabled, NULL or an undeclared insert returns NULL with
+///   SONARE_ERROR_INVALID_PARAMETER.
+/// @return NULL with SONARE_ERROR_NOT_SUPPORTED when mastering is compiled out.
 const char* sonare_mastering_insert_param_names(const char* insert);
 
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
 /// @details A JSON array
 ///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","domainMin","domainMinExclusive","domainMax","domainMaxExclusive","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn","coupledWith"},
-///   ...]` (UTF-8), `[]` for an unknown @p insert.
+///   ...]` (UTF-8).
 ///
 ///   Entries come in two runs. The first lists the processor's realtime
 ///   automation targets in id order: `id` is the integer used by @ref
@@ -575,12 +577,13 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   the bound accepted when the insert is built and prepared at @p sample_rate: an EQ
 ///   band frequency reaches 48000 for a 96000 Hz host. With @p sample_rate 0 those keys
 ///   keep the 24000 cap of the 48 kHz probe, independent of earlier calls here.
-/// @param insert Insert processor name (see @ref sonare_mastering_insert_names);
-///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
+/// @param insert Processor ID (see @ref sonare_mastering_processor_catalog).
+///   With mastering enabled, NULL or an undeclared insert is refused with
+///   SONARE_ERROR_INVALID_PARAMETER.
 /// @param sample_rate Host rate in Hz, within the range the other sample-rate arguments
 ///   of this header accept, or 0 for the rate-less query; anything else is refused with
 ///   SONARE_ERROR_INVALID_PARAMETER.
-/// @param[out] out_json Receives the document (`[]` for an unknown @p insert); the caller
+/// @param[out] out_json Receives the document; the caller
 ///   releases it with @ref sonare_free_string. Set to NULL on failure.
 SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,
                                                char** out_json);
@@ -627,11 +630,11 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
 ///   in any spelling the chain accepts).
 /// @param key Parameter key, as published by the parameter info or the chain schema.
 /// @param name The choice name, matched exactly.
-/// @param out_is_enum Receives 1 when @p key is an enum parameter and 0 when it is not, which
-///   is not an error here: a caller that was handed a name for a number-valued key owns the
-///   refusal (a wrong type, not an unknown name). Zeroed on entry.
+/// @param out_is_enum Receives 1 when @p key is an enum parameter and 0 for a non-enum key
+///   or an unknown processor ID. A caller that was handed a name for a number-valued key
+///   owns the wrong-type refusal. Zeroed on entry.
 /// @param out_value Receives the value of @p name when @p out_is_enum is 1. Zeroed on entry.
-/// @return SONARE_OK for a resolved name and for a key that is not an enum;
+/// @return SONARE_OK for a resolved name, a non-enum key or an unknown processor ID;
 ///   SONARE_ERROR_INVALID_PARAMETER when @p key is an enum and @p name is none of its choices
 ///   (the message names the key and every valid name), or when @p key, @p name, @p out_is_enum
 ///   or @p out_value is NULL.
