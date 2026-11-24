@@ -308,7 +308,11 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
   SONARE_C_TRY
   sonare::util::check::non_empty(bus_id, "bus_id");
   SONARE_C_REQUIRE_NONNULL(out);
-  if (mixer->compiled_dirty) return SONARE_ERROR_INVALID_STATE;
+  if (mixer->compiled_dirty) {
+    sonare_c_detail::set_last_error_static(
+        SONARE_ERROR_INVALID_STATE, "mixer graph must be compiled before reading a bus meter");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   sonare::graph::Node* node = mixer->graph.node(bus_id);
   // A strip id names a node that is not a bus, so it is unknown here too.
   auto* bus = node ? dynamic_cast<sonare_c_mixing_detail::BusNode*>(&node->processor()) : nullptr;

@@ -1209,6 +1209,7 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
   if (!sonare::mastering::assistant::repair_apply_json(channels, num_channels, length, sample_rate,
                                                        stages_json ? stages_json : "", out_channels,
                                                        &reports, progress, cancel)) {
+    sonare_c_detail::set_last_error_static(SONARE_ERROR_CANCELLED, "repair was cancelled");
     return SONARE_ERROR_CANCELLED;
   }
   *reports_json_out = copy_string(reports);

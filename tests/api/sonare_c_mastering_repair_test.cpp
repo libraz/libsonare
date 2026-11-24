@@ -2762,10 +2762,12 @@ TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
     struct Seen {
       std::vector<std::string> stages;
     } seen;
-    std::vector<float> a(length, 7.5f);
-    std::vector<float> b(length, 7.5f);
+    constexpr float kUntouched = 7.5f;
+    std::vector<float> a(length, kUntouched);
+    std::vector<float> b(length, kUntouched);
     float* planes[2] = {a.data(), b.data()};
-    char* reports = nullptr;
+    char sentinel = 0;
+    char* reports = &sentinel;
     const auto progress = [](float, const char* stage, void* user_data) {
       static_cast<Seen*>(user_data)->stages.emplace_back(stage);
     };
@@ -2773,9 +2775,13 @@ TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
     REQUIRE(sonare_mastering_repair_apply(
                 channels, 2, length, sr, R"([{"stage":"decrackle"},{"stage":"declick"}])", progress,
                 &seen, planes, &reports, stop, nullptr) == SONARE_ERROR_CANCELLED);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_CANCELLED);
+    CHECK(std::string(sonare_last_error_message()) == "repair was cancelled");
     CHECK(reports == nullptr);
     CHECK(seen.stages == std::vector<std::string>{"repair.declick"});
-    CHECK(a[0] == 7.5f);
+    const auto untouched = [](float sample) { return sample == kUntouched; };
+    CHECK(std::all_of(a.begin(), a.end(), untouched));
+    CHECK(std::all_of(b.begin(), b.end(), untouched));
   }
 }
 

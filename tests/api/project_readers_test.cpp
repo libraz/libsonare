@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "c_api/project_internal.h"
 #include "midi/smf2.h"
 #include "midi/ump.h"
 #include "util/resource_limits.h"
@@ -376,6 +378,140 @@ TEST_CASE("C MIDI router borrows SysEx bytes and ignores its channels",
   CHECK(sonare_midi_cc_learn(events, 1, 1, 0.0f, 1.0f, 0, &binding) == SONARE_ERROR_INVALID_STATE);
   SonareAutomationPoint point{};
   CHECK(sonare_midi_cc_to_breakpoint(nullptr, 0, &events[0], &point) == SONARE_ERROR_INVALID_STATE);
+}
+
+TEST_CASE("project MIDI CC conversions record their refused state",
+          "[c_api][project][midi-error]") {
+  const SonareMidiEventPod sysex{1.0, kGroupThreeSysExWord, 0, kGsReset, sizeof(kGsReset)};
+  const SonareMidiEventPod cc{2.0, 0x23B00764u, 0};
+
+  SECTION("learning requires a binding to emerge") {
+    SonareMidiCcBinding binding{};
+    binding.cc_number = 7;
+    binding.param_id = 9;
+    binding.max_value = 1;
+    const SonareError status = sonare_midi_cc_learn(&sysex, 1, 1, 0, 1, 0, &binding);
+    CHECK(status == SONARE_ERROR_INVALID_STATE);
+    CHECK(sonare_last_error_code() == status);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "no MIDI CC binding could be learned from events");
+    CHECK(binding.cc_number == 0);
+    CHECK(binding.param_id == 0);
+    CHECK(binding.max_value == 0);
+  }
+
+  SECTION("SysEx is not converted to a breakpoint") {
+    SonareAutomationPoint point{1.0, 1.0f, 1};
+    const SonareError status = sonare_midi_cc_to_breakpoint(nullptr, 0, &sysex, &point);
+    CHECK(status == SONARE_ERROR_INVALID_STATE);
+    CHECK(sonare_last_error_code() == status);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "MIDI CC conversion does not support SysEx events");
+    CHECK(point.ppq == 0);
+    CHECK(point.value == 0);
+    CHECK(point.curve_to_next == 0);
+  }
+
+  SECTION("an unmatched controller yields no breakpoint") {
+    SonareAutomationPoint point{1.0, 1.0f, 1};
+    const SonareError status = sonare_midi_cc_to_breakpoint(nullptr, 0, &cc, &point);
+    CHECK(status == SONARE_ERROR_INVALID_STATE);
+    CHECK(sonare_last_error_code() == status);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "no automation breakpoint could be built from event and bindings");
+    CHECK(point.ppq == 0);
+    CHECK(point.value == 0);
+    CHECK(point.curve_to_next == 0);
+  }
+
+  SECTION("an unmatched parameter yields no event") {
+    SonareMidiEventPod event = sysex;
+    const SonareError status = sonare_midi_param_to_cc(nullptr, 0, 1, 0, 0, 0, &event);
+    CHECK(status == SONARE_ERROR_INVALID_STATE);
+    CHECK(sonare_last_error_code() == status);
+    CHECK(std::string(sonare_last_error_message()) == "param_id has no MIDI CC binding");
+    CHECK(event.ppq == 0);
+    CHECK(event.word0 == 0);
+    CHECK(event.word1 == 0);
+    CHECK(event.sysex == nullptr);
+    CHECK(event.sysex_size == 0);
+  }
+}
+
+TEST_CASE("project MIDI Clip File import records the refusal cause",
+          "[c_api][project][midi-error]") {
+  OwnedProject project;
+  const auto check_refusal = [&](const uint8_t* bytes, size_t len, const std::string& message) {
+    uint32_t first_clip_id = 7;
+    const SonareError status =
+        sonare_project_import_clip_file(project.handle, bytes, len, &first_clip_id);
+    CHECK(status == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(sonare_last_error_code() == status);
+    CHECK(std::string(sonare_last_error_message()) == message);
+    CHECK(first_clip_id == 0);
+    CHECK(project.handle->history.project().clips().empty());
+    CHECK_FALSE(project.handle->history.can_undo());
+  };
+
+  SECTION("file size limit") {
+    const size_t limit = sonare::resource::kProjectMidiImportResourceLimits.max_file_bytes;
+    const std::vector<uint8_t> bytes(limit + 1);
+    check_refusal(
+        bytes.data(), bytes.size(),
+        "bytes exceeds the MIDI import file limit of " + std::to_string(limit) + " bytes");
+  }
+
+  SECTION("missing file header") {
+    constexpr uint8_t bytes[8]{};
+    check_refusal(bytes, sizeof(bytes), "missing SMF2CLIP file header");
+  }
+}
+
+TEST_CASE("project MIDI export records the encoder refusal", "[c_api][project][midi-error]") {
+  OwnedProject project;
+  uint8_t byte = 0;
+  uint8_t* bytes = &byte;
+  size_t len = 7;
+  SonareError status = SONARE_OK;
+  const char* expected = nullptr;
+
+  SECTION("MIDI Clip File clockstamp span") {
+    uint32_t track_id = 0;
+    uint32_t clip_id = 0;
+    REQUIRE(sonare_project_add_midi_clip(project.handle, 0.0, sonare::transport::kMaxPublicPpq,
+                                         &track_id, &clip_id) == SONARE_OK);
+    status = sonare_project_export_clip_file(project.handle, &bytes, &len);
+    expected = "clip spans more Delta Clockstamp ticks than the export limit";
+  }
+
+  SECTION("SMF data track count") {
+    auto& history = project.handle->history;
+    auto& model = history.project();
+    arr::Track track{};
+    track.kind = arr::Track::Kind::kMidi;
+    arr::EditClip clip{};
+    clip.track_id = model.add_track(std::move(track));
+    clip.source_id = model.add_midi_source({});
+    clip.length_ppq = 1;
+    auto& events = history.midi_content().events;
+    const uint32_t first_refused_count = std::numeric_limits<uint16_t>::max();
+    for (uint32_t id = 1; id <= first_refused_count; ++id) {
+      clip.id = id;
+      if (!model.insert_clip_raw(clip, arr::Project::kAppend, true)) FAIL("could not seed clip");
+      arr::MidiClipEvent note{};
+      note.word0 = 0x20903C64u;
+      events.emplace(id, arr::MidiClipEventList{note});
+    }
+    status = sonare_project_export_smf(project.handle, &bytes, &len);
+    expected = "SMF format 1 supports at most 65534 data tracks";
+  }
+
+  if (status == SONARE_OK && bytes != &byte) sonare_free_bytes(bytes);
+  CHECK(status == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_last_error_code() == status);
+  CHECK(std::string(sonare_last_error_message()) == expected);
+  CHECK(bytes == nullptr);
+  CHECK(len == 0);
 }
 
 TEST_CASE("project stored segment readers return owned snapshots in stored order",

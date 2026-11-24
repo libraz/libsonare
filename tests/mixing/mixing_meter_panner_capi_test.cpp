@@ -1228,6 +1228,13 @@ TEST_CASE("Bus meter refusals name the refused argument", "[mixing][capi]") {
   CHECK(sonare_mixer_bus_meter(nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) == "mixer must not be NULL");
 
+  snapshot.num_channels = 99;
+  CHECK(sonare_mixer_bus_meter(mixer, "master", &snapshot) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_STATE);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "mixer graph must be compiled before reading a bus meter");
+  CHECK(snapshot.num_channels == 0);
+
   std::array<float, 64> silence{};
   std::array<float, 64> out_l{};
   std::array<float, 64> out_r{};

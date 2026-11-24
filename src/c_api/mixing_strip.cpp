@@ -53,6 +53,12 @@ SonareError refuse_out_of_domain(const char* subject, float lo, float hi) {
       [&] { check::refuse(subject, sonare::util::refusal::range_predicate(lo, hi)); });
 }
 
+SonareError refuse_automation_lane_full() {
+  sonare_c_detail::set_last_error_static(SONARE_ERROR_OUT_OF_MEMORY,
+                                         "the automation event lane is full");
+  return SONARE_ERROR_OUT_OF_MEMORY;
+}
+
 }  // namespace
 
 SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer** out) {
@@ -562,7 +568,7 @@ SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t s
     return refuse_sample_pos_order();
   }
   if (result == sonare::mixing::AutomationPushResult::Full) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
+    return refuse_automation_lane_full();
   }
   return SONARE_OK;
 }
@@ -582,7 +588,7 @@ SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sam
     return refuse_out_of_domain("pan", sonare::mixing::kPanMin, sonare::mixing::kPanMax);
   }
   if (result == sonare::mixing::AutomationPushResult::Full) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
+    return refuse_automation_lane_full();
   }
   return SONARE_OK;
 }
@@ -602,7 +608,7 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
     return refuse_out_of_domain("width", sonare::mixing::kWidthMin, sonare::mixing::kWidthMax);
   }
   if (result == sonare::mixing::AutomationPushResult::Full) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
+    return refuse_automation_lane_full();
   }
   return SONARE_OK;
 }
@@ -627,7 +633,7 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
     return refuse_sample_pos_order();
   }
   if (result == sonare::mixing::AutomationPushResult::Full) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
+    return refuse_automation_lane_full();
   }
   return SONARE_OK;
 }

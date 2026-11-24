@@ -1540,16 +1540,7 @@ def _c_error_path_violation(r: dict) -> str | None:
     return None
 
 
-_C_ERROR_PATH_PENDING: dict[str, int] = {
-    "src/c_api/core_audio.cpp": 1,
-    "src/c_api/mixing_graph.cpp": 1,
-    "src/c_api/mixing_strip.cpp": 4,
-    "src/c_api/project_midi.cpp": 8,
-    "src/c_api/sonare_c_mastering_repair.cpp": 1,
-    "src/c_api/sonare_c_polyphony.cpp": 3,
-    "src/c_api/sonare_c_sample_bank.cpp": 1,
-    "src/c_api/sonare_c_voice_changer.cpp": 1,
-}
+_C_ERROR_PATH_PENDING: dict[str, int] = {}
 
 
 RULES: list[Rule] = [

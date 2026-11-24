@@ -66,6 +66,8 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
   SONARE_C_TRY
   if (n_frames > kMaxBankSamplePoints ||
       bank->bank->pool_size() + n_frames > kMaxBankSamplePoints) {
+    sonare_c_detail::set_last_error_static(SONARE_ERROR_OUT_OF_MEMORY,
+                                           "sample bank sample capacity exceeded");
     return SONARE_ERROR_OUT_OF_MEMORY;
   }
   if (const SonareError err = sonare_c_detail::run_validation([&] {

@@ -424,10 +424,16 @@ SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* anal
 
   const auto& object = analysis->analysis.notes[note];
   const auto& masks = analysis->analysis.masks.notes;
-  if (note >= masks.size()) return SONARE_ERROR_INVALID_STATE;
+  if (note >= masks.size()) {
+    set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                          "analysis has no mask for the requested note");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   const int ridge_index = masks[note].ridge_index;
   const auto& ridges = analysis->analysis.track.ridges;
   if (ridge_index < 0 || static_cast<size_t>(ridge_index) >= ridges.size()) {
+    set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                          "analysis note mask references a missing ridge");
     return SONARE_ERROR_INVALID_STATE;
   }
 
@@ -476,6 +482,8 @@ SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis*
   // Empty is the fit not having run; any other length breaks the per-note indexing
   // this reports under, which only a hand-built analysis can produce.
   if (!fitted.empty() && fitted.size() != analysis->analysis.notes.size()) {
+    set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                          "analysis inharmonicity fit does not match the note count");
     return SONARE_ERROR_INVALID_STATE;
   }
   return copy_curve(fitted, out, capacity, out_count);

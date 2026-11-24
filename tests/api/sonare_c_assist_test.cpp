@@ -987,6 +987,14 @@ TEST_CASE("the sample bank entries name the refused argument", "[c_api][assist]"
   desc.source_rate = 0.0;
   REQUIRE(sonare_sample_bank_add_sample(bank, frames, 4, &desc, &index) == SONARE_OK);
 
+  index = 7;
+  constexpr size_t kBeyondBankCapacity = 67108865u;
+  CHECK(sonare_sample_bank_add_sample(bank, frames, kBeyondBankCapacity, &desc, &index) ==
+        SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(index == 0);
+  CHECK(message() == "sample bank sample capacity exceeded");
+
   SonareSampleZoneDesc zone{};
   CHECK(sonare_sample_bank_add_zone(nullptr, 4096, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "bank must not be NULL");

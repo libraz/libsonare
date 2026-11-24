@@ -8,6 +8,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <map>
@@ -377,6 +379,24 @@ TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api
   CHECK(last_message() == "out_count must not be NULL");
   sonare_audio_destroy(audio);
 }
+
+#if !defined(__EMSCRIPTEN__) && !defined(SONARE_WITH_FFMPEG)
+TEST_CASE("audio channel probe reports an unknown format", "[c_api][audio_io]") {
+  const std::string path = "c_api_unknown_audio_channel_count.bin";
+  {
+    std::ofstream file(path, std::ios::binary);
+    REQUIRE(file.is_open());
+    file.write("not audio", 9);
+  }
+
+  int channels = 7;
+  CHECK(sonare_audio_file_num_channels(path.c_str(), &channels) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(channels == 0);
+  CHECK(last_message() == "audio file channel count could not be determined");
+  std::remove(path.c_str());
+}
+#endif
 
 TEST_CASE("the chord entries refuse an option member and a chord element by its name",
           "[c_api][feature]") {

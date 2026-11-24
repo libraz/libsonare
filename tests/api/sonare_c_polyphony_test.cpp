@@ -28,6 +28,46 @@
 #include "core/audio.h"
 #include "editing/polyphony/polyphonic_edit.h"
 
+// Matches the C wrapper's opaque handle definition for constructing malformed stored analysis.
+struct SonarePolyphonicAnalysis {
+  sonare::editing::polyphony::PolyphonicAnalysis analysis;
+};
+
+TEST_CASE("Polyphonic readers report malformed stored analysis", "[c_polyphony_error_path]") {
+  SonarePolyphonicAnalysis handle{};
+  handle.analysis.notes.resize(1);
+  constexpr float kUntouched = 7.0f;
+  float out = kUntouched;
+  size_t count = 1;
+  const char* message = nullptr;
+
+  SECTION("Missing note mask") {
+    message = "analysis has no mask for the requested note";
+    CHECK(sonare_polyphonic_note_salience(&handle, 0, &out, 1, &count) ==
+          SONARE_ERROR_INVALID_STATE);
+  }
+
+  SECTION("Invalid ridge reference") {
+    handle.analysis.masks.notes.resize(1);
+    handle.analysis.masks.notes.front().ridge_index = 0;
+    message = "analysis note mask references a missing ridge";
+    CHECK(sonare_polyphonic_note_salience(&handle, 0, &out, 1, &count) ==
+          SONARE_ERROR_INVALID_STATE);
+  }
+
+  SECTION("Inconsistent inharmonicity fit") {
+    handle.analysis.inharmonicity_fit.resize(2);
+    message = "analysis inharmonicity fit does not match the note count";
+    CHECK(sonare_polyphonic_note_inharmonicity(&handle, &out, 1, &count) ==
+          SONARE_ERROR_INVALID_STATE);
+  }
+
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_STATE);
+  CHECK(std::string(sonare_last_error_message()) == message);
+  CHECK(count == 0);
+  CHECK(out == kUntouched);
+}
+
 namespace {
 
 constexpr int kSampleRate = 44100;

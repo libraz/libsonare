@@ -227,6 +227,45 @@ TEST_CASE("C-API insert-automation separates out-of-order time from a full lane"
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("C-API automation event lane capacity refusals include diagnostics",
+          "[mixing][automation][capi][refusal]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "source", nullptr);
+  REQUIRE(strip != nullptr);
+  size_t send_index = 0;
+  REQUIRE(sonare_strip_add_send(strip, "send", "aux", 0.0f, SONARE_SEND_TIMING_POST_FADER,
+                                &send_index) == SONARE_OK);
+
+  const auto require_full = [](auto schedule, const char* expected_message) {
+    SonareError error = SONARE_OK;
+    for (int64_t sample_pos = 0; sample_pos < 10000 && error == SONARE_OK; ++sample_pos) {
+      error = schedule(sample_pos);
+    }
+    REQUIRE(error == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(std::string(sonare_last_error_message()) == expected_message);
+  };
+
+  require_full(
+      [&](int64_t pos) { return sonare_strip_schedule_fader_automation(strip, pos, -6.0f, 0); },
+      "the automation event lane is full");
+  require_full(
+      [&](int64_t pos) { return sonare_strip_schedule_pan_automation(strip, pos, 0.5f, 0); },
+      "the automation event lane is full");
+  require_full(
+      [&](int64_t pos) { return sonare_strip_schedule_width_automation(strip, pos, 1.5f, 0); },
+      "the automation event lane is full");
+  require_full(
+      [&](int64_t pos) {
+        return sonare_strip_schedule_send_automation(strip, send_index, pos, -6.0f, 0);
+      },
+      "the automation event lane is full");
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixer and strip entries name the refused argument", "[mixing][capi][refusal]") {
   const auto last = [] { return std::string(sonare_last_error_message()); };
 

@@ -212,7 +212,11 @@ SonareError sonare_audio_file_num_channels(const char* path, int* out_channels) 
 
   SONARE_C_TRY
   const int channels = sonare::audio_channel_count(path);
-  if (channels <= 0) return SONARE_ERROR_INVALID_FORMAT;
+  if (channels <= 0) {
+    set_last_error_static(SONARE_ERROR_INVALID_FORMAT,
+                          "audio file channel count could not be determined");
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   *out_channels = channels;
   return SONARE_OK;
   SONARE_C_CATCH

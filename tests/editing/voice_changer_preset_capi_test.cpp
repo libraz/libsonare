@@ -898,6 +898,8 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json returns a code on 
     REQUIRE(normalized == nullptr);
     REQUIRE(error != nullptr);
     REQUIRE(error[0] != '\0');
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(std::string(sonare_last_error_message()) == error);
     sonare_free_string(error);
   };
 

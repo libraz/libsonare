@@ -868,7 +868,9 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* docum
   std::string error;
   if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(document, &normalized,
                                                                            &error)) {
-    *out_error = copy_string(error.empty() ? "invalid preset JSON" : error);
+    const char* message = error.empty() ? "invalid preset JSON" : error.c_str();
+    *out_error = copy_string(message);
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, message);
     return SONARE_ERROR_INVALID_FORMAT;
   }
   *out_normalized_json = copy_string(normalized);

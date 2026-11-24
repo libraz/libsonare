@@ -1183,6 +1183,8 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
       return SONARE_OK;
     }
   }
+  sonare_c_detail::set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                                         "no MIDI CC binding could be learned from events");
   return SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
 #else
@@ -1214,12 +1216,17 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
   SONARE_C_TRY
   if (((event->word0 >> 28u) & 0x0Fu) ==
       static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
+    sonare_c_detail::set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                                           "MIDI CC conversion does not support SysEx events");
     return SONARE_ERROR_INVALID_STATE;
   }
   sonare::midi::CcMap map;
   populate_cc_map(bindings, binding_count, &map);
   std::vector<sonare::automation::Breakpoint> points;
   if (!map.cc_to_breakpoint(ump_from_pod(*event), event->ppq, &points) || points.empty()) {
+    sonare_c_detail::set_last_error_static(
+        SONARE_ERROR_INVALID_STATE,
+        "no automation breakpoint could be built from event and bindings");
     return SONARE_ERROR_INVALID_STATE;
   }
   out_point->ppq = points[0].ppq;
@@ -1255,7 +1262,11 @@ SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t 
   sonare::midi::CcMap map;
   populate_cc_map(bindings, binding_count, &map);
   sonare::midi::Ump ump{};
-  if (!map.param_to_cc(param_id, unit_value, group, &ump)) return SONARE_ERROR_INVALID_STATE;
+  if (!map.param_to_cc(param_id, unit_value, group, &ump)) {
+    sonare_c_detail::set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                                           "param_id has no MIDI CC binding");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   *out_event = pod_from_ump(ppq, ump);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -1368,13 +1379,19 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_TRY
   const auto& import_limits = sonare::resource::kProjectMidiImportResourceLimits;
   if (len > import_limits.max_file_bytes) {
+    const std::string message = "bytes exceeds the MIDI import file limit of " +
+                                std::to_string(import_limits.max_file_bytes) + " bytes";
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
-  SONARE_C_TRY
   sonare::midi::Smf2ImportResult result = sonare::midi::import_clip_file(bytes, len, import_limits);
-  if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;
+  if (!result.ok()) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, result.diagnostic.c_str());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
 
   // MIDI Clip Files carry no SMF "Marker" equivalent.
   const std::vector<sonare::midi::SmfMarker> markers;
@@ -1443,7 +1460,10 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
   options.length_ppq = clip_end_ppq;
   sonare::midi::Smf2ExportResult result =
       sonare::midi::export_clip_file(merged, tempo, sigs, options);
-  if (!result.ok()) return SONARE_ERROR_INVALID_STATE;
+  if (!result.ok()) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, result.diagnostic.c_str());
+    return SONARE_ERROR_INVALID_STATE;
+  }
 
   *out_len = result.bytes.size();
   *out_bytes = new uint8_t[result.bytes.size()];
@@ -1512,7 +1532,10 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
   }
   sonare::midi::SmfExportResult result =
       sonare::midi::export_smf(clips, tempo, sigs, names, options);
-  if (!result.ok()) return SONARE_ERROR_INVALID_STATE;
+  if (!result.ok()) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, result.diagnostic.c_str());
+    return SONARE_ERROR_INVALID_STATE;
+  }
 
   *out_len = result.bytes.size();
   *out_bytes = new uint8_t[result.bytes.size()];
