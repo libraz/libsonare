@@ -5371,6 +5371,222 @@ rule = "error-class-by-cause"
 test = "tests/conformance/core_validation_refusals_test.cpp::a MIDI-FX config is a call's argument on every entry that takes one"
 
 [[entry]]
+kind = "function"
+old = "sonare_vocal_session_create"
+changed = "a source that is not positive mono names frames, then channels, where 1.x named source, keeping the message and the vocal reason; an options header refusal names options.struct_size and an analysis header refusal options.analysis.struct_size, where 1.x named create options header and analysis header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal source and options refusals name the first invalid argument"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_restore"
+changed = "refuses a malformed SVE1 state (bad magic, truncated or inconsistent content) with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, keeping the vocal error detail; a source that is not positive mono names frames, then channels, where 1.x named source, keeping the message and the vocal reason; an options header refusal names options.struct_size, where 1.x named restore options header"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C restore classifies malformed SVE1 as a document refusal"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_apply_vocal_edit"
+changed = "refuses a malformed SVE1 payload with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, before anything is published to the project"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project apply refuses malformed SVE1 before publication"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_validate_preset_json"
+changed = "refuses a document it cannot accept (malformed JSON, a wrong shape, an unknown key or an invalid value) with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, still writing the diagnostic to out_error; a NULL argument stays SONARE_ERROR_INVALID_PARAMETER"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_realtime_voice_changer_validate_preset_json returns a code on every input"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_notes"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_notes"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_analysis"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_capabilities"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_evaluate_pitch"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_evaluate_pitch"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_snapshot_render"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_render_job_finalize"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_export_state"
+changed = "a NULL state is refused naming state and an undersized one naming state.struct_size, where 1.x named both result header"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_begin_edit"
+changed = "a NULL out_draft is refused naming out_draft, where 1.x named draft output; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_undo"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_redo"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_commit"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_apply"
+changed = "a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale generation reports its conflict with the field expected_generation, where 1.x reported generation, with the same code, reason, message and values"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_output_length"
+changed = "a NULL samples output is refused naming samples, where 1.x named output length"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_snapshot_output_length"
+changed = "a NULL samples output is refused naming samples, where 1.x named output length"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_source_to_destination"
+changed = "a NULL destination_sample is refused naming destination_sample, where 1.x named coordinate output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_source_to_destination"
+changed = "a NULL destination_sample is refused naming destination_sample, where 1.x named coordinate output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_destination_to_source"
+changed = "a NULL source_sample is refused naming source_sample, where 1.x named coordinate output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_destination_to_source"
+changed = "a NULL source_sample is refused naming source_sample, where 1.x named coordinate output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_session_capture_snapshot"
+changed = "a NULL snapshot output is refused naming snapshot, where 1.x named snapshot output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_draft_capture_snapshot"
+changed = "a NULL snapshot output is refused naming snapshot, where 1.x named snapshot output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_render_job_begin"
+changed = "a NULL job output is refused naming job, where 1.x named job output"
+domain = "project"
+rule = "individual"
+test = "tests/api/c_header_order_effects_test.cpp::vocal output and stale token refusals use declared names"
+
+[[entry]]
 kind = "field"
 old = "SonareDeclipConfig.lpc_blend"
 removed = true

@@ -646,6 +646,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareRirSynthResult.has_error` | removed: check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic message in sonare_last_error_message() and every diagnostic, code included, in sonare_last_diagnostic |
 | `sonare_synthesize_rir` | an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagnostic's text in sonare_last_error_message() instead of SONARE_OK with has_error set |
 
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_realtime_voice_changer_validate_preset_json` | refuses a document it cannot accept (malformed JSON, a wrong shape, an unknown key or an invalid value) with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, still writing the diagnostic to out_error; a NULL argument stays SONARE_ERROR_INVALID_PARAMETER |
+
 #### Each operation has exactly one entry point
 
 | 1.x | 2.0.0 |
@@ -1241,8 +1247,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_project_apply_vocal_edit` | refuses a malformed SVE1 payload with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, before anything is published to the project |
 | `sonare_project_preview_midi_fx_count` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_project_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
+| `sonare_vocal_session_restore` | refuses a malformed SVE1 state (bad magic, truncated or inconsistent content) with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, keeping the vocal error detail; a source that is not positive mono names frames, then channels, where 1.x named source, keeping the message and the vocal reason; an options header refusal names options.struct_size, where 1.x named restore options header |
 
 #### Each operation has exactly one entry point
 
@@ -1310,6 +1318,30 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMidiEventPod` | Appends const uint8_t* sysex and size_t sysex_size. Recompile and extend layout mirrors. Set both to NULL/0 for channel-voice events, or supply framed SysEx bytes and their size. The project event list owns its returned bytes until sonare_free_midi_event_list. |
 | `SonareSf2InstrumentBinding` | adds const char* sound_font_uri at the tail. Set it to NULL for the default font. Recompile code passing an array of these records. |
 | `sonare_project_set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now returns SONARE_ERROR_INVALID_PARAMETER. Use sonare_project_set_max_history_bytes(project, 0) to disable undo retention. |
+| `sonare_vocal_draft_apply` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale generation reports its conflict with the field expected_generation, where 1.x reported generation, with the same code, reason, message and values |
+| `sonare_vocal_draft_capture_snapshot` | a NULL snapshot output is refused naming snapshot, where 1.x named snapshot output |
+| `sonare_vocal_draft_commit` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values |
+| `sonare_vocal_draft_destination_to_source` | a NULL source_sample is refused naming source_sample, where 1.x named coordinate output |
+| `sonare_vocal_draft_evaluate_pitch` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_draft_notes` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_draft_source_to_destination` | a NULL destination_sample is refused naming destination_sample, where 1.x named coordinate output |
+| `sonare_vocal_render_job_begin` | a NULL job output is refused naming job, where 1.x named job output |
+| `sonare_vocal_render_job_finalize` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_session_analysis` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_session_begin_edit` | a NULL out_draft is refused naming out_draft, where 1.x named draft output; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values |
+| `sonare_vocal_session_capabilities` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_session_capture_snapshot` | a NULL snapshot output is refused naming snapshot, where 1.x named snapshot output |
+| `sonare_vocal_session_create` | a source that is not positive mono names frames, then channels, where 1.x named source, keeping the message and the vocal reason; an options header refusal names options.struct_size and an analysis header refusal options.analysis.struct_size, where 1.x named create options header and analysis header |
+| `sonare_vocal_session_destination_to_source` | a NULL source_sample is refused naming source_sample, where 1.x named coordinate output |
+| `sonare_vocal_session_evaluate_pitch` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_session_export_state` | a NULL state is refused naming state and an undersized one naming state.struct_size, where 1.x named both result header |
+| `sonare_vocal_session_notes` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
+| `sonare_vocal_session_output_length` | a NULL samples output is refused naming samples, where 1.x named output length |
+| `sonare_vocal_session_redo` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values |
+| `sonare_vocal_session_source_to_destination` | a NULL destination_sample is refused naming destination_sample, where 1.x named coordinate output |
+| `sonare_vocal_session_undo` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale revision reports its conflict with the field expected_revision, where 1.x reported revision, with the same code, reason, message and values |
+| `sonare_vocal_snapshot_output_length` | a NULL samples output is refused naming samples, where 1.x named output length |
+| `sonare_vocal_snapshot_render` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header |
 
 ## Python
 
