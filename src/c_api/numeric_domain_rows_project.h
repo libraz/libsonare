@@ -314,6 +314,7 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"transcribe", "config.velocity_floor_db", kTranscribeVelocityFloorDbDomain, nullptr},
     {"transcribe", "tempo_bpm",
      sonare::util::check::with_sentinel(sonare::transport::kInternalTempoBpmDomain, 0.0), nullptr},
+    {"validate_mixing_assistant_config", "sample_rate", kMixingAssistantSampleRateDomain, nullptr},
     {"vocal_session_create", "options.frame_length_samples", kVocalCreateFrameLengthDomain,
      nullptr},
     {"vocal_session_create", "options.hop_length_samples", kVocalCreateHopLengthDomain, nullptr},

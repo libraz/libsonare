@@ -192,6 +192,10 @@ SonareError probe_strip_insert(const std::string& param, double value) {
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT)
 
+SonareError probe_validate_mixing_assistant_config(const std::string&, double value) {
+  return sonare_validate_mixing_assistant_config(static_cast<int>(value), nullptr, 0);
+}
+
 SonareError probe_mixing_assistant_suggest(const std::string& param, double value) {
   const float* left[] = {nullptr};
   const char* ids[] = {"track"};
@@ -965,6 +969,7 @@ const std::map<std::string, Probe>& probes() {
 #endif
 #if defined(SONARE_WITH_MIXING_ASSISTANT)
       {"mixing_assistant_suggest", probe_mixing_assistant_suggest},
+      {"validate_mixing_assistant_config", probe_validate_mixing_assistant_config},
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
       {"chord_symbol_from_analysis", probe_chord_symbol_from_analysis},
