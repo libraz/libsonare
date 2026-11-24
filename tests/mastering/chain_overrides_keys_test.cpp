@@ -324,4 +324,57 @@ TEST_CASE("mastering chain catalog describes every override key",
   CHECK(reader_only.empty());
 }
 
+TEST_CASE("mastering chain documents refuse undeclared keys before reading values",
+          "[mastering][chain-overrides-keys]") {
+  const MasteringChainConfig base;
+  const std::string before = chain_config_to_json(base);
+  const std::string& expected = chain_expected_keys();
+  for (const std::string_view value : {"{}", "\"x\"", "null", "[]", "1"}) {
+    for (const bool nested : {false, true}) {
+      CAPTURE(value, nested);
+      const std::string setting = "\"undeclared\":" + std::string(value);
+      const std::string document = R"({"params":{"eq.tilt.tiltDb":2,)" +
+                                   (nested ? "\"eq\":{\"tilt\":{" + setting + "}}" : setting) +
+                                   "}}";
+      const std::string path = nested ? "params.eq.tilt.undeclared" : "params.undeclared";
+      std::optional<MasteringChainConfig> loaded;
+      try {
+        loaded = chain_config_overrides_from_json(base, document);
+        CHECK_FALSE(loaded.has_value());
+      } catch (const SonareParameterRefusal& refusal) {
+        CHECK(refusal.code() == ErrorCode::InvalidFormat);
+        CHECK(refusal.form() == SonareParameterRefusal::Form::UnknownKey);
+        CHECK(refusal.subject() == path);
+        CHECK(refusal.what() == json::schema::unknown_key_expected(path, expected));
+        CHECK_FALSE(loaded.has_value());
+      }
+      CHECK(chain_config_to_json(base) == before);
+    }
+  }
+
+  const auto empty_groups = chain_config_overrides_from_json(
+      base, R"({"params":{"eq":{"tilt":{"$annotation":{"anything":null}}},"x-extra":[]}})");
+  CHECK(chain_config_to_json(empty_groups) == before);
+}
+
+TEST_CASE("streaming mastering chain reports the expected keys for an undeclared parameter",
+          "[mastering][chain-overrides-keys]") {
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  StreamingMasteringChain chain(config);
+  chain.prepare(kInsertProbeSampleRate, kInsertProbeBlockSize, 1);
+  const std::string before = chain_config_to_json(chain.config());
+  const std::string key = "eq.tilt.undeclared";
+  try {
+    chain.set_parameter(key, 2.0);
+    FAIL("expected an unknown-key refusal");
+  } catch (const SonareParameterRefusal& refusal) {
+    CHECK(refusal.code() == ErrorCode::InvalidParameter);
+    CHECK(refusal.form() == SonareParameterRefusal::Form::UnknownKey);
+    CHECK(refusal.subject() == key);
+    CHECK(refusal.what() == json::schema::unknown_key_expected(key, chain_expected_keys()));
+  }
+  CHECK(chain_config_to_json(chain.config()) == before);
+}
+
 }  // namespace sonare::mastering::api

@@ -497,7 +497,9 @@ TEST_CASE("a binding's parameter object is refused under the root its caller wro
       refusal_of(R"({"params":{"limiter":{"ceilingDb":-1}}})");
   CHECK(unknown.code() == sonare::ErrorCode::InvalidParameter);
   CHECK(unknown.shape_error());
-  CHECK(unknown.subject() == "overrides.limiter.ceilingDb");
+  CHECK(unknown.subject() == "overrides.limiter");
+  CHECK(std::string(unknown.what()) ==
+        "unknown key overrides.limiter (expected " + chain_expected_keys() + ")");
 
   const sonare::SonareParameterRefusal token =
       refusal_of(R"({"params":{"repair.denoise.noiseEstimator":"bogus"}})");

@@ -262,6 +262,51 @@ std::string duplicate_identity(const std::string& path) {
   return canonical;
 }
 
+bool matches_chain_key_segment(std::string_view pattern, std::string_view segment) {
+  constexpr std::string_view kIndex = "{i}";
+  const auto index = pattern.find(kIndex);
+  if (index == std::string_view::npos) return pattern == segment;
+
+  const auto prefix = pattern.substr(0, index);
+  const auto suffix = pattern.substr(index + kIndex.size());
+  if (segment.size() <= prefix.size() + suffix.size() ||
+      segment.substr(0, prefix.size()) != prefix ||
+      segment.substr(segment.size() - suffix.size()) != suffix) {
+    return false;
+  }
+  const auto digits = segment.substr(prefix.size(), segment.size() - prefix.size() - suffix.size());
+  return (digits.size() == 1 || digits.front() != '0') &&
+         digits.find_first_not_of("0123456789") == std::string_view::npos;
+}
+
+bool matches_chain_path(std::string_view pattern, std::string_view path, bool allow_prefix) {
+  for (;;) {
+    const auto part_end = path.find('.');
+    const auto pattern_end = pattern.find('.');
+    if (!matches_chain_key_segment(pattern.substr(0, pattern_end), path.substr(0, part_end))) {
+      return false;
+    }
+    if (part_end == std::string_view::npos) {
+      return allow_prefix || pattern_end == std::string_view::npos;
+    }
+    if (pattern_end == std::string_view::npos) return false;
+    path.remove_prefix(part_end + 1);
+    pattern.remove_prefix(pattern_end + 1);
+  }
+}
+
+bool declared_chain_path(std::string_view path, bool allow_prefix) {
+  // Use the catalog's flat key grammar for leaves and for their enclosing paths.
+  std::string_view patterns = chain_expected_keys();
+  while (!patterns.empty()) {
+    const auto end = patterns.find(", ");
+    if (matches_chain_path(patterns.substr(0, end), path, allow_prefix)) return true;
+    if (end == std::string_view::npos) break;
+    patterns.remove_prefix(end + 2);
+  }
+  return false;
+}
+
 // Walks a `params` block into flat leaves: object members as `.<key>`, array elements as
 // `.<index>`, so a dotted key and the nested spelling of the same path are one parameter.
 class ParamsWalker {
@@ -276,6 +321,10 @@ class ParamsWalker {
 
  private:
   void append(const std::string& path, const JsonValue& value) {
+    if (!declared_chain_path(path, true)) {
+      throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, path,
+                                            chain_expected_keys());
+    }
     if (value.is_object()) {
       for (const auto& [key, member] : value.as_object()) {
         if (sonare::util::json::is_annotation_key(key)) continue;
@@ -385,6 +434,12 @@ std::vector<ChainFlatParam> read_chain_document(const std::string& text,
 }
 
 }  // namespace
+
+namespace detail {
+
+bool is_declared_chain_key(std::string_view key) { return declared_chain_path(key, false); }
+
+}  // namespace detail
 
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json) {
   return read_chain_document(chain_config_json, kChainDocument);

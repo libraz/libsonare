@@ -712,9 +712,14 @@ struct ChainFlatParam {
 /// @details Nested object members become `.<member>` and array elements `.<index>`, so the
 ///          structured multiband stage becomes `dynamics.multibandComp.crossover.cutoffsHz.<i>`
 ///          and `dynamics.multibandComp.bands.<i>.<field>`; an enum name becomes its value. The
-///          document is refused as chain_config_from_json refuses it, except that unknown keys and
-///          out-of-domain values are left to whoever applies the leaves.
+///          document is refused as chain_config_from_json refuses it, an undeclared key included,
+///          except that out-of-domain values are left to whoever applies the leaves.
 /// @throws SonareException (InvalidFormat).
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json);
+
+namespace detail {
+/// @brief True when @p key is a flat chain key the catalog's key grammar declares.
+bool is_declared_chain_key(std::string_view key);
+}  // namespace detail
 
 }  // namespace sonare::mastering::api

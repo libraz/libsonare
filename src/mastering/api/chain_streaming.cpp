@@ -14,6 +14,7 @@
 
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -558,6 +559,15 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamingMasteringChain parameter key must not be empty");
   }
+  const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),
+                                   [&full_key](const StreamingParameterTarget& candidate) {
+                                     return candidate.full_key == full_key;
+                                   });
+  if (target == impl_->parameter_targets.end() && !detail::is_declared_chain_key(full_key)) {
+    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, full_key,
+                                          chain_expected_keys())
+        .as_caller_spelled();
+  }
   if (!std::isfinite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
@@ -566,14 +576,7 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   }
   const float float_value = static_cast<float>(value);
 
-  const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),
-                                   [&full_key](const StreamingParameterTarget& candidate) {
-                                     return candidate.full_key == full_key;
-                                   });
   if (target == impl_->parameter_targets.end()) {
-    // A retired spelling is refused here as an unknown key with the accepted-key list.
-    std::string retired_check_storage;
-    (void)canonical_chain_param_key(full_key, &retired_check_storage);
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown or unavailable streaming mastering parameter: " + full_key);
   }
