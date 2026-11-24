@@ -9,6 +9,7 @@
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
 #include "c_api/note_render_common.h"
+#include "c_api/polyphonic_analysis_names.h"
 #include "c_api/transcribe_input_domains.h"
 #include "editing/polyphony/polyphonic_edit.h"
 #endif
@@ -254,9 +255,7 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         auto handle = std::make_unique<SonarePolyphonicAnalysis>();
-        constexpr std::array<CName, 2> kGeometryNames{
-            {{"n_fft", "config.n_fft"}, {"hop_length", "config.hop_length"}}};
-        handle->analysis = with_c_names(kGeometryNames, [&] {
+        handle->analysis = with_c_names(kPolyphonicAnalysisNames, [&] {
           return sonare::editing::polyphony::analyze_polyphonic(audio, resolved);
         });
         *out = handle.release();

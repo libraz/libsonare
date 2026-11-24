@@ -2301,7 +2301,7 @@
     },
     {
       "entry": "engine_set_synth_instrument",
-      "param": "patch.num_mod_routings",
+      "param": "binding.patch.num_mod_routings",
       "kind": "integer",
       "lo": 0,
       "hi": 8,
@@ -2312,7 +2312,7 @@
     },
     {
       "entry": "engine_set_synth_instrument",
-      "param": "patch.polyphony",
+      "param": "binding.patch.polyphony",
       "kind": "integer",
       "lo": 1,
       "hi": 64,
@@ -2323,7 +2323,7 @@
     },
     {
       "entry": "engine_set_synth_instrument",
-      "param": "patch.unison",
+      "param": "binding.patch.unison",
       "kind": "integer",
       "lo": 1,
       "hi": 7,
@@ -2950,17 +2950,6 @@
     },
     {
       "entry": "istft",
-      "param": "length_samples",
-      "kind": "integer",
-      "lo": 0,
-      "hi": 500000000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "istft",
       "param": "n_bins",
       "kind": "integer",
       "lo": 1,
@@ -2987,6 +2976,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "istft",
+      "param": "options.length_samples",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

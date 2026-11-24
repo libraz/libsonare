@@ -1545,7 +1545,7 @@ TEST_CASE("sonare_polyphonic_analyze refuses a cents_per_bin past the work size 
   config.cent_max_hz = 1e8f;
   SonarePolyphonicAnalysis* out = nullptr;
   check_refused(sonare_polyphonic_analyze(samples.data(), samples.size(), 44100, &config, &out),
-                element_limit("cents_per_bin", "the cent spectrum"));
+                element_limit("config.cents_per_bin", "the cent spectrum"));
   CHECK(out == nullptr);
 }
 
@@ -1579,12 +1579,12 @@ TEST_CASE("sonare_decompose_stems refuses an n_components past the work size lim
   check_refused(
       sonare_decompose_stems(samples.data(), samples.size(), kSr, &config, &out, &out_frames,
                              &out_n_components, nullptr, nullptr, nullptr, nullptr),
-      element_limit("n_components", "the component weights"));
+      element_limit("config.n_components", "the component weights"));
   config.n_components = 100000;
   check_refused(
       sonare_decompose_stems(samples.data(), samples.size(), kSr, &config, &out, &out_frames,
                              &out_n_components, nullptr, nullptr, nullptr, nullptr),
-      element_limit("n_components", "the component activations"));
+      element_limit("config.n_components", "the component activations"));
 }
 
 TEST_CASE("sonare_decompose_stems_linked refuses an n_components past the work size limit",
@@ -1602,12 +1602,12 @@ TEST_CASE("sonare_decompose_stems_linked refuses an n_components past the work s
   check_refused(
       sonare_decompose_stems_linked(channels, 2, samples.size(), kSr, &config, &out, &out_frames,
                                     &out_n_components, nullptr, nullptr, nullptr, nullptr),
-      element_limit("n_components", "the component weights"));
+      element_limit("config.n_components", "the component weights"));
   config.n_components = 100000;
   check_refused(
       sonare_decompose_stems_linked(channels, 2, samples.size(), kSr, &config, &out, &out_frames,
                                     &out_n_components, nullptr, nullptr, nullptr, nullptr),
-      element_limit("n_components", "the component activations"));
+      element_limit("config.n_components", "the component activations"));
 }
 
 TEST_CASE("sonare_phase_vocoder refuses a speed_ratio past the work size limit",

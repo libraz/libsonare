@@ -276,7 +276,7 @@ TEST_CASE("audio tag reading distinguishes unknown and unavailable formats", "[c
   } catch (const sonare::SonareParameterRefusal& error) {
     CHECK(error.code() == sonare::ErrorCode::NotSupported);
     CHECK(error.reason() == sonare::ErrorReason::NotCompiledIn);
-    CHECK(error.subject() == "flac");
+    CHECK(error.subject() == "data");
   }
 #endif
 }

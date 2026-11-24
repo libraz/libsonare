@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/audio_encode.h"
 #include "core/audio_io_detail.h"
 #include "mixing/downmix.h"
 #include "util/exception.h"
@@ -1036,16 +1037,9 @@ std::vector<uint8_t> encode_audio_ffmpeg(const float* planar, size_t frames, int
   const FFmpegEncodeFormat* spec = find_ffmpeg_encode_format(format);
   SONARE_CHECK_MSG(spec != nullptr, ErrorCode::InvalidParameter,
                    "format must be flac, mp3, ogg, opus, or m4a");
-  if (!ffmpeg_audio_encode_available(format)) {
-    throw SonareParameterRefusal::predicate_with_reason(
-        ErrorCode::NotSupported, std::string(format), "encoding is unavailable in this build",
-        ErrorReason::NotCompiledIn);
-  }
-
   const AVCodec* codec = avcodec_find_encoder_by_name(spec->encoder_name);
   const AVOutputFormat* muxer = av_guess_format(spec->muxer_name, nullptr, nullptr);
-  SONARE_CHECK_MSG(codec != nullptr && muxer != nullptr, ErrorCode::NotSupported,
-                   "FFmpeg: encoder or muxer is unavailable for " + std::string(format));
+  if (codec == nullptr || muxer == nullptr) detail::refuse_unavailable_audio_encoder();
 
   if (spec->max_channels > 0 && num_channels > spec->max_channels) {
     throw SonareParameterRefusal::predicate(

@@ -363,8 +363,8 @@ SonareError bind_native_synth(SonareEngine* engine, uint32_t destination_id,
                               const SonareSynthPatch& patch, SonareSampleBank* bank,
                               bool use_gm_programs) {
   sonare::midi::synth::NativeSynthConfig cfg;
-  if (const SonareError err =
-          run_validation([&] { cfg = sonare_c_detail::synth_config_from_patch_c(patch, "patch"); });
+  if (const SonareError err = run_validation(
+          [&] { cfg = sonare_c_detail::synth_config_from_patch_c(patch, "binding.patch"); });
       err != SONARE_OK) {
     return err;
   }

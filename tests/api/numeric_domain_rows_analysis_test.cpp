@@ -466,7 +466,7 @@ SonareError probe_istft(const std::string& param, double value) {
     n_bins = n_fft / 2 + 1;
     hop_length = as_size(value);
   }
-  if (is_param(param, "length_samples")) options.length_samples = as_size(value);
+  if (is_param(param, "options.length_samples")) options.length_samples = as_size(value);
 
   const std::vector<float> magnitude(4096, 1.0f);
   const std::vector<float> phase(4096, 0.0f);

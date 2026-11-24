@@ -192,11 +192,10 @@ std::string unsupported_buffer_message() {
          "or pass float samples to Audio.from_buffer().";
 }
 
-void refuse_optional_audio_format(const uint8_t* data, size_t size) {
-  const auto format = sniff_optional_audio_format(data, size);
-  if (!format.empty()) {
+void refuse_optional_audio_format(const uint8_t* data, size_t size, const char* subject) {
+  if (!sniff_optional_audio_format(data, size).empty()) {
     throw SonareParameterRefusal::predicate_with_reason(
-        ErrorCode::NotSupported, std::string(format), "decoding is unavailable in this build",
+        ErrorCode::NotSupported, subject, "uses a format unavailable for decoding in this build",
         ErrorReason::NotCompiledIn);
   }
 }
@@ -740,7 +739,7 @@ InterleavedAudioLoadResult load_buffer_interleaved_bounded(const uint8_t* data, 
 #ifdef SONARE_WITH_FFMPEG
       return load_buffer_ffmpeg_interleaved(data, size);
 #else
-      refuse_optional_audio_format(data, size);
+      refuse_optional_audio_format(data, size, "data");
       SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat,
                        "Interleaved audio loading supports WAV and MP3 only");
 #endif
@@ -790,7 +789,7 @@ DecodedInputData load_audio_input_once(const std::string& path, RetainChannels r
 #ifdef SONARE_WITH_FFMPEG
       return load_buffer_ffmpeg_input(data.data(), data.size(), retention);
 #else
-      refuse_optional_audio_format(data.data(), data.size());
+      refuse_optional_audio_format(data.data(), data.size(), "path");
       SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
 #endif
   }
@@ -848,7 +847,7 @@ AudioLoadResult load_buffer_as(const uint8_t* data, size_t size, AudioFormat for
 #ifdef SONARE_WITH_FFMPEG
       return load_buffer_ffmpeg(data, size);
 #else
-      refuse_optional_audio_format(data, size);
+      refuse_optional_audio_format(data, size, "data");
       SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_buffer_message());
 #endif
   }
@@ -879,7 +878,7 @@ AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& opti
     // (M4A/AAC/FLAC/OGG/Opus/WMA/...) than the built-in WAV/MP3 sniffers.
     return load_buffer_ffmpeg(data.data(), data.size());
 #else
-    refuse_optional_audio_format(data.data(), data.size());
+    refuse_optional_audio_format(data.data(), data.size(), "path");
     SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
 #endif
   }

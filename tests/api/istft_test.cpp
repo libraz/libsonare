@@ -214,7 +214,7 @@ TEST_CASE("sonare_istft names refused inputs and bounds output length",
     for (const size_t length : lengths) {
       options.length_samples = length;
       expect_refusal(magnitude.data(), phase.data(), n_bins, n_frames, n_fft, hop_length, &options,
-                     "length_samples");
+                     "options.length_samples");
     }
     CHECK(std::string(sonare_last_error_message()).find("500000000") != std::string::npos);
   }

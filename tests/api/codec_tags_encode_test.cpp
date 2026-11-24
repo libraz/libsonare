@@ -110,7 +110,7 @@ TEST_CASE("C audio codec capability lists agree", "[c_api][codec][capabilities]"
     REQUIRE(sonare_last_error_reason() != nullptr);
     CHECK(std::string(sonare_last_error_reason()) == "notCompiledIn");
     REQUIRE(sonare_last_refusal_subject_count() == 1);
-    CHECK(std::string(sonare_last_refusal_subject(0)) == "flac");
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "options.format");
     sonare_free_bytes(output);
   }
 }
@@ -137,7 +137,7 @@ TEST_CASE("C audio codec refusals clear outputs and name option fields", "[c_api
   CHECK(encoded == nullptr);
   CHECK(encoded_size == 0);
   REQUIRE(sonare_last_refusal_subject_count() == 1);
-  CHECK(std::string(sonare_last_refusal_subject(0)) == "tags.keys");
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "options.tags.keys");
 }
 
 TEST_CASE("C audio tag reader rejects an unknown container", "[c_api][codec][audio_tags]") {
@@ -162,6 +162,8 @@ TEST_CASE("C audio codec explains a recognized format absent from the build",
   REQUIRE(sonare_last_error_reason() != nullptr);
   CHECK(std::string(sonare_last_error_reason()) == "notCompiledIn");
   CHECK(tags.value.count == 0);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "data");
 
   float* samples = nullptr;
   size_t frames = 1;
@@ -171,6 +173,8 @@ TEST_CASE("C audio codec explains a recognized format absent from the build",
           SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_last_error_reason() != nullptr);
   CHECK(std::string(sonare_last_error_reason()) == "notCompiledIn");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "data");
   CHECK(samples == nullptr);
   CHECK(frames == 0);
   CHECK(channels == 0);

@@ -290,7 +290,7 @@ SonareError sonare_istft(const float* magnitude, const float* phase, int n_bins,
         check::integer_within(
             resolved.length_samples,
             check::integer_domain(0, static_cast<long long>(sonare::kMaxAudioBufferSize)),
-            "length_samples");
+            "options.length_samples");
 
         const size_t bins = static_cast<size_t>(n_bins);
         const size_t frames = static_cast<size_t>(n_frames);

@@ -30,6 +30,8 @@ bool audio_encode_format_available(std::string_view format) noexcept;
 
 namespace detail {
 
+[[noreturn]] void refuse_unavailable_audio_encoder();
+
 std::vector<uint8_t> encode_wav_planar(const float* samples, std::size_t frames, int num_channels,
                                        int sample_rate, int bit_depth, const AudioTags& tags);
 

@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <cstring>
 #include <vector>
 
@@ -14,6 +15,16 @@ using namespace sonare;
 using namespace sonare_c_detail;
 
 namespace {
+
+constexpr std::array<CName, 7> kGateNames{{
+    {"threshold_db", "config.threshold_db"},
+    {"attack_ms", "config.attack_ms"},
+    {"release_ms", "config.release_ms"},
+    {"hold_ms", "config.hold_ms"},
+    {"close_threshold_db", "config.close_threshold_db"},
+    {"key_high_pass_hz", "config.key_high_pass_hz"},
+    {"range_db", "config.range_db"},
+}};
 
 sonare::mastering::dynamics::DetectorMode to_cpp_detector_mode(int mode) {
   switch (mode) {
@@ -187,8 +198,10 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
 
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
-  sonare::mastering::dynamics::Gate processor(to_cpp_gate_config(config));
-  run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
+  with_c_names(kGateNames, [&] {
+    sonare::mastering::dynamics::Gate processor(to_cpp_gate_config(config));
+    run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
+  });
   return copy_vector(buffer, out, out_length);
   SONARE_C_CATCH
 }

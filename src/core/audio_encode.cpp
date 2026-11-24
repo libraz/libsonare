@@ -24,6 +24,12 @@ bool audio_encode_format_available(std::string_view format) noexcept {
 #endif
 }
 
+[[noreturn]] void detail::refuse_unavailable_audio_encoder() {
+  throw SonareParameterRefusal::predicate_with_reason(ErrorCode::NotSupported, "format",
+                                                      "is unavailable for encoding in this build",
+                                                      ErrorReason::NotCompiledIn);
+}
+
 std::vector<uint8_t> encode_audio(const float* samples, std::size_t frames, int num_channels,
                                   int sample_rate, const AudioEncodeOptions& options) {
   namespace check = util::check;
@@ -79,9 +85,7 @@ std::vector<uint8_t> encode_audio(const float* samples, std::size_t frames, int 
                                options.quality.value_or(default_quality), options.tags);
   }
 #endif
-  throw SonareParameterRefusal::predicate_with_reason(ErrorCode::NotSupported, format,
-                                                      "encoding is unavailable in this build",
-                                                      ErrorReason::NotCompiledIn);
+  detail::refuse_unavailable_audio_encoder();
 }
 
 }  // namespace sonare

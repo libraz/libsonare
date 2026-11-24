@@ -18,21 +18,24 @@ using namespace sonare_c_detail;
 
 namespace {
 
-const std::array<CName, 3> kEncodeOptionNames{{{"format", "options.format"},
-                                               {"bit_depth", "options.bit_depth"},
-                                               {"quality", "options.quality"}}};
+constexpr std::array<CName, 4> kEncodeOptionNames{{{"format", "options.format"},
+                                                   {"bit_depth", "options.bit_depth"},
+                                                   {"quality", "options.quality"},
+                                                   {"tags", "options.tags"}}};
 
 sonare::AudioTags to_audio_tags(const SonareAudioTags* tags) {
   sonare::AudioTags result;
   if (tags == nullptr || tags->count == 0) return result;
   if (tags->keys == nullptr) {
-    sonare::util::check::refuse("tags.keys", "must be non-null when tags.count is positive");
+    sonare::util::check::refuse("options.tags.keys",
+                                "must be non-null when options.tags.count is positive");
   }
   if (tags->values == nullptr) {
-    sonare::util::check::refuse("tags.values", "must be non-null when tags.count is positive");
+    sonare::util::check::refuse("options.tags.values",
+                                "must be non-null when options.tags.count is positive");
   }
   for (size_t i = 0; i < tags->count; ++i) {
-    const std::string subject = "tags.keys[" + std::to_string(i) + "]";
+    const std::string subject = "options.tags.keys[" + std::to_string(i) + "]";
     if (tags->keys[i] == nullptr) {
       sonare::util::check::refuse(subject.c_str(), "must be non-null");
     }
@@ -40,7 +43,7 @@ sonare::AudioTags to_audio_tags(const SonareAudioTags* tags) {
       sonare::util::check::refuse(subject.c_str(), sonare::util::refusal::kNonEmptyPredicate);
     }
     if (tags->values[i] == nullptr) {
-      sonare::util::check::refuse(("tags.values[" + std::to_string(i) + "]").c_str(),
+      sonare::util::check::refuse(("options.tags.values[" + std::to_string(i) + "]").c_str(),
                                   "must be non-null");
     }
     result[tags->keys[i]] = tags->values[i];

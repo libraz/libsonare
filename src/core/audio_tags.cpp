@@ -468,7 +468,7 @@ AudioTags read_audio_tags(const uint8_t* data, size_t size) {
 #else
   if (!optional_format.empty()) {
     throw SonareParameterRefusal::predicate_with_reason(
-        ErrorCode::NotSupported, std::string(optional_format), "tag reading is unavailable",
+        ErrorCode::NotSupported, "data", "uses a format unavailable for tag reading in this build",
         ErrorReason::NotCompiledIn);
   }
 #endif

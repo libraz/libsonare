@@ -139,7 +139,7 @@ TEST_CASE("Audio codecs match their runtime availability", "[audio_encode]") {
   if (!audio_encode_format_available(format)) {
     const float input = 0.5f;
     check_refusal([&] { encode_audio(&input, 1, 1, kSampleRate, options); },
-                  ErrorCode::NotSupported, format, ErrorReason::NotCompiledIn);
+                  ErrorCode::NotSupported, "format", ErrorReason::NotCompiledIn);
     return;
   }
 
@@ -169,9 +169,9 @@ TEST_CASE("Audio codecs match their runtime availability", "[audio_encode]") {
 #if !defined(SONARE_WITH_FFMPEG)
 TEST_CASE("Recognized codecs report a compiled-out decoder", "[audio_encode]") {
   const std::array<uint8_t, 12> flac{'f', 'L', 'a', 'C'};
-  check_refusal([&] { load_buffer(flac.data(), flac.size()); }, ErrorCode::NotSupported, "flac",
+  check_refusal([&] { load_buffer(flac.data(), flac.size()); }, ErrorCode::NotSupported, "data",
                 ErrorReason::NotCompiledIn);
   check_refusal([&] { load_buffer_interleaved(flac.data(), flac.size()); }, ErrorCode::NotSupported,
-                "flac", ErrorReason::NotCompiledIn);
+                "data", ErrorReason::NotCompiledIn);
 }
 #endif

@@ -49,6 +49,16 @@ const std::array<CName, 4> kHpssNames{{{"n_fft", "options.n_fft"},
 const std::array<CName, 3> kTimeStretchNames{
     {{"rate", "speed_ratio"}, {"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
 
+constexpr std::array<CName, 7> kDecomposeStemsNames{{
+    {"n_components", "config.n_components"},
+    {"n_fft", "config.n_fft"},
+    {"hop_length", "config.hop_length"},
+    {"n_iter", "config.n_iter"},
+    {"beta", "config.beta"},
+    {"init", "config.init"},
+    {"mask_power", "config.mask_power"},
+}};
+
 /// Checks a decompose-stems config and copies it onto the core one. Throws the refusal.
 void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
                                  DecomposeStemsConfig* core_config) {
@@ -735,8 +745,9 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        DecomposeStemsResult result =
-            decompose_stems(audio.data(), audio.size(), sample_rate, core_config);
+        DecomposeStemsResult result = with_c_names(kDecomposeStemsNames, [&] {
+          return decompose_stems(audio.data(), audio.size(), sample_rate, core_config);
+        });
         if (result.components.empty()) return SONARE_OK;
         const size_t component_length = result.components.front().size();
         if (component_length == 0) return SONARE_OK;
@@ -804,8 +815,9 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   pointers.reserve(num_channels);
   for (const Audio& one : audio) pointers.push_back(one.data());
 
-  DecomposeStemsLinkedResult result =
-      decompose_stems_linked(pointers.data(), num_channels, length, sample_rate, core_config);
+  DecomposeStemsLinkedResult result = with_c_names(kDecomposeStemsNames, [&] {
+    return decompose_stems_linked(pointers.data(), num_channels, length, sample_rate, core_config);
+  });
   if (result.components.empty()) return SONARE_OK;
   const size_t component_length =
       result.components.front().empty() ? 0 : result.components.front().front().size();
