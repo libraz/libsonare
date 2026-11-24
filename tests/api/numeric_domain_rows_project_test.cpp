@@ -6,16 +6,19 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "numeric_domain_rows_support.h"
+#include "util/sha256.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 #include "mixing/api/scene.h"
@@ -232,6 +235,25 @@ struct Project {
     return id;
   }
 
+  uint32_t add_audio_clip(double length_ppq, const float* samples, size_t frames, int rate) {
+    SonareProjectClipDesc desc{};
+    desc.track_id = add_audio_track();
+    desc.length_ppq = length_ppq;
+    desc.gain = 1.0f;
+    desc.audio_interleaved = samples;
+    desc.audio_frames = static_cast<int64_t>(frames);
+    desc.audio_channels = 1;
+    desc.audio_sample_rate = rate;
+    uint32_t id = 0;
+    REQUIRE(sonare_project_add_clip(handle, &desc, &id) == SONARE_OK);
+    return id;
+  }
+
+  uint32_t add_audio_clip() {
+    const auto& samples = analysis_samples();
+    return add_audio_clip(4.0, samples.data(), samples.size(), kAnalysisRate);
+  }
+
   uint32_t add_midi_clip() {
     uint32_t track = 0;
     uint32_t clip = 0;
@@ -390,15 +412,23 @@ SonareError probe_midi_route_events(const std::string& param, double value) {
   return sonare_midi_route_events(&event, count, nullptr, nullptr, 0, &out_count, nullptr, nullptr);
 }
 
+SonareMidiEventPod cc_pod(uint8_t cc, uint8_t amount) {
+  SonareMidiEventPod event{};
+  REQUIRE(sonare_midi_cc(0.0, 0, 0, cc, amount, &event) == SONARE_OK);
+  return event;
+}
+
 SonareError probe_midi_cc_learn(const std::string& param, double value) {
-  const SonareMidiEventPod event = event_for(param, value);
-  const size_t count = event_count_for(param, value);
+  constexpr uint8_t kProbeController = 74;
+  const size_t count = is_param(param, "count") ? to_count(value) : 2;
+  SonareMidiEventPod events[] = {cc_pod(kProbeController, 0), cc_pod(kProbeController, 127)};
+  if (is_param(param, "events[].ppq")) events[0].ppq = value;
   uint32_t param_id = 1;
   uint8_t min_movement = 1;
   if (is_param(param, "param_id")) param_id = to_u32(value);
   if (is_param(param, "min_movement")) min_movement = to_u8(value);
   SonareMidiCcBinding binding{};
-  return sonare_midi_cc_learn(&event, count, param_id, 0.0f, 1.0f, min_movement, &binding);
+  return sonare_midi_cc_learn(events, count, param_id, 0.0f, 1.0f, min_movement, &binding);
 }
 
 /// A binding every check accepts; @p param sets its cc_number or param_id to @p value.
@@ -424,7 +454,8 @@ SonareMidiCcBinding binding_for(const std::string& param, double value) {
 
 SonareError probe_midi_cc_to_breakpoint(const std::string& param, double value) {
   const SonareMidiCcBinding binding = binding_for(param, value);
-  const SonareMidiEventPod event = event_for(param, value);
+  SonareMidiEventPod event = cc_pod(binding.cc_number, 64);
+  if (is_param(param, "event.ppq")) event.ppq = value;
   SonareAutomationPoint point{};
   return sonare_midi_cc_to_breakpoint(&binding, 1, &event, &point);
 }
@@ -547,14 +578,16 @@ SonareError probe_add_loop_recording_takes(const std::string& param, double valu
 
 SonareError probe_set_source_audio(const std::string& param, double value) {
   Project project;
+  uint32_t source_id = 0;
+  REQUIRE(sonare_project_add_audio_source(project.handle, "probe.wav", &source_id) == SONARE_OK);
   int64_t frames = 1;
   int channels = 1;
   if (is_param(param, "frames")) frames = to_i64(value);
   int sample_rate = 48000;
   if (is_param(param, "channels")) channels = static_cast<int>(value);
   if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
-  return sonare_project_set_source_audio(project.handle, 1, payload_buffer(), frames, channels,
-                                         sample_rate);
+  return sonare_project_set_source_audio(project.handle, source_id, payload_buffer(), frames,
+                                         channels, sample_rate);
 }
 
 SonareError probe_annotate_chords(const std::string& param, double value) {
@@ -661,7 +694,7 @@ SonareError probe_add_midi_clip(const std::string& param, double value) {
 
 SonareError probe_split_clip(const std::string&, double value) {
   Project project;
-  const uint32_t clip = project.add_midi_clip();
+  const uint32_t clip = project.add_audio_clip();
   uint32_t out = 0;
   return sonare_project_split_clip(project.handle, clip, value, &out);
 }
@@ -676,7 +709,7 @@ SonareError probe_trim_clip(const std::string& param, double value) {
 
 SonareError probe_load_sound_font(const std::string&, double value) {
   Project project;
-  const std::vector<uint8_t> data(4, 0);
+  const auto& data = probe_sound_font();
   return sonare_project_load_sound_font(project.handle, nullptr, data.data(), to_count(value));
 }
 
@@ -688,7 +721,9 @@ SonareError probe_move_clip(const std::string&, double value) {
 
 SonareError probe_duplicate_clip(const std::string&, double value) {
   Project project;
-  const uint32_t clip = project.add_midi_clip();
+  const uint32_t clip = project.add_audio_clip();
+  // Leave space at PPQ zero for the duplicate.
+  REQUIRE(sonare_project_move_clip(project.handle, clip, 4.0, 0) == SONARE_OK);
   uint32_t out = 0;
   return sonare_project_duplicate_clip(project.handle, clip, value, &out);
 }
@@ -714,7 +749,7 @@ SonareError probe_set_clip_fade(const std::string& param, double value) {
 
 SonareError probe_set_clip_takes(const std::string&, double value) {
   Project project;
-  const uint32_t clip = project.add_midi_clip();
+  const uint32_t clip = project.add_audio_clip();
   SonareProjectClipTake take{};
   take.id = 1;
   take.source_offset_ppq = value;
@@ -723,8 +758,12 @@ SonareError probe_set_clip_takes(const std::string&, double value) {
 
 SonareError probe_set_clip_comp_segments(const std::string& param, double value) {
   Project project;
-  const uint32_t clip = project.add_midi_clip();
+  const uint32_t clip = project.add_audio_clip();
+  SonareProjectClipTake take{};
+  take.id = 1;
+  REQUIRE(sonare_project_set_clip_takes(project.handle, clip, &take, 1, take.id) == SONARE_OK);
   SonareProjectClipCompSegment segment{};
+  segment.take_id = take.id;
   segment.end_ppq = 1.0;
   if (is_param(param, "segments[].start_ppq")) segment.start_ppq = value;
   if (is_param(param, "segments[].end_ppq")) segment.end_ppq = value;
@@ -734,8 +773,11 @@ SonareError probe_set_clip_comp_segments(const std::string& param, double value)
 
 SonareError probe_set_warp_map(const std::string&, double value) {
   Project project;
+  const SonareProjectWarpAnchor anchors[] = {{0.0, 0.0}, {100.0, 100.0}};
   SonareProjectWarpMapDesc desc{};
   desc.id = to_u32(value);
+  desc.anchors = anchors;
+  desc.anchor_count = std::size(anchors);
   return sonare_project_set_warp_map(project.handle, &desc);
 }
 
@@ -827,15 +869,73 @@ SonareError probe_import_external_stems(const std::string& param, double value) 
 
 // ---- Vocal edits ------------------------------------------------------------------------
 
+constexpr size_t kVocalProbeFrames = 3200;
+constexpr int kVocalProbeRate = 48000;
+constexpr double kVocalProbeLengthPpq = 1.0;
+
+struct VocalProbeState {
+  std::vector<uint8_t> bytes;
+  SonareVocalStateToken token{};
+  std::array<uint8_t, 32> digest{};
+};
+
+VocalProbeState make_vocal_probe_state(const float* samples) {
+  constexpr size_t kAnalysisFrames = 20;
+  std::array<float, kAnalysisFrames> f0{};
+  std::array<uint8_t, kAnalysisFrames> voiced{};
+  f0.fill(440.0f);
+  voiced.fill(1);
+  SonareVocalAnalysis analysis;
+  sonare_vocal_analysis_init(&analysis);
+  analysis.samples_per_frame = kVocalProbeFrames / kAnalysisFrames;
+  analysis.frame_length_samples = 2 * (kVocalProbeFrames / kAnalysisFrames);
+  analysis.f0_hz = f0.data();
+  analysis.voiced = voiced.data();
+  analysis.frame_count = f0.size();
+
+  SonareVocalCreateOptions options;
+  sonare_vocal_create_options_init(&options);
+  options.analysis = &analysis;
+  SonareVocalSession* raw = nullptr;
+  REQUIRE(sonare_vocal_session_create(samples, kVocalProbeFrames, 1, kVocalProbeRate, &options,
+                                      &raw) == SONARE_OK);
+  const std::unique_ptr<SonareVocalSession, decltype(&sonare_vocal_session_destroy)> session(
+      raw, sonare_vocal_session_destroy);
+  VocalProbeState state;
+  REQUIRE(sonare_vocal_session_token(session.get(), &state.token) == SONARE_OK);
+  SonareVocalStateBytes bytes;
+  sonare_vocal_state_bytes_init(&bytes);
+  REQUIRE(sonare_vocal_session_export_state(session.get(), &bytes) == SONARE_OK);
+  state.bytes.assign(bytes.data, bytes.data + bytes.size);
+  sonare_free_vocal_state_bytes(&bytes);
+  sonare::util::Sha256 hash;
+  hash.update(reinterpret_cast<const uint8_t*>(samples), kVocalProbeFrames * sizeof(float));
+  state.digest = hash.finalize();
+  return state;
+}
+
 SonareError probe_apply_vocal_edit(const std::string& param, double value) {
+  const float* samples = analysis_samples().data();
+  const auto state = make_vocal_probe_state(samples);
   Project project;
+  const uint32_t clip_id =
+      project.add_audio_clip(kVocalProbeLengthPpq, samples, kVocalProbeFrames, kVocalProbeRate);
+  SonareProjectClip clip{};
+  REQUIRE(sonare_project_clip_by_index(project.handle, 0, &clip) == SONARE_OK);
   SonareProjectVocalEditApplyDesc desc;
   sonare_project_vocal_edit_apply_desc_init(&desc);
-  desc.clip_id = 1;
-  desc.take_id = 0;
-  desc.expected_source_sample_rate = 48000;
-  desc.expected_source_sample_count = 1;
-  desc.expected_clip_length_ppq = 4.0;
+  desc.clip_id = clip_id;
+  desc.expected_source_id = clip.source_id;
+  desc.expected_source_sample_rate = kVocalProbeRate;
+  desc.expected_source_sample_count = kVocalProbeFrames;
+  desc.expected_clip_length_ppq = kVocalProbeLengthPpq;
+  std::memcpy(desc.expected_source_sha256, state.digest.data(), state.digest.size());
+  desc.rendered_mono = samples;
+  desc.rendered_sample_count = kVocalProbeFrames;
+  desc.rendered_sample_rate = kVocalProbeRate;
+  desc.render_token = state.token;
+  desc.sve1 = state.bytes.data();
+  desc.sve1_size = state.bytes.size();
   if (is_param(param, "desc.clip_id")) desc.clip_id = to_u32(value);
   if (is_param(param, "desc.take_id")) desc.take_id = to_u32(value);
   if (is_param(param, "desc.expected_source_sample_rate")) {
@@ -1073,6 +1173,15 @@ double inside_value(const NumericDomainRow& row) {
   const std::string entry = row.entry;
   const std::string param = row.param;
   if (entry == "mixing_assistant_suggest") return 48000.0;
+  if (entry == "project_load_sound_font") return static_cast<double>(probe_sound_font().size());
+  // Splits must be interior; a comp segment must fit in its clip.
+  if (entry == "project_split_clip" || param == "segments[].end_ppq") return 2.0;
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+  if (entry == "project_apply_vocal_edit") {
+    if (param == "desc.expected_clip_length_ppq") return kVocalProbeLengthPpq;
+    if (param == "desc.expected_source_sample_count") return kVocalProbeFrames;
+  }
+#endif
   if (entry == "project_import_external_stems" && param == "request.sample_rate") return 48000.0;
   if (param.find("sample_rate") != std::string::npos && entry != "mixer_create") return 48000.0;
   if (entry == "transcribe" || entry == "project_transcribe_to_clip") {
@@ -1110,5 +1219,7 @@ TEST_CASE("a project value outside its row's domain is refused under the row's s
 
 TEST_CASE("a project value inside its row's domain is not refused under the row's subject",
           "[numeric_domains][c_api]") {
-  require_inside_accepted(built_table(), probes(), inside_value);
+  require_inside_accepted(built_table(), probes(), inside_value,
+                          {{"midi_cc_learn", "count", SONARE_ERROR_INVALID_STATE, "",
+                            "no MIDI CC binding could be learned from events"}});
 }

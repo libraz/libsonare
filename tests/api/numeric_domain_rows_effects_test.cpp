@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "core/audio_encode.h"
 #include "numeric_domain_rows_support.h"
 
 namespace {
@@ -54,6 +55,29 @@ class PreparedEngine {
  private:
   SonareEngine* engine_ = nullptr;
 };
+
+constexpr uint32_t kProbeDestination = 1;
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+void bind_probe_synth(SonareEngine* engine) {
+  SonareSynthInstrumentBinding binding{};
+  sonare_synth_patch_init(&binding.patch);
+  binding.destination_id = kProbeDestination;
+  binding.patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
+  REQUIRE(sonare_engine_set_synth_instrument(engine, &binding) == SONARE_OK);
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING)
+void add_probe_track_strip(SonareEngine* engine) {
+  SonareEngineTrackLane lane{};
+  lane.track_id = kProbeDestination;
+  lane.source_channel_layout = SONARE_CHANNEL_LAYOUT_STEREO;
+  REQUIRE(sonare_engine_set_track_lanes(engine, &lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, kProbeDestination, R"({"id":"probe"})") ==
+          SONARE_OK);
+}
+#endif
 
 // ---------------------------------------------------------------------------------------------
 // Effects
@@ -383,7 +407,7 @@ SonareError probe_engine_set_clip_page_prefetch_frames(const std::string&, doubl
 
 SonareError probe_engine_load_sound_font(const std::string&, double value) {
   PreparedEngine engine;
-  const std::array<std::uint8_t, 4> data{};
+  const auto& data = probe_sound_font();
   return sonare_engine_load_sound_font(engine.get(), data.data(), as_size(value));
 }
 
@@ -398,13 +422,19 @@ SonareError probe_engine_push_midi_sysex(const std::string& param, double value)
 
 SonareError probe_engine_set_articulation(const std::string&, double value) {
   PreparedEngine engine;
-  return sonare_engine_set_articulation(engine.get(), 1, as_u8(value), 0);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  bind_probe_synth(engine.get());
+#endif
+  return sonare_engine_set_articulation(engine.get(), kProbeDestination, as_u8(value), 0);
 }
 
 SonareError probe_engine_articulation(const std::string&, double value) {
   PreparedEngine engine;
   int articulation = 0;
-  return sonare_engine_articulation(engine.get(), 1, as_u8(value), &articulation);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  bind_probe_synth(engine.get());
+#endif
+  return sonare_engine_articulation(engine.get(), kProbeDestination, as_u8(value), &articulation);
 }
 
 SonareError probe_engine_bind_midi_cc(const std::string& param, double value) {
@@ -486,7 +516,10 @@ SonareError probe_engine_freeze_offline(const std::string& param, double value) 
 
 SonareError probe_engine_set_track_strip_channel_delay_samples(const std::string&, double value) {
   PreparedEngine engine;
-  return sonare_engine_set_track_strip_channel_delay_samples(engine.get(), 1,
+#if defined(SONARE_WITH_MIXING)
+  add_probe_track_strip(engine.get());
+#endif
+  return sonare_engine_set_track_strip_channel_delay_samples(engine.get(), kProbeDestination,
                                                              static_cast<int>(value));
 }
 
@@ -658,7 +691,8 @@ SonareError probe_engine_bind_controller(const std::string&, double value) {
   binding.lo = 0.0f;
   binding.hi = 1.0f;
   binding.curve = 1.0f;
-  return sonare_engine_bind_controller(engine.get(), 5, &binding);
+  bind_probe_synth(engine.get());
+  return sonare_engine_bind_controller(engine.get(), kProbeDestination, &binding);
 }
 
 SonareError probe_engine_set_midi_clips(const std::string& param, double value) {
@@ -710,7 +744,9 @@ SonareError probe_engine_set_track_buses(const std::string&, double value) {
 
 SonareError probe_engine_set_track_strip_eq_band_json(const std::string&, double value) {
   PreparedEngine engine;
-  return sonare_engine_set_track_strip_eq_band_json(engine.get(), 1, static_cast<int>(value), "{}");
+  add_probe_track_strip(engine.get());
+  return sonare_engine_set_track_strip_eq_band_json(engine.get(), kProbeDestination,
+                                                    static_cast<int>(value), "{}");
 }
 
 SonareError probe_engine_set_master_strip_eq_band_json(const std::string&, double value) {
@@ -720,7 +756,11 @@ SonareError probe_engine_set_master_strip_eq_band_json(const std::string&, doubl
 
 SonareError probe_engine_set_bus_strip_eq_band_json(const std::string&, double value) {
   PreparedEngine engine;
-  return sonare_engine_set_bus_strip_eq_band_json(engine.get(), 1, static_cast<int>(value), "{}");
+  SonareEngineBus bus{};
+  bus.bus_id = kProbeDestination;
+  REQUIRE(sonare_engine_set_track_buses(engine.get(), &bus, 1) == SONARE_OK);
+  return sonare_engine_set_bus_strip_eq_band_json(engine.get(), kProbeDestination,
+                                                  static_cast<int>(value), "{}");
 }
 
 SonareError probe_strip_set_channel_delay_samples(const std::string&, double value) {
@@ -1256,8 +1296,12 @@ NumericDomainTable built_table() {
 /// the same subject: an FFT size must be even, and a source rate must be the prepared one.
 double inside_value(const NumericDomainRow& row) {
   const std::string param = row.param;
+  const std::string entry = row.entry;
   if (ends_with(param, "n_fft")) return 2048.0;
   if (ends_with(param, "sample_rate")) return 48000.0;
+  if (entry == "engine_load_sound_font") return static_cast<double>(probe_sound_font().size());
+  // A split or merge needs room for the note spans in the probe.
+  if (param == "n_frames" && (entry == "split_note" || entry == "merge_notes")) return 8.0;
   if (param == "notes[].offset_sample") return 1.0;
   return lowest_inside_value(row);
 }
@@ -1275,7 +1319,22 @@ TEST_CASE("an effects value outside its row's domain is refused under the row's 
 
 TEST_CASE("an effects value inside its row's domain is not refused under the row's subject",
           "[numeric_domains][c_api]") {
-  require_inside_accepted(built_table(), probes(), inside_value);
+  require_inside_accepted(
+      built_table(), probes(), inside_value,
+      {
+          {"encode_audio", "options.quality", SONARE_ERROR_NOT_SUPPORTED, "options.format",
+           "is unavailable for encoding in this build",
+           !sonare::audio_encode_format_available("mp3")},
+#if !defined(SONARE_WITH_ARRANGEMENT)
+          {"engine_articulation", "channel", SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
+          {"engine_set_articulation", "channel", SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
+          {"engine_load_sound_font", "size", SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
+#endif
+#if !defined(SONARE_WITH_MIXING)
+          {"engine_set_track_strip_channel_delay_samples", "delay_samples",
+           SONARE_ERROR_NOT_SUPPORTED, "", "not compiled"},
+#endif
+      });
 }
 
 TEST_CASE("sample-bank MIDI byte rows reject out-of-range keys and accept zero sentinels",

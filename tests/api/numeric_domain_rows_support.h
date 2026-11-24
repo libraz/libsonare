@@ -9,8 +9,10 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <fstream>
 #include <functional>
 #include <initializer_list>
+#include <iterator>
 #include <map>
 #include <string>
 #include <vector>
@@ -53,6 +55,25 @@ inline const std::vector<float>& analysis_samples() {
       sonare::test::generate_sine(kAnalysisRate / 2, 440.0f, kAnalysisRate);
   return samples;
 }
+
+inline const std::vector<uint8_t>& probe_sound_font() {
+  static const auto bytes = [] {
+    std::ifstream file("tests/fixtures/sf2/minimal_gs.sf2", std::ios::binary);
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
+  }();
+  REQUIRE_FALSE(bytes.empty());
+  return bytes;
+}
+
+/// A named row whose tested value reaches a declared operation-level refusal.
+struct InsideRefusal {
+  const char* entry;
+  const char* param;
+  SonareError code;
+  const char* subject;
+  const char* message_part;
+  bool applies = true;
+};
 
 inline bool is_param(const std::string& param, const char* name) { return param == name; }
 
@@ -153,17 +174,31 @@ inline void require_outside_refused(const NumericDomainTable& table,
   }
 }
 
-/// Every row's inside value is not refused under the row's subject.
+/// Every row admits its inside value with compatible sibling arguments.
 inline void require_inside_accepted(const NumericDomainTable& table,
                                     const std::map<std::string, Probe>& probes,
-                                    const InsideValue& inside = lowest_inside_value) {
+                                    const InsideValue& inside = lowest_inside_value,
+                                    std::initializer_list<InsideRefusal> refusals = {}) {
   for (std::size_t i = 0; i < table.count; ++i) {
     const NumericDomainRow& row = table.rows[i];
     INFO(row.entry << " " << row.param);
     const auto probe = probes.find(row.entry);
     REQUIRE(probe != probes.end());
-    const SonareError err = probe->second(row.param, inside(row));
-    if (err != SONARE_OK) CHECK(last_subject() != subject_of(row));
+    const double value = inside(row);
+    const SonareError err = probe->second(row.param, value);
+    INFO("inside value " << value << ", subject " << last_subject() << ", "
+                         << sonare_last_error_message());
+    const auto refusal = std::find_if(refusals.begin(), refusals.end(), [&](const auto& item) {
+      return item.applies && is_param(row.entry, item.entry) && is_param(row.param, item.param);
+    });
+    if (refusal == refusals.end()) {
+      CHECK(err == SONARE_OK);
+    } else {
+      CHECK(err == refusal->code);
+      CHECK(last_subject() == refusal->subject);
+      CHECK(std::string(sonare_last_error_message()).find(refusal->message_part) !=
+            std::string::npos);
+    }
   }
 }
 

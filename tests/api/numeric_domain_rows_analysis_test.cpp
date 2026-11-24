@@ -7,11 +7,14 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
 #include <limits>
 #include <map>
+#include <random>
 #include <string>
 #include <vector>
 
+#include "core/audio_io.h"
 #include "numeric_domain_rows_support.h"
 
 namespace {
@@ -308,11 +311,16 @@ struct ChromaCqt {
 ChromaCqt chroma_cqt_of(const std::string& param, double value,
                         const std::string& bins_prefix = "") {
   ChromaCqt c;
-  if (is_param(param, "hop_length")) c.hop_length = as_size(value);
-  if (is_param(param, "n_chroma")) c.n_chroma = static_cast<int>(value);
-  if (is_param(param, (bins_prefix + "bins_per_octave").c_str())) {
-    c.bins_per_octave = static_cast<int>(value);
-  }
+  const std::string bins = bins_prefix + "bins_per_octave";
+  // One CQT bin per class is sufficient when the chroma count is swept.
+  const double bins_per_octave =
+      is_param(param, "n_chroma") && value > 0 ? value : c.bins_per_octave;
+  set_probe_fields(param, value, {{bins.c_str(), bins_per_octave}},
+                   [&](const std::string& field, double amount) {
+                     if (field == "hop_length") c.hop_length = as_size(amount);
+                     if (field == "n_chroma") c.n_chroma = static_cast<int>(amount);
+                     if (field == bins) c.bins_per_octave = static_cast<int>(amount);
+                   });
   return c;
 }
 
@@ -578,15 +586,25 @@ SonareError probe_spectral_flux(const std::string& param, double value) {
 
 SonareError probe_spectral_contrast(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
-  int n_bands = 6;
-  if (is_param(param, "n_bands")) n_bands = static_cast<int>(value);
+  constexpr int kProbeBands = 3;
+  constexpr float kProbeMinHz = 200.0f;
+  int n_bands = kProbeBands;
+  float fmin_hz = kProbeMinHz;
+  // A small FFT needs wider low bands so each band contains at least one bin.
+  const double fmin =
+      f.n_fft > 0 ? std::max<double>(kProbeMinHz, kAnalysisRate / static_cast<double>(f.n_fft))
+                  : kProbeMinHz;
+  set_probe_fields(param, value, {{"fmin_hz", fmin}}, [&](const std::string& field, double amount) {
+    if (field == "n_bands") n_bands = static_cast<int>(amount);
+    if (field == "fmin_hz") fmin_hz = static_cast<float>(amount);
+  });
   float* out = nullptr;
   size_t length = 0;
   int rows = 0;
   int cols = 0;
   return finish_floats(
       sonare_spectral_contrast(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, n_bands,
-                               200.0f, 0.02f, &out, &length, &rows, &cols),
+                               fmin_hz, 0.02f, &out, &length, &rows, &cols),
       out);
 }
 
@@ -768,10 +786,14 @@ SonareError probe_nnls_chroma(const std::string& param, double value) {
 }
 
 SonareError probe_griffin_lim(const std::string& param, double value) {
-  int n_fft = 128;
-  size_t hop_length = 32;
-  if (is_param(param, "n_fft")) n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) hop_length = as_size(value);
+  constexpr int kProbeFftSize = 128;
+  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : kProbeFftSize;
+  size_t hop_length = 0;
+  const int cola_hop = std::max(1, n_fft / 4);
+  set_probe_fields(param, value, {{"hop_length", static_cast<double>(cola_hop)}},
+                   [&](const std::string& field, double amount) {
+                     if (field == "hop_length") hop_length = as_size(amount);
+                   });
   const int n_bins = n_fft / 2 + 1;
   const int n_frames = 4;
   float* out = nullptr;
@@ -842,8 +864,13 @@ SonareError probe_audio_from_file(const std::string& param, double value) {
   sonare_audio_file_options_init(&options);
   if (is_param(param, "options.channel_index")) options.channel_index = static_cast<int>(value);
   SonareAudio* out = nullptr;
-  const SonareError err = sonare_audio_from_file("/nonexistent/probe.wav", &options, &out);
-  if (err == SONARE_OK) sonare_audio_destroy(out);
+  const auto path = std::filesystem::temp_directory_path() /
+                    ("sonare-domain-channel-" + std::to_string(std::random_device{}()) + ".wav");
+  const std::string filename = path.string();
+  sonare::save_wav(filename, pcm(), pcm_length(), kAnalysisRate);
+  const SonareError err = sonare_audio_from_file(filename.c_str(), &options, &out);
+  sonare_audio_destroy(out);
+  std::filesystem::remove(path);
   return err;
 }
 
@@ -1137,6 +1164,11 @@ double analysis_inside_value(const NumericDomainRow& row) {
     return 12.0;
   }
   if (param == "frame_length") return 2048.0;
+  // Bass chroma has a fixed 36-bin grid. A one-band contrast still has a valid FFT layout.
+  if ((entry == "bass_chroma" && param == "n_chroma") ||
+      (entry == "spectral_contrast" && param == "n_bands")) {
+    return lowest_inside_value(row);
+  }
   if (row.domain.kind == NumberKind::Integer && *row.domain.lo == 1.0) return 32.0;
   if (row.stricter != nullptr && std::string(row.stricter) == "even" && *row.domain.lo < 32.0) {
     return 32.0;
