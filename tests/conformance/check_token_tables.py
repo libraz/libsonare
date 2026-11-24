@@ -12,8 +12,9 @@ matched by name. A source that adds, drops or reorders a token fails with the
 token named.
 
 Document keys an earlier file form wrote follow the same rule (``KEY_FORMS``):
-the core loader refuses each beside its current key, nothing writes or reads it,
-and the core's refusal call is the only place the old spelling may appear.
+the core loader refuses every key outside the record's declared fields, so the
+old spelling is refused as an unknown key, and it may appear nowhere -- not even
+in the loader -- since naming it is how a reader comes to accept it again.
 
 The rows are not the whole population. Every core function returning two or
 more string literals is a writer, every facade literal union or literal-typed
@@ -202,6 +203,15 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/internal/entry.ts", "ts_field", "RefusalRecord.form"),
             _src("wasm", "bindings/wasm/src/internal/entry.ts", "ts_field", "RefusalRecord.form"),
+        ),
+    ),
+    TokenSet(
+        name="error reason",
+        core=CoreTable("src/util/error_reason.h", "ErrorReason", None, "error_reason_token"),
+        sources=(
+            _src("node", "bindings/node/src/errors.ts", "ts_union", "ErrorReason"),
+            _src("python", "bindings/python/src/libsonare/_errors.py", "py_literal", "ErrorReason"),
+            _src("wasm", "bindings/wasm/src/errors.ts", "ts_union", "ErrorReason"),
         ),
     ),
     TokenSet(
@@ -552,11 +562,8 @@ KEY_SWEEP_ROOTS = ("src", "include", "bindings/node/src", "bindings/wasm/src", "
 KEY_SWEEP_SUFFIXES = (".cpp", ".h", ".ts", ".py", ".pyi")
 
 
-def _core_refuses(form: KeyForm) -> re.Pattern[str]:
-    """A call handing the loader's refusal helper the current key and the earlier one beside it."""
-    return re.compile(
-        rf'(?<!_or_legacy)\(\s*[^;]*?"{re.escape(form.current)}"\s*,\s*"{re.escape(form.earlier)}"'
-    )
+# The loader's refusal of every key outside a record's declared fields.
+_REFUSES_UNKNOWN_KEYS = re.compile(r"\brefuse_unknown_keys\(")
 
 
 def _mirror_reads(key: str) -> re.Pattern[str]:
@@ -584,13 +591,10 @@ def evaluate_key_forms(
     for form in forms:
         core_path = root / form.core
         core = core_path.read_text(encoding="utf-8") if core_path.is_file() else ""
-        refusal = _core_refuses(form)
-        if re.search(rf'_or_legacy\([^;]*?"{re.escape(form.earlier)}"', core):
-            problems.append(f"{form.name}: {form.core} still reads {form.earlier!r}")
-        if refusal.search(core):
+        if _REFUSES_UNKNOWN_KEYS.search(core):
             matched += 1
         else:
-            problems.append(f"{form.name}: {form.core} does not refuse {form.earlier!r} beside {form.current!r}")
+            problems.append(f"{form.name}: {form.core} does not refuse unknown keys, so {form.earlier!r} is not refused")
         if not _writes(form.current).search(core):
             problems.append(f"{form.name}: {form.core} writes no {form.current!r}")
         for mirror in form.mirrors:
@@ -602,11 +606,10 @@ def evaluate_key_forms(
                 problems.append(f"{form.name}: {mirror} does not read {form.current!r}")
         quoted = re.compile(rf"""(['"]){re.escape(form.earlier)}\1""")
         for f, text in texts.items():
-            refusing = f == core_path
             for i, line in enumerate(text.splitlines(), 1):
-                if quoted.search(line) and not (refusing and refusal.search(line)):
+                if quoted.search(line):
                     rel = f.relative_to(root)
-                    problems.append(f"{form.name}: {form.earlier!r} appears outside the refusal at {rel}:{i}")
+                    problems.append(f"{form.name}: {form.earlier!r} appears at {rel}:{i}")
     return problems, len(forms), matched
 
 

@@ -467,7 +467,8 @@ _KEY_FILES = {
     "src/scene.cpp": """
 Insert insert_from_value(const JsonValue& object, const std::string& path) {
   static const KeySet kKnown = known_keys("inserts[]");
-  insert.processor = string_or_earlier(object, path, "processor", "processor_name", "");
+  refuse_unknown_keys(object, path, kKnown);
+  insert.processor = string_or(object, path, "processor", "");
 }
 void insert_to_value(JsonValue& object, const Insert& insert) {
   util::json::put(object, "processor", insert.processor);
@@ -499,23 +500,26 @@ class RefusedKeyTests(unittest.TestCase):
     def test_clean_tree_passes_and_matches_core_and_mirror(self) -> None:
         self.assertEqual(self.run_with(), ([], 1, 2))
 
-    def test_a_core_that_stops_refusing_is_named(self) -> None:
+    def test_a_core_that_stops_refusing_unknown_keys_is_named(self) -> None:
         problems, _, matched = self.run_with(
-            {"src/scene.cpp": ('"processor", "processor_name", ""', '"processor", ""')}
+            {"src/scene.cpp": ("  refuse_unknown_keys(object, path, kKnown);\n", "")}
         )
         self.assertEqual(
             problems,
-            ["insert processor: src/scene.cpp does not refuse 'processor_name' beside 'processor'"],
+            [
+                (
+                    "insert processor: src/scene.cpp does not refuse unknown keys, "
+                    "so 'processor_name' is not refused"
+                )
+            ],
         )
         self.assertEqual(matched, 1)
 
     def test_a_core_that_reads_the_earlier_key_again_is_named(self) -> None:
-        problems, _, _ = self.run_with({"src/scene.cpp": ("string_or_earlier(", "string_or_legacy(")})
-        self.assertIn("insert processor: src/scene.cpp still reads 'processor_name'", problems)
-        self.assertIn(
-            "insert processor: src/scene.cpp does not refuse 'processor_name' beside 'processor'",
-            problems,
+        problems, _, _ = self.run_with(
+            {"src/scene.cpp": ('string_or(object, path, "processor", "")', 'string_or(object, path, "processor_name", "")')}
         )
+        self.assertEqual(problems, ["insert processor: 'processor_name' appears at src/scene.cpp:5"])
 
     def test_an_earlier_key_declared_known_is_named(self) -> None:
         problems, _, _ = self.run_with(
@@ -523,7 +527,7 @@ class RefusedKeyTests(unittest.TestCase):
         )
         self.assertEqual(
             problems,
-            ["insert processor: 'processor_name' appears outside the refusal at src/scene.cpp:3"],
+            ["insert processor: 'processor_name' appears at src/scene.cpp:3"],
         )
 
     def test_an_earlier_key_written_by_the_core_is_named(self) -> None:
@@ -534,7 +538,7 @@ class RefusedKeyTests(unittest.TestCase):
             problems,
             [
                 "insert processor: src/scene.cpp writes no 'processor'",
-                "insert processor: 'processor_name' appears outside the refusal at src/scene.cpp:7",
+                "insert processor: 'processor_name' appears at src/scene.cpp:8",
             ],
         )
 
@@ -545,10 +549,7 @@ class RefusedKeyTests(unittest.TestCase):
         self.assertEqual(
             problems,
             [
-                (
-                    "insert processor: 'processor_name' appears outside the refusal at "
-                    "bindings/node/src/scene.ts:1"
-                )
+                "insert processor: 'processor_name' appears at bindings/node/src/scene.ts:1"
             ],
         )
 
@@ -559,10 +560,7 @@ class RefusedKeyTests(unittest.TestCase):
         self.assertEqual(
             problems,
             [
-                (
-                    "insert processor: 'processor_name' appears outside the refusal at "
-                    "bindings/wasm/src/mirror.ts:1"
-                )
+                "insert processor: 'processor_name' appears at bindings/wasm/src/mirror.ts:1"
             ],
         )
 
