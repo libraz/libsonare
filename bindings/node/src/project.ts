@@ -1281,7 +1281,11 @@ export class Project {
     return this.native.barStartPpq(barIndex);
   }
 
-  /** Read the PPQ end of the last audible audio or MIDI clip, excluding render tails. Zero when none. */
+  /**
+   * Read the end in PPQ of the last clip with a valid source and range on an audible track.
+   * A track is audible when unmuted and, if any track is soloed, soloed itself.
+   * Returns zero when no clip qualifies. Render tails are excluded.
+   */
   endPpq(): number {
     return this.native.endPpq();
   }

@@ -1190,9 +1190,10 @@ class _ProjectInspectionMixin:
 
     @_entry("Project.end_ppq")
     def end_ppq(self) -> float:
-        """Read the last audible audio or MIDI clip's end in PPQ, excluding render tails.
+        """Read the end in PPQ of the last clip with a valid source and range on an audible track.
 
-        Return zero when there are no audible clips.
+        A track is audible when it is unmuted and, if any track is soloed, soloed itself.
+        Return zero when no clip qualifies. Render tails are excluded.
         """
         out_end_ppq = ctypes.c_double()
         _check(_get_lib().sonare_project_end_ppq(self._require_handle(), ctypes.byref(out_end_ppq)))
