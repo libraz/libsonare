@@ -2093,6 +2093,36 @@ describe('Sonare WASM Project', () => {
       expect(events.every((event) => event.ppq === 0 && event.word1 === 0)).toBe(true);
     });
 
+    it('refuses bank/program domains in declaration order after checking shape', () => {
+      const request = {
+        ppq: -1,
+        group: 16,
+        channel: 16,
+        bank: { msb: 128, lsb: 128 },
+        program: 128,
+      };
+      expect(() => midiBankProgram(request)).toThrow(
+        new RangeError('midiBankProgram: ppq must be finite and in [0, 1e12]'),
+      );
+      expect(() => midiBankProgram({ ...request, ppq: 0 })).toThrow(
+        new RangeError('midiBankProgram: group must be an integer in [0, 15]'),
+      );
+      expect(() => midiBankProgram({ ...request, ppq: 0, group: 0 })).toThrow(
+        new RangeError('midiBankProgram: channel must be an integer in [0, 15]'),
+      );
+      expect(() => midiBankProgram({ ...request, ppq: 0, group: 0, channel: 0 })).toThrow(
+        new RangeError('midiBankProgram: bank.msb must be an integer in [0, 127]'),
+      );
+      const validHead = { ...request, ppq: 0, group: 0, channel: 0 };
+      expect(() => midiBankProgram({ ...validHead, bank: { msb: 0, lsb: 128 } })).toThrow(
+        new RangeError('midiBankProgram: bank.lsb must be an integer in [0, 127]'),
+      );
+      expect(() => midiBankProgram({ ...validHead, bank: { msb: 0, lsb: 0 } })).toThrow(
+        new RangeError('midiBankProgram: program must be an integer in [0, 127]'),
+      );
+      expect(() => midiBankProgram({ ...request, program: '128' as never })).toThrow(TypeError);
+    });
+
     it('refuses an unknown name or an out-of-range number from every lookup', () => {
       expect(() => gmInstrumentName(128)).toThrow(RangeError);
       expect(() => gmInstrumentName(-1)).toThrow(RangeError);

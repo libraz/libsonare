@@ -41,33 +41,36 @@ val js_mastering_insert_names() {
 }
 
 // Parameter names a given insert processor reads (mastering::api::insert_param_names).
-// The library refuses a key not in this list. Empty array for an unknown name;
-// the facade refuses an unknown name before calling.
+// The library refuses a key not in this list, and a name outside the insert registry with
+// "unknown insert processor: <id>".
 val js_mastering_insert_param_names(std::string name) {
   wasmRefuseEmbeddedNul(name, "name");
   return stringVectorToVal(mastering::api::insert_param_names(name));
 }
 
-// Parameter descriptors for every key an insert processor's construction
-// reads, as a JSON array string [{"name","id","rtSafe","type","min","max",
-// "minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin",
-// "uiMax","scale","choices","slot","dependsOn","coupledWith"}, ...]. The TS facade parses it; "[]"
-// for an unknown name. Entries come in two runs: realtime automation targets (integer "id") in id
-// order, then every other construction key sorted by name with "id" null and "rtSafe" false. See
-// sonare_mastering_insert_param_info (the C ABI oracle for this JSON's semantics) for the full
-// field contract.
-// An omitted `sample_rate_val` is the rate-less query; a given rate resolves the
-// Nyquist-following ceilings and throws outside the supported range.
+namespace {
+
+int insertSampleRate(const val& value) {
+  const int sample_rate = checkedIntFromVal(value, "sampleRate");
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    throw WasmRangeError("sampleRate " + std::to_string(sample_rate) + " is out of range");
+  }
+  return sample_rate;
+}
+
+}  // namespace
+
+// Parameter descriptors for the keys an insert reads, ordered by automation id then by name; the
+// field contract is sonare_mastering_insert_param_info's. A name outside the processor catalog is
+// refused with "unknown insert processor: <id>" before the rate is read. An omitted rate selects
+// the rate-less query; a supplied rate resolves the Nyquist ceilings.
 std::string js_mastering_insert_param_info(std::string name, const val& sample_rate_val) {
   wasmRefuseEmbeddedNul(name, "name");
   if (sample_rate_val.isUndefined() || sample_rate_val.isNull()) {
     return mastering::api::insert_param_info_json(name);
   }
-  const double sample_rate = sample_rate_val.as<double>();
-  if (!(sample_rate >= sonare::kMinAudioSampleRate && sample_rate <= sonare::kMaxAudioSampleRate)) {
-    throw WasmRangeError("sampleRate " + std::to_string(sample_rate) + " is out of range");
-  }
-  return mastering::api::insert_param_info_json_at_rate(name, sample_rate);
+  mastering::api::require_insert_metadata_processor(name);
+  return mastering::api::insert_param_info_json_at_rate(name, insertSampleRate(sample_rate_val));
 }
 
 // Latency and tail an insert reports once built from `json_params` and
@@ -78,7 +81,7 @@ std::string js_mastering_insert_param_info(std::string name, const val& sample_r
 val js_mastering_insert_timing(std::string name, std::string json_params,
                                const val& sample_rate_val) {
   wasmRefuseEmbeddedNul(name, "name");
-  const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
+  const int sample_rate = insertSampleRate(sample_rate_val);
   // The parameter bag is refused under `params`, as the Node addon reports it through the C entry.
   const mastering::api::InsertTiming timing = sonare::util::check::under_member(
       "params", [&] { return mastering::api::insert_timing(name, json_params, sample_rate); });

@@ -13,10 +13,32 @@ import {
   masteringInsertParamInfo,
   masteringInsertTiming,
 } from '../dist/index.js';
+import createSonareModule from '../dist/sonare.js';
+import { nativeExceptionPtr } from '../src/module_state.js';
 
 /** Positional shorthand over the request-only `masteringInsertTiming`. */
 const timingOf = (insert: string, params: object, sampleRate: number) =>
   masteringInsertTiming({ insert: insert as never, params: params as never, sampleRate });
+
+function nativeRefusal(
+  module: Awaited<ReturnType<typeof createSonareModule>>,
+  call: () => unknown,
+) {
+  try {
+    call();
+  } catch (error) {
+    const ptr = nativeExceptionPtr(module, error);
+    if (ptr === null) {
+      throw error;
+    }
+    try {
+      return module.sonareExceptionInfo(ptr);
+    } finally {
+      module.sonareReleaseException(ptr);
+    }
+  }
+  throw new Error('Expected a native argument refusal');
+}
 
 describe('insert timing and construction-key catalog (WASM)', () => {
   beforeAll(async () => {
@@ -52,6 +74,58 @@ describe('insert timing and construction-key catalog (WASM)', () => {
     expect(entry).toBeDefined();
     expect(timing.latencySamples).toBe(entry?.latencySamples);
     expect(timing.tailSamples).toBe(entry?.tailSamples);
+  });
+
+  it('refuses an out-of-range timing rate at both boundaries', async () => {
+    const module = await createSonareModule();
+    expect(module.masteringInsertTiming('utility.gain', '{}', 8000)).toEqual(
+      timingOf('utility.gain', {}, 8000),
+    );
+    expect(
+      nativeRefusal(module, () => module.masteringInsertTiming('utility.gain', '{}', 7999)),
+    ).toMatchObject({
+      kind: 'RangeError',
+      message: 'sampleRate 7999 is out of range',
+    });
+    expect(() => timingOf('utility.gain', {}, 7999)).toThrow(
+      new RangeError('masteringInsertTiming: sampleRate 7999 is out of range'),
+    );
+  });
+
+  it('requires whole hertz for raw metadata and keeps an omitted rate distinct', async () => {
+    const module = await createSonareModule();
+    const omitted = module.masteringInsertParamInfo('utility.gain', undefined);
+    expect(JSON.parse(omitted)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'levelDb' })]),
+    );
+    expect(module.masteringInsertParamInfo('utility.gain', null as never)).toBe(omitted);
+    expect(
+      nativeRefusal(module, () => module.masteringInsertParamInfo('utility.gain', 8000.5)),
+    ).toMatchObject({
+      kind: 'RangeError',
+      message: 'sampleRate must be an integer in [-2147483648, 2147483647]',
+    });
+    expect(
+      nativeRefusal(module, () => module.masteringInsertParamInfo('utility.gain', 0)),
+    ).toMatchObject({
+      kind: 'RangeError',
+      message: 'sampleRate 0 is out of range',
+    });
+    expect(() =>
+      masteringInsertParamInfo({ insert: 'not.a.real.processor' as never, sampleRate: 7999 }),
+    ).toThrow(
+      new RangeError('masteringInsertParamInfo: unknown insert processor: not.a.real.processor'),
+    );
+  });
+
+  it('refuses raw insert metadata membership before considering the rate', async () => {
+    const module = await createSonareModule();
+    expect(
+      nativeRefusal(module, () => module.masteringInsertParamInfo('not.a.real.processor', 7999)),
+    ).toMatchObject({
+      kind: 'RangeError',
+      message: 'unknown insert processor: not.a.real.processor',
+    });
   });
 
   it('rejects an unknown insert name', () => {

@@ -447,11 +447,7 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
   return withEntry('masteringInsertParamNames', () => {
-    assertClosedToken(
-      insert,
-      withEntry('masteringInsertParamNames', () => masteringInsertNames()),
-      'insert',
-    );
+    assertString(insert, 'insert');
     return Array.from(
       getSonareModule().masteringInsertParamNames(insert),
     ) as (keyof MasteringProcessorParams<N> & string)[];
@@ -466,8 +462,7 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
  * {@link RealtimeEngine.setTrackStripInsertParamByName}, `id` present); then,
  * sorted by name, every other construction key with no `id` and `rtSafe`
  * false. The name set matches {@link masteringInsertParamNames} plus any
- * automation target construction does not read. Returns an empty array for an
- * unknown name.
+ * automation target construction does not read.
  *
  * With `sampleRate`, a key whose `maxRelativeTo` is `"nyquist"` reports, as
  * `max` and `maxExclusive`, the bound accepted when the insert is built and
@@ -476,23 +471,15 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
  * 48 kHz probe.
  *
  * @throws {TypeError} when the request or `insert` is the wrong type
- * @throws {RangeError} for a `sampleRate` outside the supported range
+ * @throws {RangeError} for an unknown insert or a `sampleRate` outside the supported whole-hertz range
  */
 export function masteringInsertParamInfo(
   request: MasteringInsertParamInfoRequest,
 ): MasteringInsertParamInfo[] {
   return withEntry('masteringInsertParamInfo', () => {
     const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
-    assertClosedToken(
-      r.insert,
-      masteringProcessorCatalog().map((entry) => entry.id),
-      'insert',
-    );
-    const module = getSonareModule();
-    if (!isAbsent(r.sampleRate)) {
-      assertSampleRate(r.sampleRate);
-    }
-    const json = module.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
+    assertString(r.insert, 'insert');
+    const json = getSonareModule().masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
     return parseCatalogJson(json) as MasteringInsertParamInfo[];
   });
 }
@@ -544,7 +531,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
   return withEntry('masteringInsertTiming', () => {
     const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
     assertString(r.insert, 'insert');
-    assertSampleRate(r.sampleRate);
+    assertIntegerValue(r.sampleRate, 'sampleRate');
     const json = JSON.stringify(
       withEntry('masteringInsertTiming', () => resolveInsertParams(r.insert, r.params ?? {})),
     );

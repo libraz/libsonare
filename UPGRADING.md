@@ -11334,7 +11334,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SendTiming` (`./analysis`) | 'preFader' \| 'postFader' (numbers refused at every reader) |
 | `SendTiming` | 'preFader' \| 'postFader' (numbers refused at every reader) |
 | `masteringInsertNames` | masteringInsertNames(): MasteringInsertName[] |
-| `masteringInsertParamNames` | masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[] |
+| `masteringInsertParamNames` | masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]; an undeclared insert is a RangeError 'masteringInsertParamNames: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list |
 | `masteringPlatformNames` | masteringPlatformNames(): MasteringPlatform[] |
 | `mixingScenePresetNames` | mixingScenePresetNames(): MixScenePreset[] |
 
@@ -11426,7 +11426,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
-| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError ('insert must be one of ...') instead of an empty list |
+| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list |
 | `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |

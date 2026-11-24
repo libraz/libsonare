@@ -31,7 +31,9 @@ describe('insert param validation (WASM)', () => {
     // Band-indexed processors expose their band{i}.<field> keys.
     expect(masteringInsertParamNames('eq.parametric')).toContain('band0.frequencyHz');
     // An unknown name is a RangeError, never an empty list.
-    expect(() => masteringInsertParamNames('not.a.real.processor' as never)).toThrow(RangeError);
+    expect(() => masteringInsertParamNames('not.a.real.processor' as never)).toThrow(
+      new RangeError('masteringInsertParamNames: unknown insert processor: not.a.real.processor'),
+    );
   });
 
   it('flags a bound the processor itself rejects as exclusive', () => {
@@ -75,7 +77,7 @@ describe('insert param validation (WASM)', () => {
         () => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: 0 }),
         RangeError,
       ).message,
-    ).toBe('masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]');
+    ).toBe('masteringInsertParamInfo: sampleRate 0 is out of range');
   });
 
   it('reports realtime-automatable insert param descriptors', () => {
@@ -91,11 +93,7 @@ describe('insert param validation (WASM)', () => {
     const plate = masteringInsertParamInfo({ insert: 'effects.reverb.plate' });
     expect(plate.find((d) => d.name === 'modDepthSamples')?.rtSafe).toBe(false);
     expect(() => masteringInsertParamInfo({ insert: 'not.a.real.processor' as never })).toThrow(
-      new RangeError(
-        `masteringInsertParamInfo: insert must be one of ${masteringProcessorCatalog()
-          .map((entry) => entry.id)
-          .join(', ')}`,
-      ),
+      new RangeError('masteringInsertParamInfo: unknown insert processor: not.a.real.processor'),
     );
   });
 

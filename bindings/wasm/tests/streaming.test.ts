@@ -76,6 +76,23 @@ describe('StreamAnalyzer', () => {
       expect(omitted).not.toEqual(frames(new StreamAnalyzer({ ...explicit, nMels: 64 })));
     });
 
+    it.each([220, 880])('checks the A4 reference at float32 precision near %d Hz', (bound) => {
+      const rounded = bound === 220 ? 219.999999 : 880.000001;
+      using analyzer = new StreamAnalyzer({ sampleRate: 22050, referenceHz: rounded });
+      expect(analyzer.sampleRate).toBe(22050);
+      expect(() => analyzer.setReferenceHz(rounded)).not.toThrow();
+    });
+
+    it('uses the native A4 reference domain for both reads', () => {
+      const domain = 'referenceHz must be finite and in [220, 880]';
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, referenceHz: 881 })).toThrow(
+        new RangeError(`StreamAnalyzer: ${domain}`),
+      );
+      using analyzer = new StreamAnalyzer({ sampleRate: 22050 });
+      expect(() => analyzer.setReferenceHz(881)).toThrow(RangeError);
+      expect(() => analyzer.setReferenceHz(881)).toThrow(domain);
+    });
+
     it('exposes destroy() as its only release method', () => {
       const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
       expect(typeof analyzer.destroy).toBe('function');

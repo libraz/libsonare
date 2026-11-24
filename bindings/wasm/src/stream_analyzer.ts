@@ -27,7 +27,6 @@ import type {
 } from './stream_types.js';
 import { assertFloatValue, assertIntegerValue } from './validation.js';
 
-const REFERENCE_HZ_RANGE = [220, 880] as const;
 const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'sampleRate',
   'nFft',
@@ -203,22 +202,6 @@ function estimateOf(e: WasmAnalyzerStats['estimate']): StreamProgressiveEstimate
   return out;
 }
 
-/** Refuses an A4 reference outside what native accepts, as a RangeError. */
-function assertReferenceHz(referenceHz: unknown): asserts referenceHz is number {
-  if (typeof referenceHz !== 'number') {
-    throw refuseType(`referenceHz must be a number`);
-  }
-  if (
-    !Number.isFinite(referenceHz) ||
-    referenceHz < REFERENCE_HZ_RANGE[0] ||
-    referenceHz > REFERENCE_HZ_RANGE[1]
-  ) {
-    throw refuse(
-      `referenceHz must be within ${REFERENCE_HZ_RANGE[0]}..${REFERENCE_HZ_RANGE[1]} Hz`,
-    );
-  }
-}
-
 /**
  * Real-time streaming audio analyzer.
  *
@@ -288,7 +271,7 @@ export class StreamAnalyzer {
       assertFloatValue(config.fmaxHz, 'fmaxHz');
     }
     if (config.referenceHz !== undefined) {
-      assertReferenceHz(config.referenceHz);
+      assertFloatValue(config.referenceHz, 'referenceHz');
     }
     for (const key of [
       'nFft',
@@ -496,9 +479,8 @@ export class StreamAnalyzer {
   /**
    * Set the A4 reference frequency for non-standard tuning.
    *
-   * A wrong-typed value is a TypeError; one outside 220..880 Hz is a
-   * RangeError rather than being clamped, so this and `referenceHz` at create
-   * time accept exactly the same range.
+   * A wrong-typed value is a TypeError. The library checks the float32 value
+   * against [220, 880] Hz at creation and here.
    *
    * @param referenceHz - Reference frequency for A4 in Hz (default 440)
    * @example
@@ -509,7 +491,7 @@ export class StreamAnalyzer {
    * ```
    */
   setReferenceHz(referenceHz: number): void {
-    assertReferenceHz(referenceHz);
+    assertFloatValue(referenceHz, 'referenceHz');
     this.analyzer.setReferenceHz(referenceHz);
   }
 

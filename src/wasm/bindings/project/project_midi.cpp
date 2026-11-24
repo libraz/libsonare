@@ -12,6 +12,7 @@
 
 #include "analysis/music_analyzer.h"
 #include "c_api/midi_input_domains.h"
+#include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/synth_patch_fields.h"
 #include "project_wasm.h"
@@ -767,14 +768,13 @@ val js_midi_per_note_controller_name(const val& index) {
 
 val js_midi_bank_program(const val& ppq_val, const val& group_val, const val& channel_val,
                          const val& bank_msb_val, const val& bank_lsb_val, const val& program_val) {
-  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
-  const uint8_t group =
-      domainNumberFromVal<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain);
-  const uint8_t channel =
-      domainNumberFromVal<uint8_t>(channel_val, "channel", sonare_c_detail::kMidiChannelDomain);
-  const int bank_msb = checkedIntFromVal(bank_msb_val, "bankMsb");
-  const int bank_lsb = checkedIntFromVal(bank_lsb_val, "bankLsb");
-  const int program = checkedIntFromVal(program_val, "program");
+  using namespace sonare_c_detail;
+  const double ppq = domainNumberFromVal<double>(ppq_val, "ppq", kPublicPpqDomain);
+  const auto group = domainNumberFromVal<uint8_t>(group_val, "group", kMidiUmpGroupDomain);
+  const auto channel = domainNumberFromVal<uint8_t>(channel_val, "channel", kMidiChannelDomain);
+  const int bank_msb = domainNumberFromVal<int>(bank_msb_val, "bank.msb", kMidiDataByteDomain);
+  const int bank_lsb = domainNumberFromVal<int>(bank_lsb_val, "bank.lsb", kMidiDataByteDomain);
+  const int program = domainNumberFromVal<int>(program_val, "program", kMidiDataByteDomain);
   SonareMidiEventPod events[3]{};
   size_t count = 0;
   const SonareError err =

@@ -142,7 +142,22 @@ describe('Offline metering wrappers (WASM)', () => {
     const samples = sine(440, 1);
     expect(() =>
       meteringDynamicRange(samples, SR, { lowPercentile: 0.9, highPercentile: 0.1 }),
-    ).toThrow();
+    ).toThrow(new RangeError('meteringDynamicRange: lowPercentile must be at most highPercentile'));
+  });
+
+  it('compares dynamic range percentiles after lowering to float32', () => {
+    const samples = sine(440, 2);
+    for (let i = SR; i < samples.length; i++) {
+      samples[i] *= 0.25;
+    }
+    const window = { windowSec: 1, hopSec: 1 };
+    const request = { samples, sampleRate: SR, ...window };
+    const expected = meteringDynamicRange({ ...request, lowPercentile: 0.5, highPercentile: 0.5 });
+    expect(expected.dynamicRangeDb).toBe(0);
+    expect(meteringDynamicRange(request).dynamicRangeDb).toBeGreaterThan(0);
+    const options = { ...window, lowPercentile: 0.500000001, highPercentile: 0.5 };
+    expect(meteringDynamicRange({ ...request, ...options })).toEqual(expected);
+    expect(meteringDynamicRange(samples, SR, options)).toEqual(expected);
   });
 
   it('dynamic range rejects non-finite and out-of-range options', () => {

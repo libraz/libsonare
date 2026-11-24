@@ -75,16 +75,19 @@ function boundedIntOr(value: unknown, argName: string, max: number, fallback: nu
   return isAbsent(value) ? fallback : boundedInt(value, argName, max);
 }
 
-/** A bank object `{ msb, lsb }`, each 0..127. */
-function bankPair(value: unknown): MidiBank {
+/** Reads a bank object's two byte fields. */
+function bankPair(
+  value: unknown,
+  readByte = (field: unknown, subject: string) => boundedInt(field, subject, 127),
+): MidiBank {
   if (!isNonArrayObject(value)) {
     throw refuseType(`bank must be an object { msb, lsb }`);
   }
   const { msb, lsb } = value as Record<string, unknown>;
   assertDeclaredKeys(value, ['msb', 'lsb'], 'bank');
   return {
-    msb: boundedInt(msb, 'bank.msb', 127),
-    lsb: boundedInt(lsb, 'bank.lsb', 127),
+    msb: readByte(msb, 'bank.msb'),
+    lsb: readByte(lsb, 'bank.lsb'),
   };
 }
 
@@ -811,14 +814,14 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
   return withEntry('midiBankProgram', () => {
     const fn = 'midiBankProgram';
     const r = requestObject(fn, request, 'request', true);
-    const bank = bankPair(r.bank);
+    const bank = bankPair(r.bank, num);
     return projectModule().midiBankProgram(
       num(r.ppq, 'ppq'),
       num(r.group, 'group'),
       num(r.channel, 'channel'),
       bank.msb,
       bank.lsb,
-      boundedInt(r.program, 'program', 127),
+      num(r.program, 'program'),
     );
   });
 }

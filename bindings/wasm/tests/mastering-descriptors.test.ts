@@ -15,6 +15,7 @@ import {
   masteringAssistantSuggestStereo,
   masteringAudioProfileStereo,
   masteringInsertParamInfo,
+  masteringInsertParamNames,
   masteringInsertTiming,
   masteringProcessorCatalog,
   masteringStreamingPreviewStereo,
@@ -94,10 +95,19 @@ describe('repair stage descriptors', () => {
       expect(info.every((param) => param.id === undefined)).toBe(true);
     }
     expect(() => masteringInsertParamInfo({ insert: 'repair.noSuchStage' as never })).toThrow(
+      new RangeError('masteringInsertParamInfo: unknown insert processor: repair.noSuchStage'),
+    );
+  });
+
+  it('refuses a retired insert id with the current spelling named', () => {
+    expect(() => masteringInsertParamInfo({ insert: 'eq.pultec' as never })).toThrow(
       new RangeError(
-        `masteringInsertParamInfo: insert must be one of ${masteringProcessorCatalog()
-          .map((entry) => entry.id)
-          .join(', ')}`,
+        'masteringInsertParamInfo: unknown insert processor: eq.pultec (renamed to eq.passiveTube)',
+      ),
+    );
+    expect(() => masteringInsertParamNames('eq.pultec' as never)).toThrow(
+      new RangeError(
+        'masteringInsertParamNames: unknown insert processor: eq.pultec (renamed to eq.passiveTube)',
       ),
     );
   });
