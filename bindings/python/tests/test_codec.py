@@ -98,8 +98,34 @@ def test_encode_refuses_format_specific_values() -> None:
         libsonare.encode_audio(channels, 96000, "mp3")
     assert sample_rate.value.entry == "encode_audio"
 
-    with pytest.raises(libsonare.SonareValueError, match=r"quality must be in \[0, 1\]"):
-        libsonare.encode_audio(channels, 48000, "mp3", quality=math.nextafter(1.0, math.inf))
+    with pytest.raises(libsonare.SonareValueError) as unsupported_quality:
+        libsonare.encode_audio(channels, 48000, "wav", quality=1.1)
+    assert unsupported_quality.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+    assert unsupported_quality.value.entry == "encode_audio"
+    assert str(unsupported_quality.value).endswith(
+        "encode_audio: quality is not supported by this format"
+    )
+
+
+def test_encode_checks_lossy_quality_after_float32_conversion() -> None:
+    channels = _samples()
+    almost_one = math.nextafter(1.0, math.inf)
+    if "mp3" in libsonare.capabilities().encode.ffmpeg:
+        assert libsonare.encode_audio(channels, 48000, "mp3", quality=almost_one)
+    else:
+        with pytest.raises(libsonare.SonareError) as unavailable:
+            libsonare.encode_audio(channels, 48000, "mp3", quality=almost_one)
+        assert unavailable.value.code == libsonare.ErrorCode.NOT_SUPPORTED
+        assert unavailable.value.reason == "notCompiledIn"
+        assert unavailable.value.entry == "encode_audio"
+
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=r"^encode_audio: quality must be finite and in \[0, 1\]$",
+    ) as out_of_range:
+        libsonare.encode_audio(channels, 48000, "mp3", quality=1.01)
+    assert out_of_range.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+    assert out_of_range.value.entry == "encode_audio"
 
 
 def test_encode_refuses_non_finite_samples() -> None:

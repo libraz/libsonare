@@ -43,7 +43,7 @@ def _spectrum_frame(**kw: Any) -> object:
     return libsonare.metering_spectrum_frame(_signal(), SR, **kw)
 
 
-def _dynamic_range(**kw: Any) -> object:
+def _dynamic_range(**kw: Any) -> libsonare.DynamicRangeReport:
     return libsonare.metering_dynamic_range(_signal(), SR, **kw)
 
 
@@ -63,7 +63,7 @@ def _audio_spectrum_frame(**kw: Any) -> object:
     return _audio().spectrum_frame(**kw)
 
 
-def _audio_dynamic_range(**kw: Any) -> object:
+def _audio_dynamic_range(**kw: Any) -> libsonare.DynamicRangeReport:
     return _audio().dynamic_range(**kw)
 
 
@@ -118,8 +118,29 @@ def test_a_percentile_outside_the_unit_interval_is_refused(
 
 @pytest.mark.parametrize("call", [_dynamic_range, _audio_dynamic_range])
 def test_a_low_percentile_above_the_high_one_is_refused(call: Callable[..., object]) -> None:
-    with pytest.raises(SonareValueError, match="low_percentile"):
+    with pytest.raises(
+        SonareValueError, match=r": low_percentile must be at most high_percentile$"
+    ) as refusal:
         call(low_percentile=0.9, high_percentile=0.2)
+    assert refusal.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+
+
+@pytest.mark.parametrize("call", [_dynamic_range, _audio_dynamic_range])
+def test_percentiles_are_compared_after_native_float_conversion(
+    call: Callable[..., libsonare.DynamicRangeReport],
+) -> None:
+    result = call(low_percentile=0.500000001, high_percentile=0.5)
+    assert result.dynamic_range_db == pytest.approx(0.0)
+    upper_endpoint = call(low_percentile=1.0, high_percentile=math.nextafter(1.0, math.inf))
+    assert upper_endpoint.dynamic_range_db == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("call", [_dynamic_range, _audio_dynamic_range])
+def test_window_is_refused_before_an_inverted_percentile_pair(
+    call: Callable[..., object],
+) -> None:
+    with pytest.raises(SonareValueError, match="window_sec"):
+        call(window_sec=0.0, low_percentile=0.9, high_percentile=0.2)
 
 
 def test_the_unit_interval_ends_are_real_requests() -> None:

@@ -863,7 +863,8 @@ def _validate_dynamic_range_percentiles(
 ) -> None:
     low = _DYNAMIC_RANGE_LOW_PERCENTILE if args.low_percentile is None else args.low_percentile
     high = _DYNAMIC_RANGE_HIGH_PERCENTILE if args.high_percentile is None else args.high_percentile
-    if high < low:
+    # The C options and native CLI compare float32 ranks.
+    if _as_float32(high) < _as_float32(low):
         parser.error(
             f"--high-percentile must be at least --low-percentile "
             f"(--low-percentile {low:g}, --high-percentile {high:g})"

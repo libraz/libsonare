@@ -33,7 +33,6 @@ from ._runtime import (
     _measured,
     _measured_level,
     _mode_value,
-    _narrow_double,
     _narrow_int,
     _optional_from_c_float_array,
     _out_float_array,
@@ -95,16 +94,7 @@ def _dynamic_range_args(
     low_percentile: float | None,
     high_percentile: float | None,
 ) -> tuple[int | float, int | float, int | float, int | float]:
-    """The dynamic-range arguments; percentiles are ranks in [0, 1] with low <= high."""
-    for name, value in (("low_percentile", low_percentile), ("high_percentile", high_percentile)):
-        if value is not None and not 0.0 <= _narrow_double(value, name) <= 1.0:
-            raise _refuse(f"{name} must be in [0, 1]")
-    if (
-        low_percentile is not None
-        and high_percentile is not None
-        and low_percentile > high_percentile
-    ):
-        raise _refuse("low_percentile must not exceed high_percentile")
+    """Encode omissions for C, which checks the ranks after float conversion."""
     return (
         _resolve_zero_default(window_sec, "window_sec"),
         _resolve_zero_default(hop_sec, "hop_sec"),

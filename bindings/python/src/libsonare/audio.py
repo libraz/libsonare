@@ -316,10 +316,7 @@ def encode_audio(
             raise _refuse("bit_depth must not be 0; omit it for the format default")
         options.bit_depth = depth.value
     if quality is not None:
-        number = _narrow_float(quality, "quality")
-        if not 0.0 <= number <= 1.0:
-            raise _refuse("quality must be in [0, 1]")
-        options.quality = number
+        options.quality = _narrow_float(quality, "quality")
 
     if tags is not None:
         if not isinstance(tags, Mapping):

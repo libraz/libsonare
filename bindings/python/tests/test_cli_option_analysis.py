@@ -186,6 +186,21 @@ def test_key_candidates_shorthand_is_resolved_in_one_place() -> None:
     assert '(value == "true") ? 5' in native.read_text(encoding="utf-8")
 
 
+def test_dynamic_range_argv_compares_native_float_percentiles() -> None:
+    parser = _parser()
+    args = parser.parse_args(
+        [
+            "dynamic-range",
+            "input.wav",
+            "--low-percentile",
+            "0.500000001",
+            "--high-percentile",
+            "0.5",
+        ]
+    )
+    assert args.low_percentile > args.high_percentile
+
+
 def test_chords_forwards_smoothing_window_and_beat_sync_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
