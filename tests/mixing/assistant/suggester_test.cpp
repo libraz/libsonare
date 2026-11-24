@@ -1131,6 +1131,63 @@ TEST_CASE("the mixing assistant param builders refuse an unknown key", "[mixing]
                   sonare::SonareException);
 }
 
+TEST_CASE("assistant param readers name invalid STFT settings", "[mixing][assistant][params]") {
+  namespace assistant = sonare::mixing::assistant;
+  namespace api = sonare::mastering::api;
+  struct Row {
+    const char* key;
+    double value;
+    const char* expected_text;
+  };
+  const std::vector<Row> rows = {
+      {"nFft", 524290.0, "nFft must be an even integer in [2, 524288]"},
+      {"nFft", 0.0, "nFft must be an even integer in [2, 524288]"},
+      {"nFft", 3.0, "nFft must be an even integer in [2, 524288]"},
+      {"nFft", 3.5, "nFft must be an even integer in [2, 524288]"},
+      {"nFft", 1e20, "nFft must be an even integer in [2, 524288]"},
+      {"nFft", 1e100, "nFft must be an even integer in [2, 524288]"},
+      {"hopLength", 0.0, "hopLength must be an integer in [1, 2147483647]"},
+      {"hopLength", 1.5, "hopLength must be an integer in [1, 2147483647]"},
+      {"hopLength", 2147483648.0, "hopLength must be an integer in [1, 2147483647]"},
+      {"hopLength", 1e100, "hopLength must be an integer in [1, 2147483647]"},
+  };
+
+  const auto check_reader = [&rows](const auto& reader) {
+    for (const Row& row : rows) {
+      INFO(row.key << "=" << row.value);
+      const api::Param param{row.key, row.value};
+      bool refused = false;
+      try {
+        (void)reader(&param, 1);
+      } catch (const sonare::SonareParameterRefusal& refusal) {
+        refused = true;
+        CHECK(refusal.code() == sonare::ErrorCode::InvalidParameter);
+        CHECK(refusal.subject() == row.key);
+        CHECK(refusal.caller_spelled());
+        CHECK(std::string(refusal.what()) == row.expected_text);
+      }
+      CHECK(refused);
+    }
+  };
+
+  SECTION("mix assistant params") { check_reader(assistant::mix_assistant_config_from_params); }
+  SECTION("track profile params") { check_reader(assistant::track_profile_config_from_params); }
+  SECTION("closed endpoints are preserved by both readers") {
+    const auto check_endpoints = [](const auto& reader) {
+      const api::Param lo[] = {{"nFft", 2.0}, {"hopLength", 1.0}};
+      const api::Param hi[] = {{"nFft", 524288.0}, {"hopLength", 2147483647.0}};
+      const auto minimum = reader(lo, 2);
+      CHECK(minimum.n_fft == 2);
+      CHECK(minimum.hop_length == 1);
+      const auto maximum = reader(hi, 2);
+      CHECK(maximum.n_fft == 524288);
+      CHECK(maximum.hop_length == 2147483647);
+    };
+    check_endpoints(assistant::mix_assistant_config_from_params);
+    check_endpoints(assistant::track_profile_config_from_params);
+  }
+}
+
 // A track excluded before BS.1770 ever ran has no loudness measurement: integratedLufs is absent,
 // unlike a measured-silent track, whose -inf reads null.
 TEST_CASE("an unmeasured track omits its integrated loudness", "[mixing][assistant]") {

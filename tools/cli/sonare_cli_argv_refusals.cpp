@@ -17,9 +17,7 @@
 #include "mastering/assistant/platform_targets.h"
 #endif
 #ifdef SONARE_WITH_MIXING_ASSISTANT
-#include "core/spectrum.h"
 #include "mixing/assistant/config_from_params.h"
-#include "util/parameter_checks.h"
 #endif
 #include "sonare_cli.h"
 #include "sonare_cli_project.h"
@@ -178,25 +176,9 @@ constexpr std::initializer_list<const char*> kAssistantParamKeys = {"targetTrack
                                                                     "nFft",
                                                                     "hopLength"};
 
-// The value refusal the library raises for one `suggest-mix --params` entry, or empty: the
-// assistant's own reader decides tempoBpm and the integer fields, the STFT domains decide nFft and
-// hopLength, so the command line restates no domain.
+// The assistant's refusal for one `suggest-mix --params` entry, or an empty string.
 std::string mix_assistant_value_refusal(const std::string& key, double value) {
   try {
-    // Integer keys are judged on the typed value, so a fraction or an overflow states the domain.
-    const bool whole = value == std::floor(value);
-    if (key == "nFft") {
-      const long long lo = static_cast<long long>(*kStftNFftDomain.lo);
-      const long long hi = static_cast<long long>(*kStftNFftDomain.hi);
-      if (!whole || !util::check::in_domain(value, kStftNFftDomain)) {
-        throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "nFft",
-                                                util::refusal::even_integer_predicate(lo, hi));
-      }
-      util::check::even_integer_in_range(static_cast<long long>(value), lo, hi, "nFft");
-    }
-    if (key == "hopLength" && (!whole || !util::check::in_domain(value, kStftHopDomain))) {
-      util::check::refuse_outside(kStftHopDomain, "hopLength");
-    }
     const mastering::api::Param param{key, value};
     mixing::assistant::mix_assistant_config_from_params(&param, 1);
   } catch (const SonareException& refusal) {

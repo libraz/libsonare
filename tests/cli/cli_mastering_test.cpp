@@ -1911,6 +1911,7 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
   struct Row {
     std::string argv;
     std::string text;
+    bool exact_error = false;
   };
   const std::vector<Row> rows = {
       {"suggest-mix", "suggest-mix requires at least one --input"},
@@ -1927,17 +1928,21 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
       {"suggest-mix --input " + missing + " --params tempoBpm=401",
        "tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
       {"suggest-mix --input " + missing + " --params nFft=3",
-       "nFft must be an even integer in [2, 524288]"},
-      {"suggest-mix --input " + missing + " --params nFft=2.5",
-       "nFft must be an even integer in [2, 524288]"},
+       "nFft must be an even integer in [2, 524288]", true},
+      {"suggest-mix --input " + missing + " --params nFft=0",
+       "nFft must be an even integer in [2, 524288]", true},
+      {"suggest-mix --input " + missing + " --params nFft=3.5",
+       "nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params nFft=524290",
-       "nFft must be an even integer in [2, 524288]"},
+       "nFft must be an even integer in [2, 524288]", true},
+      {"suggest-mix --input " + missing + " --params nFft=1e20",
+       "nFft must be an even integer in [2, 524288]", true},
       {"suggest-mix --input " + missing + " --params hopLength=0",
-       "hopLength must be an integer in [1, 2147483647]"},
+       "hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params hopLength=1.5",
-       "hopLength must be an integer in [1, 2147483647]"},
+       "hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params hopLength=2147483648",
-       "hopLength must be an integer in [1, 2147483647]"},
+       "hopLength must be an integer in [1, 2147483647]", true},
       {"suggest-mix --input " + missing + " --params enable_eq=1",
        "unknown key enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, "
        "enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, "
@@ -1953,10 +1958,16 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
        "argument --sample-rate: must be an integer in [8000, 384000]"},
   };
   for (const Row& row : rows) {
-    const auto [code, output] = exec_command(CLI + " " + row.argv + " -q");
-    INFO(row.argv << ": " << output);
-    REQUIRE(code == 2);
-    REQUIRE_THAT(output, ContainsSubstring(row.text));
+    const SplitResult result = exec_command_split(CLI + " " + row.argv + " -q");
+    INFO(row.argv << ": " << result.err << result.out);
+    if (row.exact_error) {
+      CHECK(result.exit_code == 2);
+      CHECK(result.out.empty());
+      CHECK(result.err == "Error: " + row.text + "\nTry 'sonare-cli --help'.\n");
+    } else {
+      REQUIRE(result.exit_code == 2);
+      REQUIRE_THAT(result.err + result.out, ContainsSubstring(row.text));
+    }
   }
 
   const auto [code, output] =

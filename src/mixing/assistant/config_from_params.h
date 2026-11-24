@@ -10,22 +10,56 @@
 #include <cstddef>
 #include <string>
 
+#include "core/spectrum.h"
 #include "mastering/api/named_processor.h"
-#include "mastering/api/param_field_tables.h"
 #include "mastering/assistant/param_spelling.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mixing::assistant {
+namespace detail {
+
+// Validate flat values before narrowing the STFT sizes to their config fields.
+inline void read_profile_geometry(const mastering::api::Param* params, std::size_t count,
+                                  int& n_fft, int& hop_length) {
+  if (params == nullptr) {
+    mastering::api::validate_params(params, count);
+    return;
+  }
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto& param = params[index];
+    const bool fft = param.key == "nFft";
+    if (!fft && param.key != "hopLength") {
+      mastering::api::validate_params(&param, 1);
+      continue;
+    }
+    const auto& domain = fft ? kStftNFftDomain : kStftHopDomain;
+    if (!util::check::in_domain(param.value, domain) ||
+        (fft && static_cast<int>(param.value) % 2 != 0)) {
+      const std::string predicate =
+          fft ? util::refusal::even_integer_predicate(static_cast<long long>(*domain.lo),
+                                                      static_cast<long long>(*domain.hi))
+              : util::check::domain_predicate(domain);
+      throw SonareParameterRefusal::predicate(
+          ErrorCode::InvalidParameter, param.key, predicate,
+          RefusalDomain{domain.lo, domain.hi, domain.lo_included, domain.hi_included})
+          .as_caller_spelled();
+    }
+    (fft ? n_fft : hop_length) = static_cast<int>(param.value);
+  }
+}
+
+}  // namespace detail
 
 /// @brief Build a MixAssistantConfig from a flat param list.
 /// @details An unknown key is refused, as the mastering assistant's is: a
 ///          misspelt key would otherwise leave its setting at the default.
 inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api::Param* params,
                                                            std::size_t count) {
-  mastering::api::validate_params(params, count);
   MixAssistantConfig config;
+  detail::read_profile_geometry(params, count, config.n_fft, config.hop_length);
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
@@ -62,11 +96,7 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
       config.enable_image = value != 0.0;
     } else if (key == "enableHighPass") {
       config.enable_high_pass = value != 0.0;
-    } else if (key == "nFft") {
-      mastering::api::assign_int_param(key, value, config.n_fft);
-    } else if (key == "hopLength") {
-      mastering::api::assign_int_param(key, value, config.hop_length);
-    } else {
+    } else if (key != "nFft" && key != "hopLength") {
       mastering::assistant::refuse_unknown_param(
           key, {"targetTrackLufs", "suggestionStrength", "eqMaxCutDb", "mixBusHeadroomDbtp",
                 "tempoBpm", "enableStructure", "enableGain", "enableBalance", "enableEq",
@@ -79,19 +109,15 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
 /// @brief Build a TrackProfileConfig from a flat param list.
 inline TrackProfileConfig track_profile_config_from_params(const mastering::api::Param* params,
                                                            std::size_t count) {
-  mastering::api::validate_params(params, count);
   TrackProfileConfig config;
+  detail::read_profile_geometry(params, count, config.n_fft, config.hop_length);
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
-    if (key == "nFft") {
-      mastering::api::assign_int_param(key, value, config.n_fft);
-    } else if (key == "hopLength") {
-      mastering::api::assign_int_param(key, value, config.hop_length);
-    } else if (key == "minDurationSec") {
+    if (key == "minDurationSec") {
       SONARE_CHECK_MSG(value >= 0.0, ErrorCode::InvalidParameter, key + " must be non-negative");
       config.min_duration_sec = static_cast<float>(value);
-    } else {
+    } else if (key != "nFft" && key != "hopLength") {
       mastering::assistant::refuse_unknown_param(key, {"nFft", "hopLength", "minDurationSec"});
     }
   }
