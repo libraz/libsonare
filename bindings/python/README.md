@@ -24,7 +24,8 @@ import libsonare
 
 audio = libsonare.Audio.from_file("song.mp3")  # or "song.wav"
 result = audio.analyze()  # BPM + key + time signature + beats
-print(f"BPM: {result.bpm:.1f}  Key: {result.key.root.name} {result.key.mode}")
+tempo = f"{result.bpm:.1f}" if result.bpm is not None else "unavailable"
+print(f"BPM: {tempo}  Key: {result.key.name}")
 
 # Master toward a target loudness with a named preset
 mastered = libsonare.master_audio(
@@ -43,11 +44,12 @@ with libsonare.Project() as project:
         libsonare.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
         libsonare.midi_note_off(2.0, 0, 0, 60),
     ])
-    rendered = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
+    synth = libsonare.ProjectInstrumentBinding(instrument=libsonare.SynthPatch(preset="sawLead"))
+    rendered = project.bounce(num_channels=2, synth_instruments=[synth])
     audio = rendered.channels  # (channels, frames)
 ```
 
-Samples passed directly must be mono float32 (downmix stereo first); the defaults follow librosa (22050 Hz, `n_fft` 2048, `hop_length` 512). See [librosa compatibility](https://libsonare.libraz.net/docs/librosa-compatibility).
+Analysis functions take mono float32 samples (downmix stereo first); the defaults follow librosa (22050 Hz, `n_fft` 2048, `hop_length` 512). See [librosa compatibility](https://libsonare.libraz.net/docs/librosa-compatibility).
 
 ## Capabilities
 
@@ -59,7 +61,7 @@ Samples passed directly must be mono float32 (downmix stereo first); the default
 - **Editing DSP** — time-stretch, pitch-shift, `auto_tune`, HPSS, phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Note editing and takes** — edit the notes of monophonic takes (`extract_notes`) and polyphonic material (`PolyphonicAnalysis`), align a take to a reference with `align_take_to_reference`, and build tuning targets from a MIDI melody with `note_targets_from_smf`, and edit vocal takes offline with undo/redo through `VocalEditSession`. → [Project editing](https://libsonare.libraz.net/docs/project-editing-midi), [Recording and takes](https://libsonare.libraz.net/docs/recording-and-takes)
 - **Room acoustics** — blind RT60, impulse-response metrics, `estimate_room`, `synthesize_rir`, `room_morph`, `room_morph_stereo`. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
-- **Realtime and streaming** — `RealtimeEngine` with MIDI 1.0 / 2.0 input, bus-to-bus routing with sends, sidechain keys (`set_bus_sidechain`), `StreamAnalyzer`, `StreamingMasteringChain` and `RealtimeVoiceChanger` (also an insert, `voice.changer`; pitch correction, harmony, vocoder and character stages, driven by `note_on` / `note_off` / `all_notes_off` and `process_*_with_carrier`, with the presets `hardTune`, `robotMonotone`, `choirHarmony`, `vocoderStrings`, `megaphone` and `radioVoice`). → [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine)
+- **Realtime and streaming** — `RealtimeEngine` with MIDI 1.0 / 2.0 input, bus-to-bus routing with sends, sidechain keys (`set_bus_sidechain`), `StreamAnalyzer`, `StreamingMasteringChain` and `RealtimeVoiceChanger` (also an insert, `voice.changer`; pitch correction, harmony, vocoder and character stages, driven by `note_on` / `note_off` / `all_notes_off` and the optional `carrier` argument to `process_mono` or `process_planar`, with the presets `hardTune`, `robotMonotone`, `choirHarmony`, `vocoderStrings`, `megaphone` and `radioVoice`). → [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine)
 - **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gs_efx_realization`), with a selectable rig per part (`set_part_rig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 2.0.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
 - **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribe_to_clip` writes a transcription into a clip, and `compile(with_timeline=True)` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
