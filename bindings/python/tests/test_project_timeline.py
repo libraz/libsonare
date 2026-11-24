@@ -18,6 +18,7 @@ from libsonare import (
     EngineBounceOptions,
     ErrorCode,
     Project,
+    ProjectInstrumentBinding,
     ProjectMidiEvent,
     ProjectPosition,
     ProjectTimeline,
@@ -68,7 +69,12 @@ def _build_project() -> tuple[Project, int]:
 
 def _project_bounce(project: Project) -> np.ndarray:
     return project.bounce(
-        builtin_instruments=[(_DESTINATION, _SYNTH)],
+        builtin_instruments=[
+            ProjectInstrumentBinding(
+                instrument=_SYNTH,
+                destination_id=_DESTINATION,
+            )
+        ],
         total_frames=_FRAMES,
         block_size=_BLOCK,
         num_channels=2,

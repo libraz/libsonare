@@ -19,9 +19,9 @@ The two command-line front-ends get a column each because they are two binaries:
 | mixing & routing | 61 | 58/61 | 60/61 | 60/61 | 2/61 | 2/61 |
 | playback | 26 | 24/26 | 24/26 | 24/26 | 7/26 | 7/26 |
 | polyphony | 14 | 13/14 | 14/14 | 13/14 | 4/14 | 4/14 |
-| project & arrangement | 212 | 194/212 | 205/212 | 205/212 | 21/212 | 18/212 |
+| project & arrangement | 207 | 189/207 | 200/207 | 200/207 | 21/207 | 18/207 |
 | project part rig | 3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 |
-| realtime engine | 204 | 196/204 | 203/204 | 194/204 | 9/204 | 9/204 |
+| realtime engine | 203 | 195/203 | 202/203 | 193/203 | 9/203 | 9/203 |
 | room acoustics | 12 | 7/12 | 7/12 | 7/12 | 5/12 | 5/12 |
 | sample bank | 6 | 6/6 | 6/6 | 6/6 | 2/6 | 2/6 |
 | streaming | 31 | 29/31 | 29/31 | 29/31 | 8/31 | 8/31 |
@@ -29,4 +29,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | vocal edit | 57 | 43/57 | 56/57 | 56/57 | 11/57 | 11/57 |
 | vocal project | 10 | 6/10 | 10/10 | 10/10 | 2/10 | 2/10 |
 | voice changer | 24 | 22/24 | 23/24 | 23/24 | 2/24 | 2/24 |
-| **all domains** | **1102** | **966/1102** | **1046/1102 (1 core)** | **1001/1102 (2 core)** | **189/1102** | **184/1102** |
+| **all domains** | **1096** | **960/1096** | **1040/1096 (1 core)** | **995/1096 (2 core)** | **189/1096** | **184/1096** |

@@ -841,7 +841,9 @@ export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRou
 }
 
 /** Run native MIDI learn over an event stream; returns `null` when nothing is learned. */
-export function midiCcLearn(request: MidiCcLearnRequest): ProjectMidiCcBinding | null {
+export function midiCcLearn(
+  request: MidiCcLearnRequest,
+): (ProjectMidiCcBinding & { consume: boolean }) | null {
   return withEntry('midiCcLearn', () => {
     const r = requestObject('midiCcLearn', request, 'request', true);
     return projectModule().midiCcLearn(

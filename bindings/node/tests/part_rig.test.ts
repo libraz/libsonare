@@ -149,7 +149,8 @@ describe('part rig on the realtime engine', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setSynthInstrument(3, {});
     engine.setPartRig({ destinationId: 3, part: 0, mode: 'chain', inserts: chain });
-    engine.setPartRig({ destinationId: 3, mode: 'bank' } as never);
+    engine.setPartRig({ destinationId: 3, part: PART_RIG_ALL_PARTS, mode: 'bank' });
+    expect(() => engine.setPartRig({ destinationId: 3, mode: 'bank' } as never)).toThrow(TypeError);
     engine.destroy();
   });
 

@@ -149,7 +149,7 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badParamError = error;
       }
-      expect(badParamError).toBeInstanceOf(RangeError);
+      expect(badParamError).toBeInstanceOf(TypeError);
       expect(isSonareError(badParamError)).toBe(false);
       let badBypassError: unknown;
       try {
@@ -339,7 +339,7 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badParamError = error;
       }
-      expect(badParamError).toBeInstanceOf(RangeError);
+      expect(badParamError).toBeInstanceOf(TypeError);
       expect(isSonareError(badParamError)).toBe(false);
 
       engine.play();

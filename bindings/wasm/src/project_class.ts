@@ -5,7 +5,6 @@ import type {
   PartRigEntry,
   PartRigKey,
   PartRigRequest,
-  Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
@@ -18,11 +17,13 @@ import {
   refusalOf,
   refuse,
   refuseType,
+  refuseUnknownKey,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { withMonoHeap } from './internal/memory_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { sceneArgumentJson, sceneArgumentRefusal } from './internal/mix_scene.js';
 import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
 import { respellRefusal, withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
@@ -82,6 +83,7 @@ import type {
   ProjectAutomationLaneEditDesc,
   ProjectAutoTempoOptions,
   ProjectAutoTempoRequest,
+  ProjectAutoTempoResult,
   ProjectBounceOptions,
   ProjectBounceResult,
   ProjectChordSymbol,
@@ -115,6 +117,7 @@ import type {
   ProjectPosition,
   ProjectProgramOptions,
   ProjectSection,
+  ProjectSoundFontOptions,
   ProjectSource,
   ProjectSourceAudioInput,
   ProjectTempoCandidate,
@@ -129,7 +132,7 @@ import type {
   ProjectWarpMode,
 } from './project_types.js';
 import type { EngineMetronomeConfig } from './public_types_engine.js';
-import type { MixSceneDocument } from './public_types_mixing.js';
+import type { MixSceneDocument, MixSceneDocumentInput } from './public_types_mixing.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
@@ -236,9 +239,7 @@ function respellDestinationInstrumentRefusal(error: unknown): unknown {
   if (refusal === undefined) {
     return error;
   }
-  const subjects = refusal.renamedTo
-    ? [...refusal.subjects, refusal.renamedTo]
-    : [...refusal.subjects];
+  const { subjects } = refusal;
   const respelled: Record<string, { name: string; scale: number }> = {};
   for (const subject of subjects) {
     for (const [nativeRoot, facadeRoot] of DESTINATION_INSTRUMENT_REFUSAL_ROOTS) {
@@ -1120,11 +1121,36 @@ export class Project {
    * the two on the same scoring options. Read the installed map back with
    * {@link tempoSegments}.
    */
-  autoTempo(samples: Float32Array, sampleRate: number, options?: ProjectAutoTempoOptions): number;
-  autoTempo(request: ProjectAutoTempoRequest): number;
-  autoTempo(...args: unknown[]): number {
+  autoTempo(
+    samples: Float32Array,
+    sampleRate: number,
+    options?: ProjectAutoTempoOptions,
+  ): ProjectAutoTempoResult;
+  autoTempo(request: ProjectAutoTempoRequest): ProjectAutoTempoResult;
+  autoTempo(...args: unknown[]): ProjectAutoTempoResult {
     const { samples, sampleRate, candidateIndex, applyTimeSignatures, ...options } =
-      sampleOneShot<ProjectAutoTempoRequest>('Project.autoTempo', args);
+      sampleOneShot<ProjectAutoTempoRequest>('Project.autoTempo', args, (request) => {
+        for (const key of [
+          'candidateIndex',
+          'tempoUpdateIntervalBeats',
+          'rampThreshold',
+        ] as const) {
+          const value = request[key];
+          if (!isAbsent(value) && typeof value !== 'number') {
+            throw refuseType(`${key} must be a number`);
+          }
+        }
+        for (const key of [
+          'applyTimeSignatures',
+          'adaptiveTempo',
+          'includeOctaveCandidates',
+        ] as const) {
+          const value = request[key];
+          if (!isAbsent(value) && typeof value !== 'boolean') {
+            throw refuseType(`${key} must be a boolean`);
+          }
+        }
+      });
     const applyMeter = optionalBoolean(applyTimeSignatures, 'applyTimeSignatures', false);
     const call = () =>
       this.native.autoTempo(samples, sampleRate, candidateIndex ?? 0, applyMeter, options);
@@ -1187,7 +1213,7 @@ export class Project {
     if (numChannels !== undefined) {
       native.numChannels = numChannels;
     }
-    if (request.instrumentLatencySamples !== undefined) {
+    if (!isAbsent(request.instrumentLatencySamples)) {
       const latency = request.instrumentLatencySamples;
       if (typeof latency !== 'number') {
         throw refuseType('instrumentLatencySamples must be an integer');
@@ -1233,9 +1259,9 @@ export class Project {
    *   General MIDI voice while the patch remains the fallback. An
    *   `engineMode: 'sample'` patch reads its PCM from the {@link SampleBank}
    *   passed as `sampleBank`; the bank must still be alive when the bounce runs.
-   * - `sf2Instruments`: GS-compatible SoundFont player ({@link Sf2InstrumentConfig})
-   *   fed by the project's loaded SoundFont ({@link loadSoundFont}); programs the
-   *   SoundFont does not cover play through the built-in GM fallback bank.
+   * - `sf2Instruments`: GS-compatible SoundFont player
+   *   fed by the project's default SoundFont or by the binding's `soundFontUri`.
+   *   Programs the SoundFont does not cover play through the built-in GM fallback bank.
    * - `instruments`: {@link ExternalInstrument}s you implement in JavaScript.
    *   Every callback runs synchronously while this method is blocked, so a
    *   callback returning a Promise is refused with a `TypeError`. A callback
@@ -1261,7 +1287,7 @@ export class Project {
    * ```
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
-    const request = optionsObject('Project.bounce', options);
+    const request = optionsObject('Project.bounce', options ?? undefined);
     const { builtinInstruments, instruments, synthInstruments, sf2Instruments } = request;
     const builtinBindings =
       builtinInstruments === undefined
@@ -1306,7 +1332,25 @@ export class Project {
     const sf2Bindings =
       sf2Instruments === undefined
         ? undefined
-        : normalizeInstrumentBindings(sf2Instruments, (instrument) => instrument, 'sf2Instruments');
+        : normalizeInstrumentBindings(
+            sf2Instruments,
+            (instrument, binding, label) => {
+              const subject = `${label}.soundFontUri`;
+              if ('soundFontUri' in instrument) {
+                throw refuseUnknownKey(`${label}.instrument.soundFontUri`, [subject]);
+              }
+              if (binding.soundFontUri === undefined) {
+                return instrument;
+              }
+              const soundFontUri = requireProjectText(binding.soundFontUri, subject);
+              if (soundFontUri.length === 0) {
+                throw refuse(`${subject} must not be empty`);
+              }
+              return { ...instrument, soundFontUri };
+            },
+            'sf2Instruments',
+            ['destinationId', 'instrument', 'soundFontUri'],
+          );
     const native = this.bounceRequest(request);
     const nativeProject = this.native;
     const refusalNames: Record<string, { name: string; scale: number }> = {
@@ -1359,36 +1403,26 @@ export class Project {
   }
 
   /**
-   * Load (parse) SoundFont 2 bytes into the project: presets / instruments /
-   * sample headers plus the sample PCM decoded to a float pool. The host
-   * fetches the `.sf2` and passes the raw bytes; they are copied into linear
-   * memory for the call and not referenced afterwards. Replaces any previously
-   * loaded SoundFont; throws on malformed input (the previous SoundFont is
-   * kept).
+   * Load SoundFont 2 bytes, replacing the SoundFont at the selected URI.
+   * Omit `uri` to select the default. Malformed input leaves the previous font in place.
    */
-  loadSoundFont(data: Uint8Array): void {
-    this.native.loadSoundFont(data);
+  loadSoundFont(data: Uint8Array, options?: ProjectSoundFontOptions): void {
+    this.native.loadSoundFont(data, soundFontUri('Project.loadSoundFont', options));
   }
 
-  /** Release the project's loaded SoundFont (no-op when none is loaded). */
-  clearSoundFont(): void {
-    this.native.clearSoundFont();
+  /** Release the selected SoundFont. Omit `uri` to clear the default SoundFont. */
+  clearSoundFont(options?: ProjectSoundFontOptions): void {
+    this.native.clearSoundFont(soundFontUri('Project.clearSoundFont', options));
   }
 
-  /** Number of presets in the loaded SoundFont (0 when none is loaded). */
-  get soundFontPresetCount(): number {
-    return this.native.soundFontPresetCount();
+  /** Number of presets in the selected SoundFont, or zero if it is unloaded. */
+  soundFontPresetCount(options?: ProjectSoundFontOptions): number {
+    return this.native.soundFontPresetCount(soundFontUri('Project.soundFontPresetCount', options));
   }
 
-  /**
-   * Enumerate every (channel, bank, program) combination the arrangement plays
-   * a note through, in first-use order, reporting whether each resolves in the
-   * loaded SoundFont (`'sf2'`, GS variation/drum fallbacks included) or would
-   * fall back to the built-in synth (`'synth'`). Without a loaded SoundFont
-   * every entry is a synth fallback.
-   */
-  soundFontManifest(): Sf2ProgramStatus[] {
-    return this.native.soundFontManifest();
+  /** Report the SoundFont or synth fallback selected for each played MIDI program. */
+  soundFontManifest(options?: ProjectSoundFontOptions): Sf2ProgramStatus[] {
+    return this.native.soundFontManifest(soundFontUri('Project.soundFontManifest', options));
   }
 
   /** Remove a clip (undoable). */
@@ -1549,9 +1583,9 @@ export class Project {
     this.native.renameTrack(trackId, name);
   }
 
-  /** Set a track's mixer-strip binding + output target (undoable; omit / '' clears). */
+  /** Set a track's mixer-strip binding and output target. Omit either field to clear it. */
   setTrackRoute(trackId: number, channelStripRef?: string, outputTarget?: string): void {
-    this.native.setTrackRoute(trackId, channelStripRef ?? '', outputTarget ?? '');
+    this.native.setTrackRoute(trackId, channelStripRef ?? null, outputTarget ?? null);
   }
 
   /** Append an automation lane; returns its stable lane id (undoable). */
@@ -1687,15 +1721,14 @@ export class Project {
     return this.native.countInFrames(countInBars);
   }
 
-  /**
-   * Replace the project's mixer scene from a scene JSON string.
-   *
-   * @throws SonareError `InvalidFormat` naming the first key the scene reader does not
-   *   recognise (e.g. `unknown key strips[2].faderDB`; `$`- and `x-`-prefixed keys are
-   *   exempt); the project's scene is left unchanged.
-   */
-  setMixerSceneJson(document: string): void {
-    this.native.setMixerSceneJson(document);
+  /** Replace the project's mixer scene, or clear it by omitting the scene. */
+  setMixerScene(scene?: MixSceneDocumentInput): void {
+    const document = scene === undefined ? null : sceneArgumentJson(scene);
+    try {
+      this.native.setMixerScene(document);
+    } catch (error) {
+      throw sceneArgumentRefusal(error);
+    }
   }
 
   /** The typed mixer scene stored on the project, or `undefined` when none is set. */
@@ -1779,17 +1812,12 @@ export class Project {
 
   /** The tempo map, in the shape {@link setTempoSegments} accepts. */
   tempoSegments(): ProjectTempoSegment[] {
-    return this.readAll(this.native.tempoSegmentCount(), (index) => {
-      const { startSample: _derived, ...segment } = this.native.tempoSegmentByIndex(index);
-      return segment;
-    });
+    return this.native.tempoSegments();
   }
 
   /** The time-signature map, in the shape {@link setTimeSignatures} accepts. */
   timeSignatures(): ProjectTimeSignatureSegment[] {
-    return this.readAll(this.native.timeSignatureCount(), (index) =>
-      this.native.timeSignatureByIndex(index),
-    );
+    return this.native.timeSignatures();
   }
 
   /**
@@ -1890,4 +1918,17 @@ export class Project {
   [Symbol.dispose](): void {
     this.destroy();
   }
+}
+
+/** The URI a SoundFont option bag selects, or null for the default SoundFont. */
+function soundFontUri(
+  entry:
+    | 'Project.loadSoundFont'
+    | 'Project.clearSoundFont'
+    | 'Project.soundFontPresetCount'
+    | 'Project.soundFontManifest',
+  options?: ProjectSoundFontOptions,
+): string | null {
+  const { uri } = optionsObject(entry, options ?? undefined);
+  return uri === undefined ? null : requireProjectText(uri, 'uri');
 }

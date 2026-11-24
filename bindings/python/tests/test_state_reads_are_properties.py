@@ -31,7 +31,6 @@ _STATE_READS = [
     ("PlaybackRenderer", "non_finite_discard_count"),
     ("PlaybackLoudnessMeter", "integrated_lufs"),
     ("RealtimeEngine", "midi_instrument_count"),
-    ("RealtimeEngine", "midi_cc_binding_count"),
     ("RealtimeEngine", "midi_input_pending_count"),
     ("RealtimeEngine", "graph_node_count"),
     ("RealtimeEngine", "graph_connection_count"),
@@ -42,7 +41,6 @@ _STATE_READS = [
     ("RealtimeEngine", "external_midi_dropped_count"),
     ("RealtimeEngine", "clip_page_request_overflow_count"),
     ("RealtimeEngine", "warp_stretch_overflow_count"),
-    ("Project", "sound_font_preset_count"),
 ]
 
 

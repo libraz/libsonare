@@ -44,6 +44,7 @@ from ._runtime import (
     SonareProjectAssistSidecar,
     SonareProjectAudioSourceMetadata,
     SonareProjectAutomationLaneList,
+    SonareProjectAutoTempoResult,
     SonareProjectChordSymbol,
     SonareProjectChordSymbolList,
     SonareProjectClip,
@@ -59,12 +60,14 @@ from ._runtime import (
     SonareProjectTempoCandidate,
     SonareProjectTempoOptions,
     SonareProjectTempoSegment,
+    SonareProjectTempoSegmentList,
+    SonareProjectTimeSignatureList,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrack,
     SonareStringList,
+    _bool_flag,
     _check,
     _get_lib,
-    _guard_buffer,
     _mapping_keys,
     _narrow_int,
     _ordinal_token,
@@ -72,10 +75,10 @@ from ._runtime import (
     _to_c_int,
     _to_c_int64,
     _to_c_size_t,
-    _to_c_uint8,
     _to_c_uint32,
     _token_ordinal,
     _utf8_arg,
+    _validate_samples,
 )
 from ._types_engine import MarkerKind
 from ._types_enums import _AUTOMATION_CURVES, AutomationCurve
@@ -83,10 +86,12 @@ from .types import (
     AutomationPoint,
     MixSceneDocument,
     ProjectAutomationLane,
+    ProjectAutoTempoResult,
     ProjectClip,
     ProjectMarker,
     ProjectSource,
     ProjectTrack,
+    TimeSignature,
 )
 
 _KEY_SEGMENT_KEYS = ("start_ppq", "end_ppq", "tonic_pc", "mode")
@@ -118,33 +123,34 @@ class _ProjectInspectionMixin:
         def _require_handle(self) -> ctypes.c_void_p: ...
 
     @staticmethod
-    def _tempo_options(
+    def _tempo_option_values(
         adaptive_tempo: bool | None,
         tempo_update_interval_beats: int | None,
         ramp_threshold: float | None,
         include_octave_candidates: bool | None,
-    ) -> SonareProjectTempoOptions:
-        """Seed the native defaults, then apply whichever were given."""
-        # Constructing the struct runs sonare_project_tempo_options_init.
-        options = SonareProjectTempoOptions()
+    ) -> dict[str, int | float]:
+        """Validate supplied overrides before initializing the C options."""
+        options: dict[str, int | float] = {}
         if adaptive_tempo is not None:
-            options.adaptive_tempo = 1 if adaptive_tempo else 0
-        if tempo_update_interval_beats is not None:
-            # Assigned unconverted so the struct's own narrowing sees the
-            # caller's value; int() would truncate a fraction past it.
-            options.tempo_update_interval_beats = tempo_update_interval_beats
-        if ramp_threshold is not None:
-            options.ramp_threshold = _narrow_double(ramp_threshold, "ramp_threshold")
+            options["adaptive_tempo"] = _bool_flag(adaptive_tempo, "adaptive_tempo")
         if include_octave_candidates is not None:
-            options.include_octave_candidates = 1 if include_octave_candidates else 0
+            options["include_octave_candidates"] = _bool_flag(
+                include_octave_candidates, "include_octave_candidates"
+            )
+        if tempo_update_interval_beats is not None:
+            options["tempo_update_interval_beats"] = _to_c_int(
+                tempo_update_interval_beats, "tempo_update_interval_beats"
+            ).value
+        if ramp_threshold is not None:
+            options["ramp_threshold"] = _narrow_double(ramp_threshold, "ramp_threshold")
         return options
 
     @_entry("Project.analyze_tempo")
-    @_guard_buffer("audio")
     def analyze_tempo(
         self,
         audio: Sequence[float] | np.ndarray,
         sample_rate: int,
+        *,
         adaptive_tempo: bool | None = None,
         tempo_update_interval_beats: int | None = None,
         ramp_threshold: float | None = None,
@@ -175,21 +181,24 @@ class _ProjectInspectionMixin:
         Raises:
             SonareValueError: If ``audio`` is empty or holds a NaN or Inf sample.
         """
-        c_array, length = _to_c_float_array(audio)
-        count = ctypes.c_size_t()
-        candidates = (SonareProjectTempoCandidate * 3)()
-        options = self._tempo_options(
+        overrides = self._tempo_option_values(
             adaptive_tempo,
             tempo_update_interval_beats,
             ramp_threshold,
             include_octave_candidates,
         )
+        rate = _to_c_int(sample_rate, "sample_rate")
+        validated = _validate_samples(audio, arg_name="audio")
+        c_array, length = _to_c_float_array(validated)
+        count = ctypes.c_size_t()
+        candidates = (SonareProjectTempoCandidate * 3)()
+        options = SonareProjectTempoOptions._given(**overrides)
         _check(
             _get_lib().sonare_project_analyze_tempo(
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
+                rate,
                 ctypes.byref(options),
                 candidates,
                 ctypes.c_size_t(len(candidates)),
@@ -214,18 +223,18 @@ class _ProjectInspectionMixin:
         ]
 
     @_entry("Project.auto_tempo")
-    @_guard_buffer("audio")
     def auto_tempo(
         self,
         audio: Sequence[float] | np.ndarray,
         sample_rate: int,
+        *,
         candidate_index: int = 0,
         apply_time_signatures: bool = False,
         adaptive_tempo: bool | None = None,
         tempo_update_interval_beats: int | None = None,
         ramp_threshold: float | None = None,
         include_octave_candidates: bool | None = None,
-    ) -> float:
+    ) -> ProjectAutoTempoResult:
         """Detect tempo from a mono buffer and install it (undoable).
 
         The scoring arguments mean what they do on :meth:`analyze_tempo`, and
@@ -234,33 +243,47 @@ class _ProjectInspectionMixin:
         installed map back with :meth:`tempo_segments`.
 
         Returns:
-            The BPM of the installed map's first segment.
+            The selected BPM, its confidence, and the detected meter. The meter
+            is returned whether or not ``apply_time_signatures`` installs it.
 
         Raises:
             SonareValueError: If ``audio`` is empty or holds a NaN or Inf sample.
         """
-        c_array, length = _to_c_float_array(audio)
-        out_bpm = ctypes.c_float()
-        options = self._tempo_options(
+        apply_meter = _bool_flag(apply_time_signatures, "apply_time_signatures")
+        overrides = self._tempo_option_values(
             adaptive_tempo,
             tempo_update_interval_beats,
             ramp_threshold,
             include_octave_candidates,
         )
+        rate = _to_c_int(sample_rate, "sample_rate")
+        candidate = _to_c_size_t(candidate_index, "candidate_index")
+        validated = _validate_samples(audio, arg_name="audio")
+        c_array, length = _to_c_float_array(validated)
+        result = SonareProjectAutoTempoResult()
+        options = SonareProjectTempoOptions._given(**overrides)
         _check(
             _get_lib().sonare_project_auto_tempo(
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
+                rate,
                 ctypes.byref(options),
-                _to_c_size_t(candidate_index, "candidate_index"),
-                _to_c_uint8(1 if apply_time_signatures else 0, "apply_time_signatures"),
-                ctypes.byref(out_bpm),
+                candidate,
+                ctypes.c_int32(apply_meter),
+                ctypes.byref(result),
             ),
             flattened="options",
         )
-        return float(out_bpm.value)
+        return ProjectAutoTempoResult(
+            bpm=float(result.bpm),
+            bpm_confidence=float(result.bpm_confidence),
+            time_signature=TimeSignature(
+                numerator=int(result.time_signature.numerator),
+                denominator=int(result.time_signature.denominator),
+                confidence=float(result.time_signature.confidence),
+            ),
+        )
 
     @_entry("Project.snap_to_grid")
     def snap_to_grid(self, ppq: float, strength: float = 1.0, division: int = 1) -> float:
@@ -404,61 +427,77 @@ class _ProjectInspectionMixin:
         Each chord is a mapping with keys ``start_ppq``, ``end_ppq``, ``root_pc``
         (0..11, absent or ``None`` when the root is unknown), ``quality``
         (a :data:`ProjectChordQuality` token; absent or ``None`` is
-        ``"unknown"``), optional ``extensions`` (iterable of scale degrees
+        ``"unknown"``), optional ``extensions`` (sequence of scale degrees
         such as 7, 9, 13, up to 32), ``slash_bass_pc`` (0..11, absent or ``None``
         for a chord that is not a slash chord), ``roman_numeral`` (optional str) and
         ``modulation_boundary`` (bool). Pass an empty sequence to clear.
         """
-        rows = list(chords)
-        count = len(rows)
+        if not isinstance(chords, Sequence) or isinstance(chords, (str, bytes, bytearray)):
+            raise _refuse_type("chords must be a sequence")
+        count = len(chords)
         c_chords = (SonareProjectChordSymbol * count)()
         # Keep extension arrays and roman-numeral byte strings alive for the call.
         backing: list[object] = []
-        if c_chords is not None:
-            for i, chord in enumerate(rows):
-                c = _mapping_keys(chord, _CHORD_KEYS, f"chords[{i}]")
-                extension_values = c.get("extensions", []) or []
-                if not isinstance(extension_values, Sequence) or isinstance(extension_values, str):
-                    raise _refuse_type("chord extensions must be a sequence")
-                # Left unconverted so the per-element narrowing below sees the
-                # caller's value; int() would truncate a fraction past it.
-                ext = list(extension_values)
-                ext_count = len(ext)
-                c_ext = (
-                    (ctypes.c_uint8 * ext_count)(
-                        *[
-                            _narrow_int(e, f"chords[{i}].extensions[{j}]", 0, 255)
-                            for j, e in enumerate(ext)
-                        ]
-                    )
-                    if ext_count
-                    else None
+        for i, chord in enumerate(chords):
+            path = f"chords[{i}]"
+            c = _mapping_keys(chord, _CHORD_KEYS, path, required=("start_ppq", "end_ppq"))
+            extension_values = c.get("extensions")
+            if extension_values is None:
+                extension_values = ()
+            if not isinstance(extension_values, Sequence) or isinstance(
+                extension_values, (str, bytes, bytearray)
+            ):
+                raise _refuse_type(f"{path}.extensions must be a sequence")
+            modulation_boundary = c.get("modulation_boundary")
+            modulation_flag = (
+                0
+                if modulation_boundary is None
+                else _bool_flag(modulation_boundary, f"{path}.modulation_boundary")
+            )
+            ext_count = len(extension_values)
+            if ext_count > _MAX_PROJECT_CHORD_EXTENSIONS:
+                raise _refuse(
+                    f"{path}.extensions must contain at most "
+                    f"{_MAX_PROJECT_CHORD_EXTENSIONS} entries"
                 )
-                backing.append(c_ext)
-                roman = c.get("roman_numeral")
+            c_ext = (
+                (ctypes.c_uint8 * ext_count)(
+                    *[
+                        _narrow_int(e, f"{path}.extensions[{j}]", 0, 255)
+                        for j, e in enumerate(extension_values)
+                    ]
+                )
+                if ext_count
+                else None
+            )
+            backing.append(c_ext)
+            roman = c.get("roman_numeral")
+            try:
                 roman_bytes = (
-                    _utf8_arg(roman, "roman") if isinstance(roman, str) and roman else None
+                    _utf8_arg(roman, f"{path}.roman_numeral") if roman is not None else None
                 )
-                backing.append(roman_bytes)
-                c_chords[i].start_ppq = _narrow_double(c["start_ppq"], f"chords[{i}].start_ppq")
-                c_chords[i].end_ppq = _narrow_double(c["end_ppq"], f"chords[{i}].end_ppq")
-                # Assigned unconverted so the struct's own narrowing sees each
-                # caller value; int() would truncate a fraction past it.
-                c_chords[i].root_pc = _absent_or_in_range(
-                    c.get("root_pc"), f"chords[{i}].root_pc", 11, _NO_PITCH_CLASS
+            except UnicodeEncodeError:
+                raise _refuse(f"{path}.roman_numeral must be valid UTF-8") from None
+            backing.append(roman_bytes)
+            c_chords[i].start_ppq = _narrow_double(c["start_ppq"], f"chords[{i}].start_ppq")
+            c_chords[i].end_ppq = _narrow_double(c["end_ppq"], f"chords[{i}].end_ppq")
+            # Assigned unconverted so the struct's own narrowing sees each
+            # caller value; int() would truncate a fraction past it.
+            c_chords[i].root_pc = _absent_or_in_range(
+                c.get("root_pc"), f"chords[{i}].root_pc", 11, _NO_PITCH_CLASS
+            )
+            quality = c.get("quality")
+            if quality is not None:
+                c_chords[i].quality = _token_ordinal(
+                    quality, _PROJECT_CHORD_QUALITIES, f"chords[{i}].quality"
                 )
-                quality = c.get("quality")
-                if quality is not None:
-                    c_chords[i].quality = _token_ordinal(
-                        quality, _PROJECT_CHORD_QUALITIES, f"chords[{i}].quality"
-                    )
-                c_chords[i].extensions = c_ext
-                c_chords[i].extension_count = _to_c_size_t(ext_count, "ext_count")
-                c_chords[i].slash_bass_pc = _absent_or_in_range(
-                    c.get("slash_bass_pc"), f"chords[{i}].slash_bass_pc", 11, _NO_PITCH_CLASS
-                )
-                c_chords[i].roman_numeral = roman_bytes
-                c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
+            c_chords[i].extensions = c_ext
+            c_chords[i].extension_count = _to_c_size_t(ext_count, f"{path}.extensions")
+            c_chords[i].slash_bass_pc = _absent_or_in_range(
+                c.get("slash_bass_pc"), f"chords[{i}].slash_bass_pc", 11, _NO_PITCH_CLASS
+            )
+            c_chords[i].roman_numeral = roman_bytes
+            c_chords[i].modulation_boundary = modulation_flag
         _check(
             _get_lib().sonare_project_annotate_chords(
                 self._require_handle(), c_chords, _to_c_size_t(count, "count")
@@ -852,20 +891,23 @@ class _ProjectInspectionMixin:
         except UnicodeDecodeError:
             raise _malformed_output("project reader returned invalid UTF-8") from None
 
-    @_entry("Project.set_mixer_scene_json")
-    def set_mixer_scene_json(self, document: str) -> None:
-        """Replace the project's mixer scene from scene JSON.
+    @_entry("Project.set_mixer_scene")
+    def set_mixer_scene(self, scene: MixSceneDocument | None) -> None:
+        """Replace the project's mixer scene, or clear it when ``scene`` is ``None``.
 
-        A scene key the reader does not recognise raises ``SonareError``
-        (``INVALID_FORMAT``) naming its path, e.g. ``strips[2].faderDB``; keys starting
-        with ``$`` or ``x-`` are exempt. The scene is left unchanged on a refusal.
+        A scene key the reader does not recognise raises ``SonareValueError``
+        naming its path under ``scene``; keys starting with ``$`` or ``x-`` are
+        exempt. The scene is left unchanged on a refusal.
         """
+        if scene is not None and not isinstance(scene, Mapping):
+            raise _refuse_type("scene must be a mapping (parse JSON text with json.loads first)")
         lib = _get_lib()
         _check(
             lib.sonare_project_set_mixer_scene_json(
                 self._require_handle(),
-                _utf8_arg(document, "document"),
-            )
+                _utf8_arg(json.dumps(dict(scene)), "scene") if scene is not None else None,
+            ),
+            document_root="scene",
         )
 
     @_entry("Project.mixer_scene")
@@ -1124,14 +1166,44 @@ class _ProjectInspectionMixin:
     @_entry("Project.tempo_segments")
     def tempo_segments(self) -> list[dict[str, float]]:
         """Every tempo-map segment in stored order, as :meth:`set_tempo_segments` takes it."""
-        count = self._count("sonare_project_tempo_segment_count")
-        return [self._tempo_segment_by_index(i) for i in range(count)]
+        lib = _get_lib()
+        result = SonareProjectTempoSegmentList()
+        try:
+            _check(lib.sonare_project_tempo_segments(self._require_handle(), ctypes.byref(result)))
+            count = int(result.count)
+            if bool(result.items) != bool(count):
+                raise _malformed_output("tempo segment list has an inconsistent pointer and count")
+            return [
+                {
+                    "start_ppq": float(result.items[index].start_ppq),
+                    "bpm": float(result.items[index].bpm),
+                    "end_bpm": float(result.items[index].end_bpm),
+                }
+                for index in range(count)
+            ]
+        finally:
+            lib.sonare_free_project_tempo_segment_list(ctypes.byref(result))
 
     @_entry("Project.time_signatures")
     def time_signatures(self) -> list[dict[str, float | int]]:
         """Every time-signature segment in stored order, as :meth:`set_time_signatures` takes it."""
-        count = self._count("sonare_project_time_signature_count")
-        return [self._time_signature_by_index(i) for i in range(count)]
+        lib = _get_lib()
+        result = SonareProjectTimeSignatureList()
+        try:
+            _check(lib.sonare_project_time_signatures(self._require_handle(), ctypes.byref(result)))
+            count = int(result.count)
+            if bool(result.items) != bool(count):
+                raise _malformed_output("time-signature list has an inconsistent pointer and count")
+            return [
+                {
+                    "start_ppq": float(result.items[index].start_ppq),
+                    "numerator": int(result.items[index].numerator),
+                    "denominator": int(result.items[index].denominator),
+                }
+                for index in range(count)
+            ]
+        finally:
+            lib.sonare_free_project_time_signature_list(ctypes.byref(result))
 
     @_entry("Project.ppq_to_sec")
     def ppq_to_sec(self, ppq: float) -> float:
@@ -1198,47 +1270,6 @@ class _ProjectInspectionMixin:
         out_end_ppq = ctypes.c_double()
         _check(_get_lib().sonare_project_end_ppq(self._require_handle(), ctypes.byref(out_end_ppq)))
         return float(out_end_ppq.value)
-
-    def _tempo_segment_by_index(self, index: int) -> dict[str, float]:
-        """Read a tempo-map segment by 0-based stored index.
-
-        Returns the keys :meth:`set_tempo_segments` accepts, so a segment read
-        back can be written straight to another project. A project stores
-        musical positions only; sample positions are derived when it is
-        compiled.
-
-        Raises:
-            SonareValueError: If ``index`` is past the stored segments.
-        """
-        raw = SonareProjectTempoSegment()
-        _check(
-            _get_lib().sonare_project_tempo_segment_by_index(
-                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
-            )
-        )
-        return {
-            "start_ppq": float(raw.start_ppq),
-            "bpm": float(raw.bpm),
-            "end_bpm": float(raw.end_bpm),
-        }
-
-    def _time_signature_by_index(self, index: int) -> dict[str, float | int]:
-        """Read a time-signature segment by 0-based stored index.
-
-        Raises:
-            SonareValueError: If ``index`` is past the stored segments.
-        """
-        raw = SonareProjectTimeSignatureSegment()
-        _check(
-            _get_lib().sonare_project_time_signature_by_index(
-                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
-            )
-        )
-        return {
-            "start_ppq": float(raw.start_ppq),
-            "numerator": int(raw.numerator),
-            "denominator": int(raw.denominator),
-        }
 
     # -- compile / render ---------------------------------------------------
 

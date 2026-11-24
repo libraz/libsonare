@@ -78,6 +78,7 @@ from ._runtime import (
     _narrow_float,
     _narrow_int,
     _optional_positive_int,
+    _planar_channel_arrays,
     _to_c_float_array,
     _to_c_int,
     _to_c_int64,
@@ -247,23 +248,22 @@ class _ProjectEditMixin:
     def set_source_audio(
         self,
         source_id: int,
-        audio: Sequence[float] | np.ndarray,
-        num_channels: int,
+        channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
         sample_rate: int,
     ) -> None:
-        """Register decoded interleaved PCM for an existing audio source (undoable)."""
-        backing, total = _to_c_float_array(audio, arg_name="audio")
-        num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
-        if total % num_channels != 0:
-            raise _refuse("audio length must be a multiple of num_channels")
-        channel_count = _to_c_int(num_channels, "num_channels")
+        """Register decoded, channels-first PCM for an existing audio source."""
+        planes, _, frames = _planar_channel_arrays(channels, subject="channels")
+        channel_count = _narrow_int(len(planes), "channels", 1, _C_INT_MAX)
+        interleaved = np.stack([np.ctypeslib.as_array(plane) for plane in planes], axis=1)
+        backing, _ = _to_c_float_array(interleaved.reshape(-1), arg_name="channels")
+        channels_c = _to_c_int(channel_count, "channels")
         _check(
             _get_lib().sonare_project_set_source_audio(
                 self._require_handle(),
                 _to_c_uint32(source_id, "source_id"),
                 backing,
-                _to_c_int64(total // channel_count.value, "frames"),
-                channel_count,
+                _to_c_int64(frames, "frames"),
+                channels_c,
                 _to_c_int(sample_rate, "sample_rate"),
             )
         )
@@ -1034,8 +1034,8 @@ class _ProjectEditMixin:
     def set_clip_fade(
         self,
         clip_id: int,
-        fade_in_length_ppq: float = 0.0,
-        fade_out_length_ppq: float = 0.0,
+        fade_in_ppq: float = 0.0,
+        fade_out_ppq: float = 0.0,
         *,
         fade_in_curve: ProjectFadeCurve = "linear",
         fade_out_curve: ProjectFadeCurve = "linear",
@@ -1046,12 +1046,12 @@ class _ProjectEditMixin:
         is a token (``"linear"`` / ``"equalPower"`` / ``"exponential"`` /
         ``"logarithmic"``).
         """
-        fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")
-        fout = _narrow_double(fade_out_length_ppq, "fade_out_length_ppq")
+        fin = _narrow_double(fade_in_ppq, "fade_in_ppq")
+        fout = _narrow_double(fade_out_ppq, "fade_out_ppq")
         if not 0.0 <= fin <= _MAX_PUBLIC_PPQ:
-            raise _refuse("fade_in_length_ppq must be finite and in [0, 1e12]")
+            raise _refuse("fade_in_ppq must be finite and in [0, 1e12]")
         if not 0.0 <= fout <= _MAX_PUBLIC_PPQ:
-            raise _refuse("fade_out_length_ppq must be finite and in [0, 1e12]")
+            raise _refuse("fade_out_ppq must be finite and in [0, 1e12]")
         c_in = SonareProjectClipFade(
             length_ppq=fin, curve=_fade_curve_value(fade_in_curve, "fade_in_curve")
         )
@@ -1156,8 +1156,12 @@ class _ProjectEditMixin:
     ) -> None:
         """Set a track's mixer-strip binding + output target via an undoable edit.
 
-        Pass ``None`` (or ``""``) for either field to clear it.
+        Pass ``None`` for either field to clear it.
         """
+        if channel_strip_ref == "":
+            raise _refuse("channel_strip_ref must not be empty")
+        if output_target == "":
+            raise _refuse("output_target must not be empty")
         _check(
             _get_lib().sonare_project_set_track_route(
                 self._require_handle(),

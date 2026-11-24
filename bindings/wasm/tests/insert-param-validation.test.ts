@@ -90,8 +90,13 @@ describe('insert param validation (WASM)', () => {
     // The plate reverb publishes a non-realtime-safe param (modDepthSamples).
     const plate = masteringInsertParamInfo({ insert: 'effects.reverb.plate' });
     expect(plate.find((d) => d.name === 'modDepthSamples')?.rtSafe).toBe(false);
-    // Unknown name -> empty list.
-    expect(masteringInsertParamInfo({ insert: 'not.a.real.processor' as never })).toEqual([]);
+    expect(() => masteringInsertParamInfo({ insert: 'not.a.real.processor' as never })).toThrow(
+      new RangeError(
+        `masteringInsertParamInfo: insert must be one of ${masteringProcessorCatalog()
+          .map((entry) => entry.id)
+          .join(', ')}`,
+      ),
+    );
   });
 
   it('classifies processors in the realtime/offline/pair catalog', () => {
@@ -231,9 +236,9 @@ describe('insert param validation (WASM)', () => {
     expect(band3).not.toHaveProperty('parent');
   });
 
-  it('surfaces silently-ignored insert params as scene warnings', () => {
-    // eq.parametric reads only band{i}.* fields, so flat keys take no effect.
-    const ignored = JSON.stringify({
+  it('refuses an unknown insert param at its path in a scene document', () => {
+    // eq.parametric reads only band{i}.* fields, so a flat key is refused rather than ignored.
+    const unknown = JSON.stringify({
       version: 2,
       buses: [{ id: 'master', role: 'master' }],
       strips: [
@@ -243,19 +248,20 @@ describe('insert param validation (WASM)', () => {
             {
               slot: 'post',
               processor: 'eq.parametric',
-              params: { highPassHz: 80, presenceDb: 4 },
+              params: { highPassHz: 80 },
             },
           ],
         },
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    const mixer = Mixer.fromJson(ignored, { sampleRate: SR, maxBlockSize: BLOCK });
-    const warnings = mixer.sceneWarnings();
-    expect(warnings.length).toBe(1);
-    expect(warnings[0]).toContain('eq.parametric');
-    expect(warnings[0]).toContain('highPassHz');
-    expect(warnings[0]).toContain('presenceDb');
+    expect(() => Mixer.fromJson(unknown, { sampleRate: SR, maxBlockSize: BLOCK })).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message:
+          'Mixer.fromJson: unknown key strips[0].inserts[0].params.highPassHz (expected band{i}.attackMs, band{i}.autoThreshold, band{i}.bypassed, band{i}.coeffMode, band{i}.detectorDelayMs, band{i}.dynamic, band{i}.enabled, band{i}.frequencyHz, band{i}.gainDb, band{i}.phase, band{i}.placement, band{i}.proportionalQ, band{i}.proportionalQStrength, band{i}.q, band{i}.rangeDb, band{i}.ratio, band{i}.releaseMs, band{i}.sidechainFreqHz, band{i}.sidechainQ, band{i}.slopeDbOct, band{i}.soloed, band{i}.thresholdDb, band{i}.type)',
+      }),
+    );
 
     // A scene whose params are all consumed reports no warnings.
     const clean = JSON.stringify({

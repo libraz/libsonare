@@ -158,7 +158,10 @@ _PRESENCE_SPELLING_PYTHON = 1
 
 
 def _render_as_given(
-    lib: Any, root: str | None, respelled: Mapping[str, _Respelling] | None
+    lib: Any,
+    root: str | None,
+    respelled: Mapping[str, _Respelling] | None,
+    document_root: str | None = None,
 ) -> tuple[str, bool] | None:
     """Render the last parameter refusal under the names, units and None the caller wrote.
 
@@ -190,6 +193,9 @@ def _render_as_given(
         if given is not None:
             subject = given.name
             scale = 1.0 if given.scale is None else given.scale
+        elif document_root is not None:
+            subject = f"{document_root}.{subject}" if subject else document_root
+            in_argument = True
         elif (rooted := document_rooted(entry, subject)) is not None:
             subject = rooted
             in_argument = True
@@ -221,6 +227,8 @@ def _check(
     *,
     flattened: str | None = None,
     respelled: Mapping[str, _Respelling] | None = None,
+    document_root: str | None = None,
+    literal_document: bool = False,
 ) -> None:
     """Check a SonareError return code and raise on failure.
 
@@ -235,12 +243,20 @@ def _check(
     its own keyword arguments; the refusal is rendered without that root. ``respelled``
     maps a subject the entry converted (``start_sample``) to the spelling the caller gave
     (``start_sec``). Both together make the refusal name the argument the caller wrote.
+    ``document_root`` names the argument when this call serialized a typed mapping.
+    ``literal_document`` keeps the C text for a directly supplied document.
     """
     if rc != SONARE_OK:
         lib = _get_lib()
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
-        rendered = _render_as_given(lib, flattened, respelled)
+        is_format = rc == int(ErrorCode.INVALID_FORMAT)
+        root = document_root if is_format else None
+        rendered = (
+            None
+            if literal_document and is_format
+            else _render_as_given(lib, flattened, respelled, root)
+        )
         argument = rendered is not None and rendered[1]
         detail_str = (rendered[0] if rendered is not None else "") or detail_str
         if detail_str:
@@ -262,7 +278,13 @@ def _call_string(fn: Callable[..., int], *args: Any) -> str:
         _get_lib().sonare_free_string(out)
 
 
-def _last_error(default_code: int, fallback_message: str) -> SonareError:
+def _last_error(
+    default_code: int,
+    fallback_message: str,
+    *,
+    document_root: str | None = None,
+    literal_document: bool = False,
+) -> SonareError:
     """Build the thread-local error left by a C call that returned a null handle.
 
     Pointer-returning constructors have no return code, so the code and detail
@@ -275,7 +297,9 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     code = int(lib.sonare_last_error_code())
     raw = lib.sonare_last_error_message()
     detail = raw.decode("utf-8", errors="replace") if raw else ""
-    rendered = _render_as_given(lib, None, None)
+    is_format = code == int(ErrorCode.INVALID_FORMAT)
+    root = document_root if is_format else None
+    rendered = None if literal_document and is_format else _render_as_given(lib, None, None, root)
     detail = _strip_c_entry((rendered[0] if rendered is not None else "") or detail)
     return _coded_error(
         code if code != SONARE_OK else default_code,

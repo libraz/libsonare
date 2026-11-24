@@ -294,16 +294,14 @@ def mastering_insert_names() -> list[str]:
 def mastering_insert_param_names(insert: str) -> list[str]:
     """Return the camelCase parameter names a given insert/FX processor reads.
 
-    For tools/UIs that want to validate a scene insert's params before loading
-    it: any supplied key NOT in this list is silently ignored by the processor
-    (and would be reported via :meth:`Mixer.scene_warnings` on a scene load).
-    Band/sub-band processors enumerate their indexed ``band{i}.<field>`` keys.
-    Returns an empty list for an unknown ``insert`` (or one whose insert needs an
-    unavailable build feature, e.g. FX).
+    The library refuses an unknown parameter key. Band and sub-band processors
+    enumerate indexed ``band{i}.<field>`` keys.
+    An ``insert`` outside :func:`mastering_insert_names` raises SonareValueError.
 
     The native layer returns a thread-local, newline-joined string the caller
     must NOT free (same convention as the other ``*_names`` getters).
     """
+    _require_known(insert, "insert", mastering_insert_names)
     lib = _get_lib()
     raw = lib.sonare_mastering_insert_param_names(_utf8_arg(insert, "insert"))
     if raw is None:
@@ -324,8 +322,7 @@ def mastering_insert_param_info(
     :func:`mastering_processor_catalog` is served, an offline repair stage
     (``repair.declick``, ``repair.declip``, ``repair.trimSilence``) included,
     with the rows its catalog entry's ``params`` carries; those rows have a
-    ``None`` ``id``. Returns an empty list for an unknown ``insert`` (or one whose
-    insert needs an unavailable build feature, e.g. FX).
+    ``None`` ``id``. Any other ``insert`` raises SonareValueError.
 
     With ``sample_rate``, a key whose ``max_relative_to`` is ``"nyquist"`` reports
     as ``max`` / ``max_exclusive`` the bound accepted when the insert is built and
@@ -333,6 +330,7 @@ def mastering_insert_param_info(
     host). Without it the rate-less answer is returned, with the 24000 cap of
     the 48 kHz probe. A rate outside the supported range raises.
     """
+    _require_known(insert, "insert", lambda: [entry.id for entry in mastering_processor_catalog()])
     lib = _get_lib()
     # The C 0 is the rate-less query, so an explicit 0 is refused here rather than read as it.
     raw = _call_string(
@@ -526,6 +524,15 @@ def mastering_apply_processor_stereo(
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
+
+
+def _require_known(value: object, name: str, names: Callable[[], Sequence[str]]) -> None:
+    """Refuse ``value`` unless ``names()`` lists it: a non-string by type, else by domain."""
+    allowed = names()
+    if not isinstance(value, str):
+        raise _refuse_type(f"{name} must be one of {', '.join(allowed)}")
+    if value not in allowed:
+        raise _refuse(f"{name} must be one of {', '.join(allowed)}")
 
 
 def _enum_value(processor: str | None, key: str, name: str) -> float:

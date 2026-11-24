@@ -301,13 +301,21 @@ def _bounce(libsonare, smf_bytes: bytes, total_seconds: float, sr: int, *, rig: 
         project.import_smf(smf_bytes)
         if preset:
             audio = project.bounce(
-                synth_instruments=[(0, preset)],
+                synth_instruments=[
+                    libsonare.ProjectInstrumentBinding(
+                        instrument=libsonare.SynthPatch(preset=preset)
+                    )
+                ],
                 total_frames=round(total_seconds * sr),
             ).channels.T
             manifest = None
         else:
             audio = project.bounce(
-                sf2_instruments=[(0, libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig))],
+                sf2_instruments=[
+                    libsonare.ProjectSf2InstrumentBinding(
+                        instrument=libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig)
+                    )
+                ],
                 total_frames=round(total_seconds * sr),
             ).channels.T
             manifest = project.sound_font_manifest()

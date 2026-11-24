@@ -709,6 +709,7 @@ class SonareSf2InstrumentBinding(CStruct):
     _fields_ = [
         ("destination_id", ctypes.c_uint32),
         ("config", SonareSf2InstrumentConfig),
+        ("sound_font_uri", ctypes.c_char_p),
     ]
 
 
@@ -1038,7 +1039,6 @@ class SonareProjectBounceOptions(CStruct):
         ("total_frames", ctypes.c_int64),
         ("block_size", ctypes.c_int),
         ("num_channels", ctypes.c_int),
-        ("sample_rate", ctypes.c_int),
         ("instrument_latency_samples", ctypes.c_int),
         ("instruments", ctypes.POINTER(SonareInstrumentBinding)),
         ("instrument_count", ctypes.c_size_t),

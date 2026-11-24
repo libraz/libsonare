@@ -539,14 +539,15 @@ class SampleBank:
     Example::
 
         import numpy as np
-        from libsonare import SampleBank, SynthPatch
+        from libsonare import ProjectInstrumentBinding, SampleBank, SynthPatch
 
         tone = np.sin(2 * np.pi * 440.0 * np.arange(24000) / 48000.0).astype(np.float32)
         with SampleBank() as bank:
             index = bank.add_sample(tone, root_key=69, source_rate=48000.0)
             bank.add_zone(0, sample_index=index)  # the whole keyboard
             patch = SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank)
-            audio = project.bounce(synth_instruments=[(0, patch)], total_frames=24000).channels
+            binding = ProjectInstrumentBinding(instrument=patch)
+            audio = project.bounce(synth_instruments=[binding], total_frames=24000).channels
     """
 
     # Declared on the class so close() reads it even when __init__ never ran.

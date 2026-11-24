@@ -8,6 +8,7 @@ accepted by ``annotate_chords`` and survives serialization.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import get_args
 
 import pytest
@@ -136,34 +137,54 @@ def test_project_chord_annotation_reader_copies_extensions_and_omits_absent_nume
             slash_bass_pc=None,
             modulation_boundary=False,
         )
-        empty_numeral = ProjectChordSymbol(
-            start_ppq=1200.0,
-            end_ppq=1440.0,
-            root_pc=0,
-            quality="major",
-            extensions=[7] * 32,
-            slash_bass_pc=None,
-            modulation_boundary=False,
-            roman_numeral="",
-        )
         assert project.chord_annotations() == []
-        project.annotate_chords([absent, labeled, single_extension, empty_numeral])
+        project.annotate_chords([absent, labeled, single_extension])
         expected_empty = {
-            "start_ppq": empty_numeral["start_ppq"],
-            "end_ppq": empty_numeral["end_ppq"],
-            "root_pc": empty_numeral["root_pc"],
-            "quality": empty_numeral["quality"],
-            "extensions": empty_numeral["extensions"],
-            "slash_bass_pc": empty_numeral["slash_bass_pc"],
-            "modulation_boundary": empty_numeral["modulation_boundary"],
+            "start_ppq": single_extension["start_ppq"],
+            "end_ppq": single_extension["end_ppq"],
+            "root_pc": single_extension["root_pc"],
+            "quality": single_extension["quality"],
+            "extensions": single_extension["extensions"],
+            "slash_bass_pc": single_extension["slash_bass_pc"],
+            "modulation_boundary": single_extension["modulation_boundary"],
         }
         snapshot = project.chord_annotations()
-        assert snapshot == [absent, labeled, single_extension, expected_empty]
+        assert snapshot == [absent, labeled, expected_empty]
         project.annotate_chords([])
         assert project.chord_annotations() == []
-        assert snapshot == [absent, labeled, single_extension, expected_empty]
+        assert snapshot == [absent, labeled, expected_empty]
     finally:
         project.close()
+
+
+def test_an_explicit_empty_roman_numeral_is_refused_by_name() -> None:
+    project = Project()
+    try:
+        with pytest.raises(
+            SonareValueError,
+            match=r"^Project\.annotate_chords: chords\[0\]\.roman_numeral must not be empty$",
+        ):
+            project.annotate_chords(
+                [
+                    {
+                        "start_ppq": 0.0,
+                        "end_ppq": 480.0,
+                        "quality": "major",
+                        "roman_numeral": "",
+                    }
+                ]
+            )
+        assert project.chord_annotations() == []
+    finally:
+        project.close()
+
+
+def test_annotate_chords_reads_immutable_rows_and_extensions() -> None:
+    row = MappingProxyType({"start_ppq": 0.0, "end_ppq": 4.0, "extensions": (7, 9)})
+    with Project() as project:
+        project.annotate_chords((row,))
+        assert project.chord_annotations()[0]["extensions"] == [7, 9]
+    assert row["extensions"] == (7, 9)
 
 
 @pytest.mark.parametrize("value", [{"root": 0}, "major", None, (0, "major")])

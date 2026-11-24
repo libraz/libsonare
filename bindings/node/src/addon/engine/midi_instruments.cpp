@@ -189,7 +189,7 @@ Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   const uint8_t* bytes = nullptr;
   size_t len = 0;
   if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return env.Undefined();
-  ThrowIfError(env, sonare_engine_load_soundfont(engine_, bytes, len));
+  ThrowIfError(env, sonare_engine_load_sound_font(engine_, bytes, len));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

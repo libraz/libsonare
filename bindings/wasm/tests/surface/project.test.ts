@@ -364,12 +364,48 @@ describe('compile and bounce', () => {
     });
   });
 
+  it('refuses tempo option shape before rate or sample content in either call form', () => {
+    withProject((project) => {
+      const samples = new Float32Array([Number.NaN]);
+      for (const key of [
+        'candidateIndex',
+        'applyTimeSignatures',
+        'adaptiveTempo',
+        'tempoUpdateIntervalBeats',
+        'rampThreshold',
+        'includeOctaveCandidates',
+      ] as const) {
+        const options = { [key]: 'wrong' } as never;
+        for (const call of [
+          () => project.autoTempo({ samples, sampleRate: 1, [key]: 'wrong' } as never),
+          () => project.autoTempo(samples, SR, options),
+        ]) {
+          expect(call).toThrow(TypeError);
+          expect(call).toThrow(new RegExp(`^Project\\.autoTempo: ${key} must be `));
+        }
+      }
+    });
+  });
+
   it('installs a tempo from options with no positional boolean', () => {
     withProject((project) => {
       const samples = clicks(120, 4);
-      expect(typeof project.autoTempo(samples, SR, { applyTimeSignatures: true })).toBe('number');
-      expect(typeof project.autoTempo({ samples, sampleRate: SR, candidateIndex: 0 })).toBe(
-        'number',
+      const before = project.timeSignatures();
+      const detected = project.autoTempo({ samples, sampleRate: SR, candidateIndex: 0 });
+      expect(project.timeSignatures()).toEqual(before);
+      expect(detected).toEqual({
+        bpm: expect.any(Number),
+        bpmConfidence: expect.any(Number),
+        timeSignature: {
+          numerator: expect.any(Number),
+          denominator: expect.any(Number),
+          confidence: expect.any(Number),
+        },
+      });
+      expect(project.autoTempo(samples, SR, { applyTimeSignatures: true })).toEqual(detected);
+      expect(project.tempoSegments()[0].bpm).toBeCloseTo(detected.bpm);
+      expect(() => project.autoTempo({ samples, sampleRate: SR, candidateIndex: -1 })).toThrow(
+        /candidateIndex/,
       );
       expect(() => loose(project).autoTempo(samples, SR, 0, true)).toThrow(TypeError);
       const candidates = project.analyzeTempo(samples, SR);

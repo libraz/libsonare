@@ -107,7 +107,7 @@ export interface StreamStats {
   durationSec: number;
   /** Frames produced but not yet read. */
   pendingFrames: number;
-  /** New frames dropped because `maxPendingFrames` unread frames were already pending. */
+  /** New frames dropped because `maxPendingFrames` unread frames were already pending. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   droppedOutputFrames: number;
   /** Chord changes dropped at the `maxProgressionEntries` cap. */
   droppedChordProgressionEntries: number;

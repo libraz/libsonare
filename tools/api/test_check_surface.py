@@ -2929,6 +2929,25 @@ class Refusals(CheckerCase):
                 )
 
 
+class PythonTypeParameters(CheckerCase):
+    """A package TypeVar named in an annotation is a type parameter, not a name to export."""
+
+    def test_a_type_variable_is_not_refused_and_an_unexported_class_still_is(self):
+        self.inv = copy.deepcopy(BASE)
+        self.inv["python_type_params"] = ["_Config"]
+        _, before = self.run_check("--check", "python-public-names")
+        self.add(_field("python", "Binding", "config", type="_Config"))
+        self.add(_field("python", "Binding", "raw", type="_RawFrames"))
+        _, lines = self.run_check("--check", "python-public-names")
+        found = sorted(x.strip() for x in set(lines) - set(before) if x.startswith("    "))
+        self.assertEqual(
+            found,
+            [
+                "python field Binding.raw: annotation names _RawFrames, which libsonare does not export"
+            ],
+        )
+
+
 class FixedLayoutRecords(CheckerCase):
     """A count inside a named fixed-layout realtime record keeps its width and is counted."""
 

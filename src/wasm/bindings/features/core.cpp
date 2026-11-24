@@ -64,7 +64,7 @@ float js_note_to_hz(const std::string& note) {
 }
 float js_frames_to_time(const val& frames, const val& sr, const val& hop_length) {
   return frames_to_time(checkedIntFromVal(frames, "frames"),
-                        domainNumberFromVal<int>(sr, "sr", kFrameTimeSampleRateDomain),
+                        domainNumberFromVal<int>(sr, "sampleRate", kFrameTimeSampleRateDomain),
                         domainNumberFromVal<int>(hop_length, "hopLength", kFrameTimeHopDomain));
 }
 int js_time_to_frames(const val& time_val, const val& sr, const val& hop_length) {
@@ -72,7 +72,7 @@ int js_time_to_frames(const val& time_val, const val& sr, const val& hop_length)
   // parameter turned into an infinity returns a frame index nothing downstream
   // can tell from a real one.
   return time_to_frames(checkedFloatFromVal(time_val, "time"),
-                        domainNumberFromVal<int>(sr, "sr", kFrameTimeSampleRateDomain),
+                        domainNumberFromVal<int>(sr, "sampleRate", kFrameTimeSampleRateDomain),
                         domainNumberFromVal<int>(hop_length, "hopLength", kFrameTimeHopDomain));
 }
 int js_frames_to_samples(const val& frames, const val& hop_length, const val& n_fft) {

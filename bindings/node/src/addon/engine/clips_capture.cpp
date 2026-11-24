@@ -904,7 +904,8 @@ Napi::Value RealtimeEngineWrap::CaptureStatus(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("capturedFrames", Napi::Number::New(env, static_cast<double>(status.captured_frames)));
-  out.Set("overflowCount", Napi::Number::New(env, status.overflow_count));
+  out.Set("overflowCount", Napi::Number::New(env, static_cast<double>(status.overflow_count)));
+  out.Set("droppedFrames", Napi::Number::New(env, static_cast<double>(status.dropped_frames)));
   out.Set("armed", Napi::Boolean::New(env, status.armed != 0));
   out.Set("punchEnabled", Napi::Boolean::New(env, status.punch_enabled != 0));
   out.Set("source", Napi::String::New(env, CaptureSourceName(status.source)));

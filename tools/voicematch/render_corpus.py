@@ -221,7 +221,9 @@ def render_model(smf_bytes: bytes, seconds: float) -> np.ndarray:
     try:
         proj.import_smf(smf_bytes)
         audio = proj.bounce(
-            sf2_instruments=[(0, libsonare.Sf2InstrumentConfig())],
+            sf2_instruments=[
+                libsonare.ProjectSf2InstrumentBinding(instrument=libsonare.Sf2InstrumentConfig())
+            ],
             total_frames=int(seconds * SR),
             num_channels=2,
         ).channels.T

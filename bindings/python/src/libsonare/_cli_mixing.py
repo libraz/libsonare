@@ -10,6 +10,7 @@ program.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import sys
@@ -19,6 +20,7 @@ import numpy as np
 
 from ._cli_common import (
     _CLI_HOST_CHUNK_FRAMES,
+    _MAX_ANALYSIS_WINDOW,
     _atomic_wav_writer,
     _atomic_write_bytes,
     _audio_array,
@@ -49,16 +51,17 @@ from ._cli_options import (
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._result_records import _result_to_json_dict
+from ._runtime import _C_INT_MAX
+
+_MIN_ASSISTANT_TEMPO_BPM = 20
+_MAX_ASSISTANT_TEMPO_BPM = 400
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
     """Map ``suggest-mix --params`` keys onto ``mixing_assistant_suggest`` keywords.
 
-    The accepted set is the assistant's own option table, so either spelling the
-    C ABI reads is accepted and nothing here restates the list. Two conversions
-    are this boundary's: an option whose config field is a bool is converted
-    rather than handed a number, and an integral value for an integer option is
-    narrowed, since ``--params`` parses every value as a float.
+    Boolean and integer options are converted from their numeric argv values.
+    Zero tempo selects the transport fallback, represented by an absent keyword.
     """
     from .mixing_assistant import _INTEGER_PARAMS
 
@@ -67,11 +70,29 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
         name = _json_key_to_snake_case(key)
         if name.startswith("enable_"):
             options[name] = value != 0.0
+        elif name == "tempo_bpm" and ctypes.c_float(value).value == 0.0:
+            continue
         elif name in _INTEGER_PARAMS and value.is_integer():
             options[name] = int(value)
         else:
             options[name] = value
     return options
+
+
+def _mix_assistant_value_refusal(key: str, value: float) -> str | None:
+    if key == "tempoBpm":
+        tempo = ctypes.c_float(value).value
+        if tempo != 0.0 and not _MIN_ASSISTANT_TEMPO_BPM <= tempo <= _MAX_ASSISTANT_TEMPO_BPM:
+            return (
+                f"{key} must be 0 or a tempo between "
+                f"{_MIN_ASSISTANT_TEMPO_BPM} and {_MAX_ASSISTANT_TEMPO_BPM} BPM"
+            )
+    elif key == "nFft":
+        if not 2 <= value <= _MAX_ANALYSIS_WINDOW or value % 2 != 0.0:
+            return f"{key} must be an even integer in [2, {_MAX_ANALYSIS_WINDOW}]"
+    elif key == "hopLength" and (not 1 <= value <= _C_INT_MAX or not value.is_integer()):
+        return f"{key} must be an integer in [1, {_C_INT_MAX}]"
+    return None
 
 
 def mix_input_refusal(entries: list[str]) -> str | None:
@@ -83,22 +104,6 @@ def mix_input_refusal(entries: list[str]) -> str | None:
         if not (path if separator else entry):
             return f"--input requires a file path: {entry}"
     return None
-
-
-def _earlier_spelling(key: str) -> str:
-    """The camelCase key a snake_case spelling of ``key`` stands for, as the library reads it."""
-    camel = ""
-    upper_next = False
-    for char in key:
-        if char == "_":
-            upper_next = True
-        elif upper_next and "a" <= char <= "z":
-            camel += char.upper()
-            upper_next = False
-        else:
-            camel += char
-            upper_next = False
-    return camel
 
 
 def suggest_mix_refusal(args: argparse.Namespace) -> str | None:
@@ -125,24 +130,24 @@ def suggest_mix_refusal(args: argparse.Namespace) -> str | None:
     items = args.params.split(",")
     if items[-1] == "":
         items.pop()
+    value_refusal = None
     for item in items:
         key, separator, text = item.partition("=")
         if not separator or not key or not text:
             return f"invalid parameter entry: '{item}' (expected key=value)"
         try:
-            _read_number_text(text)
+            value = _read_number_text(text)
         except _NumericTextError:
             return f"invalid numeric value for parameter '{key}'"
-        camel = _earlier_spelling(key)
-        if "_" in key and camel in known:
-            return f"assistant param {key} is an earlier spelling; write {camel}"
         if key not in known:
             return f"unknown key {key} (expected {', '.join(known)})"
+        if value_refusal is None:
+            value_refusal = _mix_assistant_value_refusal(key, value)
     # The dedicated option and `--params tempoBpm=` reach one field, so naming both
     # is a contradiction rather than a precedence question.
     if args.tempo_bpm is not None and any(item.partition("=")[0] == "tempoBpm" for item in items):
         return "--tempo-bpm and --params tempoBpm= set the same value"
-    return None
+    return value_refusal
 
 
 def _mix_assistant_tracks(entries: list[str]) -> list[Any]:

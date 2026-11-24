@@ -903,10 +903,10 @@ def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
     Raises:
         TypeError: If ``document`` is not a ``str``.
         SonareError: Code ``INVALID_FORMAT`` when the document is malformed, lacks
-            ``params``, carries another version, an unknown or earlier key
-            spelling, a path given twice, a null, a number for a token or an
-            unknown token, or a value outside its domain; the message names the
-            path and, for an earlier spelling, the current one.
+            ``params``, carries another version, an unknown key, a path given
+            twice, a null, a number for a token or an unknown token, or a value
+            outside its domain. The message names the path and lists accepted
+            keys for an unknown key.
     """
     _require_instance(document, str, "document")
     lib = _get_lib()

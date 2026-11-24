@@ -117,7 +117,7 @@ describe('RealtimeEngine', () => {
   it('exposes live MIDI CC bindings', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
-      expect(engine.midiCcBindingCount).toBe(0);
+      expect(engine.midiCcBindings()).toHaveLength(0);
       engine.bindMidiCc({ ccNumber: 74, channel: 0, paramId: 7, minValue: -60, maxValue: 0 });
       engine.bindMidiCc({
         ccNumber: 1,
@@ -128,9 +128,9 @@ describe('RealtimeEngine', () => {
         minValue: 0,
         maxValue: 1,
       });
-      expect(engine.midiCcBindingCount).toBe(2);
+      expect(engine.midiCcBindings()).toHaveLength(2);
       engine.clearMidiCcBindings();
-      expect(engine.midiCcBindingCount).toBe(0);
+      expect(engine.midiCcBindings()).toHaveLength(0);
     } finally {
       engine.destroy();
     }
@@ -148,9 +148,9 @@ describe('RealtimeEngine', () => {
         maxValue: 1,
       };
       expect(() => engine.bindMidiCc({ ...binding, kind: 'controlChange14' })).not.toThrow();
-      expect(engine.midiCcBindingCount).toBe(1);
+      expect(engine.midiCcBindings()).toHaveLength(1);
       expect(() => engine.bindMidiCc({ ...binding, kind: 1 as never })).toThrow(TypeError);
-      expect(engine.midiCcBindingCount).toBe(1);
+      expect(engine.midiCcBindings()).toHaveLength(1);
       const learned = midiCcLearn({
         events: [
           midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
@@ -159,6 +159,7 @@ describe('RealtimeEngine', () => {
         paramId: 77,
       });
       expect(learned?.kind).toBe('controlChange14');
+      expect(learned?.consume).toBe(false);
     } finally {
       engine.destroy();
     }

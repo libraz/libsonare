@@ -513,15 +513,51 @@ describe('compile and bounce', () => {
     });
   });
 
+  it('refuses tempo option shape before rate or sample content in either call form', () => {
+    withProject((project) => {
+      const samples = new Float32Array([Number.NaN]);
+      for (const key of [
+        'candidateIndex',
+        'applyTimeSignatures',
+        'adaptiveTempo',
+        'tempoUpdateIntervalBeats',
+        'rampThreshold',
+        'includeOctaveCandidates',
+      ] as const) {
+        const options = { [key]: 'wrong' } as never;
+        for (const call of [
+          () => project.autoTempo({ samples, sampleRate: 1, [key]: 'wrong' } as never),
+          () => project.autoTempo(samples, SR, options),
+        ]) {
+          expect(call).toThrow(TypeError);
+          expect(call).toThrow(new RegExp(`^Project\\.autoTempo: ${key} must be `));
+        }
+      }
+    });
+  });
+
   it('installs a tempo from options with no positional boolean, in either call form', () => {
     withProject((project) => {
       const samples = clicks(120, 4);
-      expect(typeof project.autoTempo(samples, SR, { applyTimeSignatures: true })).toBe('number');
-      expect(typeof project.autoTempo({ samples, sampleRate: SR, candidateIndex: 0 })).toBe(
-        'number',
-      );
-      expect(() => loose(project).autoTempo(samples, SR, 0, true)).toThrow(TypeError);
+      const stored = [{ startPpq: 0, numerator: 7, denominator: 8 }];
+      project.setTimeSignatures(stored);
       const [candidate] = project.analyzeTempo(samples, SR);
+      const detected = project.autoTempo({ samples, sampleRate: SR, candidateIndex: 0 });
+      expect(project.timeSignatures()).toEqual(stored);
+      expect(detected.bpm).toBeCloseTo(candidate.bpm);
+      expect(detected.bpmConfidence).toBeCloseTo(candidate.confidence);
+      expect(detected.timeSignature).toMatchObject({
+        numerator: candidate.firstTimeSignature.numerator,
+        denominator: candidate.firstTimeSignature.denominator,
+        confidence: expect.any(Number),
+      });
+      const applied = project.autoTempo(samples, SR, { applyTimeSignatures: true });
+      expect(applied).toEqual(detected);
+      expect(project.timeSignatures()[0]).toMatchObject({
+        numerator: applied.timeSignature.numerator,
+        denominator: applied.timeSignature.denominator,
+      });
+      expect(() => loose(project).autoTempo(samples, SR, 0, true)).toThrow(TypeError);
       expect(candidate).not.toHaveProperty('timeSignature');
       expect(project.tempoSegments()[0]).not.toHaveProperty('startSample');
     });

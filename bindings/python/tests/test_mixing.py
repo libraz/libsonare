@@ -848,24 +848,23 @@ def test_mastering_insert_param_names_enumerates_keys() -> None:
     assert "ratio" in comp
     # Band-indexed processors expose their band{i}.<field> keys.
     assert "band0.frequencyHz" in mastering_insert_param_names("eq.parametric")
-    assert mastering_insert_param_names("not.a.real.processor") == []
+    # An unknown insert is an out-of-domain argument, never an empty parameter list.
+    with pytest.raises(
+        SonareValueError, match="^mastering_insert_param_names: insert must be one of "
+    ):
+        mastering_insert_param_names("not.a.real.processor")
 
 
-def test_scene_warnings_surface_ignored_insert_params() -> None:
-    """A scene insert with unread params loads but reports the ignored keys."""
+def test_scene_refuses_unread_insert_params_at_their_path() -> None:
+    """An unread insert key is a document error or a mapping argument error."""
     from libsonare import Mixer
 
-    # eq.parametric reads only band{i}.* fields, so flat keys take no effect.
-    scene = _scene_with_insert_params("eq.parametric", {"highPassHz": 80, "presenceDb": 4})
-    mixer = Mixer.from_json(scene, sample_rate=48000, max_block_size=256)
-    try:
-        warnings = mixer.scene_warnings()
-        assert len(warnings) == 1
-        assert "eq.parametric" in warnings[0]
-        assert "highPassHz" in warnings[0]
-        assert "presenceDb" in warnings[0]
-    finally:
-        mixer.close()
+    scene = _scene_with_insert_params("eq.parametric", {"highPassHz": 80})
+    path = r"strips\[0\]\.inserts\[0\]\.params\.highPassHz"
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"unknown key {path} \(expected "):
+        Mixer.from_json(scene, sample_rate=48000, max_block_size=256)
+    with pytest.raises(SonareValueError, match=rf"unknown key scene\.{path} \(expected "):
+        Mixer(scene=json.loads(scene), sample_rate=48000, max_block_size=256)
 
     # A scene whose params are all consumed reports no warnings.
     clean = _scene_with_insert_params(
@@ -932,8 +931,8 @@ def test_a_mixer_is_built_from_a_scene_mapping_or_empty_by_keyword() -> None:
         Mixer(48000)  # type: ignore[misc]
     with pytest.raises(TypeError):
         Mixer.from_json(text, 48000)  # type: ignore[misc]
-    with raises_coded(ErrorCode.INVALID_FORMAT, match=r"strips\[0\]\.faderDB"):
-        Mixer(sample_rate=48000, scene={"strips": [{"id": "a", "faderDB": -3}]})
+    with pytest.raises(SonareValueError, match=r"scene\.strips\[0\]\.faderDB"):
+        Mixer(sample_rate=48000, scene={"version": 2, "strips": [{"id": "a", "faderDB": -3}]})
 
 
 def test_from_json_refuses_an_unknown_scene_key_by_path() -> None:

@@ -21,6 +21,31 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('reports accumulated dropped capture frames and resets them', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
+    try {
+      engine.configureCapture({ capacityFrames: 4, numChannels: 1, source: 'input' });
+      engine.armCapture({ armed: true });
+      engine.play();
+
+      const block = [new Float32Array(8).fill(0.25)];
+      engine.process(block);
+      const first = engine.captureStatus().droppedFrames;
+      expect(typeof first).toBe('number');
+      expect(Number.isSafeInteger(first)).toBe(true);
+      expect(first).toBe(4);
+
+      engine.process(block);
+      expect(engine.captureStatus().droppedFrames).toBe(12);
+
+      engine.armCapture({ armed: false });
+      engine.resetCapture();
+      expect(engine.captureStatus().droppedFrames).toBe(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('allocates capture storage from the channel count and capacity', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.configureCapture({ capacityFrames: 128, numChannels: 2 });

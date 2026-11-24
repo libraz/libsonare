@@ -130,7 +130,6 @@ describe('transport and counts', () => {
       'automationLaneCount',
       'clipCount',
       'midiInstrumentCount',
-      'midiCcBindingCount',
       'graphNodeCount',
       'graphConnectionCount',
       'externalMidiDroppedCount',
@@ -151,6 +150,7 @@ describe('transport and counts', () => {
       }
       expect(engine.warpVoiceCapacity).toBe(8);
       expect(engine.clipCount).toBe(0);
+      expect('midiCcBindingCount' in engine).toBe(false);
       expect(
         Object.getOwnPropertyDescriptor(RealtimeEngine.prototype, 'midiCcBindings')?.value,
       ).toBeTypeOf('function');
@@ -754,6 +754,26 @@ describe('capture', () => {
     });
   });
 
+  it('reports capture frames dropped after the buffer fills', () => {
+    withEngine((engine) => {
+      engine.configureCapture({ capacityFrames: 16, numChannels: 1 });
+      engine.armCapture({ armed: true });
+      engine.play();
+      engine.process([new Float32Array(BLOCK)]);
+
+      expect(engine.captureStatus()).toMatchObject({
+        capturedFrames: 16,
+        overflowCount: BLOCK - 16,
+        droppedFrames: BLOCK - 16,
+      });
+      engine.process([new Float32Array(BLOCK)]);
+      expect(engine.captureStatus().droppedFrames).toBe(2 * BLOCK - 16);
+      engine.armCapture({ armed: false });
+      engine.resetCapture();
+      expect(engine.captureStatus()).toMatchObject({ capturedFrames: 0, droppedFrames: 0 });
+    });
+  });
+
   it('reallocates the capture buffer only while disarmed', () => {
     withEngine((engine) => {
       engine.configureCapture({ capacityFrames: 128 });
@@ -918,7 +938,7 @@ describe('instruments and MIDI', () => {
     withEngine((engine) => {
       engine.addParameter({ id: 5, name: 'p', minValue: 0, maxValue: 1 });
       engine.bindMidiCc({ ccNumber: 7, channel: 0, paramId: 5, minValue: 0, maxValue: 1 });
-      expect(engine.midiCcBindingCount).toBe(1);
+      expect(engine.midiCcBindings().length).toBe(1);
       expect('bindMidiCcBinding' in engine).toBe(false);
     });
   });
@@ -971,7 +991,7 @@ describe('instruments and MIDI', () => {
       }
       expect(engine.midiCcBindings().sort(byCcNumber)).toEqual(bindings);
       bindings.length = 0;
-      expect(engine.midiCcBindingCount).toBe(2);
+      expect(engine.midiCcBindings().length).toBe(2);
       expect(engine.midiCcBindings()).toHaveLength(2);
     });
   });
@@ -981,7 +1001,7 @@ describe('instruments and MIDI', () => {
       expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 5, consume: 1 as never })).toThrow(
         TypeError,
       );
-      expect(engine.midiCcBindingCount).toBe(0);
+      expect(engine.midiCcBindings().length).toBe(0);
     });
   });
 

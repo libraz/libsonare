@@ -835,13 +835,8 @@ export class RealtimeEngine {
     this.native.clearMidiCcBindings();
   }
 
-  /** Number of bound MIDI CC descriptors. */
-  get midiCcBindingCount(): number {
-    return this.native.midiCcBindingCount();
-  }
-
   /** Returns a detached copy of the MIDI CC, RPN and NRPN bindings. Order is unspecified. */
-  midiCcBindings(): ProjectMidiCcBinding[] {
+  midiCcBindings(): Array<ProjectMidiCcBinding & { consume: boolean }> {
     return this.native.midiCcBindings();
   }
 
@@ -962,8 +957,8 @@ export class RealtimeEngine {
   }
 
   /**
-   * Set the rig of one part (0-15), or of the destination's default when `part`
-   * is omitted, on the instrument bound to `destinationId`. A direct call, not a
+   * Set the rig of one part (0-15), or of the destination's default with
+   * {@link PART_RIG_ALL_PARTS}, on the instrument bound to `destinationId`. A direct call, not a
    * stored edit: a destination with no instrument is an invalid parameter, and
    * an instrument without part rigs (a builtin, a host-callback instrument) is
    * refused as not implemented rather than succeeding quietly. `'chain'` takes
@@ -972,8 +967,7 @@ export class RealtimeEngine {
   setPartRig(request: PartRigRequest): void {
     requestObject('setPartRig', request, 'request', true);
     noOrdinal('mode', request.mode, PART_RIG_MODES);
-    // Absent part addresses the destination's default rig (the C ABI's 0xff).
-    const rig = normalizePartRig({ ...request, part: request.part ?? 0xff });
+    const rig = normalizePartRig(request);
     this.native.setPartRig(rig.destinationId, rig.part, rig.mode as never, rig.insertsJson);
   }
 
@@ -1057,7 +1051,7 @@ export class RealtimeEngine {
     );
   }
 
-  /** Count of external-MIDI events dropped because the output queue was full. */
+  /** Count of external-MIDI events dropped because the output queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   get externalMidiDroppedCount(): number {
     return this.native.externalMidiDroppedCount();
   }
@@ -2485,12 +2479,12 @@ export class RealtimeEngine {
     return this.native.popClipPageRequest() ?? undefined;
   }
 
-  /** Cumulative page misses dropped because the native bounded request queue was full. */
+  /** Cumulative page misses dropped because the native bounded request queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   get clipPageRequestOverflowCount(): number {
     return this.native.clipPageRequestOverflowCount();
   }
 
-  /** Cumulative warp-stretch requests dropped because the native queue was full. */
+  /** Cumulative warp-stretch requests dropped because the native queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   get warpStretchOverflowCount(): number {
     return this.native.warpStretchOverflowCount();
   }

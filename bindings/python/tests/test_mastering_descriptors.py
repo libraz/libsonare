@@ -69,7 +69,10 @@ def test_param_info_serves_the_catalog_rows_of_an_offline_repair_stage() -> None
         assert info
         assert tuple(info) == catalog[stage].params
         assert all(param.id is None for param in info)
-    assert libsonare.mastering_insert_param_info("repair.noSuchStage") == []
+    with pytest.raises(
+        libsonare.SonareValueError, match="^mastering_insert_param_info: insert must be one of "
+    ):
+        libsonare.mastering_insert_param_info("repair.noSuchStage")
 
 
 @pytest.mark.parametrize("stage", ["effects.reverb.room", "effects.acoustic.roomMorph"])

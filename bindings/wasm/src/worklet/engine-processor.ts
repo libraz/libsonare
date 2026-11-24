@@ -1166,6 +1166,7 @@ export class SonareRealtimeEngineWorkletProcessor {
             status: {
               capturedFrames: status.capturedFrames,
               overflowCount: status.overflowCount,
+              droppedFrames: status.droppedFrames,
               armed: status.armed,
               punchEnabled: status.punchEnabled,
               source: status.source,
@@ -1852,8 +1853,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       }
     }
     const overflowCount = this.engine.clipPageRequestOverflowCount;
-    // The native counter is uint32_t; preserve a correct delta across its
-    // defined unsigned wraparound instead of emitting a negative count.
+    // The native tally is 64-bit; the transport word carries the delta modulo
+    // 2^32.
     const dropped = (overflowCount - this.clipPageRequestOverflowReported) >>> 0;
     this.clipPageRequestOverflowReported = overflowCount;
     if (ring) {

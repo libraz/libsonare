@@ -66,6 +66,9 @@ from ._cli_common import (
     _emit_effect_result as _emit_effect_result,
 )
 from ._cli_common import (
+    _error_message as _error_message,
+)
+from ._cli_common import (
     _exit_code_for as _exit_code_for,
 )
 from ._cli_common import (
@@ -369,8 +372,7 @@ def main() -> None:
     try:
         _dispatch()
     except (Exception, KeyboardInterrupt) as exc:
-        message = "cancelled" if isinstance(exc, KeyboardInterrupt) else str(exc)
-        print(f"Error: {message}", file=sys.stderr)
+        print(f"Error: {_error_message(exc)}", file=sys.stderr)
         sys.exit(_exit_code_for(exc))
 
 

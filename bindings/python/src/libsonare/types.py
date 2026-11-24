@@ -808,11 +808,31 @@ del _rebind_facade_exports
 if _TYPE_CHECKING:
     from ._project_instruments import ProjectDestinationInstrument as ProjectDestinationInstrument
     from ._project_instruments import ProjectInstrument as ProjectInstrument
+    from ._project_instruments import ProjectInstrumentBinding as ProjectInstrumentBinding
+    from ._project_instruments import ProjectSf2InstrumentBinding as ProjectSf2InstrumentBinding
+    from ._project_model import ProjectArticulationBinding as ProjectArticulationBinding
     from ._project_model import ProjectAutomationLane as ProjectAutomationLane
+    from ._project_model import ProjectAutoTempoResult as ProjectAutoTempoResult
+    from ._project_model import ProjectControllerProfileBinding as ProjectControllerProfileBinding
     from ._vocal_edit_marshal import VocalErrorDetail as VocalErrorDetail
 
 
 def __getattr__(name: str) -> object:
+    if name == "ProjectArticulationBinding":
+        from ._project_model import ProjectArticulationBinding
+
+        globals()[name] = ProjectArticulationBinding
+        return ProjectArticulationBinding
+    if name == "ProjectControllerProfileBinding":
+        from ._project_model import ProjectControllerProfileBinding
+
+        globals()[name] = ProjectControllerProfileBinding
+        return ProjectControllerProfileBinding
+    if name == "ProjectAutoTempoResult":
+        from ._project_model import ProjectAutoTempoResult
+
+        globals()[name] = ProjectAutoTempoResult
+        return ProjectAutoTempoResult
     if name == "ProjectAutomationLane":
         from ._project_model import ProjectAutomationLane
 
@@ -828,6 +848,16 @@ def __getattr__(name: str) -> object:
 
         globals()[name] = ProjectInstrument
         return ProjectInstrument
+    if name == "ProjectInstrumentBinding":
+        from ._project_instruments import ProjectInstrumentBinding
+
+        globals()[name] = ProjectInstrumentBinding
+        return ProjectInstrumentBinding
+    if name == "ProjectSf2InstrumentBinding":
+        from ._project_instruments import ProjectSf2InstrumentBinding
+
+        globals()[name] = ProjectSf2InstrumentBinding
+        return ProjectSf2InstrumentBinding
     if name == "VocalErrorDetail":
         from ._vocal_edit_marshal import VocalErrorDetail
 

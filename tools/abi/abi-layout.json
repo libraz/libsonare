@@ -2791,9 +2791,15 @@
         "name": "record_offset_samples",
         "offset": 32,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "dropped_frames",
+        "offset": 40,
+        "size": 8
       }
     ],
-    "size": 40
+    "size": 48
   },
   "SonareEngineClip": {
     "align": 8,
@@ -7570,14 +7576,8 @@
       },
       {
         "kind": "signed",
-        "name": "sample_rate",
-        "offset": 24,
-        "size": 4
-      },
-      {
-        "kind": "signed",
         "name": "instrument_latency_samples",
-        "offset": 28,
+        "offset": 24,
         "size": 4
       },
       {
@@ -10386,7 +10386,7 @@
     "size": 16
   },
   "SonareSf2InstrumentBinding": {
-    "align": 4,
+    "align": 8,
     "fields": [
       {
         "kind": "unsigned",
@@ -10399,9 +10399,15 @@
         "name": "config",
         "offset": 4,
         "size": 24
+      },
+      {
+        "kind": "pointer",
+        "name": "sound_font_uri",
+        "offset": 32,
+        "size": 8
       }
     ],
-    "size": 28
+    "size": 40
   },
   "SonareSf2InstrumentConfig": {
     "align": 4,

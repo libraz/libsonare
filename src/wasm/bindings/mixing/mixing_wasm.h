@@ -44,8 +44,8 @@ class MixerWasm {
 
   static MixerWasm* fromSceneJson(std::string json, int sample_rate, int block_size);
 
-  // Non-fatal warnings captured when this mixer was built from scene JSON, one
-  // entry per insert handed param keys it does not read; empty when all consumed.
+  // Non-fatal warnings captured when this mixer was built from scene JSON, such as
+  // a send to an undeclared bus; empty when there were none.
   val sceneWarnings() const;
 
   static std::string presetJson(std::string name);

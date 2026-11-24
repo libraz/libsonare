@@ -882,7 +882,7 @@ const loadMixScene: Record<MixSceneLoader, (scene: Record<string, unknown>) => v
   mixer_from_json: (scene) => Mixer.fromJson(JSON.stringify(scene), MIX_OPTIONS).destroy(),
   mixer_scene_option: (scene) => new Mixer({ ...MIX_OPTIONS, scene: scene as never }).destroy(),
   project_set_mixer_scene: (scene) => {
-    const project = new Project();
+    const project = new addon.Project();
     try {
       project.setMixerSceneJson(JSON.stringify(scene));
     } finally {
@@ -901,9 +901,21 @@ describe('mix-scene document refusals come from the core', () => {
   const refused = mixScene.loaders.flatMap((loader) =>
     mixScene.refused.map((entry) => ({ loader, ...entry })),
   );
-  it.each(refused)('refuses $id through $loader', ({ loader, scene, cause, code, message }) => {
-    // A document's content is refused by the core's reader, never re-labelled as an argument.
+  it.each(refused)('refuses $id through $loader', ({ loader, scene, cause, code, message, id }) => {
     expect(cause).toBe('format');
+    if (loader === 'mixer_scene_option') {
+      const call = () => loadMixScene[loader](scene);
+      const shape = id === 'unknown_key' || id === 'send_timing_ordinal';
+      const entry = loader === 'mixer_scene_option' ? 'Mixer' : 'Project.setMixerScene';
+      const text = (message as string).replace(/^(unknown key )?/, '$1scene.');
+      expect(call).toThrow(shape ? TypeError : RangeError);
+      expect(call).toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining(`${entry}: ${text}`),
+        }),
+      );
+      return;
+    }
     expect(() => loadMixScene[loader](scene)).toThrow(
       expect.objectContaining({
         code: ErrorCode[code as keyof typeof ErrorCode],

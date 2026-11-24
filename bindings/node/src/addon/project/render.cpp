@@ -36,7 +36,6 @@ void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* opti
       IntProperty(obj, "numChannels", AbsentIsSentinel<int>{options->num_channels});
   options->instrument_latency_samples =
       IntProperty(obj, "instrumentLatencySamples", options->instrument_latency_samples);
-  options->count_in_bars = IntProperty(obj, "countInBars", options->count_in_bars);
 }
 
 // Parses a JS instrument descriptor into a built-in synth binding. Throws a
@@ -369,6 +368,7 @@ struct BounceJob {
   int num_channels = 0;
   SonareError error = SONARE_OK;
   std::string detail;
+  std::optional<std::string> reason;
   bool shape_refusal = false;
 
   BounceJob(JsThreadBridge* bridge_in, SonareProject* project_in,
@@ -399,10 +399,11 @@ void RunBounceJob(void* arg) {
   auto* job = static_cast<BounceJob*>(arg);
   job->error = sonare_project_bounce(job->project, job->options, &job->interleaved, &job->frames,
                                      &job->num_channels);
-  // The detail slot is thread-local, so it is read here and not on the JS thread.
+  // Copy the thread-local error before returning to JS.
   if (job->error != SONARE_OK) {
     job->detail = sonare_node::ErrorMessageForCode(job->error);
     job->shape_refusal = sonare_node::LastRefusalIsShape();
+    if (const char* reason = sonare_last_error_reason()) job->reason = reason;
   }
   job->bridge->Finish();
 }
@@ -470,12 +471,14 @@ bool ReadSynthBindings(Napi::Env env, const Napi::Value& value,
 }
 
 bool ReadSf2Bindings(Napi::Env env, const Napi::Value& value,
-                     std::vector<SonareSf2InstrumentBinding>* bindings) {
+                     std::vector<SonareSf2InstrumentBinding>* bindings,
+                     std::vector<std::optional<std::string>>* sound_font_uris) {
   if (value.IsUndefined() || value.IsNull()) return true;
   Napi::Array arr;
-  if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
-  const uint32_t arr_count = sonare_node::node_list_length(arr, "instruments");
+  if (!RequiredArrayValue(env, value, "sf2Instruments", &arr)) return false;
+  const uint32_t arr_count = sonare_node::node_list_length(arr, "sf2Instruments");
   bindings->reserve(arr_count);
+  sound_font_uris->resize(arr_count);
   for (uint32_t i = 0; i < arr_count; ++i) {
     Napi::Value element = arr.Get(i);
     if (!element.IsObject()) {
@@ -497,7 +500,17 @@ bool ReadSf2Bindings(Napi::Env env, const Napi::Value& value,
         BoolProperty(obj, "clearBankRig", binding.config.clear_bank_rig != 0) ? 1 : 0;
     binding.config.gs_efx_realization =
         sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
+    const Napi::Value uri = obj.Get("soundFontUri");
+    if (!uri.IsUndefined() && !uri.IsNull()) {
+      (*sound_font_uris)[i].emplace();
+      const std::string subject = "sf2Instruments[" + std::to_string(i) + "].soundFontUri";
+      if (!RequiredStringValue(env, uri, subject, &*(*sound_font_uris)[i])) return false;
+    }
     bindings->push_back(binding);
+  }
+  for (size_t i = 0; i < bindings->size(); ++i) {
+    (*bindings)[i].sound_font_uri =
+        (*sound_font_uris)[i] ? (*sound_font_uris)[i]->c_str() : nullptr;
   }
   return true;
 }
@@ -662,13 +675,11 @@ Napi::Value ProjectWrap::CountInFrames(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int64_t frames = 0;
-  ThrowIfError(env, sonare_project_count_in_frames(project_, count_in_bars,
-                                                   SONARE_PROJECT_SAMPLE_RATE_PROJECT, &frames));
+  ThrowIfError(env, sonare_project_count_in_frames(project_, count_in_bars, &frames));
   if (env.IsExceptionPending()) return env.Undefined();
   if (frames < 0 || static_cast<double>(frames) > sonare_node::kMaxSafeInteger) {
-    sonare_node::ThrowSonareErrorMessage(
-        env, SONARE_ERROR_INVALID_FORMAT,
-        "countInFrames result is not exactly representable as a number");
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "frames is not exactly representable as a number");
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(frames));
@@ -698,6 +709,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   // Owns the engine-param keys each synth binding's patch borrows; alive across the C call.
   std::vector<sonare_node::SynthPatchStorage> patch_storages;
   std::vector<SonareSf2InstrumentBinding> sf2_bindings;
+  std::vector<std::optional<std::string>> sf2_sound_font_uris;
   JsThreadBridge bridge;
   std::vector<JsInstrumentSlot> slots;
   std::vector<SonareInstrumentBinding> callback_bindings;
@@ -708,7 +720,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   std::vector<SonareProjectArticulationBinding> articulations;
   if (!ReadBuiltinBindings(env, info[1], &builtin_bindings) ||
       !ReadSynthBindings(env, info[2], &synth_bindings, &patch_storages) ||
-      !ReadSf2Bindings(env, info[3], &sf2_bindings) ||
+      !ReadSf2Bindings(env, info[3], &sf2_bindings, &sf2_sound_font_uris) ||
       !ReadCallbackBindings(env, info[4], &bridge, &slots, &callback_bindings) ||
       (has_settings_obj &&
        (!ReadBounceMetronome(env, settings_obj, &metronome, &has_metronome) ||
@@ -716,6 +728,17 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
                                       &controller_profiles, &controller_profile_names) ||
         !ReadBounceArticulations(env, settings_obj.Get("articulations"), &articulations)))) {
     return env.Undefined();
+  }
+  if (has_settings_obj) {
+    const Napi::Value count_in_bars_value = settings_obj.Get("countInBars");
+    if (!count_in_bars_value.IsUndefined() && !count_in_bars_value.IsNull()) {
+      int32_t count_in_bars = 0;
+      if (!RequiredDomainValue(env, count_in_bars_value, "countInBars",
+                               sonare_c_detail::kProjectCountInBarsDomain, &count_in_bars)) {
+        return env.Undefined();
+      }
+      options.count_in_bars = count_in_bars;
+    }
   }
   options.builtin_instruments = builtin_bindings.empty() ? nullptr : builtin_bindings.data();
   options.builtin_instrument_count = builtin_bindings.size();
@@ -758,13 +781,9 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   // the callback's pending exception is dropped to report it.
   if (job.error != SONARE_OK) {
     if (env.IsExceptionPending()) (void)env.GetAndClearPendingException();
-    if (!job.detail.empty()) {
-      sonare_node::MakeSonareError(env, job.error, job.detail, job.shape_refusal)
-          .ThrowAsJavaScriptException();
-    } else {
-      // The detail slot is thread-local and was read on the bounce thread.
-      sonare_node::ThrowSonareErrorMessage(env, job.error, sonare_error_message(job.error));
-    }
+    sonare_node::MakeSonareError(env, job.error, job.detail, job.shape_refusal,
+                                 job.reason ? job.reason->c_str() : nullptr)
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (env.IsExceptionPending()) return env.Undefined();
@@ -779,7 +798,10 @@ void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   const uint8_t* bytes = nullptr;
   size_t len = 0;
   if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return;
-  ThrowIfError(env, sonare_project_load_soundfont(project_, bytes, len));
+  std::optional<std::string> uri;
+  if (!OptionalStringArg(env, info, 1, "uri", &uri)) return;
+  ThrowIfError(env,
+               sonare_project_load_sound_font(project_, uri ? uri->c_str() : nullptr, bytes, len));
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -787,7 +809,9 @@ void ProjectWrap::ClearSoundFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN_VOID(env, project_, "Project");
-  ThrowIfError(info.Env(), sonare_project_clear_soundfont(project_));
+  std::optional<std::string> uri;
+  if (!OptionalStringArg(env, info, 0, "uri", &uri)) return;
+  ThrowIfError(env, sonare_project_clear_sound_font(project_, uri ? uri->c_str() : nullptr));
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -795,8 +819,11 @@ Napi::Value ProjectWrap::SoundFontPresetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  std::optional<std::string> uri;
+  if (!OptionalStringArg(env, info, 0, "uri", &uri)) return env.Undefined();
   size_t out = 0;
-  ThrowIfError(env, sonare_project_soundfont_preset_count(project_, &out));
+  ThrowIfError(
+      env, sonare_project_sound_font_preset_count(project_, uri ? uri->c_str() : nullptr, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
   SONARE_NODE_CATCH(env)
@@ -806,13 +833,17 @@ Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  std::optional<std::string> uri;
+  if (!OptionalStringArg(env, info, 0, "uri", &uri)) return env.Undefined();
   size_t total = 0;
-  ThrowIfError(env, sonare_project_soundfont_manifest(project_, nullptr, 0, &total));
+  ThrowIfError(env, sonare_project_sound_font_manifest(project_, uri ? uri->c_str() : nullptr,
+                                                       nullptr, 0, &total));
   if (env.IsExceptionPending()) return env.Undefined();
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
-    ThrowIfError(env, sonare_project_soundfont_manifest(project_, sonare_node::ElementData(entries),
-                                                        total, &total));
+    ThrowIfError(
+        env, sonare_project_sound_font_manifest(project_, uri ? uri->c_str() : nullptr,
+                                                sonare_node::ElementData(entries), total, &total));
     if (env.IsExceptionPending()) return env.Undefined();
   }
   Napi::Array out = Napi::Array::New(env, entries.size());

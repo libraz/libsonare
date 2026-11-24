@@ -158,6 +158,20 @@ describe('Sonare WASM part rig', () => {
           TypeError,
         ).message,
       ).toBe('Project.setPartRig: inserts[0].params must be an object');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.setPartRig({
+              destinationId: 0,
+              part: 0,
+              mode: 'chain',
+              inserts: [{ processor: LIMITER.processor, params: { unknown: 1 } }],
+            }),
+          TypeError,
+        ).message,
+      ).toBe(
+        'Project.setPartRig: unknown key inserts[0].params.unknown (expected lookaheadMs, postGainDb, ratio, releaseMs, thresholdDb)',
+      );
       expect(project.partRig({ destinationId: 0, part: 0 })).toEqual({ mode: 'none' });
     } finally {
       project.destroy();
@@ -207,6 +221,11 @@ describe('Sonare WASM part rig', () => {
           RangeError,
         ).message,
       ).toBe('RealtimeEngine.setPartRig: part must be an integer in [0, 15] or 255');
+      // Every part is the explicit PART_RIG_ALL_PARTS, never an omitted part.
+      expectRefusalOf(
+        () => engine.setPartRig({ destinationId: 0, mode: 'none' } as never),
+        TypeError,
+      );
       expect(
         expectRefusalOf(
           () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
@@ -225,6 +244,20 @@ describe('Sonare WASM part rig', () => {
           RangeError,
         ).message,
       ).toBe('RealtimeEngine.setPartRig: inserts[0].processor must name an insert processor');
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.setPartRig({
+              destinationId: 0,
+              part: 0,
+              mode: 'chain',
+              inserts: [{ processor: LIMITER.processor, params: { unknown: 1 } }],
+            }),
+          TypeError,
+        ).message,
+      ).toBe(
+        'RealtimeEngine.setPartRig: unknown key inserts[0].params.unknown (expected lookaheadMs, postGainDb, ratio, releaseMs, thresholdDb)',
+      );
     } finally {
       engine.destroy();
     }

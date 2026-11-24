@@ -300,6 +300,11 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
       ),
   },
   {
+    callable: 'Project.setMixerScene',
+    message: `Project.setMixerScene: ${overBudget('scene')}`,
+    run: (api, l) => withProject(api, (p) => p.setMixerScene({ strips: l } as never)),
+  },
+  {
     callable: 'Project.bakeMidiFx',
     message: `Project.bakeMidiFx: ${overBudget('config')}`,
     run: (api, l) =>

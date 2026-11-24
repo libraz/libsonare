@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from ._cstruct import CStruct
-from ._errors import _entry, _malformed_output, _refuse
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._ffi_types_mastering_project import (
     SonareControllerBinding,
     SonareMidiCcBindingList,
@@ -453,13 +453,15 @@ class _EngineMidiMixin:
         referenced after the call. Raises :class:`SonareError` on malformed
         input.
         """
-        lib = _get_lib()
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise _refuse_type("data must be bytes-like")
         buf = bytes(data)
         if not buf:
-            raise _refuse("SoundFont data must not be empty")
+            raise _refuse("data must not be empty")
+        lib = _get_lib()
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
-            lib.sonare_engine_load_soundfont(
+            lib.sonare_engine_load_sound_font(
                 self._require_handle(), c_data, ctypes.c_size_t(len(buf))
             )
         )
@@ -872,14 +874,6 @@ class _EngineMidiMixin:
             return [_cc_binding_from_c(result.items[i]) for i in range(count)]
         finally:
             lib.sonare_free_midi_cc_binding_list(ctypes.byref(result))
-
-    @property
-    def midi_cc_binding_count(self) -> int:
-        """Return the number of live MIDI CC bindings."""
-        lib = _get_lib()
-        out = ctypes.c_size_t()
-        _check(lib.sonare_engine_midi_cc_binding_count(self._require_handle(), ctypes.byref(out)))
-        return int(out.value)
 
     @_entry("RealtimeEngine.set_midi_fx")
     def set_midi_fx(self, destination_id: int, config: MidiFxConfig) -> None:

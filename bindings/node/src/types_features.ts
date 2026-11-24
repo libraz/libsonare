@@ -279,7 +279,7 @@ export interface StreamStats {
   durationSec: number;
   /** Frames produced and not yet read. */
   pendingFrames: number;
-  /** Frames dropped because the unread queue was full. */
+  /** Frames dropped because the unread queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   droppedOutputFrames: number;
   /** Oldest chord progression entries dropped at the history cap. */
   droppedChordProgressionEntries: number;

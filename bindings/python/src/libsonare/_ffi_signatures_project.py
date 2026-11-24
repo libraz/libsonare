@@ -149,25 +149,28 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
     ]
 
-    lib.sonare_project_load_soundfont.restype = ctypes.c_int32
-    lib.sonare_project_load_soundfont.argtypes = [
+    lib.sonare_project_load_sound_font.restype = ctypes.c_int32
+    lib.sonare_project_load_sound_font.argtypes = [
         ctypes.c_void_p,
+        ctypes.c_char_p,
         ctypes.POINTER(ctypes.c_uint8),
         ctypes.c_size_t,
     ]
 
-    lib.sonare_project_clear_soundfont.restype = ctypes.c_int32
-    lib.sonare_project_clear_soundfont.argtypes = [ctypes.c_void_p]
+    lib.sonare_project_clear_sound_font.restype = ctypes.c_int32
+    lib.sonare_project_clear_sound_font.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
 
-    lib.sonare_project_soundfont_preset_count.restype = ctypes.c_int32
-    lib.sonare_project_soundfont_preset_count.argtypes = [
+    lib.sonare_project_sound_font_preset_count.restype = ctypes.c_int32
+    lib.sonare_project_sound_font_preset_count.argtypes = [
         ctypes.c_void_p,
+        ctypes.c_char_p,
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    lib.sonare_project_soundfont_manifest.restype = ctypes.c_int32
-    lib.sonare_project_soundfont_manifest.argtypes = [
+    lib.sonare_project_sound_font_manifest.restype = ctypes.c_int32
+    lib.sonare_project_sound_font_manifest.argtypes = [
         ctypes.c_void_p,
+        ctypes.c_char_p,
         ctypes.POINTER(SonareSf2ProgramStatus),
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
@@ -664,8 +667,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(SonareProjectTempoOptions),
         ctypes.c_size_t,
-        ctypes.c_uint8,
-        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int32,
+        ctypes.POINTER(SonareProjectAutoTempoResult),
     ]
     lib.sonare_project_analyze_tempo.restype = ctypes.c_int32
     lib.sonare_project_analyze_tempo.argtypes = [
@@ -972,17 +975,24 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareProjectMarker),
     ]
 
-    # Bound once for both by-index registration loops below: without it the
-    # first loop pins _struct to its own two structs and the second one, which
-    # registers a different set through the identical signature, is rejected.
-    _struct: type[ctypes.Structure]
-    for _name, _struct in (
-        ("sonare_project_tempo_segment_by_index", SonareProjectTempoSegment),
-        ("sonare_project_time_signature_by_index", SonareProjectTimeSignatureSegment),
-    ):
-        _fn = getattr(lib, _name)
-        _fn.restype = ctypes.c_int32
-        _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
+    lib.sonare_project_tempo_segments.restype = ctypes.c_int32
+    lib.sonare_project_tempo_segments.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareProjectTempoSegmentList),
+    ]
+    lib.sonare_free_project_tempo_segment_list.restype = None
+    lib.sonare_free_project_tempo_segment_list.argtypes = [
+        ctypes.POINTER(SonareProjectTempoSegmentList),
+    ]
+    lib.sonare_project_time_signatures.restype = ctypes.c_int32
+    lib.sonare_project_time_signatures.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareProjectTimeSignatureList),
+    ]
+    lib.sonare_free_project_time_signature_list.restype = None
+    lib.sonare_free_project_time_signature_list.argtypes = [
+        ctypes.POINTER(SonareProjectTimeSignatureList),
+    ]
 
     for _name in (
         "sonare_project_marker_name_by_index",
@@ -1013,6 +1023,7 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_char_p,
     ]
 
+    _struct: type[ctypes.Structure]
     for _name, _struct in (
         ("sonare_project_track_by_index", SonareProjectTrack),
         ("sonare_project_clip_by_index", SonareProjectClip),
@@ -1100,7 +1111,6 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_project_count_in_frames.argtypes = [
         ctypes.c_void_p,
         ctypes.c_int32,
-        ctypes.c_int,
         ctypes.POINTER(ctypes.c_int64),
     ]
 
@@ -1108,8 +1118,6 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         "sonare_project_clip_count",
         "sonare_project_marker_count",
         "sonare_project_source_count",
-        "sonare_project_tempo_segment_count",
-        "sonare_project_time_signature_count",
         "sonare_project_track_count",
     ):
         _fn = getattr(lib, _name)

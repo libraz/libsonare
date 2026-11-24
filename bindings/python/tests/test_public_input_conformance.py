@@ -148,11 +148,11 @@ def test_bind_midi_cc_refuses_a_byte_above_the_midi_data_range(field: str, value
             ),
         ):
             engine.bind_midi_cc(binding)
-        assert engine.midi_cc_binding_count == 0
+        assert len(engine.midi_cc_bindings()) == 0
         engine.bind_midi_cc(
             MidiCcBinding(param_id=1, kind=kind, **{"cc_number": 1, field: accepted})
         )
-        assert engine.midi_cc_binding_count == 1
+        assert len(engine.midi_cc_bindings()) == 1
 
 
 @pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])
@@ -160,14 +160,14 @@ def test_bind_midi_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) -> Non
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         if case["accepted"]:
             engine.bind_midi_cc(_midi_cc_binding(case))
-            assert engine.midi_cc_binding_count == 1
+            assert len(engine.midi_cc_bindings()) == 1
         else:
             with pytest.raises(
                 SonareValueError,
                 match=rf"^\S+: {re.escape(_binding_field(case))} must be an integer in \[0, ",
             ):
                 engine.bind_midi_cc(_midi_cc_binding(case))
-            assert engine.midi_cc_binding_count == 0
+            assert len(engine.midi_cc_bindings()) == 0
 
 
 @pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])

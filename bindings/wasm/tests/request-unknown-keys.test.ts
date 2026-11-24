@@ -167,6 +167,7 @@ describe('request objects refuse unknown keys', () => {
 
 /** Positional arguments ahead of the request object on `Project` methods that take one. */
 const PROJECT_LEADING_ARGS: Partial<Record<string, unknown[]>> = {
+  'Project.loadSoundFont': [new Uint8Array(4)],
   'Project.moveClip': [0, 0],
   'Project.setClipFade': [0],
   'Project.setClipLoop': [0],

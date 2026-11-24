@@ -81,8 +81,6 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
   if (!sonare_node::CcBindingFromObject(env, object, &binding, "")) {
     return env.Undefined();
   }
-  binding.consume = sonare_node::BoolProperty(object, "consume", false) ? 1 : 0;
-  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, &binding));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -94,16 +92,6 @@ Napi::Value RealtimeEngineWrap::ClearMidiCcBindings(const Napi::CallbackInfo& in
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_clear_midi_cc_bindings(engine_));
   return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  size_t count = 0;
-  ThrowIfError(env, sonare_engine_midi_cc_binding_count(engine_, &count));
-  return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
 }
 
@@ -136,7 +124,6 @@ Napi::Value RealtimeEngineWrap::MidiCcBindings(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object item = sonare_node::CcBindingToObject(env, binding);
-    item.Set("consume", binding.consume != 0);
     out.Set(static_cast<uint32_t>(i), item);
   }
   return out;

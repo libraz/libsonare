@@ -213,6 +213,9 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
       p.setDestinationInstrument(0, { kind: 'synth', patch: { modRoutings: l } } as never),
     ),
   ),
+  row('Project.setMixerScene', 'scene', (api, l) =>
+    withProject(api, (p) => p.setMixerScene({ strips: l } as never)),
+  ),
   row('encodeAudio', 'channels', (api, l) =>
     api.encodeAudio({ channels: l, sampleRate: SR, format: 'wav' } as never),
   ),

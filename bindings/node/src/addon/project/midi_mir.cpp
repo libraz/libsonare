@@ -70,7 +70,7 @@ bool RefuseUnknownAnnotationKeys(Napi::Env env, const Napi::Object& row, const c
       }
       const std::string subject = row_subject + "." + key;
       throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, subject,
-                                                    "", expected)
+                                                    expected)
           .as_caller_spelled();
     }
   }
@@ -396,15 +396,23 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 3, "applyTimeSignatures", false, &apply_time_signatures)) {
     return env.Undefined();
   }
-  float out_bpm = 0.0f;
+  SonareProjectAutoTempoResult result{};
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 4 ? info[4] : env.Undefined());
   ThrowIfError(
       env, sonare_project_auto_tempo(project_, sonare_node::ElementData(audio),
                                      audio.ElementLength(), sample_rate, &options, candidate_index,
-                                     apply_time_signatures ? 1 : 0, &out_bpm));
+                                     apply_time_signatures ? 1 : 0, &result));
   if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, out_bpm);
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("bpm", Napi::Number::New(env, result.bpm));
+  out.Set("bpmConfidence", Napi::Number::New(env, result.bpm_confidence));
+  Napi::Object time_signature = Napi::Object::New(env);
+  time_signature.Set("numerator", Napi::Number::New(env, result.time_signature.numerator));
+  time_signature.Set("denominator", Napi::Number::New(env, result.time_signature.denominator));
+  time_signature.Set("confidence", Napi::Number::New(env, result.time_signature.confidence));
+  out.Set("timeSignature", time_signature);
+  return out;
   SONARE_NODE_CATCH(env)
 }
 
@@ -529,11 +537,10 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
   roman.resize(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "chord symbol must be an object").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    if (!RequiredObjectValue(env, entry, "chords[" + std::to_string(i) + "]", &obj)) {
       return env.Undefined();
     }
-    Napi::Object obj = entry.As<Napi::Object>();
     static constexpr std::array<const char*, 8> kAllowed = {
         "endPpq",       "extensions", "modulationBoundary", "quality",
         "romanNumeral", "rootPc",     "slashBassPc",        "startPpq"};
@@ -551,12 +558,13 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
     Napi::Value ext = obj.Get("extensions");
     if (!ext.IsUndefined() && !ext.IsNull()) {
       Napi::Array arr;
-      if (!RequiredArrayValue(env, ext, "extensions", &arr)) return env.Undefined();
-      const uint32_t arr_count = sonare_node::node_list_length(arr, "extensions");
+      const std::string subject = "chords[" + std::to_string(i) + "].extensions";
+      if (!RequiredArrayValue(env, ext, subject, &arr)) return env.Undefined();
+      const uint32_t arr_count = sonare_node::node_list_length(arr, subject);
       extensions[i].reserve(arr_count);
       for (uint32_t j = 0; j < arr_count; ++j) {
         uint8_t extension = 0;
-        if (!RequiredMidiByteValue(env, arr.Get(j), "extensions[" + std::to_string(j) + "]",
+        if (!RequiredMidiByteValue(env, arr.Get(j), subject + "[" + std::to_string(j) + "]",
                                    &extension)) {
           return env.Undefined();
         }
@@ -569,7 +577,10 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
         sonare_node::IntInRangeOrAbsentProperty(obj, "slashBassPc", 0, 11, 255));
     Napi::Value rn = obj.Get("romanNumeral");
     if (!rn.IsUndefined() && !rn.IsNull()) {
-      roman[i] = StringProperty(obj, "romanNumeral", "");
+      if (!RequiredStringValue(env, rn, "chords[" + std::to_string(i) + "].romanNumeral",
+                               &roman[i])) {
+        return env.Undefined();
+      }
       chord.roman_numeral = roman[i].c_str();
     }
     chord.modulation_boundary =

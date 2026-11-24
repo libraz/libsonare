@@ -390,7 +390,7 @@ describe('StreamingEqualizer band tokens', () => {
     { type: 'Bell' },
     { type: 'peak', coeffMode: 'Rbj' },
     { type: 'peak', phase: 'NaturalPhase' },
-  ])('refuses the earlier spelling %j', (band) => {
+  ])('refuses non-canonical enum tokens %j', (band) => {
     const eq = new StreamingEqualizer({ sampleRate });
     try {
       expect(errorOf(() => eq.setBand(0, band as never))).toBeInstanceOf(RangeError);
@@ -400,16 +400,14 @@ describe('StreamingEqualizer band tokens', () => {
   });
 
   it.each(['lookaheadMs', 'bogus'])(
-    'refuses the undeclared band key %s with the accepted list',
+    'refuses the undeclared band key %s with the sorted accepted list',
     (key) => {
       const eq = new StreamingEqualizer({ sampleRate });
       try {
         const error = errorOf(() => eq.setBand(0, { type: 'peak', [key]: 5 } as never));
         expect(error).toBeInstanceOf(TypeError);
-        expect((error as Error).message).toMatch(
-          new RegExp(
-            `^StreamingEqualizer\\.setBand: unknown key band\\.${key} \\(expected attackMs, autoThreshold, .*detectorDelayMs, .*type\\)$`,
-          ),
+        expect((error as Error).message).toBe(
+          `StreamingEqualizer.setBand: unknown key band.${key} (expected attackMs, autoThreshold, bypassed, coeffMode, detectorDelayMs, dynamic, enabled, externalSidechain, frequencyHz, gainDb, phase, placement, proportionalQ, proportionalQStrength, q, rangeDb, ratio, releaseMs, sidechainFreqHz, sidechainQ, slopeDbOct, soloed, thresholdDb, type)`,
         );
       } finally {
         eq.destroy();

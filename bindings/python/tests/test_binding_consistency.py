@@ -18,6 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from libsonare import BuiltinSynthConfig, Project, ProjectInstrumentBinding
+
 from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
@@ -545,14 +547,17 @@ def test_empty_bounce_returns_empty_array_repeatably() -> None:
 
 def test_empty_builtin_instrument_bounce_is_empty() -> None:
     """The built-in-instrument bounce also frees the sentinel on empty output."""
-    from libsonare import BuiltinSynthConfig, Project
-
     project = Project()
     try:
         project.set_sample_rate(48000)
         for _ in range(5):
             audio = project.bounce(
-                builtin_instruments=[(0, BuiltinSynthConfig())],
+                builtin_instruments=[
+                    ProjectInstrumentBinding(
+                        instrument=BuiltinSynthConfig(),
+                        destination_id=0,
+                    )
+                ],
                 num_channels=2,
             ).channels
             assert audio.size == 0

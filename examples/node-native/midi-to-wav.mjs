@@ -18,13 +18,13 @@ try {
     midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 64, velocity: 100 }),
     midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 64 }),
   ]);
-  const { channels } = project.bounce({ numChannels: 2, synthInstruments: [{ instrument: { preset: 'sawLead' } }] });
+  const { channels, sampleRate } = project.bounce({ numChannels: 2, synthInstruments: [{ instrument: { preset: 'sawLead' } }] });
   const samples = new Float32Array(channels[0].length * 2);
   channels[0].forEach((left, i) => {
     samples[2 * i] = left;
     samples[2 * i + 1] = channels[1][i];
   });
-  writePcm16Wav(outputPath, samples, 48000, 2);
+  writePcm16Wav(outputPath, samples, sampleRate, channels.length);
 } finally {
   project.destroy();
 }

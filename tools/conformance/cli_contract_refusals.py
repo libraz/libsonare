@@ -274,8 +274,44 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
         "invalid numeric value for parameter 'tempoBpm'",
     ),
     (
+        ["suggest-mix", "--input", "{input}", "--params", "targetTrackLufs=1e100"],
+        "invalid numeric value for parameter 'targetTrackLufs'",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=19"],
+        "tempoBpm must be 0 or a tempo between 20 and 400 BPM",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=401"],
+        "tempoBpm must be 0 or a tempo between 20 and 400 BPM",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "nFft=3"],
+        "nFft must be an even integer in [2, 524288]",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "nFft=2.5"],
+        "nFft must be an even integer in [2, 524288]",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "nFft=524290"],
+        "nFft must be an even integer in [2, 524288]",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "hopLength=0"],
+        "hopLength must be an integer in [1, 2147483647]",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "hopLength=1.5"],
+        "hopLength must be an integer in [1, 2147483647]",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "hopLength=2147483648"],
+        "hopLength must be an integer in [1, 2147483647]",
+    ),
+    (
         ["suggest-mix", "--input", "{input}", "--params", "enable_eq=1"],
-        "assistant param enable_eq is an earlier spelling; write enableEq",
+        "unknown key enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, targetTrackLufs, tempoBpm)",
     ),
     (
         ["suggest-mix", "--input", "{input}", "--params", "nosuchkey=1"],
@@ -471,11 +507,39 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     ),
     (
         ["mastering-suggest", "{input}", "--params", "target_platform=club"],
-        "--params target_platform is an earlier spelling; write targetPlatform",
+        "unknown key target_platform (expected ceilingDbtp, enableRepair, preferStreamingSafe, preset, speechMonoAmount, targetLufs, targetPlatform)",
     ),
     (
         ["mastering-suggest", "{input}", "--target-lufs", "-12", "--params", "targetLufs=-12"],
         "--target-lufs and --params targetLufs= set the same value",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "preset=3"],
+        "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, techno, metal, trap, rnb, jazz, kpop, trance, gameOst",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "preset=vinyl"],
+        "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, techno, metal, trap, rnb, jazz, kpop, trance, gameOst",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "targetPlatform=2"],
+        "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, cinema, club, cd",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "targetPlatform=typo"],
+        "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, cinema, club, cd",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "targetLufs=invalid"],
+        "invalid numeric value for parameter 'targetLufs'",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "ceilingDbtp=1e100"],
+        "invalid numeric value for parameter 'ceilingDbtp'",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "speechMonoAmount=nan"],
+        "invalid numeric value for parameter 'speechMonoAmount'",
     ),
     (
         [

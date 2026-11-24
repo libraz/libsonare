@@ -349,6 +349,14 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.midiCcName', 'controller', () => addon.midiCcName('x')],
   ['addon.midiPerNoteControllerName', 'index', () => addon.midiPerNoteControllerName('x')],
   ['Project.setMixerSceneJson', 'document', () => withProject((p) => p.setMixerSceneJson(5))],
+  [
+    'Project.loadSoundFont',
+    'uri',
+    () => withProject((p) => p.loadSoundFont(new Uint8Array([1]), 5)),
+  ],
+  ['Project.clearSoundFont', 'uri', () => withProject((p) => p.clearSoundFont(5))],
+  ['Project.soundFontPresetCount', 'uri', () => withProject((p) => p.soundFontPresetCount(5))],
+  ['Project.soundFontManifest', 'uri', () => withProject((p) => p.soundFontManifest(5))],
   ['Audio.silenceRatio', 'thresholdDb', () => readerAudio().silenceRatio('x')],
   ['Audio.truePeakDb', 'oversampleFactor', () => readerAudio().truePeakDb('x')],
   [
@@ -2215,20 +2223,6 @@ export const CASES: AbortGuardCase[] = [
     name: 'Project.sourceByIndex',
     missingRequired: [],
     badProjectArguments: [{ argument: 'index', call: ({ project }) => project.sourceByIndex('0') }],
-  },
-  {
-    name: 'Project.tempoSegmentByIndex',
-    missingRequired: [],
-    badProjectArguments: [
-      { argument: 'index', call: ({ project }) => project.tempoSegmentByIndex('0') },
-    ],
-  },
-  {
-    name: 'Project.timeSignatureByIndex',
-    missingRequired: [],
-    badProjectArguments: [
-      { argument: 'index', call: ({ project }) => project.timeSignatureByIndex('0') },
-    ],
   },
   {
     name: 'Project.splitClip',

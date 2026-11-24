@@ -14960,10 +14960,9 @@ test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.midiCcBindingCount"
-changed = "readonly getter (was a method)"
+removed = "Use midiCcBindings().length."
 domain = "engine"
-rule = "getters"
-test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+rule = "individual"
 
 [[entry]]
 kind = "method"
@@ -15308,7 +15307,7 @@ rule = "strip-ref"
 kind = "method"
 old = "RealtimeEngine.setTrackStripJson"
 to = "RealtimeEngine.setStrip"
-changed = "setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>"
+changed = "setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys."
 domain = "engine"
 rule = "typed-results"
 test = "bindings/wasm/tests/scene-warnings.test.ts::engine strip setters refuse an unknown key by name"
@@ -15317,7 +15316,7 @@ test = "bindings/wasm/tests/scene-warnings.test.ts::engine strip setters refuse 
 kind = "method"
 old = "RealtimeEngine.setMasterStripJson"
 to = "RealtimeEngine.setStrip"
-changed = "setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>"
+changed = "setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys."
 domain = "engine"
 rule = "typed-results"
 test = "bindings/wasm/tests/scene-warnings.test.ts::engine strip setters refuse an unknown key by name"
@@ -15326,7 +15325,7 @@ test = "bindings/wasm/tests/scene-warnings.test.ts::engine strip setters refuse 
 kind = "method"
 old = "RealtimeEngine.setBusStripJson"
 to = "RealtimeEngine.setBusStrip"
-changed = "setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>"
+changed = "setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys."
 domain = "engine"
 rule = "typed-results"
 test = "bindings/wasm/tests/scene-warnings.test.ts::the bus strip setter refuses an unknown key as an argument"
@@ -15911,7 +15910,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination i
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setPartRig"
-changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain')"
+changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and part is required (PART_RIG_ALL_PARTS selects every part); inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused on every insert construction route as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain')"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine.test.ts::sets a part rig from one request"
@@ -16930,10 +16929,10 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry a
 kind = "method"
 old = "Mixer.fromSceneJson"
 to = "Mixer.fromJson"
-changed = "static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required"
+changed = "static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required; an unread insert params key is refused as InvalidFormat with its indexed document path and the sorted accepted keys"
 domain = "engine"
 rule = "construction"
-test = "bindings/wasm/tests/surface/engine-mixer.test.ts::fromJson builds from a scene JSON string"
+test = "bindings/wasm/tests/scene-warnings.test.ts::names unread insert params in typed scenes and loaded documents"
 
 [[entry]]
 kind = "method"
@@ -20758,18 +20757,17 @@ rule = "getters"
 [[entry]]
 kind = "method"
 old = "Project.soundFontPresetCount"
-changed = "readonly getter (was a method)"
+changed = "soundFontPresetCount({ uri }?) is a method. Omit the URI to count presets in the default SoundFont."
 domain = "project"
-rule = "getters"
-test = "bindings/wasm/tests/soundfont.test.ts::reads the preset count as a getter"
+rule = "individual"
+test = "bindings/wasm/tests/soundfont.test.ts::keeps SoundFonts and manifests independent by URI"
 
 [[entry]]
 kind = "method"
 old = "Project.setMixerSceneJson"
-changed = "returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed"
+removed = "Pass a MixSceneDocumentInput to setMixerScene(scene), or omit scene to clear it. Unknown scene keys and wrong field types are TypeError. Out-of-domain values are RangeError."
 domain = "project"
 rule = "individual"
-test = "bindings/wasm/tests/scene-warnings.test.ts::Project.setMixerSceneJson refuses an unknown key by name as InvalidFormat"
 
 [[entry]]
 kind = "method"
@@ -20916,7 +20914,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSf2Instrument"
-removed = "Call bounce({ ...options, sf2Instruments: [...] })."
+removed = "Call bounce({ ...options, sf2Instruments: [{ instrument, destinationId, soundFontUri }] }). Omit soundFontUri for the default font."
 domain = "project"
 rule = "one-entry-per-operation"
 
@@ -21008,7 +21006,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.setPartRig"
-changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain')"
+changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused on every insert construction route as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain')"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
@@ -21032,7 +21030,7 @@ test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config
 [[entry]]
 kind = "method"
 old = "Project.autoTempo"
-changed = "autoTempo takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are option fields, not positional arguments"
+changed = "Both the request and (samples, sampleRate, options?) forms return ProjectAutoTempoResult { bpm, bpmConfidence, timeSignature: { numerator, denominator, confidence } }. The detected meter is returned even when applyTimeSignatures is omitted or false. The returned fields and the detected timeSignature fields are readonly."
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::installs a tempo from options with no positional boolean"
@@ -21133,7 +21131,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::returns compile diagnostics
 [[entry]]
 kind = "method"
 old = "Project.bounce"
-changed = "bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option"
+changed = "bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri."
 domain = "project"
 rule = "planar-channels"
 test = "bindings/wasm/tests/surface/project.test.ts::bounces to planar channels"
@@ -25046,7 +25044,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertName
 [[entry]]
 kind = "function"
 old = "masteringInsertParamInfo"
-changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]"
+changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError ('insert must be one of ...') instead of an empty list"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
@@ -26278,7 +26276,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixingScenePresetJ
 kind = "function"
 old = "suggestMixScene"
 to = "mixingAssistantSuggest"
-changed = "renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult"
+changed = "renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult. Earlier parameter spellings are refused as unknown keys with TypeError and the sorted accepted keys."
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::suggestMixScene"
@@ -28184,7 +28182,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size 
 [[entry]]
 kind = "class"
 old = "Mixer"
-changed = "maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError"
+changed = "maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError. A typed scene is a call argument. Structured refusals name scene.<path> and use TypeError for shape or RangeError for values. Mixer.fromJson retains InvalidFormat at document paths."
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/mixer-input-count.test.ts::reports the library default block size when maxBlockSize is omitted, and refuses an explicit 0"
@@ -37177,3 +37175,84 @@ changed = "a union keyed by targetKind: an opaque lane takes targetParamId, 'tra
 domain = "project"
 rule = "options-struct"
 test = "bindings/wasm/tests/project-lane-and-reader.test.ts::uses C target names and names typed parameter and unknown lane refusals"
+
+[[entry]]
+kind = "method"
+old = "Project.loadSoundFont"
+changed = "Accepts (data, { uri }?). Omit the URI to replace the default SoundFont. A supplied empty URI is refused."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/soundfont.test.ts::refuses an empty SoundFont URI"
+
+[[entry]]
+kind = "method"
+old = "Project.clearSoundFont"
+changed = "Accepts ({ uri }?). Omit the URI to clear only the default SoundFont."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/soundfont.test.ts::keeps SoundFonts and manifests independent by URI"
+
+[[entry]]
+kind = "method"
+old = "Project.soundFontManifest"
+changed = "Accepts ({ uri }?). Omit the URI to inspect the default SoundFont."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/soundfont.test.ts::keeps SoundFonts and manifests independent by URI"
+
+[[entry]]
+kind = "method"
+old = "Project.setTrackRoute"
+changed = "Omit a route string to clear it. A supplied empty channelStripRef or outputTarget is refused with a RangeError naming the argument. trackId is required and an omitted trackId is a TypeError."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/project-edit-ops.test.ts::renameTrack / setTrackRoute / removeTrack apply without throwing"
+
+[[entry]]
+kind = "field"
+old = "ProjectChordSymbol.romanNumeral"
+changed = "Omit romanNumeral to store no label. An explicit empty string is a RangeError naming chords[i].romanNumeral."
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project.test.ts::round-trips absent Roman numerals and refuses a specified empty numeral"
+
+[[entry]]
+kind = "type"
+old = "EngineCaptureStatus"
+changed = "Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers."
+domain = "engine"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/engine.test.ts::reports capture frames dropped after the buffer fills"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.captureStatus"
+changed = "The capture response includes droppedFrames as a number, beside overflowCount."
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet/capture.test.ts::requires the dropped-frame capture counter in status responses"
+
+[[entry]]
+kind = "method"
+old = "Project.fromJson"
+changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/scene-warnings.test.ts::names unread insert params in typed scenes and loaded documents"
+
+[[entry]]
+kind = "method"
+old = "Project.fromJsonWithDiagnostics"
+changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/scene-warnings.test.ts::names unread insert params in typed scenes and loaded documents"
+
+[[entry]]
+kind = "method"
+old = "Project.annotateChords"
+changed = "Accepts a readonly list and requires startPpq and endPpq on each chord."
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/project.test.ts::requires chord endpoints and names invalid nested fields"

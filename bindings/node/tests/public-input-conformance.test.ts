@@ -197,10 +197,10 @@ describe('shared public-input conformance corpus', () => {
       try {
         if (testCase.accepted) {
           engine.bindMidiCc(binding() as never);
-          expect(engine.midiCcBindingCount).toBe(1);
+          expect(engine.midiCcBindings().length).toBe(1);
         } else {
           expect(() => engine.bindMidiCc(binding() as never)).toThrow(RangeError);
-          expect(engine.midiCcBindingCount).toBe(0);
+          expect(engine.midiCcBindings().length).toBe(0);
         }
       } finally {
         engine.destroy();
@@ -246,9 +246,9 @@ describe('shared public-input conformance corpus', () => {
           expect(() => engine.bindMidiCc(binding(value) as never)).toThrow(
             new RangeError(`RealtimeEngine.bindMidiCc: ${field} must be an integer in [0, 127]`),
           );
-          expect(engine.midiCcBindingCount).toBe(0);
+          expect(engine.midiCcBindings().length).toBe(0);
           engine.bindMidiCc(binding(accepted) as never);
-          expect(engine.midiCcBindingCount).toBe(1);
+          expect(engine.midiCcBindings().length).toBe(1);
         } finally {
           engine.destroy();
         }
@@ -265,7 +265,7 @@ describe('shared public-input conformance corpus', () => {
       expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 1, channel: '3' } as never)).toThrow(
         /^RealtimeEngine\.bindMidiCc: channel must be a number$/,
       );
-      expect(engine.midiCcBindingCount).toBe(0);
+      expect(engine.midiCcBindings().length).toBe(0);
     } finally {
       engine.destroy();
     }

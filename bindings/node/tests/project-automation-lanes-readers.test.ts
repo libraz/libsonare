@@ -135,9 +135,7 @@ describe('project scene and route readers', () => {
       });
 
       expect(project.mixerScene()).toBeUndefined();
-      project.setMixerSceneJson(
-        JSON.stringify({ version: 2, strips: [], buses: [], vcaGroups: [], connections: [] }),
-      );
+      project.setMixerScene({ version: 2, strips: [], buses: [], vcaGroups: [], connections: [] });
       expect(project.mixerScene()).toMatchObject({
         version: 2,
         strips: [],

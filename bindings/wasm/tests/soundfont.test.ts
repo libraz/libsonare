@@ -30,13 +30,13 @@ const sf2Bytes = new Uint8Array(readFileSync(fixturePath));
 /** Bounce one instrument at its destination and interleave the planar result for sample-wise checks. */
 function bounceSf2(
   project: Project,
-  config: Sf2InstrumentConfig & { destinationId?: number },
+  config: Sf2InstrumentConfig & { destinationId?: number; soundFontUri?: string },
   options?: ProjectBounceOptions,
 ): Float32Array {
-  const { destinationId, ...instrument } = config as { destinationId?: number };
+  const { destinationId, soundFontUri, ...instrument } = config;
   const { channels } = project.bounce({
     ...options,
-    sf2Instruments: [{ destinationId, instrument }] as never,
+    sf2Instruments: [{ destinationId, soundFontUri, instrument }] as never,
   });
   const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
   channels.forEach((channel, c) => {
@@ -75,20 +75,127 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     return project;
   }
 
-  it('reads the preset count as a getter', () => {
+  it('reads the preset count as a method', () => {
     const descriptor = Object.getOwnPropertyDescriptor(Project.prototype, 'soundFontPresetCount');
-    expect(typeof descriptor?.get).toBe('function');
+    expect(typeof descriptor?.value).toBe('function');
     expect(descriptor?.set).toBeUndefined();
   });
 
   it('loads, counts presets and clears a SoundFont', () => {
     const project = new Project();
-    expect(project.soundFontPresetCount).toBe(0);
+    expect(project.soundFontPresetCount()).toBe(0);
     project.loadSoundFont(sf2Bytes);
-    expect(project.soundFontPresetCount).toBe(3);
+    expect(project.soundFontPresetCount()).toBe(3);
     project.clearSoundFont();
-    expect(project.soundFontPresetCount).toBe(0);
+    expect(project.soundFontPresetCount()).toBe(0);
     project.destroy();
+  });
+
+  it('keeps SoundFonts and manifests independent by URI', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      project.loadSoundFont(sf2Bytes);
+      project.loadSoundFont(sf2Bytes, { uri: 'alternate' });
+
+      expect(project.soundFontPresetCount()).toBe(3);
+      expect(project.soundFontPresetCount({ uri: 'alternate' })).toBe(3);
+      expect(project.soundFontManifest()[0].backend).toBe('sf2');
+      expect(project.soundFontManifest({ uri: 'alternate' })[0].backend).toBe('sf2');
+
+      project.clearSoundFont();
+      expect(project.soundFontPresetCount()).toBe(0);
+      expect(project.soundFontManifest()[0].backend).toBe('synth');
+      expect(project.soundFontPresetCount({ uri: 'alternate' })).toBe(3);
+      expect(project.soundFontManifest({ uri: 'alternate' })[0].backend).toBe('sf2');
+
+      project.clearSoundFont({ uri: 'alternate' });
+      expect(project.soundFontPresetCount({ uri: 'alternate' })).toBe(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses an empty SoundFont URI', () => {
+    const project = new Project();
+    try {
+      expect(() => project.loadSoundFont(sf2Bytes, { uri: '' })).toThrow(RangeError);
+      expect(() => project.clearSoundFont({ uri: '' })).toThrow(RangeError);
+      expect(() => project.soundFontPresetCount({ uri: '' })).toThrow(RangeError);
+      expect(() => project.soundFontManifest({ uri: '' })).toThrow(RangeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('keeps named SoundFonts independent of the default and each other', () => {
+    const project = buildMidiOnlyProject();
+    const first = { uri: 'urn:font:first' };
+    const second = { uri: 'urn:font:second' };
+    try {
+      project.loadSoundFont(sf2Bytes, first);
+      project.loadSoundFont(sf2Bytes, second);
+      expect(project.soundFontPresetCount()).toBe(0);
+      expect(project.soundFontPresetCount(first)).toBe(3);
+      expect(project.soundFontPresetCount(second)).toBe(3);
+      expect(project.soundFontManifest()[0].backend).toBe('synth');
+      expect(project.soundFontManifest(first)[0].backend).toBe('sf2');
+      expect(project.soundFontManifest(second)[0].backend).toBe('sf2');
+
+      project.loadSoundFont(sf2Bytes);
+      project.clearSoundFont(first);
+      expect(project.soundFontPresetCount(first)).toBe(0);
+      expect(project.soundFontManifest(first)[0].backend).toBe('synth');
+      expect(project.soundFontPresetCount(second)).toBe(3);
+      expect(project.soundFontPresetCount()).toBe(3);
+      expect(() => project.clearSoundFont({ uri: '' })).toThrow(
+        new RangeError('Project.clearSoundFont: uri must not be empty'),
+      );
+      expect(() => project.soundFontManifest({ uri: 'x\0y' })).toThrow(
+        new RangeError('Project.soundFontManifest: uri must not contain NUL'),
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('selects a per-bounce SoundFont URI over a persistent instrument', () => {
+    const project = buildMidiOnlyProject();
+    const soundFontUri = 'urn:font:keys';
+    try {
+      project.loadSoundFont(sf2Bytes, { uri: soundFontUri });
+      project.loadSoundFont(sf2Bytes);
+      const common = { totalFrames: 4096, numChannels: 2 };
+      const usingDefaultFont = project.bounce({ ...common, sf2Instruments: [{ instrument: {} }] });
+      project.clearSoundFont();
+      project.setDestinationInstrument(0, { kind: 'builtin', config: { waveform: 'saw' } });
+      const persistent = project.bounce(common);
+      const usingNamedFont = project.bounce({
+        ...common,
+        sf2Instruments: [{ instrument: {}, soundFontUri }],
+      });
+      expect(usingNamedFont.channels).toEqual(usingDefaultFont.channels);
+      expect(usingNamedFont.channels).not.toEqual(persistent.channels);
+      expect(() =>
+        project.bounce({
+          ...common,
+          sf2Instruments: [{ instrument: {}, soundFontUri: 'urn:missing' }],
+        }),
+      ).toThrow(expect.objectContaining({ reason: 'unresolvedSoundFont' }));
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('treats null SoundFont options as absent and names unknown keys directly', () => {
+    using project = new Project();
+    project.loadSoundFont(sf2Bytes, null as never);
+    expect(project.soundFontPresetCount(null as never)).toBe(3);
+    expect(project.soundFontManifest(null as never)).toEqual(project.soundFontManifest());
+    expect(() => project.clearSoundFont({ unexpected: true } as never)).toThrow(
+      new TypeError('Project.clearSoundFont: unknown key unexpected (expected uri)'),
+    );
+    project.clearSoundFont(null as never);
+    expect(project.soundFontPresetCount()).toBe(0);
   });
 
   it('rejects malformed SoundFont bytes and keeps the previous state', () => {
@@ -111,7 +218,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     // parse. The two used to disagree, which meant the same failure reached a
     // caller under two different codes depending on which door it came through.
     expect(caught.code).toBe(ErrorCode.InvalidFormat);
-    expect(project.soundFontPresetCount).toBe(3);
+    expect(project.soundFontPresetCount()).toBe(3);
     project.destroy();
   });
 
@@ -155,12 +262,47 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     expect(render(0, true)).toEqual(render(0, false));
   });
 
+  it('refuses a nested per-call URI and names an empty binding URI', () => {
+    const project = new Project();
+    try {
+      const nested = () =>
+        project.bounce({
+          sf2Instruments: [{ instrument: { soundFontUri: 'per-call' } as never }],
+        });
+      expect(nested).toThrow(TypeError);
+      expect(nested).toThrow(/unknown key sf2Instruments\[0\]\.instrument\.soundFontUri/);
+      const empty = () =>
+        project.bounce({
+          sf2Instruments: [{ instrument: {}, soundFontUri: '' }],
+        });
+      expect(empty).toThrow(RangeError);
+      expect(empty).toThrow(/sf2Instruments\[0\]\.soundFontUri must not be empty/);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('bounces MIDI through the SoundFont player to non-silent audio', () => {
     const project = buildMidiOnlyProject();
     // Without a loaded SoundFont the bounce still sounds: the built-in
     // synthesizer GM fallback is the data-free floor.
     const fallback = bounceSf2(project, {}, { totalFrames: 4096, numChannels: 2 });
     expect(peak(fallback)).toBeGreaterThan(0.01);
+
+    project.loadSoundFont(sf2Bytes, { uri: 'per-call' });
+    const defaultFontMissing = bounceSf2(
+      project,
+      { destinationId: 0, gain: 1 },
+      { totalFrames: 4096, numChannels: 2 },
+    );
+    const perCall = bounceSf2(
+      project,
+      { destinationId: 0, gain: 1, soundFontUri: 'per-call' },
+      { totalFrames: 4096, numChannels: 2 },
+    );
+    expect(peak(perCall)).toBeGreaterThan(0.01);
+    expect(perCall).not.toEqual(defaultFontMissing);
+    expect(project.soundFontManifest({ uri: 'per-call' })[0].backend).toBe('sf2');
 
     project.loadSoundFont(sf2Bytes);
     const audio = bounceSf2(

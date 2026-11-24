@@ -229,6 +229,7 @@ import type {
   ProjectMidiFxPreviewRequest,
   ProjectMoveClipOptions,
   ProjectProgramOptions,
+  ProjectSoundFontOptions,
   ProjectSourceAudioInput,
   ProjectTranscribeRequest,
 } from './project_types.js';
@@ -2700,6 +2701,7 @@ const ProjectSetAssistSidecarRequestKeys = keysOf<ProjectAssistSidecarInput>()([
   'regionEndPpq',
   'payload',
 ]);
+const ProjectSoundFontOptionsKeys = keysOf<ProjectSoundFontOptions>()(['uri']);
 const ProjectBounceRequestKeys = keysOf<ProjectBounceOptions>()([
   'totalFrames',
   'blockSize',
@@ -2908,6 +2910,10 @@ export const REQUEST_SHAPES = {
   'Project.setSourceAudio': { keys: ProjectSetSourceAudioRequestKeys },
   'Project.setAudioSourceMetadata': { keys: ProjectSetAudioSourceMetadataRequestKeys },
   'Project.setAssistSidecar': { keys: ProjectSetAssistSidecarRequestKeys },
+  'Project.loadSoundFont': { keys: ProjectSoundFontOptionsKeys },
+  'Project.clearSoundFont': { keys: ProjectSoundFontOptionsKeys },
+  'Project.soundFontPresetCount': { keys: ProjectSoundFontOptionsKeys },
+  'Project.soundFontManifest': { keys: ProjectSoundFontOptionsKeys },
   'Project.bounce': {
     keys: ProjectBounceRequestKeys,
     nested: { metronome: EngineMetronomeConfigKeys },

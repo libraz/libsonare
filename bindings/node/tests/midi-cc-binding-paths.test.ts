@@ -14,6 +14,7 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     ['channel', { ccNumber: 7, paramId: 1, channel: 16 }, RangeError],
     ['channel', { ccNumber: 7, paramId: 1, channel: '3' }, TypeError],
     ['kind', { ccNumber: 7, paramId: 1, kind: 'bogus' }, RangeError],
+    ['consume', { ccNumber: 7, paramId: 1, consume: 'yes' }, TypeError],
     ['ccLsbNumber', { ccNumber: 7, paramId: 1, ccLsbNumber: 300 }, RangeError],
     ['minValue', { ccNumber: 7, paramId: 1, minValue: Number.NaN }, RangeError],
   ] as const)('midiParamToCc names bindings[1].%s', (field, binding, errorClass) => {
@@ -25,6 +26,34 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     expect(() =>
       midiCcToBreakpoint({ bindings: [{ ccNumber: 200, paramId: 1 } as never], event }),
     ).toThrow(/^midiCcToBreakpoint: bindings\[0\]\.ccNumber must be an integer in \[0, 127\]$/);
+  });
+
+  it('validates and ignores consume in CC conversion inputs', () => {
+    const base = midiCcToBreakpoint({ bindings: [good], event });
+    const consumed = midiCcToBreakpoint({ bindings: [{ ...good, consume: true }], event });
+    expect(base).not.toBeNull();
+    expect(consumed).toEqual(base);
+    expect(() =>
+      midiCcToBreakpoint({ bindings: [{ ...good, consume: 1 } as never], event }),
+    ).toThrow(/^midiCcToBreakpoint: bindings\[0\]\.consume must be a boolean$/);
+
+    const midiParamRequest = { bindings: [good], paramId: 1, unitValue: 0.5, group: 0 };
+    const cc = midiParamToCc(midiParamRequest);
+    expect(cc).not.toBeNull();
+    expect(
+      midiParamToCc({
+        ...midiParamRequest,
+        bindings: [{ ...good, consume: true }],
+      }),
+    ).toEqual(cc);
+    expect(() =>
+      midiParamToCc({
+        bindings: [{ ...good, consume: 'yes' } as never],
+        paramId: 1,
+        unitValue: 0.5,
+        group: 0,
+      }),
+    ).toThrow(/^midiParamToCc: bindings\[0\]\.consume must be a boolean$/);
   });
 
   it('a single binding keeps its bare field names', () => {

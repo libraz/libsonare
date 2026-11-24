@@ -1,7 +1,11 @@
 import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
-import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
-import { assertStripMetering } from './internal/mix_scene.js';
-import { isAbsent, isPlainRecord } from './internal/value_guards.js';
+import { requireListBudget } from './internal/list_budget.js';
+import {
+  assertStripMetering,
+  sceneArgumentJson,
+  sceneArgumentRefusal,
+} from './internal/mix_scene.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   AutomationCurve,
@@ -196,7 +200,7 @@ export class Mixer {
   private disposed = false;
 
   /**
-   * Build a mixer from a scene document.
+   * Build a mixer from a typed scene argument.
    *
    * A strip's meters are sized when the strip is built, so this is where their
    * configuration is chosen: {@link MixSceneStrip.metering} selects it, and
@@ -205,7 +209,8 @@ export class Mixer {
    *
    * @param config - See {@link MixerConfig}. An absent `scene` gives an empty mixer.
    * @throws TypeError for a wrong-typed field or an unknown key; RangeError for
-   *   a sample rate outside `[8000, 384000]` or a `maxBlockSize` of `0` or below.
+   *   a value outside its domain, including a sample rate outside `[8000, 384000]`
+   *   or a `maxBlockSize` of `0` or below. Scene refusal paths start at `scene`.
    */
   constructor(config: MixerConfig) {
     const json = adoptedSceneJson;
@@ -213,14 +218,12 @@ export class Mixer {
     const bag = requestObject('Mixer', config, 'config', true);
     assertSampleRate(bag.sampleRate);
     const maxBlockSize = maxBlockSizeOf(bag.maxBlockSize);
-    let sceneJson = json;
-    if (sceneJson === undefined) {
-      if (!isAbsent(bag.scene) && !isPlainRecord(bag.scene)) {
-        throw refuseType('scene must be an object');
-      }
-      sceneJson = stringifyWithinBudget(bag.scene ?? { strips: [], buses: [] }, 'scene');
+    const sceneJson = json ?? sceneArgumentJson(bag.scene ?? { strips: [], buses: [] });
+    try {
+      this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, maxBlockSize);
+    } catch (error) {
+      throw json === undefined ? sceneArgumentRefusal(error) : error;
     }
-    this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, maxBlockSize);
   }
 
   /**
@@ -259,10 +262,10 @@ export class Mixer {
   }
 
   /**
-   * Non-fatal warnings captured when this mixer was built from scene JSON: one
-   * entry per channel-strip insert that was handed param keys it does not read
-   * (a likely typo, or a key meant for a different processor). The scene still
-   * loaded; these keys simply took no effect. Empty when every key was consumed.
+   * Non-fatal warnings captured when this mixer was built from a scene, such as
+   * a send to a bus the scene does not declare. An unknown scene key, including
+   * an insert parameter the processor does not read, is refused instead, naming
+   * the key's path.
    * Use {@link masteringInsertParamNames} to discover the keys an insert accepts.
    */
   sceneWarnings(): string[] {

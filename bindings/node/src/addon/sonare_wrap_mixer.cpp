@@ -101,11 +101,10 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
 
   mixer_ = sonare_mixer_from_scene_json(json.c_str(), sample_rate_, block_size_);
   if (mixer_ == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "");
+    sonare_node::ThrowSonareErrorPreservingRefusal(env, sonare_last_error_code());
     return;
   }
-  // Capture the load's warnings (e.g. insert params no processor read)
-  // immediately, before any later C-ABI call can overwrite the thread-local list.
+  // Copy load warnings before the next C call overwrites them.
   scene_warnings_ = sonare_node::LastDiagnosticMessages();
   SONARE_NODE_CATCH_VOID(env)
 }

@@ -895,7 +895,9 @@ export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRou
  * @returns The learned binding, or `null` when nothing is learned
  * @throws TypeError for a non-object request or an unknown field
  */
-export function midiCcLearn(request: MidiCcLearnRequest): ProjectMidiCcBinding | null {
+export function midiCcLearn(
+  request: MidiCcLearnRequest,
+): (ProjectMidiCcBinding & { consume: boolean }) | null {
   return withEntry('midiCcLearn', () => {
     const r = requestObject('midiCcLearn', request, 'request', true);
     return addon.midiCcLearn(

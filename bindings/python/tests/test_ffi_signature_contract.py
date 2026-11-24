@@ -417,6 +417,15 @@ def test_every_declared_function_has_a_restype() -> None:
     assert not missing, f"ctypes signatures with argtypes but no restype: {missing}"
 
 
+def test_stream_stats_preserve_uint64_dropped_output_frames() -> None:
+    from libsonare._ffi_types_streaming import SonareStreamStats
+    from libsonare.streaming import _stream_stats_from_c
+
+    count = (1 << 48) + 7
+    raw = SonareStreamStats(dropped_output_frames=count, key=-1, chord_root=-1, current_bar=-1)
+    assert _stream_stats_from_c(raw).dropped_output_frames == count
+
+
 @pytest.mark.parametrize("module_name", [name for name, _ in SIGNATURE_MODULES])
 def test_ctypes_signatures_match_the_c_headers(module_name: str) -> None:
     """Every argtype and restype must have the C prototype's ABI shape.

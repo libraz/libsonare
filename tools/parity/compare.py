@@ -384,15 +384,6 @@ _ALIAS_COVERAGE = {
     # ProjectSource is the facade's aggregate read model; its source-by-index
     # projection includes the owning audio metadata strings for audio sources.
     "project_get_audio_source_metadata": ("source_by_index", "sources"),
-    # SoundFont ops: the C symbols spell "soundfont" as one word while the
-    # Node/WASM camelCase methods (`loadSoundFont`) fold to `load_sound_font`.
-    # An idiomatic spelling difference shared by both JS facades (Python matches
-    # the C spelling directly), not an omission.
-    "project_load_soundfont": ("load_sound_font",),
-    "project_clear_soundfont": ("clear_sound_font",),
-    "project_soundfont_preset_count": ("sound_font_preset_count",),
-    "project_soundfont_manifest": ("sound_font_manifest",),
-    "engine_load_soundfont": ("load_sound_font",),
     # GM / GM2 naming helpers: every facade (Python `gm_instrument_name`, Node
     # `gmInstrumentName`, WASM `gmInstrumentName`) drops the `midi_` prefix the C
     # symbol carries. An idiomatic rename shared by all three facades, not an

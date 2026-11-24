@@ -30,7 +30,14 @@ def main() -> int:
                 libsonare.midi_note_off(2.0, 0, 0, 64),
             ],
         )
-        rendered = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
+        rendered = project.bounce(
+            num_channels=2,
+            synth_instruments=[
+                libsonare.ProjectInstrumentBinding(
+                    instrument=libsonare.SynthPatch(preset="sawLead")
+                )
+            ],
+        )
     write_wav(sys.argv[1], rendered.channels.T, rendered.sample_rate)
     return 0
 

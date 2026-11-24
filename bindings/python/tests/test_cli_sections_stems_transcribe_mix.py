@@ -272,6 +272,8 @@ def test_transcribe_writes_an_smf_whose_notes_read_back(melody_wav: str) -> None
         assert payload["output"] == output
         assert payload["note_count"] == len(_EXPECTED_NOTES)
         assert payload["tempo_bpm"] == pytest.approx(120.0)
+        assert "tempo_confidence" not in payload
+        assert "time_signature" not in payload
         assert payload["bytes"] == os.path.getsize(output)
 
         project = libsonare.Project()
@@ -299,6 +301,12 @@ def test_transcribe_reports_the_tempo_it_detected(melody_wav: str) -> None:
         payload = json.loads(result.stdout)
         assert payload["tempo_bpm"] > 0.0
         assert math.isfinite(payload["tempo_bpm"])
+        assert 0.0 <= payload["tempo_confidence"] <= 1.0
+        signature = payload["time_signature"]
+        assert set(signature) == {"numerator", "denominator", "confidence"}
+        assert signature["numerator"] > 0
+        assert signature["denominator"] > 0
+        assert 0.0 <= signature["confidence"] <= 1.0
         assert payload["note_count"] > 0
 
 

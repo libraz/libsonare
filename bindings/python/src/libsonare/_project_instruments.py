@@ -6,7 +6,7 @@ import ctypes
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from typing import Any, Literal, Protocol, TypeAlias, cast, get_args
+from typing import Any, Generic, Literal, Protocol, TypeAlias, TypeVar, cast, get_args
 
 import numpy as np
 
@@ -1033,6 +1033,26 @@ ProjectInstrumentKind: TypeAlias = Literal["synth", "builtin", "sf2"]
 
 _PROJECT_INSTRUMENT_KINDS = {"synth": 0, "builtin": 1, "sf2": 2}
 _PROJECT_INSTRUMENT_KIND_NAMES = tuple(_PROJECT_INSTRUMENT_KINDS)
+
+_InstrumentConfig = TypeVar("_InstrumentConfig")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProjectInstrumentBinding(Generic[_InstrumentConfig]):
+    """An instrument supplied for one project bounce."""
+
+    instrument: _InstrumentConfig
+    """The instrument or configuration to render through."""
+    destination_id: int | None = None
+    """MIDI destination served by the instrument; ``None`` is destination 0, a real id."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProjectSf2InstrumentBinding(ProjectInstrumentBinding[Sf2InstrumentConfig]):
+    """A SoundFont instrument supplied for one project bounce."""
+
+    sound_font_uri: str | None = None
+    """Loaded SoundFont URI, or ``None`` to use the default."""
 
 
 @dataclass(frozen=True)

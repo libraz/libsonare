@@ -5,20 +5,24 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
 from ._engine_conversions import _POSITIVE_COUNT, _POSITIVE_INT, _given_positive
 from ._errors import _entry, _malformed_output, _refuse, _refuse_type
+from ._narrowing import _is_number
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _SOURCE_BACKENDS,
+    ProjectArticulationBinding,
+    ProjectControllerProfileBinding,
     ProjectDiagnosticCode,
     ProjectDiagnosticSeverity,
+    ProjectInstrumentBinding,
+    ProjectSf2InstrumentBinding,
     SourceBackend,
     _make_instrument_callbacks,
-    _synth_patch_arg,
 )
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
@@ -52,16 +56,34 @@ from ._runtime import (
 )
 from ._types_engine import EngineMetronomeConfig
 
+_Row = TypeVar("_Row")
+
+
+def _binding_destination(binding: ProjectInstrumentBinding[object]) -> int:
+    """The destination a binding renders; an omitted id is destination 0."""
+    return 0 if binding.destination_id is None else binding.destination_id
+
 
 def _planar_bounce(interleaved: np.ndarray, num_channels: int) -> np.ndarray:
     """Return an interleaved bounce as contiguous ``(channels, frames)`` planes."""
     return np.ascontiguousarray(interleaved.reshape(-1, num_channels).T)
 
 
+def _sound_font_uri(uri: str | None, subject: str = "uri") -> bytes | None:
+    """Encode an optional SoundFont URI, preserving None as the default selector."""
+    if uri is None:
+        return None
+    try:
+        encoded = _utf8_arg(uri, subject)
+    except UnicodeEncodeError:
+        raise _refuse(f"{subject} must contain well-formed Unicode") from None
+    if not encoded:
+        raise _refuse(f"{subject} must not be empty")
+    return encoded
+
+
 def _bounce_metronome(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfig:
     """Convert a project bounce click config with project keyword names."""
-    if not isinstance(config, EngineMetronomeConfig):
-        raise _refuse_type("metronome must be an EngineMetronomeConfig")
     if config.click_samples is not None and config.click_sec is not None:
         raise _refuse("metronome.click_samples and metronome.click_sec are mutually exclusive")
     return SonareEngineMetronomeConfig._given(
@@ -78,57 +100,146 @@ def _bounce_metronome(config: EngineMetronomeConfig) -> SonareEngineMetronomeCon
 
 
 def _bounce_bindings(
-    controller_profiles: Sequence[tuple[int, str]] | None,
-    articulations: Sequence[tuple[int, int, Articulation]] | None,
+    controller_profiles: Sequence[ProjectControllerProfileBinding],
+    articulations: Sequence[ProjectArticulationBinding],
 ) -> tuple[
     ctypes.Array | None,
     list[bytes],
     ctypes.Array | None,
 ]:
     """Convert typed instrument-control bindings and keep their strings alive."""
-    profile_rows = _sequence_rows(controller_profiles, "controller_profiles")
     profile_names: list[bytes] = []
-    c_profiles = (SonareProjectControllerProfileBinding * len(profile_rows))()
-    for index, row in enumerate(profile_rows):
-        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) != 2:
-            raise _refuse_type(f"controller_profiles[{index}] must be a pair")
-        destination, preset_name = row
+    c_profiles = (SonareProjectControllerProfileBinding * len(controller_profiles))()
+    for index, row in enumerate(controller_profiles):
+        path = f"controller_profiles[{index}]"
         c_profiles[index].destination_id = _to_c_uint32(
-            destination, f"controller_profiles[{index}][0]"
+            row.destination_id, f"{path}.destination_id"
         )
-        encoded_name = _utf8_arg(preset_name, f"controller_profiles[{index}][1]")
+        preset_path = f"{path}.preset_name"
+        try:
+            encoded_name = _utf8_arg(row.preset_name, preset_path)
+        except UnicodeEncodeError:
+            raise _refuse(f"{preset_path} must contain well-formed Unicode") from None
         if not encoded_name:
-            raise _refuse(f"controller_profiles[{index}][1] must not be empty")
+            raise _refuse(f"{preset_path} must not be empty")
         profile_names.append(encoded_name)
         c_profiles[index].preset_name = encoded_name
 
-    articulation_rows = _sequence_rows(articulations, "articulations")
-    c_articulations = (SonareProjectArticulationBinding * len(articulation_rows))()
-    for index, row in enumerate(articulation_rows):
-        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) != 3:
-            raise _refuse_type(f"articulations[{index}] must be a triple")
-        destination, channel, articulation = row
+    c_articulations = (SonareProjectArticulationBinding * len(articulations))()
+    for index, row in enumerate(articulations):
+        path = f"articulations[{index}]"
         c_articulations[index].destination_id = _to_c_uint32(
-            destination, f"articulations[{index}][0]"
+            row.destination_id, f"{path}.destination_id"
         )
-        c_articulations[index].channel = _narrow_int(channel, f"articulations[{index}][1]", 0, 15)
+        c_articulations[index].channel = _narrow_int(row.channel, f"{path}.channel", 0, 15)
         c_articulations[index].articulation = _articulation_value(
-            articulation, f"articulations[{index}][2]"
+            row.articulation, f"{path}.articulation"
         )
     return (
-        c_profiles if profile_rows else None,
+        c_profiles if controller_profiles else None,
         profile_names,
-        c_articulations if articulation_rows else None,
+        c_articulations if articulations else None,
     )
 
 
-def _sequence_rows(value: Sequence[object] | None, name: str) -> list[object]:
+def _sequence_rows(value: Sequence[_Row] | None, name: str) -> list[_Row]:
     """Copy a facade sequence while refusing scalar strings and non-sequences by name."""
     if value is None:
         return []
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise _refuse_type(f"{name} must be a sequence")
     return list(value)
+
+
+def _require_integer_shape(value: object, name: str) -> None:
+    if isinstance(value, bool) or not (isinstance(value, SupportsIndex) or _is_number(value)):
+        raise _refuse_type(f"{name} must be an integer")
+
+
+def _preflight_bounce_shapes(
+    *,
+    instruments: Sequence[ProjectInstrumentBinding[ExternalInstrument]] | None,
+    builtin_instruments: Sequence[ProjectInstrumentBinding[BuiltinSynthConfig]] | None,
+    synth_instruments: Sequence[ProjectInstrumentBinding[SynthPatch]] | None,
+    sf2_instruments: Sequence[ProjectSf2InstrumentBinding] | None,
+    controller_profiles: Sequence[ProjectControllerProfileBinding] | None,
+    articulations: Sequence[ProjectArticulationBinding] | None,
+    metronome: EngineMetronomeConfig | None,
+) -> tuple[
+    list[ProjectInstrumentBinding[ExternalInstrument]],
+    list[ProjectInstrumentBinding[BuiltinSynthConfig]],
+    list[ProjectInstrumentBinding[SynthPatch]],
+    list[ProjectSf2InstrumentBinding],
+    list[ProjectControllerProfileBinding],
+    list[ProjectArticulationBinding],
+]:
+    """Refuse malformed binding shapes before validating scalar domains."""
+    if metronome is not None and not isinstance(metronome, EngineMetronomeConfig):
+        raise _refuse_type("metronome must be an EngineMetronomeConfig")
+
+    instrument_rows = _sequence_rows(instruments, "instruments")
+    builtin_rows = _sequence_rows(builtin_instruments, "builtin_instruments")
+    synth_rows = _sequence_rows(synth_instruments, "synth_instruments")
+    for name, bindings, expected in (
+        ("instruments", instrument_rows, ExternalInstrument),
+        ("builtin_instruments", builtin_rows, BuiltinSynthConfig),
+        ("synth_instruments", synth_rows, SynthPatch),
+    ):
+        for index, binding in enumerate(bindings):
+            if not isinstance(binding, ProjectInstrumentBinding):
+                raise _refuse_type(f"{name}[{index}] must be a ProjectInstrumentBinding")
+            if binding.destination_id is not None:
+                _require_integer_shape(binding.destination_id, f"{name}[{index}].destination_id")
+            instrument = binding.instrument
+            if expected is ExternalInstrument:
+                if not callable(getattr(instrument, "render", None)):
+                    raise _refuse_type(
+                        f"{name}[{index}].instrument must provide a "
+                        "render(channels, num_frames) method"
+                    )
+            elif not isinstance(instrument, expected):
+                raise _refuse_type(f"{name}[{index}].instrument must be a {expected.__name__}")
+
+    sf2_bindings = _sequence_rows(sf2_instruments, "sf2_instruments")
+    for index, binding in enumerate(sf2_bindings):
+        if not isinstance(binding, ProjectSf2InstrumentBinding):
+            raise _refuse_type(f"sf2_instruments[{index}] must be a ProjectSf2InstrumentBinding")
+        if binding.destination_id is not None:
+            _require_integer_shape(
+                binding.destination_id, f"sf2_instruments[{index}].destination_id"
+            )
+        if not isinstance(binding.instrument, Sf2InstrumentConfig):
+            raise _refuse_type(f"sf2_instruments[{index}].instrument must be a Sf2InstrumentConfig")
+        if binding.sound_font_uri is not None and not isinstance(binding.sound_font_uri, str):
+            raise _refuse_type(f"sf2_instruments[{index}].sound_font_uri must be a str")
+
+    control_rows = _sequence_rows(controller_profiles, "controller_profiles")
+    for index, row in enumerate(control_rows):
+        path = f"controller_profiles[{index}]"
+        if not isinstance(row, ProjectControllerProfileBinding):
+            raise _refuse_type(f"{path} must be a ProjectControllerProfileBinding")
+        _require_integer_shape(row.destination_id, f"{path}.destination_id")
+        if not isinstance(row.preset_name, str):
+            raise _refuse_type(f"{path}.preset_name must be a str")
+
+    articulation_rows = _sequence_rows(articulations, "articulations")
+    for index, row in enumerate(articulation_rows):
+        path = f"articulations[{index}]"
+        if not isinstance(row, ProjectArticulationBinding):
+            raise _refuse_type(f"{path} must be a ProjectArticulationBinding")
+        _require_integer_shape(row.destination_id, f"{path}.destination_id")
+        _require_integer_shape(row.channel, f"{path}.channel")
+        if not isinstance(row.articulation, str):
+            raise _refuse_type(f"{path}.articulation must be a str")
+
+    return (
+        instrument_rows,
+        builtin_rows,
+        synth_rows,
+        sf2_bindings,
+        control_rows,
+        articulation_rows,
+    )
 
 
 def _bounce_options(
@@ -207,28 +318,29 @@ class _ProjectRenderMixin:
             _get_lib().sonare_project_count_in_frames(
                 self._require_handle(),
                 bars,
-                -1,
                 ctypes.byref(out_frames),
             )
         )
+        if out_frames.value < 0:
+            raise _malformed_output("frames must be non-negative")
         return int(out_frames.value)
 
     @_entry("Project.bounce")
     def bounce(
         self,
         *,
-        instruments: Sequence[tuple[int, ExternalInstrument]] | None = None,
-        builtin_instruments: Sequence[tuple[int, BuiltinSynthConfig]] | None = None,
-        synth_instruments: Sequence[tuple[int, SynthPatch | str]] | None = None,
-        sf2_instruments: Sequence[tuple[int, Sf2InstrumentConfig]] | None = None,
+        instruments: Sequence[ProjectInstrumentBinding[ExternalInstrument]] | None = None,
+        builtin_instruments: Sequence[ProjectInstrumentBinding[BuiltinSynthConfig]] | None = None,
+        synth_instruments: Sequence[ProjectInstrumentBinding[SynthPatch]] | None = None,
+        sf2_instruments: Sequence[ProjectSf2InstrumentBinding] | None = None,
         total_frames: int | None = None,
         block_size: int | None = None,
         num_channels: int | None = None,
-        instrument_latency_samples: int = 0,
+        instrument_latency_samples: int | None = 0,
         metronome: EngineMetronomeConfig | None = None,
         count_in_bars: int = 0,
-        controller_profiles: Sequence[tuple[int, str]] | None = None,
-        articulations: Sequence[tuple[int, int, Articulation]] | None = None,
+        controller_profiles: Sequence[ProjectControllerProfileBinding] | None = None,
+        articulations: Sequence[ProjectArticulationBinding] | None = None,
     ) -> ProjectBounceResult:
         """Compile and render the project offline to planar float audio.
 
@@ -241,14 +353,15 @@ class _ProjectRenderMixin:
         length derived from the arrangement (musical end + the longest
         instrument release tail). An explicit 0 or a negative value is refused.
 
-        Each instrument keyword is a sequence of ``(destination_id, config)``
-        bindings (``destination_id`` matches :meth:`set_track_midi_destination`).
-        MIDI tracks routed to a destination with no binding render to silence,
-        and a destination named twice, within one keyword or across keywords, is
-        refused.
+        Instrument keywords take sequences of binding records. Their
+        ``destination_id`` defaults to 0 and matches
+        :meth:`set_track_midi_destination`. MIDI tracks routed to a destination
+        with no binding render to silence, and a destination named twice,
+        within one keyword or across keywords, is refused.
 
         Args:
-            instruments: Host-supplied :class:`ExternalInstrument` objects. Their
+            instruments: :class:`ProjectInstrumentBinding` records containing
+                host-supplied :class:`ExternalInstrument` objects. Their
                 callbacks run synchronously on the calling thread for the
                 duration of this method; an instrument's ``latency_samples``
                 adds per-instrument PDC and ``tail_samples`` extends the
@@ -258,107 +371,147 @@ class _ProjectRenderMixin:
                 with ``NOT_SUPPORTED``, since callback audio has no source-track
                 attribution; the same holds for a latency-bearing source-aware
                 instrument.
-            builtin_instruments: :class:`BuiltinSynthConfig` patches for the
-                built-in polyphonic oscillator synth.
-            synth_instruments: NativeSynth patches: a :class:`SynthPatch` or a
-                preset name string (``"sawLead"`` or ``"va:sawLead"``; see
-                :func:`synth_preset_names`). An unknown preset name raises
-                :class:`SonareValueError`. A patch whose ``engine_mode`` is
+            builtin_instruments: :class:`ProjectInstrumentBinding` records
+                containing :class:`BuiltinSynthConfig` patches for the built-in
+                polyphonic oscillator synth.
+            synth_instruments: :class:`ProjectInstrumentBinding` records
+                containing NativeSynth :class:`SynthPatch` instances.
+                Select a preset with ``SynthPatch(preset=...)``. A patch whose
+                ``engine_mode`` is
                 ``"sample"`` reads the :class:`SampleBank` on its own
                 :attr:`SynthPatch.sample_bank`; the bank is borrowed for the
                 call, must outlive the bounce, and must not be added to while
                 it runs. A patch's :attr:`SynthPatch.use_gm_programs` selects GM
                 program/drum-kit following for its destination.
-            sf2_instruments: :class:`Sf2InstrumentConfig` players fed by the
-                loaded SoundFont (:meth:`load_sound_font`); programs it does not
-                cover, or no SoundFont at all, play through the built-in GM
-                fallback bank (see :meth:`sound_font_manifest`).
+            sf2_instruments: :class:`ProjectSf2InstrumentBinding` records
+                containing :class:`Sf2InstrumentConfig` patches. Set
+                ``sound_font_uri`` to select a named font; ``None`` selects the
+                default. An empty URI is refused. Programs it does not cover, or
+                no SoundFont at all, play through the built-in GM fallback bank
+                (see :meth:`sound_font_manifest`).
             total_frames / block_size / num_channels: Render length, block
                 size and output width; omitted takes the library default.
             instrument_latency_samples: Host-instrument latency compensation in
-                samples fed to the compiler.
+                samples fed to the compiler. ``None`` selects the default 0.
             metronome: Optional :class:`EngineMetronomeConfig`; clicks are mixed
                 when ``enabled`` is true. A disabled config renders like ``None``.
             count_in_bars: Silent or clicked pre-roll bars in ``[0, 16]``.
-            controller_profiles: ``(destination_id, preset_name)`` pairs for
+            controller_profiles: :class:`ProjectControllerProfileBinding` records for
                 instruments that support controller profiles.
-            articulations: ``(destination_id, channel, articulation)`` triples.
+            articulations: :class:`ProjectArticulationBinding` records for each
+                destination and channel.
         """
+        (
+            external_bindings,
+            builtin_bindings,
+            synth_bindings,
+            sf2_bindings,
+            profile_rows,
+            articulation_rows,
+        ) = _preflight_bounce_shapes(
+            instruments=instruments,
+            builtin_instruments=builtin_instruments,
+            synth_instruments=synth_instruments,
+            sf2_instruments=sf2_instruments,
+            controller_profiles=controller_profiles,
+            articulations=articulations,
+            metronome=metronome,
+        )
+        for name, value in (
+            ("total_frames", total_frames),
+            ("block_size", block_size),
+            ("num_channels", num_channels),
+            ("instrument_latency_samples", instrument_latency_samples),
+        ):
+            if value is not None:
+                _require_integer_shape(value, name)
+        count_in_bars_value = _narrow_int(count_in_bars, "count_in_bars", 0, 16)
         lib = _get_lib()
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
         options = _bounce_options(
-            total_frames, block_size, num_channels, instrument_latency_samples
+            total_frames,
+            block_size,
+            num_channels,
+            0 if instrument_latency_samples is None else instrument_latency_samples,
         )
-        options.count_in_bars = _narrow_int(count_in_bars, "count_in_bars", 0, 16)
-        # A Python instrument callback may reenter and edit the project, so read
-        # the effective rate before entering the native renderer.
-        resolved_sample_rate = int(self.sample_rate)
-
+        options.count_in_bars = count_in_bars_value
         c_metronome = _bounce_metronome(metronome) if metronome is not None else None
-        if c_metronome is not None:
-            options.metronome = ctypes.pointer(c_metronome)
 
         c_profiles, profile_names, c_articulations = _bounce_bindings(
-            controller_profiles, articulations
+            profile_rows, articulation_rows
         )
-        if c_profiles is not None:
-            options.controller_profiles = c_profiles
-            options.controller_profile_count = _to_c_size_t(len(c_profiles), "controller_profiles")
-        if c_articulations is not None:
-            options.articulations = c_articulations
-            options.articulation_count = _to_c_size_t(len(c_articulations), "articulations")
 
         errors: list[BaseException] = []
         keepalive: list[object] = []
-        if instruments is not None:
-            external_bindings = [(dst, inst) for dst, inst in instruments]
+        if external_bindings:
             c_external = (SonareInstrumentBinding * len(external_bindings))()
-            for i, (dst, inst) in enumerate(external_bindings):
-                if not callable(getattr(inst, "render", None)):
-                    raise _refuse_type(
-                        "each instrument must provide a render(channels, num_frames) method"
-                    )
-                c_external[i].destination_id = dst
+            for i, binding in enumerate(external_bindings):
+                inst = binding.instrument
+                c_external[i].destination_id = _to_c_uint32(
+                    _binding_destination(binding), f"instruments[{i}].destination_id"
+                )
                 c_external[i].callbacks = _make_instrument_callbacks(inst, errors, keepalive)
-            if external_bindings:
-                options.instruments = c_external
-                options.instrument_count = _to_c_size_t(len(external_bindings), "count")
-        if builtin_instruments is not None:
-            builtin_bindings = [(dst, config) for dst, config in builtin_instruments]
+            options.instruments = c_external
+            options.instrument_count = _to_c_size_t(len(external_bindings), "count")
+        if builtin_bindings:
             c_builtin = (SonareBuiltinInstrumentBinding * len(builtin_bindings))()
-            for i, (dst, config) in enumerate(builtin_bindings):
-                c_builtin[i].destination_id = dst
+            for i, binding in enumerate(builtin_bindings):
+                config = binding.instrument
+                c_builtin[i].destination_id = _to_c_uint32(
+                    _binding_destination(binding), f"builtin_instruments[{i}].destination_id"
+                )
                 c_builtin[i].config = config._to_c()
-            if builtin_bindings:
-                options.builtin_instruments = c_builtin
-                options.builtin_instrument_count = _to_c_size_t(len(builtin_bindings), "count")
+            options.builtin_instruments = c_builtin
+            options.builtin_instrument_count = _to_c_size_t(len(builtin_bindings), "count")
         # Each converted patch borrows its engine params; copying it into the
         # binding array copies bytes only, so these stay alive past the C call.
         c_patches = []
-        if synth_instruments is not None:
-            synth_bindings = [(dst, _synth_patch_arg(patch)) for dst, patch in synth_instruments]
+        if synth_bindings:
             c_synth = (SonareSynthInstrumentBinding * len(synth_bindings))()
-            for i, (dst, synth_patch) in enumerate(synth_bindings):
-                c_synth[i].destination_id = dst
+            for i, binding in enumerate(synth_bindings):
+                synth_patch = binding.instrument
+                c_synth[i].destination_id = _to_c_uint32(
+                    _binding_destination(binding), f"synth_instruments[{i}].destination_id"
+                )
                 c_patch = synth_patch._to_c()
                 c_patches.append(c_patch)
                 c_synth[i].patch = c_patch
                 c_synth[i].use_gm_programs = 1 if synth_patch.use_gm_programs else 0
                 bank = synth_patch.sample_bank
                 c_synth[i].sample_bank = bank._require_handle() if bank is not None else None
-            if synth_bindings:
-                options.synth_instruments = c_synth
-                options.synth_instrument_count = _to_c_size_t(len(synth_bindings), "count")
-        if sf2_instruments is not None:
-            sf2_bindings = [(dst, sf2_config) for dst, sf2_config in sf2_instruments]
+            options.synth_instruments = c_synth
+            options.synth_instrument_count = _to_c_size_t(len(synth_bindings), "count")
+        c_sf2 = None
+        sf2_uri_storage: list[bytes] = []
+        if sf2_bindings:
             c_sf2 = (SonareSf2InstrumentBinding * len(sf2_bindings))()
-            for i, (dst, sf2_config) in enumerate(sf2_bindings):
-                c_sf2[i].destination_id = dst
+            for i, binding in enumerate(sf2_bindings):
+                sf2_config = binding.instrument
+                c_sf2[i].destination_id = _to_c_uint32(
+                    _binding_destination(binding), f"sf2_instruments[{i}].destination_id"
+                )
                 c_sf2[i].config = sf2_config._to_c()
-            if sf2_bindings:
-                options.sf2_instruments = c_sf2
-                options.sf2_instrument_count = _to_c_size_t(len(sf2_bindings), "count")
+                encoded_uri = _sound_font_uri(
+                    binding.sound_font_uri, f"sf2_instruments[{i}].sound_font_uri"
+                )
+                if encoded_uri is not None:
+                    c_sf2[i].sound_font_uri = encoded_uri
+                    sf2_uri_storage.append(encoded_uri)
+            options.sf2_instruments = c_sf2
+            options.sf2_instrument_count = _to_c_size_t(len(sf2_bindings), "count")
+
+        if c_metronome is not None:
+            options.metronome = ctypes.pointer(c_metronome)
+        if c_profiles is not None:
+            options.controller_profiles = c_profiles
+            options.controller_profile_count = _to_c_size_t(len(c_profiles), "controller_profiles")
+        if c_articulations is not None:
+            options.articulations = c_articulations
+            options.articulation_count = _to_c_size_t(len(c_articulations), "articulations")
+        # A Python instrument callback may reenter and edit the project, so read
+        # the effective rate before entering the native renderer.
+        resolved_sample_rate = int(self.sample_rate)
 
         width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_frames):
@@ -378,25 +531,6 @@ class _ProjectRenderMixin:
                 "metronome.click_samples": _Respelling("metronome.click_samples"),
                 "metronome.click_sec": _Respelling("metronome.click_sec"),
             }
-            if c_profiles is not None:
-                for index in range(len(c_profiles)):
-                    respelled[f"controller_profiles[{index}].destination_id"] = _Respelling(
-                        f"controller_profiles[{index}][0]"
-                    )
-                    respelled[f"controller_profiles[{index}].preset_name"] = _Respelling(
-                        f"controller_profiles[{index}][1]"
-                    )
-            if c_articulations is not None:
-                for index in range(len(c_articulations)):
-                    respelled[f"articulations[{index}].destination_id"] = _Respelling(
-                        f"articulations[{index}][0]"
-                    )
-                    respelled[f"articulations[{index}].channel"] = _Respelling(
-                        f"articulations[{index}][1]"
-                    )
-                    respelled[f"articulations[{index}].articulation"] = _Respelling(
-                        f"articulations[{index}][2]"
-                    )
             _check(rc, flattened="options", respelled=respelled)
             if errors:
                 raise errors[0]
@@ -404,46 +538,59 @@ class _ProjectRenderMixin:
                 raise _malformed_output("project bounce returned no channels")
             interleaved = _from_c_float_array(out, int(out_frames.value) * width.value)
         channels = _planar_bounce(interleaved, width.value)
-        # Keep the encoded preset strings alive through the C call.
+        # Keep strings borrowed by the native bounce alive through the C call.
         del profile_names
+        del sf2_uri_storage
         return ProjectBounceResult(channels=channels, sample_rate=resolved_sample_rate)
 
     @_entry("Project.load_sound_font")
-    def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:
+    def load_sound_font(
+        self, data: bytes | bytearray | memoryview, *, uri: str | None = None
+    ) -> None:
         """Load (parse) SoundFont 2 bytes into the project.
 
         The presets / instruments / sample headers and the sample PCM (decoded
-        to a float pool) replace any previously loaded SoundFont; the input
-        buffer is not referenced after the call. Raises :class:`SonareError`
+        to a float pool) replace the SoundFont at ``uri``. Omit ``uri`` to
+        select the default SoundFont. The input buffer is not referenced after
+        the call. Raises :class:`SonareError`
         (``INVALID_FORMAT``) on malformed input (the previous SoundFont is kept).
         """
-        lib = _get_lib()
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise _refuse_type("data must be bytes-like")
         buf = bytes(data)
         if not buf:
-            raise _refuse("SoundFont data must not be empty")
+            raise _refuse("data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
+        encoded_uri = _sound_font_uri(uri)
+        lib = _get_lib()
         _check(
-            lib.sonare_project_load_soundfont(
-                self._require_handle(), c_data, ctypes.c_size_t(len(buf))
+            lib.sonare_project_load_sound_font(
+                self._require_handle(), encoded_uri, c_data, ctypes.c_size_t(len(buf))
             )
         )
 
     @_entry("Project.clear_sound_font")
-    def clear_sound_font(self) -> None:
-        """Release the project's loaded SoundFont (no-op when none is loaded)."""
+    def clear_sound_font(self, *, uri: str | None = None) -> None:
+        """Release the SoundFont at ``uri``, or the default one when omitted."""
+        encoded_uri = _sound_font_uri(uri)
         lib = _get_lib()
-        _check(lib.sonare_project_clear_soundfont(self._require_handle()))
+        _check(lib.sonare_project_clear_sound_font(self._require_handle(), encoded_uri))
 
-    @property
-    def sound_font_preset_count(self) -> int:
-        """Number of presets in the loaded SoundFont (0 when none is loaded)."""
+    @_entry("Project.sound_font_preset_count")
+    def sound_font_preset_count(self, *, uri: str | None = None) -> int:
+        """Return the preset count at ``uri``, or in the default SoundFont."""
+        encoded_uri = _sound_font_uri(uri)
         lib = _get_lib()
         out = ctypes.c_size_t()
-        _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
+        _check(
+            lib.sonare_project_sound_font_preset_count(
+                self._require_handle(), encoded_uri, ctypes.byref(out)
+            )
+        )
         return int(out.value)
 
     @_entry("Project.sound_font_manifest")
-    def sound_font_manifest(self) -> list[Sf2ProgramStatus]:
+    def sound_font_manifest(self, *, uri: str | None = None) -> list[Sf2ProgramStatus]:
         """Enumerate the programs the arrangement plays and their backends.
 
         Returns one :class:`Sf2ProgramStatus` per (channel, bank, program)
@@ -453,17 +600,22 @@ class _ProjectRenderMixin:
         the built-in synth (``"synth"``).
         Without a loaded SoundFont every entry is a synth fallback.
         """
+        encoded_uri = _sound_font_uri(uri)
         lib = _get_lib()
         handle = self._require_handle()
         total = ctypes.c_size_t()
-        _check(lib.sonare_project_soundfont_manifest(handle, None, 0, ctypes.byref(total)))
+        _check(
+            lib.sonare_project_sound_font_manifest(
+                handle, encoded_uri, None, 0, ctypes.byref(total)
+            )
+        )
         count = int(total.value)
         if count == 0:
             return []
         entries = (SonareSf2ProgramStatus * count)()
         _check(
-            lib.sonare_project_soundfont_manifest(
-                handle, entries, _to_c_size_t(count, "count"), ctypes.byref(total)
+            lib.sonare_project_sound_font_manifest(
+                handle, encoded_uri, entries, _to_c_size_t(count, "count"), ctypes.byref(total)
             )
         )
         return [

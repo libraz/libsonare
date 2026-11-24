@@ -20,6 +20,56 @@ EXIT_INVALID_PARAMETER = 3
 _CLEAN_PROJECT = {"version": 7, "sampleRate": 48000, "tracks": [], "clips": []}
 
 
+def test_bounce_binds_source_audio_as_planar_channels(monkeypatch) -> None:
+    from libsonare import _cli_project
+
+    planes = [[0.25, 0.5], [-0.25, -0.5]]
+    monkeypatch.setattr(_cli_project, "_load_audio_channels", lambda _: (planes, 48000))
+
+    class Project:
+        def set_source_audio(self, source_id, channels, sample_rate):
+            assert source_id == 7
+            assert channels == planes
+            assert sample_rate == 48000
+            self.bound = True
+
+    project = Project()
+    _cli_project._bind_source_audio(project, 7, "take.wav")
+    assert project.bound
+
+
+def test_cli_bounce_passes_a_synth_binding_record(monkeypatch, tmp_path) -> None:
+    from argparse import Namespace
+
+    import numpy as np
+
+    from libsonare import ProjectBounceResult, ProjectInstrumentBinding, SynthPatch, _cli_project
+
+    class Project:
+        sample_rate = 48000
+
+        def bounce(self, *, synth_instruments):
+            expected = ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))
+            assert synth_instruments == [expected]
+            return ProjectBounceResult(channels=np.zeros((2, 2), np.float32), sample_rate=48000)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(_cli_project, "_load_project", lambda _path: Project())
+    monkeypatch.setattr(_cli_project, "_synth_preset", lambda *_args, **_kwargs: "sawLead")
+    args = Namespace(
+        input="project.json",
+        output=str(tmp_path / "bounce.wav"),
+        synth="sawLead",
+        sample_rate=None,
+        frames=None,
+        channels=None,
+        json=False,
+    )
+    assert _cli_project._project_bounce(args, binds_source_audio=False) == 0
+
+
 def _console_script() -> Path:
     script = Path(sys.executable).parent / "sonare"
     assert script.is_file(), f"installed console script is missing: {script}"

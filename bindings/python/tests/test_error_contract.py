@@ -142,6 +142,8 @@ def test_a_failed_getter_reports_the_detail_alone_and_its_own_text_only_without_
     lib = _FailingLib(detail)
     monkeypatch.setattr(_runtime, "_get_lib", lambda: lib)
     monkeypatch.setattr(_mastering_offline, "_get_lib", lambda: lib)
+    # The insert-name precheck would fail on the stand-in first; measure the getter's own failure.
+    monkeypatch.setattr(_mastering_offline, "_require_known", lambda *_args: None)
     with pytest.raises(SonareError) as raised:
         call()
     assert str(raised.value).endswith(expected or fallback)

@@ -50,6 +50,8 @@ interface Family {
   /** Two instruments that must render differently: the control row. */
   instrument: unknown;
   other: unknown;
+  /** The keys a binding pair of this family declares, in the refusal's sorted order. */
+  pairKeys: string;
 }
 
 const FAMILIES: Family[] = [
@@ -58,18 +60,21 @@ const FAMILIES: Family[] = [
     run: (p, v) => p.bounce({ ...OPTIONS, builtinInstruments: v as never }),
     instrument: { waveform: 'saw' },
     other: { waveform: 'sine' },
+    pairKeys: 'destinationId, instrument',
   },
   {
     option: 'synthInstruments',
     run: (p, v) => p.bounce({ ...OPTIONS, synthInstruments: v as never }),
     instrument: {},
     other: { preset: 'sawLead' },
+    pairKeys: 'destinationId, instrument',
   },
   {
     option: 'sf2Instruments',
     run: (p, v) => p.bounce({ ...OPTIONS, sf2Instruments: v as never }),
     instrument: { gain: 0.8 },
     other: { gain: 0.2 },
+    pairKeys: 'destinationId, instrument, soundFontUri',
   },
 ];
 
@@ -119,7 +124,7 @@ describe.each(FAMILIES)('bounce $option', (family) => {
       // A bare config, or a name, must be wrapped as a pair.
       expect(() => family.run(project, [family.instrument])).toThrow(
         new RegExp(
-          `: (unknown key ${family.option}\\[0\\]\\.\\w+ \\(expected destinationId, instrument\\)|${family.option}\\[0\\]\\.instrument must be given)$`,
+          `: (unknown key ${family.option}\\[0\\]\\.\\w+ \\(expected ${family.pairKeys}\\)|${family.option}\\[0\\]\\.instrument must be given)$`,
         ),
       );
       expect(() => family.run(project, ['piano'])).toThrow(

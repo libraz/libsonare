@@ -1047,11 +1047,11 @@ describe('v1.2 feature additions (WASM)', () => {
       // Sample-accurate + smoothed parameter changes queue without throwing.
       expect(() => engine.setParameter(5, 6)).not.toThrow();
       expect(() => engine.setParameter(5, -3, undefined, { smoothed: true })).not.toThrow();
-      expect(engine.midiCcBindingCount).toBe(0);
+      expect(engine.midiCcBindings().length).toBe(0);
       expect(() =>
         engine.bindMidiCc({ channel: 0, ccNumber: 74, paramId: 5, minValue: -60, maxValue: 12 }),
       ).not.toThrow();
-      expect(engine.midiCcBindingCount).toBe(1);
+      expect(engine.midiCcBindings().length).toBe(1);
       expect(() =>
         engine.bindMidiCc({
           ccNumber: 1,
@@ -1063,9 +1063,9 @@ describe('v1.2 feature additions (WASM)', () => {
           maxValue: 1,
         }),
       ).not.toThrow();
-      expect(engine.midiCcBindingCount).toBe(2);
+      expect(engine.midiCcBindings().length).toBe(2);
       engine.clearMidiCcBindings();
-      expect(engine.midiCcBindingCount).toBe(0);
+      expect(engine.midiCcBindings().length).toBe(0);
       expect(() => engine.setMidiFx(0, { transposeSemitones: 12 })).not.toThrow();
       expect(() =>
         engine.setMidiFx(0, {

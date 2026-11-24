@@ -28,15 +28,19 @@ from ._project import NoteTracking as NoteTracking
 from ._project import PartRigEntry as PartRigEntry
 from ._project import PartRigMode as PartRigMode
 from ._project import Project as Project
+from ._project import ProjectArticulationBinding as ProjectArticulationBinding
 from ._project import ProjectAutomationLane as ProjectAutomationLane
 from ._project import ProjectAutomationTargetKind as ProjectAutomationTargetKind
+from ._project import ProjectAutoTempoResult as ProjectAutoTempoResult
 from ._project import ProjectBounceResult as ProjectBounceResult
 from ._project import ProjectChordQuality as ProjectChordQuality
 from ._project import ProjectChordSymbol as ProjectChordSymbol
+from ._project import ProjectControllerProfileBinding as ProjectControllerProfileBinding
 from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import ProjectDestinationInstrument as ProjectDestinationInstrument
 from ._project import ProjectFadeCurve as ProjectFadeCurve
 from ._project import ProjectInstrument as ProjectInstrument
+from ._project import ProjectInstrumentBinding as ProjectInstrumentBinding
 from ._project import ProjectInstrumentKind as ProjectInstrumentKind
 from ._project import ProjectKeyMode as ProjectKeyMode
 from ._project import ProjectKeySegment as ProjectKeySegment
@@ -48,6 +52,7 @@ from ._project import ProjectMidiEvent as ProjectMidiEvent
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
 from ._project import ProjectPosition as ProjectPosition
 from ._project import ProjectSection as ProjectSection
+from ._project import ProjectSf2InstrumentBinding as ProjectSf2InstrumentBinding
 from ._project import ProjectSourceKind as ProjectSourceKind
 from ._project import ProjectStemLayout as ProjectStemLayout
 from ._project import ProjectTimeline as ProjectTimeline

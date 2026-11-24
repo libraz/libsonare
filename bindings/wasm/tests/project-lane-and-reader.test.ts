@@ -133,9 +133,10 @@ describe('project metadata readers', () => {
         outputTarget: 'master',
       });
       expect(project.mixerScene()).toBeUndefined();
-      project.setMixerSceneJson(
-        JSON.stringify({ version: 2, buses: [{ id: 'master', role: 'master', layout: 'stereo' }] }),
-      );
+      project.setMixerScene({
+        version: 2,
+        buses: [{ id: 'master', role: 'master', layout: 'stereo' }],
+      });
       expect(project.mixerScene()?.buses[0]?.id).toBe('master');
     } finally {
       project.destroy();

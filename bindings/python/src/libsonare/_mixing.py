@@ -120,7 +120,13 @@ def mixing_scene_preset(name: str) -> MixSceneDocument:
     return typing.cast(MixSceneDocument, json.loads(text))
 
 
-def _scene_handle(text: str, sample_rate: int, max_block_size: int | None) -> tuple[int, list[str]]:
+def _scene_handle(
+    text: str,
+    sample_rate: int,
+    max_block_size: int | None,
+    *,
+    document_root: str | None = None,
+) -> tuple[int, list[str]]:
     """Build a mixer handle from scene JSON text, with the warnings its load left."""
     lib = _get_lib()
     handle = lib.sonare_mixer_from_scene_json(
@@ -129,9 +135,13 @@ def _scene_handle(text: str, sample_rate: int, max_block_size: int | None) -> tu
         _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
     )
     if not handle:
-        raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to build mixer from scene JSON")
-    # Capture the load's warnings (e.g. insert params no processor read)
-    # immediately, before any later C-ABI call overwrites them.
+        raise _last_error(
+            int(ErrorCode.INVALID_PARAMETER),
+            "failed to build mixer from scene JSON",
+            document_root=document_root,
+            literal_document=document_root is None,
+        )
+    # Capture warnings before any later C-ABI call overwrites them.
     return int(handle), [message for _, message, _ in _last_diagnostics()]
 
 
@@ -172,9 +182,8 @@ class Mixer:
         strip (``enabled`` / ``lufs`` / ``truePeak`` / ``truePeakOversample``)
         selects it, and leaving it out keeps the full default (LUFS + true peak
         at 4x, about 1.4 MB per strip at 48 kHz). ``{"enabled": false}`` drops
-        both meters for a strip whose snapshots are never read. The core reads
-        the scene, so a content refusal is ``SonareError`` (``INVALID_FORMAT``)
-        naming the path.
+        both meters for a strip whose snapshots are never read. An invalid
+        field in the scene mapping raises ``SonareValueError`` naming its path.
         """
         if scene is not None and not isinstance(scene, Mapping):
             raise _refuse_type("scene must be a mapping (parse JSON text with json.loads first)")
@@ -192,7 +201,9 @@ class Mixer:
             )
             self._adopt(typing.cast(int, out.value), sample_rate, [])
             return
-        handle, warnings = _scene_handle(json.dumps(dict(scene)), sample_rate, max_block_size)
+        handle, warnings = _scene_handle(
+            json.dumps(dict(scene)), sample_rate, max_block_size, document_root="scene"
+        )
         self._adopt(handle, sample_rate, warnings)
 
     @classmethod
@@ -215,13 +226,10 @@ class Mixer:
     def scene_warnings(self) -> list[str]:
         """Non-fatal warnings captured when this mixer was built from scene JSON.
 
-        One entry per channel-strip insert that was handed param keys no processor
-        reads (a likely typo, or a key meant for a different processor), and one per
-        send to a destination the scene does not declare. The scene still loaded;
-        those keys and sends simply took no effect. Empty when nothing was ignored.
-        Use :func:`mastering_insert_param_names` to discover the keys an insert
-        accepts. An unknown scene key is not a warning: building the mixer
-        raises ``SonareError`` (``INVALID_FORMAT``) naming its path.
+        A send to a bus the scene does not declare produces a warning.
+        Unknown scene keys, including unread insert parameters, raise an error
+        naming the key's path. Use :func:`mastering_insert_param_names` to discover
+        the keys an insert accepts.
         """
         return list(self._scene_warnings)
 

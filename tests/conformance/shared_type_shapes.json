@@ -105,7 +105,16 @@
       "minCrossoverCutoffs",
       "name",
       "parent"
-    ]
+    ],
+    "ProjectInstrumentBinding": ["destinationId", "instrument"],
+    "ProjectSf2InstrumentBinding": [
+      "destinationId",
+      "instrument",
+      "soundFontUri"
+    ],
+    "ProjectAutoTempoResult": ["bpm", "bpmConfidence", "timeSignature"],
+    "ProjectControllerProfileBinding": ["destinationId", "presetName"],
+    "ProjectArticulationBinding": ["articulation", "channel", "destinationId"]
   },
   "optional": {
     "DynamicsResult": ["crestFactor", "dynamicRangeDb", "loudnessRangeLu"],
@@ -133,7 +142,9 @@
       "unit"
     ],
     "MasteringProcessorCatalogEntry": ["offlineParams", "realtimeCost"],
-    "MasteringInsertSlot": ["parent"]
+    "MasteringInsertSlot": ["parent"],
+    "ProjectInstrumentBinding": ["destinationId"],
+    "ProjectSf2InstrumentBinding": ["destinationId", "soundFontUri"]
   },
   "aliases": {}
 }

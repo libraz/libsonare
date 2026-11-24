@@ -730,6 +730,12 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'refusal name built from a literal list name, a segment index and a literal key',
     },
     {
+      file: 'project/project_meta.cpp',
+      text: 'subject.c_str()',
+      count: 4,
+      reason: 'refusal name built from a literal list name, an annotation index and a literal key',
+    },
+    {
       file: 'realtime/transport.cpp',
       text: '(at + ".',
       count: 3,

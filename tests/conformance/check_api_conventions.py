@@ -1448,7 +1448,9 @@ def _c_not_compiled_in_sites(root: Path) -> list[dict]:
                     if m.group(2) == "SONARE_C_STUB_NOT_SUPPORTED"
                     or not any(
                         later.group(1)
-                        for later in _C_NOT_SUPPORTED.finditer(_c_statement_rest(code, start + m.end()))
+                        for later in _C_NOT_SUPPORTED.finditer(
+                            _c_statement_rest(code, start + m.end())
+                        )
                     )
                 ]
             start += len(line) + 1
@@ -1537,7 +1539,6 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/mixing_graph.cpp": 1,
     "src/c_api/mixing_strip.cpp": 4,
     "src/c_api/project_midi.cpp": 8,
-    "src/c_api/project_soundfont.cpp": 1,
     "src/c_api/sonare_c_mastering_repair.cpp": 1,
     "src/c_api/sonare_c_memory.cpp": 1,
     "src/c_api/sonare_c_polyphony.cpp": 3,

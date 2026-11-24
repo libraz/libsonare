@@ -3,6 +3,7 @@ import type { SonareEngineCaptureResponseMessage } from '../../src/internal/work
 const status = {
   capturedFrames: 128,
   overflowCount: 0,
+  droppedFrames: 0,
   armed: true,
   punchEnabled: false,
   source: 'input' as const,

@@ -117,7 +117,6 @@ describe('RealtimeEngine transport and state reads', () => {
         'automationLaneCount',
         'clipCount',
         'midiInstrumentCount',
-        'midiCcBindingCount',
         'graphNodeCount',
         'graphConnectionCount',
         'externalMidiDroppedCount',
@@ -940,10 +939,12 @@ describe('RealtimeEngine instruments and MIDI', () => {
     });
   });
 
-  it('takes the part rig as a request object with an optional part', () => {
+  it('takes the part rig as a request object with a required part', () => {
     withEngine((engine) => {
       engine.setSynthInstrument(3, {});
-      expect(() => engine.setPartRig({ destinationId: 3, mode: 'bank' } as never)).not.toThrow();
+      expect(
+        caught(() => engine.setPartRig({ destinationId: 3, mode: 'bank' } as never)),
+      ).toBeInstanceOf(TypeError);
       expect(() => engine.setPartRig({ destinationId: 3, part: 0, mode: 'none' })).not.toThrow();
       expect(
         caught(() => engine.setPartRig({ destinationId: 3, part: 0, mode: 1 as never })),
@@ -967,11 +968,65 @@ describe('RealtimeEngine instruments and MIDI', () => {
     });
   });
 
+  it('reads and rebinds detached MIDI CC descriptors with consume state', () => {
+    withEngine((engine) => {
+      engine.bindMidiCc({ ccNumber: 7, paramId: 5 });
+      engine.bindMidiCc({
+        ccNumber: 10,
+        channel: 2,
+        kind: 'rpn',
+        selectorMsb: 1,
+        selectorLsb: 3,
+        paramId: 6,
+        minValue: -2,
+        maxValue: 8,
+        consume: true,
+      });
+      const byCcNumber = (a: { ccNumber: number }, b: { ccNumber: number }) =>
+        a.ccNumber - b.ccNumber;
+      const bindings = engine.midiCcBindings().sort(byCcNumber);
+      expect(bindings).toEqual([
+        {
+          ccNumber: 7,
+          kind: 'controlChange7',
+          ccLsbNumber: 0,
+          selectorMsb: 0,
+          selectorLsb: 0,
+          paramId: 5,
+          minValue: 0,
+          maxValue: 1,
+          consume: false,
+        },
+        {
+          ccNumber: 10,
+          channel: 2,
+          kind: 'rpn',
+          ccLsbNumber: 0,
+          selectorMsb: 1,
+          selectorLsb: 3,
+          paramId: 6,
+          minValue: -2,
+          maxValue: 8,
+          consume: true,
+        },
+      ]);
+
+      for (const binding of bindings) {
+        engine.bindMidiCc(binding);
+      }
+      expect(engine.midiCcBindings().sort(byCcNumber)).toEqual(bindings);
+      bindings.length = 0;
+      expect(engine.midiCcBindings().length).toBe(2);
+      expect(engine.midiCcBindings()).toHaveLength(2);
+    });
+  });
+
   it('binds one CC descriptor with bindMidiCc', () => {
     withEngine((engine) => {
+      expect(anyEngine(engine).midiCcBindingCount).toBeUndefined();
       engine.addParameter({ id: 4, name: 'cutoff' });
       engine.bindMidiCc({ ccNumber: 74, paramId: 4, minValue: 0, maxValue: 1 });
-      expect(engine.midiCcBindingCount).toBe(1);
+      expect(engine.midiCcBindings()).toHaveLength(1);
       const bindings = engine.midiCcBindings();
       expect(bindings).toHaveLength(1);
       expect('channel' in bindings[0]).toBe(false);

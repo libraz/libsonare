@@ -176,6 +176,8 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
             pass
 
         def bounce(self, *, sf2_instruments, total_frames):
+            assert len(sf2_instruments) == 1
+            assert sf2_instruments[0].destination_id == 0
             seen["frames"] = total_frames
             return SimpleNamespace(
                 channels=np.zeros((2, total_frames), dtype=np.float32),
@@ -191,6 +193,7 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
     fake = type(sys)("libsonare")
     fake.Project = _Project
     fake.Sf2InstrumentConfig = lambda **_kw: object()
+    fake.ProjectSf2InstrumentBinding = lambda **kwargs: SimpleNamespace(destination_id=0, **kwargs)
     monkeypatch.setitem(sys.modules, "libsonare", fake)
     monkeypatch.setattr(render_model, "ensure_lib_path", lambda: None)
     monkeypatch.setattr(render_model, "check_gm_fallback", lambda _m: None)
@@ -200,6 +203,36 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
     assert seen["project_rate"] == 44100
     assert seen["frames"] == round(0.4 * 44100)
     assert audio.shape == (seen["frames"], 2)
+
+
+def test_preset_bounce_passes_a_structured_synth_patch():
+    from libsonare import ProjectInstrumentBinding, SynthPatch
+
+    class _Project:
+        def set_sample_rate(self, rate):
+            assert rate == 44100
+
+        def import_smf(self, data):
+            assert data == b"midi"
+
+        def bounce(self, *, synth_instruments, total_frames):
+            assert synth_instruments == [
+                ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))
+            ]
+            assert total_frames == 441
+            return SimpleNamespace(channels=np.zeros((2, total_frames), dtype=np.float32))
+
+        def close(self):
+            pass
+
+    facade = SimpleNamespace(
+        Project=_Project, ProjectInstrumentBinding=ProjectInstrumentBinding, SynthPatch=SynthPatch
+    )
+    audio, manifest = render_model._bounce(
+        facade, b"midi", 0.01, 44100, rig=False, preset="sawLead"
+    )
+    assert audio.shape == (441, 2)
+    assert manifest is None
 
 
 def test_a_request_renders_at_its_own_rig_rate_and_window(monkeypatch):
@@ -260,6 +293,7 @@ def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
     fake = type(sys)("libsonare")
     fake.Project = _Project
     fake.Sf2InstrumentConfig = lambda **_kw: object()
+    fake.ProjectSf2InstrumentBinding = lambda **kwargs: SimpleNamespace(destination_id=0, **kwargs)
     monkeypatch.setitem(sys.modules, "libsonare", fake)
     monkeypatch.setattr(render_model, "ensure_lib_path", lambda: None)
     monkeypatch.setattr(render_model, "check_gm_fallback", lambda _m: None)

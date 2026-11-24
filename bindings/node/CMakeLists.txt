@@ -164,7 +164,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_tempo.cpp
   ${SONARE_ROOT}/src/c_api/project_instruments.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_transcribe.cpp
-  ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
+  ${SONARE_ROOT}/src/c_api/project_sound_font.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_sample_bank.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_playback.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_acoustic.cpp

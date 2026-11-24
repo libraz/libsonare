@@ -139,11 +139,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
 const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
   ['noteToHz', () => sonare.noteToHz(5 as never), 'note'],
   [
-    'masteringInsertParamInfo',
-    () => sonare.masteringInsertParamInfo({ insert: 5 as never }),
-    'insert',
-  ],
-  [
     'masteringInsertTiming',
     () => sonare.masteringInsertTiming({ insert: 5 as never, sampleRate: 48000 }),
     'insert',
@@ -158,6 +153,11 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
 /** A closed name set refuses a wrong type by naming its members, as it refuses an unknown name. */
 const CLOSED_NAME_ARGUMENT: Array<[string, () => unknown, string]> = [
   ['masteringInsertParamNames', () => sonare.masteringInsertParamNames(5 as never), 'insert'],
+  [
+    'masteringInsertParamInfo',
+    () => sonare.masteringInsertParamInfo({ insert: 5 as never }),
+    'insert',
+  ],
   ['mixingScenePreset', () => sonare.mixingScenePreset(5 as never), 'name'],
   [
     'mixingAssistantSourceClassFromName',

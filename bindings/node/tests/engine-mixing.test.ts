@@ -433,7 +433,7 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badParamError = error;
     }
-    expect(badParamError).toBeInstanceOf(RangeError);
+    expect(badParamError).toBeInstanceOf(TypeError);
     expect(isSonareError(badParamError)).toBe(false);
     let badBypassError: unknown;
     try {
@@ -774,7 +774,7 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badParamError = error;
     }
-    expect(badParamError).toBeInstanceOf(RangeError);
+    expect(badParamError).toBeInstanceOf(TypeError);
     expect(isSonareError(badParamError)).toBe(false);
 
     engine.play();
@@ -1014,7 +1014,13 @@ describe('RealtimeEngine native binding', () => {
     expect(dryWet).toBeDefined();
     expect(dryWet?.rtSafe).toBe(true);
     expect(typeof dryWet?.id).toBe('number');
-    expect(masteringInsertParamInfo({ insert: 'nope.nope' as never })).toEqual([]);
+    expect(() => masteringInsertParamInfo({ insert: 'nope.nope' as never })).toThrow(
+      new RangeError(
+        `masteringInsertParamInfo: insert must be one of ${masteringProcessorCatalog()
+          .map((entry) => entry.id)
+          .join(', ')}`,
+      ),
+    );
 
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;

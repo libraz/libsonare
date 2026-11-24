@@ -1018,7 +1018,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         Advisory telemetry; monotonic within a prepared session.
         """
         lib = _get_lib()
-        out = ctypes.c_size_t()
+        out = ctypes.c_uint64()
         _check(
             lib.sonare_engine_external_midi_dropped_count(self._require_handle(), ctypes.byref(out))
         )
@@ -1034,7 +1034,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         for, so their reads produced silence.
         """
         lib = _get_lib()
-        out = ctypes.c_size_t()
+        out = ctypes.c_uint64()
         _check(
             lib.sonare_engine_clip_page_request_overflow_count(
                 self._require_handle(), ctypes.byref(out)
@@ -1053,7 +1053,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         detect that degradation.
         """
         lib = _get_lib()
-        out = ctypes.c_size_t()
+        out = ctypes.c_uint64()
         _check(
             lib.sonare_engine_warp_stretch_overflow_count(self._require_handle(), ctypes.byref(out))
         )

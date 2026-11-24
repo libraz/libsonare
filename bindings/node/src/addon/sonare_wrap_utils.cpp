@@ -84,7 +84,6 @@ Napi::Object RefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& 
   for (uint32_t i = 0; i < parts.subjects.size(); ++i) subjects.Set(i, parts.subjects[i]);
   out.Set("subjects", subjects);
   out.Set("predicate", parts.predicate);
-  out.Set("renamedTo", parts.renamed_to);
   out.Set("expected", parts.expected);
   out.Set("callerSpelled", parts.caller_spelled);
   out.Set("text", RefusalText(refusal));
@@ -117,7 +116,6 @@ bool RefusalFromObject(Napi::Env env, const Napi::Object& object,
   }
   parts->form = StringProperty(object, "form", "");
   parts->predicate = StringProperty(object, "predicate", "");
-  parts->renamed_to = StringProperty(object, "renamedTo", "");
   parts->expected = StringProperty(object, "expected", "");
   parts->caller_spelled = BoolProperty(object, "callerSpelled", false);
   const Napi::Value domain = object.Get("domain");
@@ -304,6 +302,27 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix)
   if (env.IsExceptionPending()) return;
   const char* reason = sonare_last_error_reason();
   ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason);
+}
+
+void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err, const std::string& prefix) {
+  if (env.IsExceptionPending()) return;
+  if (err == SONARE_OK) {
+    err = sonare_last_error_code();
+    if (err == SONARE_OK) err = SONARE_ERROR_UNKNOWN;
+  }
+  const char* reason = sonare_last_error_reason();
+  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
+  if (refusal == nullptr) {
+    ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason);
+    return;
+  }
+  const sonare::SonareParameterRefusal shown = refusal->as_caller_spelled();
+  // The code stays the C call's: a document refusal is InvalidFormat, not an argument error.
+  Napi::Error error =
+      MakeSonareError(env, err, prefix + RefusalText(shown), shown.shape_error(), reason);
+  const Napi::Object value = error.Value().As<Napi::Object>();
+  AttachRefusal(env, value, shown, LastRefusalEntry());
+  error.ThrowAsJavaScriptException();
 }
 
 void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_root) {

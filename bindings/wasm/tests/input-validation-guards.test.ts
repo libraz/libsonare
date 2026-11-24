@@ -590,7 +590,7 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
     expect(() =>
       engine.bindMidiCc({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
     ).not.toThrow();
-    expect(engine.midiCcBindingCount).toBe(1);
+    expect(engine.midiCcBindings().length).toBe(1);
   });
 
   it('defaults an omitted kind to 7-bit Control Change', () => {
@@ -606,7 +606,7 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
     expect(() =>
       engine.bindMidiCc({ ccNumber: 8, kind: 'controlChange7', paramId: 2 } as CcBindingDescriptor),
     ).not.toThrow();
-    expect(engine.midiCcBindingCount).toBe(2);
+    expect(engine.midiCcBindings().length).toBe(2);
   });
 
   it('defaults an omitted minValue to 0 and an omitted maxValue to 1', () => {
@@ -652,7 +652,7 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
         maxValue: 1,
       } as CcBindingDescriptor),
     );
-    expect(engine.midiCcBindingCount).toBe(0);
+    expect(engine.midiCcBindings().length).toBe(0);
   });
 
   it('still requires paramId and refuses a numeric kind', () => {
@@ -665,7 +665,7 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
         paramId: 1,
       } as unknown as CcBindingDescriptor),
     );
-    expect(engine.midiCcBindingCount).toBe(0);
+    expect(engine.midiCcBindings().length).toBe(0);
   });
 
   it('refuses an unknown kind name and a reserved paramId as RangeError', () => {
@@ -683,7 +683,7 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
     // 0xffffffff lies in the insert-parameter namespace the engine reserves.
     const reserved = expectRefusalOf(() => engine.bindMidiCc({ ccNumber: 7, paramId: 0xffffffff }));
     expect(reserved.message).toMatch(/paramId 4294967295 is reserved/);
-    expect(engine.midiCcBindingCount).toBe(0);
+    expect(engine.midiCcBindings().length).toBe(0);
   });
 });
 

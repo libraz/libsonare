@@ -42,7 +42,7 @@ from ._cli_options import (
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._narrowing import _INT64_MAX, _INT64_MIN
-from ._project_instruments import SynthPatch
+from ._project_instruments import ProjectInstrumentBinding, SynthPatch
 from ._runtime import _UINT32_MAX, ErrorCode, SonareError
 
 # The only URI scheme --resolve-audio opens. The core never opens a URI itself,
@@ -137,12 +137,12 @@ def _path_from_file_uri(uri: str) -> str | None:
 def _bind_source_audio(project: object, source_id: int, path: str) -> None:
     """Decode an audio file and register its PCM against one audio source."""
     planes, sample_rate = _load_audio_channels(path)
-    channels = len(planes)
     frames = min((len(plane) for plane in planes), default=0)
-    if channels == 0 or frames == 0:
+    if frames == 0:
         raise ValueError(f"--audio {source_id}={path} decoded no samples")
-    interleaved = [plane[frame] for frame in range(frames) for plane in planes]
-    cast(Any, project).set_source_audio(source_id, interleaved, channels, sample_rate)
+    cast(Any, project).set_source_audio(
+        source_id, [plane[:frames] for plane in planes], sample_rate
+    )
 
 
 def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> None:
@@ -282,8 +282,12 @@ def _project_bounce(
             kwargs["metronome"] = EngineMetronomeConfig(enabled=True)
         use_synth = force_synth or args.synth is not None
         if use_synth:
-            patch = SynthPatch(use_gm_programs=True) if preset is None else preset
-            rendered = cast(Any, project).bounce(synth_instruments=[(0, patch)], **kwargs)
+            patch = (
+                SynthPatch(use_gm_programs=True) if preset is None else SynthPatch(preset=preset)
+            )
+            rendered = cast(Any, project).bounce(
+                synth_instruments=[ProjectInstrumentBinding(instrument=patch)], **kwargs
+            )
         else:
             rendered = cast(Any, project).bounce(**kwargs)
         prefix_frames = 0
@@ -714,8 +718,10 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         # The clip's grid is the PROJECT's tempo map, which is why an explicit
         # tempo is installed rather than passed: `Project.transcribe_to_clip`
         # takes none. Leaving it out detects one, as `transcribe` does.
+        detected = None
         if args.tempo_bpm is None:
-            tempo_bpm = float(cast(Any, project).auto_tempo(samples, sr))
+            detected = project.auto_tempo(samples, sr)
+            tempo_bpm = detected.bpm
         else:
             tempo_bpm = float(args.tempo_bpm)
             cast(Any, project).set_tempo_segments([{"start_ppq": 0.0, "bpm": tempo_bpm}])
@@ -749,16 +755,20 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         cast(Any, project).close()
     _atomic_write_bytes(args.output, data)
     if args.json:
-        print(
-            _strict_json_dumps(
-                {
-                    "output": args.output,
-                    "note_count": note_count,
-                    "tempo_bpm": tempo_bpm,
-                    "bytes": len(data),
-                }
-            )
-        )
+        payload: dict[str, Any] = {
+            "output": args.output,
+            "note_count": note_count,
+            "tempo_bpm": tempo_bpm,
+            "bytes": len(data),
+        }
+        if detected is not None:
+            payload["tempo_confidence"] = detected.bpm_confidence
+            payload["time_signature"] = {
+                "numerator": detected.time_signature.numerator,
+                "denominator": detected.time_signature.denominator,
+                "confidence": detected.time_signature.confidence,
+            }
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Transcribed {note_count} notes at {tempo_bpm:.2f} BPM")
         print(f"    Wrote: {args.output}")

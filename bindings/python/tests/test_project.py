@@ -14,6 +14,7 @@ import dataclasses
 import json
 import re
 from collections.abc import Callable
+from types import MappingProxyType
 from typing import Any, get_args
 
 import numpy as np
@@ -24,6 +25,7 @@ from libsonare import (
     ErrorCode,
     ExternalSeparatedStemImportResult,
     Project,
+    ProjectAutoTempoResult,
     ProjectDiagnosticCode,
     ProjectDiagnosticSeverity,
     ProjectLoopRecordingResult,
@@ -316,7 +318,7 @@ def test_unresolved_audio_sources_carry_full_uri_and_metadata() -> None:
             assert sources[1].content_hash == "sha256:abc"
             assert sources[1].external_stem_role == "vocals"
             assert restored.sources()[0].name_or_uri == long_uri
-            restored.set_source_audio(ids[0], np.full(480, 0.25, dtype=np.float32), 1, 48000)
+            restored.set_source_audio(ids[0], np.full((1, 480), 0.25, dtype=np.float32), 48000)
             assert [s.id for s in restored.unresolved_audio_sources()] == [ids[1]]
         finally:
             restored.close()
@@ -437,7 +439,7 @@ def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
         try:
             ids = restored.unresolved_audio_source_ids()
             assert len(ids) == 1
-            restored.set_source_audio(ids[0], audio, 1, 48000)
+            restored.set_source_audio(ids[0], audio.reshape(1, -1), 48000)
             assert restored.unresolved_audio_source_ids().size == 0
             assert restored.bounce(total_frames=480, num_channels=1).channels.shape == (1, 480)
         finally:
@@ -976,7 +978,8 @@ def test_snap_to_grid_snaps_near_beat_to_line() -> None:
         project.close()
 
 
-def test_auto_tempo_returns_positive_bpm() -> None:
+@pytest.mark.parametrize("apply_meter", [False, True])
+def test_auto_tempo_returns_selected_bpm_confidence_and_meter(apply_meter: bool) -> None:
     project = Project()
     try:
         project.set_sample_rate(48000)
@@ -990,10 +993,104 @@ def test_auto_tempo_returns_positive_bpm() -> None:
         assert candidates[0]["bpm"] > 0.0
         assert candidates[0]["label"] in {"primary", "half", "double"}
         assert candidates[0]["time_signature"]["numerator"] > 0
-        bpm = project.auto_tempo(audio, sr, candidate_index=0, apply_time_signatures=True)
-        assert bpm > 0.0
+        result = project.auto_tempo(audio, sr, candidate_index=0, apply_time_signatures=apply_meter)
+        assert isinstance(result, ProjectAutoTempoResult)
+        assert result.bpm > 0.0
+        assert 0.0 <= result.bpm_confidence <= 1.0
+        assert result.time_signature.numerator > 0
+        assert result.time_signature.denominator > 0
+        assert 0.0 <= result.time_signature.confidence <= 1.0
+        if not apply_meter:
+            assert project.time_signatures() == []
     finally:
         project.close()
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("apply_time_signatures", 1),
+        ("adaptive_tempo", "yes"),
+        ("include_octave_candidates", []),
+        ("tempo_update_interval_beats", "four"),
+        ("ramp_threshold", "small"),
+        ("candidate_index", "first"),
+    ],
+)
+def test_auto_tempo_checks_option_type_before_sample_content(option: str, value: object) -> None:
+    project = Project.__new__(Project)
+    with pytest.raises(TypeError, match=option):
+        project.auto_tempo([float("nan")], 48000, **{option: value})
+
+
+def test_set_track_route_requires_the_track_id() -> None:
+    project = Project.__new__(Project)
+    with pytest.raises(TypeError, match="track_id"):
+        project.set_track_route(channel_strip_ref=None)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("method", ["analyze_tempo", "auto_tempo"])
+def test_project_tempo_options_are_keyword_only(method: str) -> None:
+    project = Project.__new__(Project)
+    with pytest.raises(TypeError, match="positional"):
+        getattr(project, method)([], 48000, False)
+
+
+def test_project_bounce_binding_records_are_frozen_and_keyword_only() -> None:
+    from libsonare import (
+        ProjectInstrumentBinding,
+        ProjectSf2InstrumentBinding,
+        Sf2InstrumentConfig,
+        SynthPatch,
+        types,
+    )
+
+    synth = SynthPatch()
+    binding = ProjectInstrumentBinding[SynthPatch](instrument=synth)
+    assert binding.instrument is synth
+    assert binding.destination_id is None
+    sf2 = ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(), destination_id=3)
+    assert sf2.destination_id == 3
+    assert sf2.sound_font_uri is None
+    assert isinstance(sf2, ProjectInstrumentBinding)
+    assert types.ProjectInstrumentBinding is ProjectInstrumentBinding
+    assert types.ProjectSf2InstrumentBinding is ProjectSf2InstrumentBinding
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        binding.destination_id = 2
+    with pytest.raises(TypeError):
+        ProjectInstrumentBinding(synth)
+
+
+def test_project_bounce_checks_scalar_and_destination_types_before_count_bounds() -> None:
+    from libsonare import ProjectInstrumentBinding, SynthPatch
+
+    project = Project.__new__(Project)
+    with pytest.raises(TypeError, match="total_frames"):
+        project.bounce(count_in_bars=17, total_frames="1")  # type: ignore[arg-type]
+    binding = ProjectInstrumentBinding(
+        instrument=SynthPatch(),
+        destination_id="1",  # type: ignore[arg-type]
+    )
+    with pytest.raises(TypeError, match=r"synth_instruments\[0\]\.destination_id"):
+        project.bounce(count_in_bars=17, synth_instruments=[binding])
+
+
+@pytest.mark.parametrize("missing", ["start_ppq", "end_ppq"])
+def test_chord_annotation_requires_both_ppq_endpoints(missing: str) -> None:
+    project = Project.__new__(Project)
+    chord = {"start_ppq": 0.0, "end_ppq": 0.5}
+    del chord[missing]
+    with pytest.raises(SonareValueError, match=rf"chords\[0\]\.{missing} must be given"):
+        project.annotate_chords((MappingProxyType(chord),))
+
+
+def test_chord_argument_refusals_name_row_and_extension_indices() -> None:
+    project = Project.__new__(Project)
+    chord = MappingProxyType({"start_ppq": 0.0, "end_ppq": 0.5, "extensions": (7, 2.5)})
+    with pytest.raises(SonareValueError, match=r"chords\[1\]\.extensions\[1\]"):
+        project.annotate_chords(({"start_ppq": 0.0, "end_ppq": 0.5}, chord))
+    with pytest.raises(SonareValueError, match=r"chords\[0\]\.roman_numeral"):
+        project.annotate_chords(({"start_ppq": 0.0, "end_ppq": 0.5, "roman_numeral": "I\0V"},))
 
 
 # --- lifecycle -------------------------------------------------------------
@@ -1027,29 +1124,45 @@ def test_project_getters_setters_and_counts() -> None:
         project.set_sample_rate(44100)
         assert project.sample_rate == 44100.0
 
+        # The stored-list readers stay empty while the effective timeline uses
+        # its default tempo and meter.
+        assert project.tempo_segments() == []
+        assert project.time_signatures() == []
+        default_position = project.position_at_ppq(0.0)
+        assert default_position.bpm == 120.0
+        assert (
+            default_position.time_signature.numerator,
+            default_position.time_signature.denominator,
+        ) == (4, 4)
+
         assert project.overlap_policy == "disallow"
         project.set_overlap_policy("allow")
         assert project.overlap_policy == "allow"
 
         project.set_tempo_segments(
-            [{"start_ppq": 0.0, "bpm": 120.0}, {"start_ppq": 480.0, "bpm": 140.0}]
+            [{"start_ppq": 0.25, "bpm": 120.0}, {"start_ppq": 480.125, "bpm": 140.0}]
         )
         # A segment read back is in the shape set_tempo_segments takes.
         assert project.tempo_segments() == [
-            {"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 0.0},
-            {"start_ppq": 480.0, "bpm": 140.0, "end_bpm": 0.0},
+            {"start_ppq": 0.25, "bpm": 120.0, "end_bpm": 0.0},
+            {"start_ppq": 480.125, "bpm": 140.0, "end_bpm": 0.0},
         ]
 
         project.set_time_signatures(
             [
-                {"start_ppq": 0.0, "numerator": 4, "denominator": 4},
-                {"start_ppq": 1920.0, "numerator": 3, "denominator": 4},
+                {"start_ppq": 0.25, "numerator": 4, "denominator": 4},
+                {"start_ppq": 1920.125, "numerator": 3, "denominator": 4},
             ]
         )
         assert project.time_signatures() == [
-            {"start_ppq": 0.0, "numerator": 4, "denominator": 4},
-            {"start_ppq": 1920.0, "numerator": 3, "denominator": 4},
+            {"start_ppq": 0.25, "numerator": 4, "denominator": 4},
+            {"start_ppq": 1920.125, "numerator": 3, "denominator": 4},
         ]
+        project.set_tempo_segments([])
+        project.set_time_signatures([])
+        assert project.tempo_segments() == []
+        assert project.time_signatures() == []
+        assert project.position_at_ppq(0.0) == default_position
 
         marker_id = project.set_marker(1.0, name="intro")
         assert marker_id > 0
@@ -1213,10 +1326,10 @@ def test_replacing_source_audio_carries_its_shape_and_undo_restores_it() -> None
         track_id = project.add_track("audio", "lead")
         project.add_clip(track_id, 0.0, 1.0, source_uri="asset://take.wav")
         source_id = project.sources()[0].id
-        project.set_source_audio(source_id, np.full(480, 0.25, dtype=np.float32), 1, 48000)
+        project.set_source_audio(source_id, np.full((1, 480), 0.25, dtype=np.float32), 48000)
         mono = project.sources()[0]
         assert (mono.num_channels, mono.sample_rate_hint) == (1, 48000.0)
-        project.set_source_audio(source_id, np.full(2 * 441, 0.25, dtype=np.float32), 2, 44100)
+        project.set_source_audio(source_id, np.full((2, 441), 0.25, dtype=np.float32), 44100)
         stereo = project.sources()[0]
         assert (stereo.num_channels, stereo.sample_rate_hint) == (2, 44100.0)
         project.undo()

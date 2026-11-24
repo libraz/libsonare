@@ -15,6 +15,7 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { sceneArgumentJson, sceneArgumentRefusal } from './internal/mix_scene.js';
 import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { setTimelineHandle } from './internal/project_handles.js';
@@ -34,13 +35,14 @@ import {
 } from './internal/project_tokens.js';
 import { respellRefusal } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals, refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
-import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, isPlainRecord } from './internal/value_guards.js';
 import { addon } from './native.js';
 import { synthPatchParamInfo } from './synth_catalog.js';
 import type {
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   MixSceneDocument,
+  MixSceneDocumentInput,
   PartRigEntry,
   PartRigKey,
   PartRigMode,
@@ -56,6 +58,7 @@ import type {
   ProjectAutomationTargetKind,
   ProjectAutoTempoOptions,
   ProjectAutoTempoRequest,
+  ProjectAutoTempoResult,
   ProjectBounceOptions,
   ProjectBounceResult,
   ProjectChordSymbol,
@@ -90,6 +93,7 @@ import type {
   ProjectPosition,
   ProjectProgramOptions,
   ProjectSection,
+  ProjectSoundFontOptions,
   ProjectSource,
   ProjectSourceAudioRequest,
   ProjectTempoCandidate,
@@ -396,7 +400,6 @@ function bounceSettings(request: ProjectBounceOptions): Record<string, unknown> 
   const blockSize = optionalPositiveInt('blockSize', request.blockSize, C_INT_MAX);
   const numChannels = optionalPositiveInt('numChannels', request.numChannels, C_INT_MAX);
   if (!isAbsent(request.countInBars)) {
-    assertBoundedInteger(request.countInBars, 'countInBars', 0, 16);
     native.countInBars = request.countInBars;
   }
   if (totalFrames !== undefined) {
@@ -434,8 +437,9 @@ function bounceSettings(request: ProjectBounceOptions): Record<string, unknown> 
 function bindInstruments<T extends object>(
   list: string,
   value: readonly ProjectInstrumentBinding<T>[],
-  entry: (instrument: T) => T,
+  entry: (instrument: T, binding: Record<string, unknown>, label: string) => T,
   withDestination: (instrument: T, destinationId: number) => T,
+  keys: readonly string[] = INSTRUMENT_BINDING_KEYS,
 ): T[] {
   if (!Array.isArray(value)) {
     throw refuseType(`${list} must be an array of { destinationId?, instrument } pairs`);
@@ -443,9 +447,9 @@ function bindInstruments<T extends object>(
   requireListBudget(value, list);
   return value.map((pair: unknown, index: number) => {
     const label = `${list}[${index}]`;
-    const binding = instrumentBinding(pair, label);
+    const binding = instrumentBinding(pair, label, keys);
     const instrument = binding.instrument as T;
-    const resolved = entry(instrument);
+    const resolved = entry(instrument, binding, label);
     if (isAbsent(binding.destinationId)) {
       return resolved;
     }
@@ -457,18 +461,23 @@ function bindInstruments<T extends object>(
 
 /** The keys of a `{ destinationId?, instrument }` pair. */
 const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
+const SF2_BINDING_KEYS = [...INSTRUMENT_BINDING_KEYS, 'soundFontUri'];
 
 /**
  * One `{ destinationId?, instrument }` pair, refused by its path: an undeclared key, a
  * missing or non-object instrument, and a `destinationId` given inside the instrument
  * instead of beside it.
  */
-function instrumentBinding(pair: unknown, label: string): Record<string, unknown> {
+function instrumentBinding(
+  pair: unknown,
+  label: string,
+  keys: readonly string[],
+): Record<string, unknown> {
   if (!isNonArrayObject(pair)) {
     throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
   }
   const record = pair as Record<string, unknown>;
-  assertDeclaredKeys(record, INSTRUMENT_BINDING_KEYS, label);
+  assertDeclaredKeys(record, keys, label);
   if (isAbsent(record.instrument)) {
     throw refuseType(`${label}.instrument must be given`);
   }
@@ -490,6 +499,17 @@ const withDestinationCopy = <T extends object>(instrument: T, destinationId: num
 /** Same as {@link withDestinationCopy} but keeps the instrument's prototype callbacks reachable. */
 const withDestinationLayer = <T extends object>(instrument: T, destinationId: number): T =>
   Object.assign(Object.create(instrument) as T, { destinationId });
+
+function soundFontUri(options: ProjectSoundFontOptions | undefined): string | undefined {
+  if (isAbsent(options)) {
+    return undefined;
+  }
+  if (!isPlainRecord(options)) {
+    throw refuseType('options must be an object');
+  }
+  assertDeclaredKeys(options, ['uri'], '');
+  return options.uri === undefined ? undefined : requireProjectText(options.uri, 'uri');
+}
 
 const PROJECT_INSTRUMENT_KINDS = ['synth', 'builtin', 'sf2'] as const;
 const MAX_SYNTH_MOD_ROUTINGS = 8;
@@ -522,7 +542,7 @@ function respellDestinationInstrument(error: unknown): unknown {
   if (refusal === undefined) {
     return error;
   }
-  const subjects = refusal.renamedTo ? [...refusal.subjects, refusal.renamedTo] : refusal.subjects;
+  const subjects = refusal.subjects;
   const respelled: Record<string, Respelling> = {};
   for (const subject of subjects) {
     const name = subject.replace(/^instrument\.(synth|builtin|sf2)(?=\.|$)/, (_root, kind) =>
@@ -818,9 +838,7 @@ function respellMidiSysexBudget(error: unknown): unknown {
   if (refusal === undefined) {
     return error;
   }
-  const subjects = refusal.renamedTo
-    ? [...refusal.subjects, refusal.renamedTo]
-    : [...refusal.subjects];
+  const subjects = refusal.subjects;
   const respelled: Record<string, Respelling> = {};
   for (const subject of subjects) {
     const match = /^events\[(\d+)\]\.sysexSize$/.exec(subject);
@@ -1133,14 +1151,19 @@ export class Project {
   }
 
   /**
-   * Replace the project's mixer scene from scene JSON (see {@link Mixer.fromJson}).
-   *
-   * @throws SonareError `InvalidFormat` naming the first key the scene reader does not
-   *   recognise (e.g. `unknown key strips[2].faderDB`; `$`- and `x-`-prefixed keys are
-   *   exempt); the project's scene is left unchanged.
+   * Replace the project's mixer scene. Omit the scene to clear it.
+   * @throws TypeError for an unknown key or wrong field type.
+   * @throws RangeError for a value outside its domain.
    */
-  setMixerSceneJson(document: string): void {
-    this.native.setMixerSceneJson(document);
+  setMixerScene(scene?: MixSceneDocumentInput): void {
+    withEntry('Project.setMixerScene', () => {
+      const document = scene === undefined ? undefined : sceneArgumentJson(scene);
+      try {
+        this.native.setMixerSceneJson(document);
+      } catch (error) {
+        throw sceneArgumentRefusal(error);
+      }
+    });
   }
 
   /** Read the project's mixer scene, or `undefined` when no scene is stored. */
@@ -1238,18 +1261,12 @@ export class Project {
 
   /** Every tempo segment, in stored order, in the shape {@link setTempoSegments} accepts. */
   tempoSegments(): ProjectTempoSegment[] {
-    const native = this.native;
-    return Array.from({ length: native.tempoSegmentCount() }, (_, i) =>
-      native.tempoSegmentByIndex(i),
-    );
+    return this.native.tempoSegments();
   }
 
   /** Every time-signature segment, in stored order, in the shape {@link setTimeSignatures} accepts. */
   timeSignatures(): ProjectTimeSignatureSegment[] {
-    const native = this.native;
-    return Array.from({ length: native.timeSignatureCount() }, (_, i) =>
-      native.timeSignatureByIndex(i),
-    );
+    return this.native.timeSignatures();
   }
 
   /** Count-in length at the project's initial tempo and meter. */
@@ -1720,7 +1737,7 @@ export class Project {
 
   /**
    * Set a track's mixer-strip binding + output target via an undoable edit.
-   * Pass `undefined`/empty to clear the respective field.
+   * Omit either field to clear it. A supplied route must be nonempty.
    */
   setTrackRoute(trackId: number, channelStripRef?: string, outputTarget?: string): void {
     this.native.setTrackRoute(trackId, channelStripRef ?? null, outputTarget ?? null);
@@ -1962,11 +1979,34 @@ export class Project {
    * the two on the same options. Read the installed map back with
    * {@link tempoSegments}.
    */
-  autoTempo(request: ProjectAutoTempoRequest): number;
-  autoTempo(samples: Float32Array, sampleRate: number, options?: ProjectAutoTempoOptions): number;
-  autoTempo(...args: unknown[]): number {
+  autoTempo(request: ProjectAutoTempoRequest): ProjectAutoTempoResult;
+  autoTempo(
+    samples: Float32Array,
+    sampleRate: number,
+    options?: ProjectAutoTempoOptions,
+  ): ProjectAutoTempoResult;
+  autoTempo(...args: unknown[]): ProjectAutoTempoResult {
     const fnName = 'autoTempo';
-    const request = sampleOneShot<ProjectAutoTempoRequest>(fnName, args);
+    const request = sampleOneShot<ProjectAutoTempoRequest>(fnName, args, (value) => {
+      for (const [name, field] of [
+        ['candidateIndex', value.candidateIndex],
+        ['tempoUpdateIntervalBeats', value.tempoUpdateIntervalBeats],
+        ['rampThreshold', value.rampThreshold],
+      ] as const) {
+        if (!isAbsent(field) && typeof field !== 'number') {
+          throw refuseType(`${name} must be a number`);
+        }
+      }
+      for (const [name, field] of [
+        ['applyTimeSignatures', value.applyTimeSignatures],
+        ['adaptiveTempo', value.adaptiveTempo],
+        ['includeOctaveCandidates', value.includeOctaveCandidates],
+      ] as const) {
+        if (!isAbsent(field) && typeof field !== 'boolean') {
+          throw refuseType(`${name} must be a boolean`);
+        }
+      }
+    });
     assertAudioInput(request.samples, request.sampleRate);
     return this.native.autoTempo(
       request.samples,
@@ -2020,17 +2060,23 @@ export class Project {
   }
 
   /** Replace the project's chord-symbol annotation stream via an undoable edit. */
-  annotateChords(chords: ProjectChordSymbol[]): void {
-    if (Array.isArray(chords)) {
-      requireListBudget(chords, 'chords');
+  annotateChords(chords: ReadonlyArray<ProjectChordSymbol>): void {
+    if (!Array.isArray(chords)) {
+      throw refuseType('chords must be an array');
     }
+    requireListBudget(chords, 'chords');
     this.native.annotateChords(
-      chords.map((chord) => ({
-        ...chord,
-        ...(chord.quality === undefined
-          ? {}
-          : { quality: tokenOrdinal(chord.quality, CHORD_QUALITY, 'quality') }),
-      })),
+      chords.map((chord: unknown, index) => {
+        if (!isNonArrayObject(chord)) {
+          throw refuseType(`chords[${index}] must be an object`);
+        }
+        return {
+          ...chord,
+          ...(chord.quality === undefined
+            ? {}
+            : { quality: tokenOrdinal(chord.quality, CHORD_QUALITY, 'quality') }),
+        };
+      }),
     );
   }
 
@@ -2154,8 +2200,8 @@ export class Project {
    * sample rate. Deterministic: the same project + options yields bit-identical
    * output within one build.
    *
-   * Omitting `options.totalFrames` derives the render length from the arrangement
-   * rather than producing an empty render.
+   * Omitting `options.totalFrames` derives the render length from the arrangement.
+   * An empty project yields no frames.
    *
    * MIDI tracks routed to a destination no instrument list binds render as
    * silence. Bind instruments with `builtinInstruments` (built-in oscillator
@@ -2176,7 +2222,6 @@ export class Project {
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
     const request = requestObject('bounce', options ?? {}, 'options', true);
-    const settings = bounceSettings(request);
     const builtin =
       request.builtinInstruments === undefined
         ? undefined
@@ -2201,11 +2246,33 @@ export class Project {
     const sf2 =
       request.sf2Instruments === undefined
         ? undefined
-        : bindInstruments('sf2Instruments', request.sf2Instruments, (i) => i, withDestinationCopy);
+        : bindInstruments(
+            'sf2Instruments',
+            request.sf2Instruments,
+            (instrument, binding, label) => {
+              if ('soundFontUri' in instrument) {
+                throw refuseUnknownKey(`${label}.instrument.soundFontUri`, [
+                  `${label}.soundFontUri`,
+                ]);
+              }
+              if (binding.soundFontUri === undefined) {
+                return instrument;
+              }
+              const subject = `${label}.soundFontUri`;
+              const uri = requireProjectText(binding.soundFontUri, subject);
+              if (uri.length === 0) {
+                throw refuse(`${subject} must not be empty`);
+              }
+              return { ...instrument, soundFontUri: uri };
+            },
+            withDestinationCopy,
+            SF2_BINDING_KEYS,
+          );
     const callbacks =
       request.instruments === undefined
         ? undefined
         : bindInstruments('instruments', request.instruments, (i) => i, withDestinationLayer);
+    const settings = bounceSettings(request);
     const native = this.native;
     if (callbacks === undefined) {
       return planarBounce(native.bounce(settings, builtin, synth, sf2), native.getSampleRate());
@@ -2223,22 +2290,25 @@ export class Project {
 
   /**
    * Load (parse) SoundFont 2 bytes into the project: presets / instruments /
-   * sample headers plus the sample PCM decoded to a float pool. Replaces any
-   * previously loaded SoundFont; the input buffer is not referenced after the
-   * call. Throws on malformed input (the previous SoundFont is kept).
+   * sample headers plus the sample PCM decoded to a float pool. Replaces the
+   * font at the selected URI. Omit the URI to use the default font.
    */
-  loadSoundFont(data: Uint8Array): void {
-    this.native.loadSoundFont(data);
+  loadSoundFont(data: Uint8Array, options?: ProjectSoundFontOptions): void {
+    withEntry('Project.loadSoundFont', () =>
+      this.native.loadSoundFont(data, soundFontUri(options)),
+    );
   }
 
   /** Release the project's loaded SoundFont (no-op when none is loaded). */
-  clearSoundFont(): void {
-    this.native.clearSoundFont();
+  clearSoundFont(options?: ProjectSoundFontOptions): void {
+    withEntry('Project.clearSoundFont', () => this.native.clearSoundFont(soundFontUri(options)));
   }
 
   /** Number of presets in the loaded SoundFont (0 when none is loaded). */
-  get soundFontPresetCount(): number {
-    return this.native.soundFontPresetCount();
+  soundFontPresetCount(options?: ProjectSoundFontOptions): number {
+    return withEntry('Project.soundFontPresetCount', () =>
+      this.native.soundFontPresetCount(soundFontUri(options)),
+    );
   }
 
   /**
@@ -2248,8 +2318,10 @@ export class Project {
    * fall back to the built-in synth (`'synth'`). Without a loaded SoundFont
    * every entry is a synth fallback.
    */
-  soundFontManifest(): Sf2ProgramStatus[] {
-    return this.native.soundFontManifest();
+  soundFontManifest(options?: ProjectSoundFontOptions): Sf2ProgramStatus[] {
+    return withEntry('Project.soundFontManifest', () =>
+      this.native.soundFontManifest(soundFontUri(options)),
+    );
   }
 
   /** Release the underlying native project. Idempotent. */

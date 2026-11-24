@@ -20,9 +20,10 @@ def test_corpus_renders_a_selected_program_with_the_bank_rig(tmp_path, monkeypat
             assert data.startswith(b"MThd")
 
         def bounce(self, *, sf2_instruments, total_frames, num_channels):
-            [(destination, config)] = sf2_instruments
-            assert destination == 0
-            assert not config.clear_bank_rig
+            [binding] = sf2_instruments
+            assert binding == libsonare.ProjectSf2InstrumentBinding(
+                instrument=libsonare.Sf2InstrumentConfig()
+            )
             rendered_frames.append(total_frames)
             return libsonare.ProjectBounceResult(
                 channels=np.zeros((num_channels, total_frames), dtype=np.float32),

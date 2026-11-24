@@ -11,6 +11,7 @@ import {
   gmFamilyName,
   gmInstrumentName,
   gmProgramForName,
+  isSonareError,
   midi2Cc,
   midi2PerNoteManagement,
   midi2Program,
@@ -362,7 +363,7 @@ it('refuses undeclared key and chord annotation fields by indexed path', () => {
   }
 });
 
-it('reads chord annotations with owned extensions and no unset or empty numeral', () => {
+it('reads chord annotations with owned extensions and no unset numeral', () => {
   const project = new Project();
   try {
     const chords = [
@@ -391,25 +392,56 @@ it('reads chord annotations with owned extensions and no unset or empty numeral'
         quality: 'minor' as const,
         extensions: [3, 5],
         modulationBoundary: false,
-        romanNumeral: '',
       },
     ];
     project.annotateChords(chords);
     const annotations = project.chordAnnotations();
-    const expected = chords.map(({ romanNumeral, ...chord }) =>
-      romanNumeral === undefined || romanNumeral === '' ? chord : { ...chord, romanNumeral },
-    );
-    expect(annotations).toEqual(expected);
+    expect(annotations).toEqual(chords);
     expect(annotations[0].romanNumeral).toBe('V7');
     expect(annotations[1]).not.toHaveProperty('romanNumeral');
     expect(annotations[2]).not.toHaveProperty('romanNumeral');
     project.undo();
     expect(project.chordAnnotations()).toEqual([]);
     project.redo();
-    expect(project.chordAnnotations()).toEqual(expected);
+    expect(project.chordAnnotations()).toEqual(chords);
   } finally {
     project.destroy();
   }
+});
+
+it('refuses an empty Roman numeral without changing chord annotations', () => {
+  const project = new Project();
+  try {
+    const chord = { startPpq: 0, endPpq: 4, quality: 'major' as const, romanNumeral: 'I' };
+    project.annotateChords([chord]);
+    const before = project.chordAnnotations();
+    expect(() => project.annotateChords([{ ...chord, romanNumeral: '' }])).toThrow(
+      new RangeError('Project.annotateChords: chords[0].romanNumeral must not be empty'),
+    );
+    expect(project.chordAnnotations()).toEqual(before);
+  } finally {
+    project.destroy();
+  }
+});
+
+it('requires chord endpoints and names invalid nested fields', () => {
+  using project = new Project();
+  const chord = { startPpq: 0, endPpq: 4, extensions: [7] } as const;
+  project.annotateChords([chord] as const);
+  expect(() => project.annotateChords([{ endPpq: 4 } as never])).toThrow(
+    new TypeError('Project.annotateChords: startPpq must be a number'),
+  );
+  expect(() => project.annotateChords([{ startPpq: 0 } as never])).toThrow(
+    new TypeError('Project.annotateChords: endPpq must be a number'),
+  );
+  expect(() => project.annotateChords([chord, { ...chord, extensions: [7, 256] }])).toThrow(
+    new RangeError(
+      'Project.annotateChords: chords[1].extensions[1] must be an integer in [0, 255]',
+    ),
+  );
+  expect(() => project.annotateChords([chord, { ...chord, romanNumeral: 'I\0V' }])).toThrow(
+    new RangeError('Project.annotateChords: chords[1].romanNumeral must not contain NUL'),
+  );
 });
 
 it('writes overlapping section annotations as one undoable edit', () => {
@@ -762,6 +794,28 @@ describe('Project native binding', () => {
     } finally {
       project.destroy();
     }
+  });
+
+  it('uses one count-in domain and reports an unrepresentable frame result', () => {
+    using project = new Project();
+    for (const bad of [0.5, 17, Number.MAX_SAFE_INTEGER]) {
+      expect(() => project.countInFrames(bad)).toThrow(
+        new RangeError('Project.countInFrames: countInBars must be an integer in [0, 16]'),
+      );
+    }
+    project.setSampleRate(48000);
+    project.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }]);
+    let caught: unknown;
+    try {
+      project.countInFrames(16);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect(caught).toMatchObject({
+      code: ErrorCode.InvalidFormat,
+      message: 'Project.countInFrames: frames is not exactly representable as a number',
+    });
   });
 
   it('undo() restores the serialized bytes after an edit', () => {
@@ -1394,20 +1448,18 @@ describe('Project native binding', () => {
   });
 
   it('bounces at the width of the scene master when numChannels is omitted', () => {
-    const cases: ReadonlyArray<[string | undefined, number]> = [
+    const cases = [
       [undefined, 2],
       ['mono', 1],
       ['stereo', 2],
       ['5.1', 6],
       ['7.1', 8],
-    ];
+    ] as const;
     for (const [layout, width] of cases) {
       const project = new Project();
       project.setSampleRate(48000);
       if (layout !== undefined) {
-        project.setMixerSceneJson(
-          JSON.stringify({ version: 2, buses: [{ id: 'master', role: 'master', layout }] }),
-        );
+        project.setMixerScene({ version: 2, buses: [{ id: 'master', role: 'master', layout }] });
       }
       project.addMidiClip(0, 1);
       const audio = project.bounce({ totalFrames: 128 });
@@ -1697,6 +1749,8 @@ describe('Project value-model accessors', () => {
       { startPpq: 4, bpm: 140, endBpm: 160 },
     ]);
     expect(project.tempoSegments().length).toBe(2);
+    project.setTempoSegments([]);
+    expect(project.tempoSegments()).toEqual([]);
     project.destroy();
   });
 
@@ -1737,6 +1791,8 @@ describe('Project value-model accessors', () => {
       denominator: 4,
     });
     expect(project.timeSignatures()[2]).toBeUndefined();
+    project.setTimeSignatures([]);
+    expect(project.timeSignatures()).toEqual([]);
     project.destroy();
   });
 
@@ -1852,9 +1908,12 @@ describe('Project value-model accessors', () => {
     project.destroy();
   });
 
-  it('accepts a mixer scene JSON without throwing', () => {
+  it('accepts and clears a mixer scene', () => {
     const project = new Project();
-    expect(() => project.setMixerSceneJson('{}')).not.toThrow();
+    project.setMixerScene({});
+    expect(project.mixerScene()?.version).toBe(2);
+    project.setMixerScene();
+    expect(project.mixerScene()).toBeUndefined();
     project.destroy();
   });
 
@@ -2102,6 +2161,7 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       paramId: 77,
       minValue: -1,
       maxValue: 1,
+      consume: false,
     });
 
     const learnedRpn = midiCcLearn({

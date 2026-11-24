@@ -190,9 +190,6 @@ const TRACK_MONITOR_MODE = { off: 0, pfl: 1, afl: 2 } as const;
 /** The C ABI tags clock and transport bytes with this destination; the facade omits the field. */
 const EVERY_PORT_DESTINATION = 0xffffffff;
 
-/** The C ABI value that selects every part of a part rig. */
-const PART_RIG_EVERY_PART = 0xff;
-
 /** An omitted size stays undefined, which the addon passes on as the library default. */
 interface ResolvedEngineConfig {
   sampleRate: number;
@@ -1608,7 +1605,8 @@ export class RealtimeEngine {
   }
 
   /**
-   * Reads the capture state: recorded frames, overflow count, armed and punch flags, source and record offset.
+   * Reads the capture state: recorded and dropped frames, overflow count, armed and punch flags,
+   * source and record offset.
    */
   captureStatus(): EngineCaptureStatus {
     return this.native.captureStatus();
@@ -2012,18 +2010,13 @@ export class RealtimeEngine {
   }
 
   /** Returns a copied snapshot of the live MIDI CC bindings in unspecified order. */
-  midiCcBindings(): ProjectMidiCcBinding[] {
+  midiCcBindings(): Array<ProjectMidiCcBinding & { consume: boolean }> {
     return this.native.midiCcBindings();
   }
 
   /** Removes every live MIDI CC / RPN / NRPN binding. */
   clearMidiCcBindings(): void {
     this.native.clearMidiCcBindings();
-  }
-
-  /** Number of live MIDI CC bindings. */
-  get midiCcBindingCount(): number {
-    return this.native.midiCcBindingCount();
   }
 
   /**
@@ -2153,8 +2146,8 @@ export class RealtimeEngine {
 
   /**
    * Set one part rig of the destination's instrument (see
-   * {@link Project.setPartRig} for the request; an absent `part` selects every
-   * part, and `inserts[].params` is an object). A destination with no
+   * {@link Project.setPartRig} for the request; `part` is required, with
+   * {@link PART_RIG_ALL_PARTS} for every part). A destination with no
    * instrument bound throws a `RangeError`; an instrument without part rigs
    * (builtin, host callback) throws `NotSupported`.
    */
@@ -2163,7 +2156,7 @@ export class RealtimeEngine {
     const record = requestObject(fnName, request, 'request', true);
     this.native.setPartRig(
       record.destinationId,
-      isAbsent(record.part) ? PART_RIG_EVERY_PART : record.part,
+      record.part,
       requireName(record.mode, 'mode', PART_RIG_MODES) as PartRigMode,
       partRigInsertsJson(record.inserts as PartRigInsert[] | undefined),
     );
@@ -2656,17 +2649,17 @@ export class RealtimeEngine {
     this.native.setExternalMidiClockEnabled(externalMidiClockEnabled);
   }
 
-  /** Number of external-MIDI events dropped because the output queue was full. */
+  /** Number of external-MIDI events dropped because the output queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   get externalMidiDroppedCount(): number {
     return this.native.externalMidiDroppedCount();
   }
 
-  /** Cumulative page misses dropped because the native bounded request queue was full. */
+  /** Cumulative page misses dropped because the native bounded request queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   get clipPageRequestOverflowCount(): number {
     return this.native.clipPageRequestOverflowCount();
   }
 
-  /** Cumulative warp-stretch requests dropped because the native queue was full. */
+  /** Cumulative warp-stretch requests dropped because the native queue was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   get warpStretchOverflowCount(): number {
     return this.native.warpStretchOverflowCount();
   }

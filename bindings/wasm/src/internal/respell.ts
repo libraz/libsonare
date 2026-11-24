@@ -33,9 +33,7 @@ export function respellRefusal(error: unknown, respelled: Respelled): unknown {
   if (refusal === undefined || !(error instanceof Error)) {
     return error;
   }
-  const subjects = refusal.renamedTo
-    ? [...refusal.subjects, refusal.renamedTo]
-    : [...refusal.subjects];
+  const { subjects } = refusal;
   const own = (subject: string): Respelling | undefined =>
     // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
     Object.prototype.hasOwnProperty.call(respelled, subject) ? respelled[subject] : undefined;

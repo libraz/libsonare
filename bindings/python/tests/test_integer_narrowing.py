@@ -395,6 +395,9 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
     would have compared two identical strings and passed on any argument.
     """
 
+    one_channel = [[0.9, 0.1] * 4]
+    two_channels = [[0.9, 0.1] * 4, [0.2, 0.7] * 4]
+
     def bounced(source_id, channels, sample_rate) -> bytes:
         project = ls.Project()
         for index, name in enumerate(("a", "b")):
@@ -407,27 +410,43 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
                 audio_channels=1,
                 audio_sample_rate=48000,
             )
-        project.set_source_audio(source_id, [0.9, 0.1] * 4, channels, sample_rate)
+        project.set_source_audio(source_id, channels, sample_rate)
         return np.asarray(project.bounce().channels, dtype=np.float64).tobytes()
 
-    assert bounced(1, 1, 48000) != bounced(2, 1, 48000)  # positive control
-    assert bounced(1, 1, 48000) != bounced(1, 2, 48000)  # positive control
-    assert bounced(1, 1, 44100) != bounced(1, 1, 48000)  # positive control
+    assert bounced(1, one_channel, 48000) != bounced(2, one_channel, 48000)  # positive control
+    assert bounced(1, one_channel, 48000) != bounced(1, two_channels, 48000)  # positive control
+    assert bounced(1, one_channel, 44100) != bounced(1, one_channel, 48000)  # positive control
     for value in WRAPPED_IDS:
-        _refuses("source_id", bounced, value, 1, 48000)
+        _refuses("source_id", bounced, value, one_channel, 48000)
     for value in WRAPPED_INTS:
-        _refuses("sample_rate", bounced, 1, 1, value)
+        _refuses("sample_rate", bounced, 1, one_channel, value)
 
-    # The count is narrowed before it divides the sample count, so a wrapped or
-    # non-positive value is refused under its own name, and only an in-domain
-    # count meets the modulo check.
-    for value in (2**32, 2**32 + 1, 1.5, -1, 0):
-        _refuses("num_channels", bounced, 1, value, 48000)
     with pytest.raises(
         SonareValueError,
-        match="^Project.set_source_audio: audio length must be a multiple of num_channels$",
+        match="^Project.set_source_audio: channels",
     ):
-        bounced(1, 3, 48000)
+        bounced(1, [0.9, 0.1] * 4, 48000)
+    with pytest.raises(
+        SonareValueError,
+        match="^Project.set_source_audio: all channels must have the same length$",
+    ):
+        bounced(1, [[0.9, 0.1], [0.2]], 48000)
+
+
+def test_track_route_refuses_empty_fields_and_none_clears_them(arrangement_project) -> None:
+    project, (track_a, _), _, _, _, _ = arrangement_project
+
+    project.set_track_route(track_a, "strip-main", "master")
+    project.set_track_route(track_a)
+    for kwargs, field in (
+        ({"channel_strip_ref": ""}, "channel_strip_ref"),
+        ({"output_target": ""}, "output_target"),
+    ):
+        with pytest.raises(
+            SonareValueError,
+            match=rf"^Project\.set_track_route: {field} must not be empty$",
+        ):
+            project.set_track_route(track_a, **kwargs)
 
 
 @pytest.fixture

@@ -62,6 +62,20 @@ describe('insert key spellings', () => {
     );
   });
 
+  it('refuses the old EQ detector-delay key as an unknown key', () => {
+    expect(() =>
+      masteringInsertTiming({
+        insert: 'eq.parametric',
+        params: { 'band0.frequencyHz': 1000, 'band0.lookaheadMs': 1 } as never,
+        sampleRate: 48000,
+      }),
+    ).toThrow(
+      new TypeError(
+        'masteringInsertTiming: unknown key params.band0.lookaheadMs (expected band{i}.attackMs, band{i}.autoThreshold, band{i}.bypassed, band{i}.coeffMode, band{i}.detectorDelayMs, band{i}.dynamic, band{i}.enabled, band{i}.frequencyHz, band{i}.gainDb, band{i}.phase, band{i}.placement, band{i}.proportionalQ, band{i}.proportionalQStrength, band{i}.q, band{i}.rangeDb, band{i}.ratio, band{i}.releaseMs, band{i}.sidechainFreqHz, band{i}.sidechainQ, band{i}.slopeDbOct, band{i}.soloed, band{i}.thresholdDb, band{i}.type)',
+      ),
+    );
+  });
+
   it('reads the repair.trimSilence threshold as thresholdDb in dBFS', () => {
     const samples = new Float32Array(4800);
     samples.fill(0.5, 1200, 3600);

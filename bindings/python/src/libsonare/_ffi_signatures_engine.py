@@ -561,17 +561,17 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_external_midi_dropped_count.restype = ctypes.c_int32
     lib.sonare_engine_external_midi_dropped_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_uint64),
     ]
     lib.sonare_engine_clip_page_request_overflow_count.restype = ctypes.c_int32
     lib.sonare_engine_clip_page_request_overflow_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_uint64),
     ]
     lib.sonare_engine_warp_stretch_overflow_count.restype = ctypes.c_int32
     lib.sonare_engine_warp_stretch_overflow_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_uint64),
     ]
     lib.sonare_engine_set_warp_voice_capacity.restype = ctypes.c_int32
     lib.sonare_engine_set_warp_voice_capacity.argtypes = [
@@ -925,8 +925,8 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(SonareSynthInstrumentBinding),
     ]
-    lib.sonare_engine_load_soundfont.restype = ctypes.c_int32
-    lib.sonare_engine_load_soundfont.argtypes = [
+    lib.sonare_engine_load_sound_font.restype = ctypes.c_int32
+    lib.sonare_engine_load_sound_font.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_uint8),
         ctypes.c_size_t,
@@ -954,11 +954,6 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     ]
     lib.sonare_engine_clear_midi_cc_bindings.restype = ctypes.c_int32
     lib.sonare_engine_clear_midi_cc_bindings.argtypes = [ctypes.c_void_p]
-    lib.sonare_engine_midi_cc_binding_count.restype = ctypes.c_int32
-    lib.sonare_engine_midi_cc_binding_count.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
     lib.sonare_engine_midi_cc_bindings.restype = ctypes.c_int32
     lib.sonare_engine_midi_cc_bindings.argtypes = [
         ctypes.c_void_p,

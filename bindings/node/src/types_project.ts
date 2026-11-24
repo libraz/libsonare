@@ -1,6 +1,7 @@
 // Type-only, so the erased import adds no runtime edge: to the coercion module
 // below, and to the bank module, which names these types back.
 import type { ProjectTimeline } from './project.js';
+import type { TimeSignature } from './types_analysis.js';
 import type { EngineMetronomeConfig, MidiFxConfig } from './types_engine.js';
 import type {
   Articulation,
@@ -630,6 +631,16 @@ export interface ProjectAutoTempoRequest extends ProjectAnalyzeTempoRequest {
 /** Options of the positional form of {@link Project.autoTempo}. */
 export type ProjectAutoTempoOptions = Omit<ProjectAutoTempoRequest, 'samples' | 'sampleRate'>;
 
+/** The tempo and detected meter returned by {@link Project.autoTempo}. */
+export interface ProjectAutoTempoResult {
+  /** BPM of the first installed tempo segment. */
+  readonly bpm: number;
+  /** Confidence of the selected tempo candidate. */
+  readonly bpmConfidence: number;
+  /** Detected meter, including when it was not installed. */
+  readonly timeSignature: Readonly<TimeSignature>;
+}
+
 /**
  * Options for {@link Project.bounce}. Omit a field for its default; an explicit `0` on
  * `totalFrames`, `blockSize` or `numChannels` is a `RangeError`.
@@ -645,8 +656,8 @@ export type ProjectAutoTempoOptions = Omit<ProjectAutoTempoRequest, 'samples' | 
 export interface ProjectBounceOptions {
   /**
    * Render length in frames at the project sample rate. Omitted, the length is
-   * derived from the arrangement (musical end plus any instrument release tail);
-   * it is never an empty render.
+   * derived from the arrangement (musical end plus any instrument release tail).
+   * An empty project yields no frames.
    */
   totalFrames?: number;
   /** Render block size in frames. Default 128. */
@@ -681,7 +692,7 @@ export interface ProjectBounceOptions {
    * GS-compatible SoundFont players ({@link Sf2InstrumentConfig}) fed by the loaded SoundFont
    * ({@link Project.loadSoundFont}), one per destination.
    */
-  sf2Instruments?: readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[];
+  sf2Instruments?: readonly ProjectSf2InstrumentBinding[];
 }
 
 /** Controller profile bound to a hosted instrument destination during a bounce. */
@@ -719,6 +730,18 @@ export interface ProjectInstrumentBinding<T> {
   destinationId?: number;
   /** The instrument that renders the destination. */
   instrument: T;
+}
+
+/** SoundFont player bound to a MIDI destination for one bounce. */
+export interface ProjectSf2InstrumentBinding extends ProjectInstrumentBinding<Sf2InstrumentConfig> {
+  /** URI of the loaded SoundFont to use. Omit for the default SoundFont. */
+  soundFontUri?: string;
+}
+
+/** Select a SoundFont stored in a project. */
+export interface ProjectSoundFontOptions {
+  /** URI of the SoundFont. Omit for the default SoundFont. */
+  uri?: string;
 }
 
 /** Persistent instrument selection for one MIDI destination. */
@@ -1094,7 +1117,7 @@ export interface ProjectChordSymbol {
   /** Chord quality. Default `'unknown'`. */
   quality?: ProjectChordQuality;
   /** Extension scale degrees (for example 7, 9, 13; 2 or 4 for a suspension), up to 32. */
-  extensions?: number[];
+  extensions?: ReadonlyArray<number>;
   /** Slash-bass pitch class 0..11. Omit when the chord has no slash bass. */
   slashBassPc?: number;
   /** Optional roman-numeral label. */

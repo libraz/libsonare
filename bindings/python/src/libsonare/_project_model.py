@@ -38,6 +38,7 @@ import numpy as np
 
 from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._narrowing import _MAX_PUBLIC_PPQ, _narrow_int
+from ._types_analysis import TimeSignature
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
@@ -61,6 +62,12 @@ from ._project_instruments import (
 )
 from ._project_instruments import (
     GsEfxRealization as GsEfxRealization,
+)
+from ._project_instruments import (
+    ProjectInstrumentBinding as ProjectInstrumentBinding,
+)
+from ._project_instruments import (
+    ProjectSf2InstrumentBinding as ProjectSf2InstrumentBinding,
 )
 from ._project_instruments import (
     Sf2InstrumentConfig as Sf2InstrumentConfig,
@@ -602,6 +609,18 @@ class ProjectSection(TypedDict):
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectAutoTempoResult:
+    """The selected tempo and detected meter from :meth:`Project.auto_tempo`."""
+
+    bpm: float
+    """Tempo installed in the project."""
+    bpm_confidence: float
+    """Confidence of the selected tempo candidate, in [0, 1]."""
+    time_signature: TimeSignature
+    """Detected meter, whether or not it was installed in the project."""
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectBounceResult:
     """Rendered planar project audio and its sample rate."""
 
@@ -609,6 +628,28 @@ class ProjectBounceResult:
     """Float32 planar audio with shape ``(num_channels, frames)``."""
     sample_rate: int
     """Sample rate of the rendered channels in Hz."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProjectControllerProfileBinding:
+    """A controller profile selected for one instrument in a project bounce."""
+
+    destination_id: int
+    """ID of a hosted instrument destination."""
+    preset_name: str
+    """Name returned by :func:`controller_profile_names`."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProjectArticulationBinding:
+    """A note articulation selected for one destination and channel in a project bounce."""
+
+    destination_id: int
+    """ID of a hosted instrument destination."""
+    channel: int
+    """MIDI channel in [0, 15]."""
+    articulation: Articulation
+    """Mode for overlapping notes on this channel."""
 
 
 @dataclass(frozen=True)

@@ -29,9 +29,7 @@ export function respellRefusal(error: unknown, respelled: Respelled): unknown {
   if (refusal === undefined || !(error instanceof Error)) {
     return error;
   }
-  const subjects = refusal.renamedTo
-    ? [...refusal.subjects, refusal.renamedTo]
-    : [...refusal.subjects];
+  const subjects = refusal.subjects;
   const own = (subject: string): Respelling | undefined =>
     Object.hasOwn(respelled, subject) ? respelled[subject] : undefined;
   if (!subjects.some((subject) => own(subject) !== undefined)) {

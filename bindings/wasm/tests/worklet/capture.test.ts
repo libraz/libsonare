@@ -10,6 +10,7 @@ import {
 const status = {
   capturedFrames: 128,
   overflowCount: 0,
+  droppedFrames: 0,
   armed: true,
   punchEnabled: false,
   source: 'input' as const,
@@ -80,6 +81,17 @@ describe('worklet capture response protocol', () => {
     for (const op of ['status', 'read', 'reset'] as const) {
       expect(matchesOperation(failureResponse, op)).toBe(true);
     }
+  });
+
+  it('requires the dropped-frame capture counter in status responses', () => {
+    expect(
+      validResponse({
+        type: 'captureResponse',
+        requestId: 1,
+        ok: true,
+        status: { ...status, droppedFrames: undefined },
+      }),
+    ).toBe(false);
   });
 
   it('rejects a mismatched response and does not reuse the cleaned pending entry', async () => {

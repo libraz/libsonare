@@ -34,6 +34,35 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     ).toThrow(/^midiCcToBreakpoint: bindings\[0\]\.ccNumber must be an integer in \[0, 127\]$/);
   });
 
+  it('validates and ignores consume in CC conversion inputs', () => {
+    const event = makeEvent();
+    const base = midiCcToBreakpoint({ bindings: [good], event });
+    const consumed = midiCcToBreakpoint({ bindings: [{ ...good, consume: true }], event });
+    expect(base).not.toBeNull();
+    expect(consumed).toEqual(base);
+    expect(() =>
+      midiCcToBreakpoint({ bindings: [{ ...good, consume: 1 } as never], event }),
+    ).toThrow(/^midiCcToBreakpoint: bindings\[0\]\.consume must be a boolean$/);
+
+    const midiParamRequest = { bindings: [good], paramId: 1, unitValue: 0.5, group: 0 };
+    const cc = midiParamToCc(midiParamRequest);
+    expect(cc).not.toBeNull();
+    expect(
+      midiParamToCc({
+        ...midiParamRequest,
+        bindings: [{ ...good, consume: true }],
+      }),
+    ).toEqual(cc);
+    expect(() =>
+      midiParamToCc({
+        bindings: [{ ...good, consume: 'yes' } as never],
+        paramId: 1,
+        unitValue: 0.5,
+        group: 0,
+      }),
+    ).toThrow(/^midiParamToCc: bindings\[0\]\.consume must be a boolean$/);
+  });
+
   it('a single binding keeps its bare field names', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {

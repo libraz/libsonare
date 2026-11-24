@@ -504,7 +504,7 @@ describe('rejected transport and MIDI arguments issue no command', () => {
       const transport = engine.getTransportState();
       expect(transport.playing).toBe(false);
       expect(transport.samplePosition).toBeGreaterThan(0);
-      expect(engine.midiCcBindingCount()).toBeGreaterThan(0);
+      expect(engine.midiCcBindings().length).toBeGreaterThan(0);
       expect(engine.midiInputPendingCount()).toBe(0);
     });
   });
@@ -915,8 +915,6 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => p.trackByIndex('0'));
         swallow(() => p.clipByIndex('0'));
         swallow(() => p.sourceByIndex('0'));
-        swallow(() => p.tempoSegmentByIndex('0'));
-        swallow(() => p.timeSignatureByIndex('0'));
         swallow(() => p.splitClip('1', 'x'));
         swallow(() => p.trimClip('1', 'x', 'y'));
         swallow(() => p.moveClip('1', 'x', 'y'));

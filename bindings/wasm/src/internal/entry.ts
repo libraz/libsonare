@@ -84,7 +84,6 @@ export interface RefusalRecord {
   readonly form: 'predicate' | 'wrongType' | 'unknownKey' | 'relation';
   readonly subjects: readonly string[];
   readonly predicate: string;
-  readonly renamedTo: string;
   readonly expected: string;
   readonly callerSpelled: boolean;
   /** The text the caller read, without the entry prefix. */

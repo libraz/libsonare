@@ -370,6 +370,8 @@ describe('RealtimeEngine native binding', () => {
       // always existed reads the same way, so a zero here is the counter
       // answering rather than a stub returning a default.
       expect(engine.externalMidiDroppedCount).toBe(0);
+      expect(typeof engine.externalMidiDroppedCount).toBe('number');
+      expect(Number.isSafeInteger(engine.externalMidiDroppedCount)).toBe(true);
       expect(typeof engine.clipPageRequestOverflowCount).toBe('number');
       expect(typeof engine.warpStretchOverflowCount).toBe('number');
     } finally {

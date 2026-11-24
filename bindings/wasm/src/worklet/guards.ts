@@ -157,6 +157,9 @@ function isCaptureStatus(value: unknown): value is EngineCaptureStatus {
     typeof value.overflowCount === 'number' &&
     Number.isSafeInteger(value.overflowCount) &&
     value.overflowCount >= 0 &&
+    typeof value.droppedFrames === 'number' &&
+    Number.isSafeInteger(value.droppedFrames) &&
+    value.droppedFrames >= 0 &&
     typeof value.armed === 'boolean' &&
     typeof value.punchEnabled === 'boolean' &&
     (value.source === 'input' || value.source === 'output') &&

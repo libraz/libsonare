@@ -1226,7 +1226,7 @@ const config = { version: 2, lfeMixDb: -6 };
 [[rule]]
 slug = "old-documents-refused"
 title = "Documents in a 1.x spelling are refused"
-summary = "A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names. On Node and WASM the facade refuses only a document argument that is not an object, with `TypeError`; everything inside it (an unknown or snake_case key, a wrong-kind value, an unsupported version) is the core's `SonareError` coded `InvalidFormat`, so code that caught `TypeError` for a misspelt document key must test `codeName === 'InvalidFormat'`."
+summary = "A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and an undeclared key's message lists the accepted keys. Nothing converts an old document on load; rewrite it with the 2.0 names. The JSON loaders (`fromJson`, `from_json`) keep `InvalidFormat` at the document path. A typed scene passed as a call argument (`setMixerScene`, the `Mixer` constructor's `scene`) is refused by kind under `scene.<path>`: `TypeError` for an unknown key or wrong type and `RangeError` for an out-of-domain value on Node and WASM, `SonareValueError` in Python."
 [[rule.example]]
 surface = "wasm"
 before = '''

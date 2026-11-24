@@ -53,6 +53,7 @@ import type {
   ProjectAutomationLaneEditDesc,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
+  ProjectAutoTempoResult,
   ProjectBounceResult,
   ProjectChordQuality,
   ProjectChordSymbol,
@@ -313,8 +314,9 @@ const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
 
 export function normalizeInstrumentBindings<E, R extends object>(
   value: ReadonlyArray<ProjectInstrumentBinding<E>> | null | undefined,
-  entry: (instrument: E) => R,
+  entry: (instrument: E, binding: Record<string, unknown>, label: string) => R,
   option = 'instruments',
+  keys = INSTRUMENT_BINDING_KEYS,
 ): NativeInstrumentBinding<R>[] {
   if (isAbsent(value)) {
     return [];
@@ -329,7 +331,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
       throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
     }
     const record = pair as Record<string, unknown>;
-    assertDeclaredKeys(record, INSTRUMENT_BINDING_KEYS, label);
+    assertDeclaredKeys(record, keys, label);
     if (isAbsent(record.instrument)) {
       throw refuseType(`${label}.instrument must be given`);
     }
@@ -343,7 +345,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
     // 0 is a real destination here, so an omitted id is 0 rather than refused.
     const destinationId = isAbsent(record.destinationId) ? 0 : record.destinationId;
     assertBoundedInteger(destinationId, `${label}.destinationId`, 0, UINT32_MAX);
-    return { ...entry(instrument as E), destinationId };
+    return { ...entry(instrument as E, record, label), destinationId };
   });
 }
 
@@ -519,7 +521,7 @@ export interface WasmProject {
     candidateIndex: number,
     applyTimeSignatures: boolean,
     options: ProjectTempoOptions | undefined,
-  ) => number;
+  ) => ProjectAutoTempoResult;
   snapToGrid: (ppq: number, strength: number, division: number) => number;
   compile: {
     (withTimeline: undefined): NativeProjectCompileResult;
@@ -534,13 +536,15 @@ export interface WasmProject {
     builtinBindings: ReadonlyArray<NativeInstrumentBinding<BuiltinSynthConfig>> | undefined,
     instrumentBindings: ReadonlyArray<NativeInstrumentBinding<ExternalInstrument>> | undefined,
     synthBindings: ReadonlyArray<NativeInstrumentBinding<NativeSynthBinding>> | undefined,
-    sf2Bindings: ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig>> | undefined,
+    sf2Bindings:
+      | ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig & { soundFontUri?: string }>>
+      | undefined,
   ) => NativeProjectBounce | { instrumentFailure: unknown };
   countInFrames: (countInBars: number) => number;
-  loadSoundFont: (data: Uint8Array) => void;
-  clearSoundFont: () => void;
-  soundFontPresetCount: () => number;
-  soundFontManifest: () => Sf2ProgramStatus[];
+  loadSoundFont: (data: Uint8Array, uri: string | null) => void;
+  clearSoundFont: (uri: string | null) => void;
+  soundFontPresetCount: (uri: string | null) => number;
+  soundFontManifest: (uri: string | null) => Sf2ProgramStatus[];
   removeClip: (clipId: number) => void;
   setClipGain: (clipId: number, gain: number) => void;
   setClipFade: (
@@ -575,7 +579,11 @@ export interface WasmProject {
   duplicateClip: (clipId: number, newStartPpq: number) => number;
   removeTrack: (trackId: number) => void;
   renameTrack: (trackId: number, name: string) => void;
-  setTrackRoute: (trackId: number, channelStripRef: string, outputTarget: string) => void;
+  setTrackRoute: (
+    trackId: number,
+    channelStripRef: string | null,
+    outputTarget: string | null,
+  ) => void;
   addAutomationLane: (trackId: number, desc: NativeAutomationLaneDesc) => number;
   editAutomationLane: (trackId: number, laneId: number, desc: NativeAutomationLaneDesc) => void;
   removeAutomationLane: (trackId: number, laneId: number) => void;
@@ -599,7 +607,7 @@ export interface WasmProject {
   setOverlapPolicy: (policy: number) => void;
   getOverlapPolicy: () => number;
   getSampleRate: () => number;
-  setMixerSceneJson: (document: string) => void;
+  setMixerScene: (document: string | null) => void;
   mixerScene: () => string | null;
   unresolvedSoundFontUris: () => string[];
   setMarker: (marker: {
@@ -618,10 +626,8 @@ export interface WasmProject {
   trackCount: () => number;
   clipCount: () => number;
   sourceCount: () => number;
-  tempoSegmentCount: () => number;
-  tempoSegmentByIndex: (index: number) => ProjectTempoSegment & { startSample?: number };
-  timeSignatureByIndex: (index: number) => ProjectTimeSignatureSegment;
-  timeSignatureCount: () => number;
+  tempoSegments: () => ProjectTempoSegment[];
+  timeSignatures: () => ProjectTimeSignatureSegment[];
   setTempoSegments: (segments: ReadonlyArray<ProjectTempoSegment>) => void;
   setTimeSignatures: (segments: ReadonlyArray<ProjectTimeSignatureSegment>) => void;
   lastBounceCompileResult: () => NativeProjectCompileResult & { hasTimeline: boolean };
@@ -687,7 +693,7 @@ export interface ProjectModule {
     minValue: number,
     maxValue: number,
     minMovement: number,
-  ) => ProjectMidiCcBinding | null;
+  ) => (ProjectMidiCcBinding & { consume: boolean }) | null;
   midiCcToBreakpoint: (
     bindings: ReadonlyArray<ProjectMidiCcBinding>,
     event: ProjectMidiEvent,
@@ -912,15 +918,21 @@ export function projectKeySegmentsToNative(
 export function projectChordSymbolsToNative(
   chords: ReadonlyArray<ProjectChordSymbol>,
 ): NativeChordSymbol[] {
+  if (!Array.isArray(chords)) {
+    throw refuseType('chords must be an array');
+  }
   requireListBudget(chords, 'chords');
-  return chords.map((chord) =>
-    chord.quality === undefined
+  return chords.map((chord: ProjectChordSymbol, index) => {
+    if (!isNonArrayObject(chord)) {
+      throw refuseType(`chords[${index}] must be an object`);
+    }
+    return chord.quality === undefined
       ? (chord as NativeChordSymbol)
       : {
           ...chord,
           quality: resolveEnumOrdinal(chord.quality, CHORD_QUALITY_CODES, 'quality'),
-        },
-  );
+        };
+  });
 }
 
 export function projectKeyModeName(ordinal: number): ProjectKeyMode {

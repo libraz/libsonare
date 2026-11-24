@@ -696,6 +696,19 @@ describe('Sonare WASM Project edit ops', () => {
     try {
       expect(() => project.renameTrack(trackId, 'renamed')).not.toThrow();
       expect(() => project.setTrackRoute(trackId, 'strip-1', 'master')).not.toThrow();
+      expect(() => project.setTrackRoute(undefined as never)).toThrow(
+        new TypeError('Project.setTrackRoute: trackId must be a number'),
+      );
+      expect(() => project.setTrackRoute(trackId, '', 'master')).toThrow(/channelStripRef.*empty/);
+      expect(() => project.setTrackRoute(trackId, 'strip-1', '')).toThrow(/outputTarget.*empty/);
+      expect(project.tracks().find(({ id }) => id === trackId)).toMatchObject({
+        channelStripRef: 'strip-1',
+        outputTarget: 'master',
+      });
+      project.setTrackRoute(trackId);
+      const cleared = project.tracks().find(({ id }) => id === trackId);
+      expect(cleared).not.toHaveProperty('channelStripRef');
+      expect(cleared).not.toHaveProperty('outputTarget');
       expect(() => project.removeTrack(trackId)).not.toThrow();
     } finally {
       project.destroy();

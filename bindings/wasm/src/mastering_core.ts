@@ -435,11 +435,9 @@ export function masteringInsertNames(): MasteringInsertName[] {
 }
 
 /**
- * Returns the camelCase parameter names a given insert / FX processor reads, for
- * tooling/validation. Any key NOT in this list is silently ignored by the
- * processor (and would be reported via {@link Mixer.sceneWarnings} when a scene
- * carrying it is loaded). Band/sub-band processors enumerate their indexed
- * `band{i}.<field>` keys.
+ * Returns the camelCase parameter names an insert or FX processor reads.
+ * The library refuses an unknown parameter key. Band and sub-band processors
+ * enumerate indexed `band{i}.<field>` keys.
  *
  * @param insert - Insert processor name (see {@link masteringInsertNames}).
  * @throws {TypeError} when `insert` is not a string
@@ -485,7 +483,11 @@ export function masteringInsertParamInfo(
 ): MasteringInsertParamInfo[] {
   return withEntry('masteringInsertParamInfo', () => {
     const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
-    assertString(r.insert, 'insert');
+    assertClosedToken(
+      r.insert,
+      masteringProcessorCatalog().map((entry) => entry.id),
+      'insert',
+    );
     const module = getSonareModule();
     if (!isAbsent(r.sampleRate)) {
       assertSampleRate(r.sampleRate);

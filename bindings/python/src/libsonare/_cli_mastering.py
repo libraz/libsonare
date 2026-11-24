@@ -35,7 +35,9 @@ from ._cli_options import (
     _ContractArgumentParser,
     _finite_float,
     _library_catalog,
+    _NumericTextError,
     _option_supplied,
+    _read_number_text,
     _wav_bits,
 )
 from ._cli_repair import (
@@ -124,6 +126,7 @@ _ASSISTANT_OPTIONS = (
     ("preset", "preset"),
 )
 _NAMED_ASSISTANT_KEYS = ("targetPlatform", "preset")
+_ASSISTANT_PARAM_KEYS = tuple(key for key, _ in _ASSISTANT_OPTIONS)
 
 
 def _assistant_params_from_args(
@@ -137,16 +140,16 @@ def _assistant_params_from_args(
     for a delivery target, and the library holds every other default.
     ``targetPlatform`` and ``preset`` take a name, which the library resolves; a
     setting named by an option and by ``--params`` is a contradiction rather
-    than a precedence question. Unknown keys are the library's to refuse.
+    than a precedence question.
     """
     params: dict[str, float | int | bool | str] = {}
-    # _assistant_params_refusal() has settled the entries' grammar and names before the read.
+    # The argv preflight has checked each entry before the read.
     for item in _params_entries(params_raw):
-        key, raw = (part.strip() for part in item.split("=", 1))
+        key, raw = item.split("=", 1)
         if key in _NAMED_ASSISTANT_KEYS:
             params[key] = raw
         else:
-            params.update(_parse_kv_params(item))
+            params[key] = _read_number_text(raw)
     if _option_supplied(args, "target-lufs"):
         params["targetLufs"] = float(args.target_lufs)
     if _option_supplied(args, "ceiling-dbtp"):
@@ -285,15 +288,34 @@ def _eq_params_refusal(args: argparse.Namespace) -> str | None:
 
 def _assistant_params_refusal(args: argparse.Namespace) -> str | None:
     """The refusal of ``mastering-suggest --params`` decided from argv, or None."""
+    from . import capability_catalog, mastering_platform_names
+
     raw = getattr(args, "params", "") or ""
     if (refusal := _params_grammar_refusal(raw)) is not None:
         return refusal
-    for key in _params_keys(raw):
-        if key == "target_platform":
-            return "--params target_platform is an earlier spelling; write targetPlatform"
+    for item in _params_entries(raw):
+        key, value = item.split("=", 1)
+        if key not in _ASSISTANT_PARAM_KEYS:
+            return f"unknown key {key} (expected {', '.join(sorted(_ASSISTANT_PARAM_KEYS))})"
         for named_key, option in _ASSISTANT_OPTIONS:
             if key == named_key and _option_supplied(args, option):
                 return f"--{option} and --params {key}= set the same value"
+        if key == "preset":
+            tokens = [
+                entry.name
+                for entry in capability_catalog().mastering_presets
+                if entry.kind == "mastering"
+            ]
+        elif key == "targetPlatform":
+            tokens = mastering_platform_names()
+        else:
+            try:
+                _read_number_text(value)
+            except _NumericTextError:
+                return f"invalid numeric value for parameter '{key}'"
+            continue
+        if value not in tokens:
+            return f"{key} must be one of {', '.join(tokens)}"
     return None
 
 

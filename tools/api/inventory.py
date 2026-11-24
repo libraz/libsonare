@@ -682,8 +682,26 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
                     )
                 )
     out += _python_extras(root)
-    meta = {"python_all": sorted(py_all), "python_unresolved": unresolved}
+    meta = {
+        "python_all": sorted(py_all),
+        "python_type_params": sorted(_python_type_params(pkg)),
+        "python_unresolved": unresolved,
+    }
     return out, {"python": pkg.files}, meta
+
+
+def _python_type_params(pkg) -> set[str]:
+    """Module-level names bound to `TypeVar(...)`: type parameters, which nothing exports."""
+    names = set()
+    for table in (pkg.py, pkg.pyi):
+        for mod in table.values():
+            for node in mod.tree.body:
+                call = node.value if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
+                if not isinstance(call, ast.Call) or getattr(call.func, "id", "") != "TypeVar":
+                    continue
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names |= {t.id for t in targets if isinstance(t, ast.Name)}
+    return names
 
 
 def _python_extras(root: Path) -> list[dict]:

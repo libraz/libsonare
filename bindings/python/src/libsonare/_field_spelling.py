@@ -89,7 +89,6 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("project_import_smf", "bytes"): "data",
     ("project_set_marker", "id"): "marker_id",
     ("project_set_overlap_policy", "overlap_policy"): "policy",
-    ("project_set_source_audio", "channels"): "num_channels",
     ("project_set_warp_map", "id"): "warp_ref_id",
     ("pseudo_cqt", "fmin_hz"): "fmin",
     ("pseudo_cqt", "sample_rate"): "sr",

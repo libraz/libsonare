@@ -772,7 +772,7 @@
     },
     {
       "entry": "cyclic_tempogram",
-      "param": "sr",
+      "param": "sample_rate",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -1321,7 +1321,7 @@
       "sentinel": null
     },
     {
-      "entry": "engine_load_soundfont",
+      "entry": "engine_load_sound_font",
       "param": "size",
       "kind": "integer",
       "lo": 1,
@@ -2411,7 +2411,7 @@
     },
     {
       "entry": "frames_to_time",
-      "param": "sr",
+      "param": "sample_rate",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -6019,17 +6019,6 @@
     },
     {
       "entry": "project_bounce",
-      "param": "options.sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": -1
-    },
-    {
-      "entry": "project_bounce",
       "param": "options.sf2_instruments[].config.clear_bank_rig",
       "kind": "integer",
       "lo": 0,
@@ -6139,17 +6128,6 @@
       "sentinel": null
     },
     {
-      "entry": "project_count_in_frames",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": -1
-    },
-    {
       "entry": "project_duplicate_clip",
       "param": "new_start_ppq",
       "kind": "real",
@@ -6205,7 +6183,7 @@
       "sentinel": null
     },
     {
-      "entry": "project_load_soundfont",
+      "entry": "project_load_sound_font",
       "param": "size",
       "kind": "integer",
       "lo": 1,
@@ -8109,7 +8087,7 @@
     },
     {
       "entry": "time_to_frames",
-      "param": "sr",
+      "param": "sample_rate",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -8133,8 +8111,8 @@
       "entry": "tonnetz",
       "param": "n_chroma",
       "kind": "integer",
-      "lo": 0,
-      "hi": 2147483647,
+      "lo": 12,
+      "hi": 12,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

@@ -461,9 +461,19 @@ def test_refusal_names_no_c_entry_after_the_public_name(
     assert _without_c_entry(case["message"]) in str(caught.value)
 
 
-_SCENE_LOADERS: dict[str, Callable[[str], object]] = {
-    "mixer_from_json": lambda text: libsonare.Mixer.from_json(text, sample_rate=48000),
-    "project_set_mixer_scene": lambda text: libsonare.Project().set_mixer_scene_json(text),
+def _load_mixer_scene(scene: libsonare.MixSceneDocument) -> None:
+    with libsonare.Mixer.from_json(json.dumps(scene), sample_rate=48000):
+        pass
+
+
+def _set_project_scene(scene: libsonare.MixSceneDocument) -> None:
+    with libsonare.Project() as project:
+        project.set_mixer_scene(scene)
+
+
+_SCENE_LOADERS: dict[str, Callable[[libsonare.MixSceneDocument], None]] = {
+    "mixer_from_json": _load_mixer_scene,
+    "project_set_mixer_scene": _set_project_scene,
 }
 
 
@@ -475,17 +485,46 @@ def test_scene_loaders_cover_the_python_row() -> None:
 @pytest.mark.parametrize("loader", sorted(_SCENE_LOADERS))
 @pytest.mark.parametrize("case", _SCENE["accepted"], ids=lambda case: case["id"])
 def test_mix_scene_document_accepts(case: dict, loader: str) -> None:
-    _SCENE_LOADERS[loader](json.dumps(case["scene"]))
+    _SCENE_LOADERS[loader](case["scene"])
 
 
 @pytest.mark.parametrize("loader", sorted(_SCENE_LOADERS))
 @pytest.mark.parametrize("case", _SCENE["refused"], ids=lambda case: case["id"])
 def test_mix_scene_document_refuses(case: dict, loader: str) -> None:
     assert case["cause"] == "format"
+    if loader == "project_set_mixer_scene":
+        message = case["message"]
+        if message.startswith("unknown key "):
+            message = message.replace("unknown key ", "unknown key scene.", 1)
+        else:
+            message = f"scene.{message}"
+        with pytest.raises(SonareValueError, match=re.escape(message)):
+            _SCENE_LOADERS[loader](case["scene"])
+        return
     with pytest.raises(libsonare.SonareError, match=re.escape(case["message"])) as caught:
-        _SCENE_LOADERS[loader](json.dumps(case["scene"]))
+        _SCENE_LOADERS[loader](case["scene"])
     assert caught.value.code == libsonare.ErrorCode[_CODE_NAMES[case["code"]]]
     assert not isinstance(caught.value, SonareValueError)
+
+
+def test_project_document_refuses_unread_insert_params_at_their_path() -> None:
+    with libsonare.Project() as project:
+        document = json.loads(project.to_json())
+    document["scene"] = {
+        "version": 2,
+        "strips": [
+            {
+                "id": "vocal",
+                "inserts": [
+                    {"slot": "post", "processor": "eq.parametric", "params": {"bogusKey": 1}}
+                ],
+            }
+        ],
+    }
+    path = r"scene\.strips\[0\]\.inserts\[0\]\.params\.bogusKey"
+    with pytest.raises(libsonare.SonareError, match=rf"unknown key {path} \(expected ") as refused:
+        libsonare.Project.from_json(json.dumps(document))
+    assert refused.value.code == libsonare.ErrorCode.INVALID_FORMAT
 
 
 _CODE_NAMES = {"InvalidFormat": "INVALID_FORMAT"}

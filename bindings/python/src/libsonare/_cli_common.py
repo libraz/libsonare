@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from collections.abc import Iterable, Sequence
 from typing import Any, cast, get_args
@@ -415,6 +416,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"  SIMD:                 {descriptor['simd']}")
     print(f"  Hardware concurrency: {payload['hardware_concurrency']}")
     return EXIT_SUCCESS
+
+
+# The librosa keyword for the rate, as a word of a refusal; the CLI has no such option.
+_LIBROSA_RATE_WORD = re.compile(r"(?<![\w.-])sr(?![\w(])")
+
+
+def _error_message(exc: BaseException) -> str:
+    """The one-line text reported for ``exc``.
+
+    The rate comes from the input file rather than an ``sr`` option, so a refused
+    argument names it ``sample_rate``, as the native CLI does.
+    """
+    if isinstance(exc, KeyboardInterrupt):
+        return "cancelled"
+    message = str(exc)
+    if isinstance(exc, SonareValueError):
+        message = _LIBROSA_RATE_WORD.sub("sample_rate", message)
+    return message
 
 
 def _exit_code_for(exc: BaseException) -> int:

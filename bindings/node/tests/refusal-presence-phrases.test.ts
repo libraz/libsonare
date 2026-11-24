@@ -22,7 +22,6 @@ const render = (form: 'predicate' | 'relation', subjects: string[], predicate: s
       form,
       subjects,
       predicate,
-      renamedTo: '',
       expected: '',
       callerSpelled: true,
     },

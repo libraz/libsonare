@@ -2435,10 +2435,18 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed in
 [[entry]]
 kind = "flag"
 old = "suggest-mix --params"
-changed = "a malformed entry, a non-numeric value, an unknown or snake_case key and a tempoBpm clash with --tempo-bpm are refused as a usage error (exit 2) before any input is read, with one text on both front-ends"
+changed = "malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order"
 domain = "mastering"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed inputs and params from argv"
+
+[[entry]]
+kind = "flag"
+old = "mastering-suggest --params"
+changed = "unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering-suggest options"
 
 [[entry]]
 kind = "flag"
@@ -2506,3 +2514,11 @@ changed = "--frames lists f0 for the voiced frames only, beside their frame indi
 domain = "analysis"
 rule = "silence-is-infinite"
 test = "bindings/python/tests/test_cli_note_edit.py::test_pitch_frames_cli_lists_voiced_f0_beside_their_frame_indices"
+
+[[entry]]
+kind = "command"
+old = "transcribe"
+changed = "--json includes tempo_confidence and the detected time_signature (numerator, denominator, confidence) when tempo detection runs; both are omitted with explicit --tempo-bpm"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_sections_stems_transcribe_mix.py::test_transcribe_reports_the_tempo_it_detected"

@@ -603,6 +603,8 @@ class EngineCaptureStatus:
     """What the sink captures (:data:`EngineCaptureSource`: ``"output"`` or ``"input"``)."""
     record_offset_samples: int
     """Capture alignment offset in samples relative to the punch start."""
+    dropped_frames: int
+    """Number of frames discarded after the capture buffer filled."""
 
 
 EngineDither: TypeAlias = Literal["rpdf", "tpdf", "noiseShaped"]

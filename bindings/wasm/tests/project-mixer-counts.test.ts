@@ -85,6 +85,18 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
+  it('reads empty stored maps without effective defaults', () => {
+    const project = new Project();
+    try {
+      project.setTempoSegments([]);
+      project.setTimeSignatures([]);
+      expect(project.tempoSegments()).toEqual([]);
+      expect(project.timeSignatures()).toEqual([]);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('sets and counts tempo segments', () => {
     const project = new Project();
     try {
@@ -218,11 +230,14 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
-  it('accepts a mixer scene JSON without throwing', () => {
+  it('stores a typed mixer scene and clears it when omitted', () => {
     const project = new Project();
     try {
-      const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
-      expect(() => project.setMixerSceneJson(sceneJson)).not.toThrow();
+      const scene = mixingScenePreset('vocalReverbSend');
+      project.setMixerScene(scene);
+      expect(project.mixerScene()).toEqual(scene);
+      project.setMixerScene();
+      expect(project.mixerScene()).toBeUndefined();
     } finally {
       project.destroy();
     }

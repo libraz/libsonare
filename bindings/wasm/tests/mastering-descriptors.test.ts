@@ -93,7 +93,13 @@ describe('repair stage descriptors', () => {
       expect(info).toEqual(catalog.get(id)?.params);
       expect(info.every((param) => param.id === undefined)).toBe(true);
     }
-    expect(masteringInsertParamInfo({ insert: 'repair.noSuchStage' as never })).toEqual([]);
+    expect(() => masteringInsertParamInfo({ insert: 'repair.noSuchStage' as never })).toThrow(
+      new RangeError(
+        `masteringInsertParamInfo: insert must be one of ${masteringProcessorCatalog()
+          .map((entry) => entry.id)
+          .join(', ')}`,
+      ),
+    );
   });
 });
 

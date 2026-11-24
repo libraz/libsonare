@@ -648,10 +648,6 @@ class RealtimeEngine:
     def midi_cc_bindings(self) -> list[MidiCcBinding]:
         """Return a copied snapshot of the live MIDI CC to parameter bindings."""
         ...
-    @property
-    def midi_cc_binding_count(self) -> int:
-        """Number of live MIDI CC bindings."""
-        ...
     def set_midi_fx(self, destination_id: int, config: MidiFxConfig) -> None:
         """Install or replace a live MIDI-FX insert for ``destination_id`` from a MidiFxConfig."""
         ...

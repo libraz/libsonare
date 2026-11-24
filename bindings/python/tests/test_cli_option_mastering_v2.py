@@ -840,8 +840,8 @@ def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys
         (("--preset", "classical", "--params", "preset=classical"), "set the same value"),
         (("--target-lufs", "-12", "--params", "targetLufs=-12"), "set the same value"),
         (("--target-platform", "club", "--params", "targetPlatform=club"), "set the same value"),
-        (("--params", "target_platform=club"), "earlier spelling; write targetPlatform"),
         (("--params", "novalue"), "must be a comma-separated list of key=value entries"),
+        (("--params", "notAKey=1"), "unknown key notAKey (expected "),
     ],
 )
 def test_mastering_suggest_refuses_a_contradiction_before_the_read(
@@ -853,17 +853,59 @@ def test_mastering_suggest_refuses_a_contradiction_before_the_read(
     assert match in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("options", [(), ("--target-platform", "club")])
+def test_mastering_suggest_refuses_an_unknown_params_key_from_argv(
+    monkeypatch, capsys, options
+) -> None:
+    from libsonare import cli
+
+    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0] * 2048, 48_000))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["sonare", "mastering-suggest", "input.wav", *options, "--params", "target_platform=club"],
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main()
+    assert exc_info.value.code == 2
+    assert (
+        "unknown key target_platform (expected ceilingDbtp, enableRepair, "
+        "preferStreamingSafe, preset, speechMonoAmount, targetLufs, targetPlatform)"
+    ) in capsys.readouterr().err
+
+
+_SUGGEST_PRESETS = (
+    "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
+    "broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, "
+    "techno, metal, trap, rnb, jazz, kpop, trance, gameOst"
+)
+_SUGGEST_PLATFORMS = (
+    "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, "
+    "cinema, club, cd"
+)
+
+
 @pytest.mark.parametrize(
-    ("extra", "match"),
+    ("params", "match"),
     [
-        (("--params", "notAKey=1"), "notAKey"),
-        # The index the C ABI carries is a transport detail, not a CLI value.
-        (("--params", "preset=3"), "params.preset must be one of "),
-        (("--params", "targetPlatform=2"), "params.targetPlatform must be one of "),
+        ("preset=3", _SUGGEST_PRESETS),
+        ("preset=vinyl", _SUGGEST_PRESETS),
+        ("targetPlatform=2", _SUGGEST_PLATFORMS),
+        ("targetPlatform=typo", _SUGGEST_PLATFORMS),
+        ("targetLufs=invalid", "invalid numeric value for parameter 'targetLufs'"),
+        ("ceilingDbtp=1e100", "invalid numeric value for parameter 'ceilingDbtp'"),
+        ("speechMonoAmount=nan", "invalid numeric value for parameter 'speechMonoAmount'"),
     ],
 )
-def test_mastering_suggest_refuses_a_contradiction_or_an_unknown(
-    monkeypatch, capsys, extra, match
+def test_mastering_suggest_refuses_invalid_param_values_before_read(
+    monkeypatch, capsys, tmp_path, params, match
 ) -> None:
-    with pytest.raises(Exception, match=match):
-        _suggest(monkeypatch, capsys, *extra)
+    from libsonare import cli
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["sonare", "mastering-suggest", str(tmp_path / "absent.wav"), "--params", params],
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main()
+    assert exc_info.value.code == 2
+    assert capsys.readouterr().err.rstrip().endswith(match)

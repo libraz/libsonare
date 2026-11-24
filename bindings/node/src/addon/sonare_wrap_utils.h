@@ -88,6 +88,10 @@ Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& m
 ///        ThrowSonareErrorMessage instead, so they never read or inherit thread-local reasons.
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
 
+/// @brief Translate a document refusal without changing its literal key spelling.
+void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err,
+                                       const std::string& prefix = "");
+
 /// @brief ThrowSonareError for an entry whose JS object flattens the C struct parameter @p c_root,
 ///        a root other than the `options` / `config` every refusal already drops: a refused
 ///        subject whose first path segment is @p c_root is named by the rest of its path.

@@ -589,6 +589,7 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
     assert binding.kind == "controlChange14"
     assert binding.param_id == 77
     assert binding.min_value == -1.0
+    assert binding.consume is False
 
     # RPN selector assembly learns kind 2.
     rpn = [
@@ -599,12 +600,14 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
     rpn_binding = ls.midi_cc_learn(rpn, 78)
     assert rpn_binding is not None
     assert rpn_binding.kind == "rpn"
+    assert rpn_binding.consume is False
 
     # No learnable CC stream -> None sentinel (INVALID_STATE), not an exception.
     assert ls.midi_cc_learn([], 99) is None
 
     # cc_to_breakpoint converts a matching CC to an automation point.
-    point = ls.midi_cc_to_breakpoint([binding], ls.midi_cc(1.0, 0, 2, 1, 100))
+    cc = ls.midi_cc(1.0, 0, 2, 1, 100)
+    point = ls.midi_cc_to_breakpoint([binding], cc)
     assert isinstance(point, AutomationPoint)
     assert point.ppq == 1.0
     assert point.curve_to_next in ("linear", "exponential", "hold", "sCurve")
@@ -612,6 +615,9 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
     back = ls.midi_param_to_cc([binding], 77, 0.5, 0, ppq=2.0)
     assert isinstance(back, ProjectMidiEvent)
     assert back.ppq == 2.0
+    consuming = dataclasses.replace(binding, consume=True)
+    assert ls.midi_cc_to_breakpoint([consuming], cc) == point
+    assert ls.midi_param_to_cc([consuming], 77, 0.5, 0, ppq=2.0) == back
     assert ls.midi_param_to_cc([binding], 12345, 0.5, 0) is None
 
 

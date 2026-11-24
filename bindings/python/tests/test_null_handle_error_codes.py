@@ -27,7 +27,7 @@ def test_streaming_retune_refusal_is_coded_from_the_library() -> None:
 
 def test_insert_param_info_rate_refusal_carries_the_library_detail() -> None:
     with pytest.raises(SonareError) as caught:
-        mastering_insert_param_info("compressor", sample_rate=7)
+        mastering_insert_param_info("dynamics.compressor", sample_rate=7)
     assert caught.value.code == int(ErrorCode.INVALID_PARAMETER)
     assert "sample_rate" in str(caught.value)
 

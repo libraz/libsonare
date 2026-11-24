@@ -41,8 +41,8 @@ val js_mastering_insert_names() {
 }
 
 // Parameter names a given insert processor reads (mastering::api::insert_param_names).
-// Any key not in this list is silently ignored; for scene loads those ignored
-// keys are reported via Mixer.sceneWarnings(). Empty array for an unknown name.
+// The library refuses a key not in this list. Empty array for an unknown name;
+// the facade refuses an unknown name before calling.
 val js_mastering_insert_param_names(std::string name) {
   wasmRefuseEmbeddedNul(name, "name");
   return stringVectorToVal(mastering::api::insert_param_names(name));

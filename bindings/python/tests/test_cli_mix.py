@@ -9,6 +9,8 @@ import os
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from libsonare._types_mixing_assistant import MixAssistantMixProfile, MixAssistantResult
 
 # ruff: noqa: F403,F405
@@ -482,7 +484,7 @@ def test_mixer_commands_refuse_malformed_argv_before_reading_inputs(tmp_path) ->
         ),
         (
             ["suggest-mix", "--input", missing, "--params", "enable_eq=1"],
-            "assistant param enable_eq is an earlier spelling; write enableEq",
+            f"unknown key enable_eq (expected {_ASSISTANT_KEYS})",
         ),
         (
             ["suggest-mix", "--input", missing, "--params", "nosuchkey=1"],
@@ -509,6 +511,34 @@ def test_mixer_commands_refuse_malformed_argv_before_reading_inputs(tmp_path) ->
         result = _run_cli(argv)
         assert result.returncode == 2, (argv, result.stderr)
         assert text in result.stderr, (argv, result.stderr)
+
+
+@pytest.mark.parametrize(
+    ("params", "text"),
+    [
+        ("targetTrackLufs=1e100", "invalid numeric value for parameter 'targetTrackLufs'"),
+        ("tempoBpm=19", "tempoBpm must be 0 or a tempo between 20 and 400 BPM"),
+        ("tempoBpm=401", "tempoBpm must be 0 or a tempo between 20 and 400 BPM"),
+        ("nFft=3", "nFft must be an even integer in [2, 524288]"),
+        ("nFft=2.5", "nFft must be an even integer in [2, 524288]"),
+        ("nFft=524290", "nFft must be an even integer in [2, 524288]"),
+        ("hopLength=0", "hopLength must be an integer in [1, 2147483647]"),
+        ("hopLength=1.5", "hopLength must be an integer in [1, 2147483647]"),
+        ("hopLength=2147483648", "hopLength must be an integer in [1, 2147483647]"),
+    ],
+)
+def test_suggest_mix_refuses_invalid_param_values_before_read(tmp_path, params, text) -> None:
+    result = _run_cli(["suggest-mix", "--input", str(tmp_path / "absent.wav"), "--params", params])
+    assert result.returncode == 2, result.stderr
+    assert result.stderr.rstrip().endswith(text)
+
+
+def test_suggest_mix_accepts_transport_tempo_and_even_fft(tmp_path) -> None:
+    track = tmp_path / "track.wav"
+    _write_test_wav(str(track), [0.3 * math.sin(0.05 * i) for i in range(48000)], 48000)
+    result = _run_cli(["suggest-mix", "--input", str(track), "--params", "tempoBpm=0,nFft=1000"])
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["scene"]["strips"][0]["id"] == "track"
 
 
 def test_suggest_mix_bare_path_id_splits_at_the_platform_separator(tmp_path) -> None:

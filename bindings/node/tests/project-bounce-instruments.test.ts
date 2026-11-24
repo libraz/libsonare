@@ -92,6 +92,38 @@ class ConstantInstrument implements ExternalInstrument {
 }
 
 describe('bounce with instruments', () => {
+  it('treats null bounce options as absent and refuses shape before count-in range', () => {
+    using project = new Project();
+    expect(project.bounce(null as never)).toEqual(project.bounce());
+    expect(project.bounce({ ...OPTIONS, instrumentLatencySamples: null as never })).toEqual(
+      project.bounce(OPTIONS),
+    );
+    expect(() => project.bounce({ countInBars: 17, sf2Instruments: {} as never })).toThrow(
+      TypeError,
+    );
+    expect(() => project.bounce({ countInBars: 17, sf2Instruments: {} as never })).toThrow(
+      /sf2Instruments must be an array/,
+    );
+    const invalidBinding = () =>
+      project.bounce({
+        countInBars: 17,
+        builtinInstruments: [{ instrument: { gain: 'bad' } as never }],
+      });
+    expect(invalidBinding).toThrow(TypeError);
+    expect(invalidBinding).toThrow(/gain must be a number/);
+  });
+
+  it('preserves the unresolved SoundFont reason on the callback worker', () => {
+    using project = midiProject();
+    expect(() =>
+      project.bounce({
+        ...OPTIONS,
+        instruments: [{ destinationId: 1, instrument: new ConstantInstrument() }],
+        sf2Instruments: [{ destinationId: 0, instrument: {}, soundFontUri: 'urn:missing' }],
+      }),
+    ).toThrow(expect.objectContaining({ reason: 'unresolvedSoundFont' }));
+  });
+
   it('renders the callback instrument into the bounce', () => {
     using project = midiProject();
     const silent = flat(project.bounce(OPTIONS));

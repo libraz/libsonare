@@ -28683,7 +28683,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "must be less than sr / 2"
+            "must be less than sample_rate / 2"
           ]
         },
         {

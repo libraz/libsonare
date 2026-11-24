@@ -518,14 +518,14 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => new Project().analyzeTempo(clicks(120, 6), SR, o),
   },
   {
-    // Reads the installed map back rather than only the returned BPM: the option
+    // Reads the installed map as well as the detected tempo and meter: the option
     // bag reaches the segmentation as well as the tempo decision, so comparing
     // one number would miss a divergence in how the map was cut.
     jsName: 'autoTempo',
     invoke: (o) => {
       const project = new Project();
-      const bpm = project.autoTempo(clicks(120, 6), SR, o);
-      return [bpm, project.tempoSegments()];
+      const result = project.autoTempo(clicks(120, 6), SR, o);
+      return [result, project.tempoSegments()];
     },
   },
   {
@@ -947,7 +947,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withEngine((engine) => {
         engine.bindMidiCc({ ...o, ccNumber: 7, paramId: 1 });
-        return engine.midiCcBindingCount;
+        return engine.midiCcBindings();
       }),
   },
   { jsName: 'addTrack', invoke: (o) => withProject((p) => p.addTrack({ ...o, kind: 'audio' })) },

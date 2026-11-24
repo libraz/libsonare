@@ -17,35 +17,32 @@ def _row(entry: str, param: str, lo: int = 1, hi: int | None = 64) -> dict:
 
 
 _COUNT_IN_REACHED = {"Project.count_in_frames": frozenset({"project_count_in_frames"})}
-_COUNT_IN_DOMAINS = [
-    _row("project_count_in_frames", "count_in_bars", 0, 16),
-    _row("project_count_in_frames", "sample_rate", 8000, 384000),
-]
+_COUNT_IN_DOMAINS = [_row("project_count_in_frames", "count_in_bars", 0, 16)]
 
 
 class ReachableRowsTest(unittest.TestCase):
     def test_a_direct_parameter_the_signature_does_not_take_gets_no_row(self) -> None:
-        taken = {"Project.count_in_frames": frozenset({"self", "count_in_bars"})}
+        taken = {"Project.count_in_frames": frozenset({"self"})}
         table = gen.rows(_COUNT_IN_DOMAINS, {}, _COUNT_IN_REACHED, taken=taken)
-        self.assertEqual(list(table), [("Project.count_in_frames", "count_in_bars")])
+        self.assertEqual(table, {})
 
     def test_without_signatures_every_row_is_kept(self) -> None:
         table = gen.rows(_COUNT_IN_DOMAINS, {}, _COUNT_IN_REACHED)
-        self.assertIn(("Project.count_in_frames", "sample_rate"), table)
+        self.assertEqual(table, {("Project.count_in_frames", "count_in_bars"): (0, 16, None)})
 
     def test_an_entry_absent_from_the_signatures_keeps_its_rows(self) -> None:
         table = gen.rows(_COUNT_IN_DOMAINS, {}, _COUNT_IN_REACHED, taken={})
-        self.assertIn(("Project.count_in_frames", "sample_rate"), table)
+        self.assertEqual(table, {("Project.count_in_frames", "count_in_bars"): (0, 16, None)})
 
     def test_a_python_unbound_struct_member_gets_no_row(self) -> None:
         domains = [
-            _row("project_bounce", "options.sample_rate"),
+            _row("project_bounce", "options.instrument_count"),
             _row("project_bounce", "options.block_size"),
         ]
         reached = {"Project.bounce": frozenset({"project_bounce"})}
         taken = {"Project.bounce": frozenset({"self"})}
         table = gen.rows(
-            domains, {}, reached, taken=taken, unbound={("project_bounce", "sample_rate")}
+            domains, {}, reached, taken=taken, unbound={("project_bounce", "instrument_count")}
         )
         self.assertEqual(list(table), [("Project.bounce", "block_size")])
 

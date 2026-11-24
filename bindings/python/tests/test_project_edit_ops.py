@@ -62,7 +62,13 @@ def test_set_clip_gain_accepts_zero_mute_and_undoes() -> None:
 def test_set_clip_fade_and_loop_round_trip() -> None:
     p, _track, clip = _audio_project()
     before = p.to_json()
-    p.set_clip_fade(clip, 24.0, 48.0, fade_in_curve="exponential", fade_out_curve="equalPower")
+    p.set_clip_fade(
+        clip,
+        fade_in_ppq=24.0,
+        fade_out_ppq=48.0,
+        fade_in_curve="exponential",
+        fade_out_curve="equalPower",
+    )
     assert p.to_json() != before
     p.undo()
     assert p.to_json() == before
@@ -505,9 +511,7 @@ def test_project_scene_route_and_unresolved_soundfont_readers() -> None:
     assert stored_track.output_target == "master"
     assert p.mixer_scene() is None
 
-    p.set_mixer_scene_json(
-        json.dumps({"version": 2, "strips": [], "buses": [], "vcaGroups": [], "connections": []})
-    )
+    p.set_mixer_scene({"version": 2, "strips": [], "buses": [], "vcaGroups": [], "connections": []})
     scene = p.mixer_scene()
     assert scene is not None
     assert scene["version"] == 2

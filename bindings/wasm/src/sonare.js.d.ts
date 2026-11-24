@@ -1281,6 +1281,7 @@ export interface WasmEngineScopeTelemetry {
 export interface WasmEngineCaptureStatus {
   capturedFrames: number;
   overflowCount: number;
+  droppedFrames: number;
   armed: boolean;
   punchEnabled: boolean;
   source: 'output' | 'input';
@@ -1632,8 +1633,9 @@ export interface WasmRealtimeEngine {
   midiInstrumentCount: () => number;
   bindMidiCc: (binding: import('./project_types.js').ProjectMidiCcBinding) => void;
   clearMidiCcBindings: () => void;
-  midiCcBindingCount: () => number;
-  midiCcBindings: () => import('./project_types.js').ProjectMidiCcBinding[];
+  midiCcBindings: () => Array<
+    import('./project_types.js').ProjectMidiCcBinding & { consume: boolean }
+  >;
   setControllerProfile: (destinationId: number, presetName: string) => void;
   bindController: (
     destinationId: number,
@@ -2087,7 +2089,7 @@ export interface SonareModule {
     minValue: number,
     maxValue: number,
     minMovement: number,
-  ) => unknown;
+  ) => (import('./project_types.js').ProjectMidiCcBinding & { consume: boolean }) | null;
   midiCcToBreakpoint: (bindings: readonly unknown[], event: unknown) => unknown;
   midiParamToCc: (
     bindings: readonly unknown[],

@@ -250,8 +250,6 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::BindMidiCc>("bindMidiCc", napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiCcBindings>("clearMidiCcBindings",
                                                                    napi_default_method),
-          InstanceMethod<&RealtimeEngineWrap::MidiCcBindingCount>("midiCcBindingCount",
-                                                                  napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::MidiCcBindings>("midiCcBindings",
                                                               napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetControllerProfile>("setControllerProfile",
@@ -748,7 +746,7 @@ Napi::Value RealtimeEngineWrap::ClipPageRequestOverflowCount(const Napi::Callbac
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  size_t count = 0;
+  uint64_t count = 0;
   ThrowIfError(env, sonare_engine_clip_page_request_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
@@ -759,7 +757,7 @@ Napi::Value RealtimeEngineWrap::WarpStretchOverflowCount(const Napi::CallbackInf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  size_t count = 0;
+  uint64_t count = 0;
   ThrowIfError(env, sonare_engine_warp_stretch_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));

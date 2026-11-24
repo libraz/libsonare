@@ -6,7 +6,12 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { ProjectBounceResult, ProjectChordSymbol, ProjectKeySegment } from '../dist/index.js';
+import type {
+  ChannelLayout,
+  ProjectBounceResult,
+  ProjectChordSymbol,
+  ProjectKeySegment,
+} from '../dist/index.js';
 import {
   controllerProfileNames,
   ErrorCode,
@@ -283,7 +288,7 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('round-trips chord annotations and omits empty or absent Roman numerals', () => {
+  it('round-trips absent Roman numerals and refuses a specified empty numeral', () => {
     const project = new Project();
     try {
       const chords: ProjectChordSymbol[] = [
@@ -302,7 +307,6 @@ describe('Sonare WASM Project', () => {
           rootPc: 2,
           quality: 'minor',
           extensions: [],
-          romanNumeral: '',
           modulationBoundary: false,
         },
         {
@@ -315,13 +319,13 @@ describe('Sonare WASM Project', () => {
           modulationBoundary: false,
         },
       ];
-      const expected = chords.map(({ romanNumeral, ...chord }) =>
-        romanNumeral === undefined || romanNumeral === '' ? chord : { ...chord, romanNumeral },
-      );
+      const annotateEmpty = () => project.annotateChords([{ ...chords[0], romanNumeral: '' }]);
+      expect(annotateEmpty).toThrow(RangeError);
+      expect(annotateEmpty).toThrow(/chords\[0\]\.romanNumeral.*empty/);
       expect(project.chordAnnotations()).toEqual([]);
       project.annotateChords(chords);
       const read = project.chordAnnotations();
-      expect(read).toStrictEqual(expected);
+      expect(read).toStrictEqual(chords);
       expect(read[0]).not.toHaveProperty('romanNumeral');
       expect(read[1]).not.toHaveProperty('romanNumeral');
       expect(read[2].romanNumeral).toBe('V');
@@ -919,6 +923,30 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('requires chord endpoints and names invalid nested fields', () => {
+    const project = new Project();
+    try {
+      const chord = { startPpq: 0, endPpq: 4, extensions: [7] } as const;
+      project.annotateChords([chord] as const);
+      expect(() => project.annotateChords([{ endPpq: 4 } as never])).toThrow(
+        new TypeError('Project.annotateChords: startPpq must be a number'),
+      );
+      expect(() => project.annotateChords([{ startPpq: 0 } as never])).toThrow(
+        new TypeError('Project.annotateChords: endPpq must be a number'),
+      );
+      expect(() => project.annotateChords([chord, { ...chord, extensions: [7, 256] }])).toThrow(
+        new RangeError(
+          'Project.annotateChords: chords[1].extensions[1] must be an integer in [0, 255]',
+        ),
+      );
+      expect(() => project.annotateChords([chord, { ...chord, romanNumeral: 'I\0V' }])).toThrow(
+        new RangeError('Project.annotateChords: chords[1].romanNumeral must not contain NUL'),
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('compiles an empty project into a renderable timeline', () => {
     const project = new Project();
     try {
@@ -1146,6 +1174,11 @@ describe('Sonare WASM Project', () => {
   it('reports an unsafe count-in frame result as InvalidFormat', () => {
     const project = new Project();
     try {
+      for (const bad of [0.5, 17, Number.MAX_SAFE_INTEGER]) {
+        expect(() => project.countInFrames(bad)).toThrow(
+          new RangeError('Project.countInFrames: countInBars must be an integer in [0, 16]'),
+        );
+      }
       project.setSampleRate(48000);
       project.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }]);
       let caught: unknown;
@@ -1155,7 +1188,10 @@ describe('Sonare WASM Project', () => {
         caught = error;
       }
       expect(isSonareError(caught)).toBe(true);
-      expect(caught).toMatchObject({ code: ErrorCode.InvalidFormat });
+      expect(caught).toMatchObject({
+        code: ErrorCode.InvalidFormat,
+        message: 'Project.countInFrames: frames is not exactly representable as a number',
+      });
     } finally {
       project.destroy();
     }
@@ -1260,7 +1296,7 @@ describe('Sonare WASM Project', () => {
   });
 
   it('bounces at the width of the scene master when numChannels is omitted', () => {
-    const cases: ReadonlyArray<[string | undefined, number]> = [
+    const cases: ReadonlyArray<[ChannelLayout | undefined, number]> = [
       [undefined, 2],
       ['mono', 1],
       ['stereo', 2],
@@ -1271,9 +1307,7 @@ describe('Sonare WASM Project', () => {
       const project = new Project();
       project.setSampleRate(48000);
       if (layout !== undefined) {
-        project.setMixerSceneJson(
-          JSON.stringify({ version: 2, buses: [{ id: 'master', role: 'master', layout }] }),
-        );
+        project.setMixerScene({ version: 2, buses: [{ id: 'master', role: 'master', layout }] });
       }
       project.addMidiClip(0, 1);
       const audio = project.bounce({ totalFrames: 128 });
@@ -2170,7 +2204,11 @@ describe('Sonare WASM Project', () => {
         maxValue: 1,
       };
       expect(midiRouteEvents({ events, filterChannel: 2 }).events).toHaveLength(1);
-      expect(midiCcLearn({ events, paramId: 9 })).toMatchObject({ ccNumber: 74, paramId: 9 });
+      expect(midiCcLearn({ events, paramId: 9 })).toMatchObject({
+        ccNumber: 74,
+        paramId: 9,
+        consume: false,
+      });
       expect(midiCcToBreakpoint({ bindings: [binding], event: events[0] })).not.toBeNull();
       const loose = (fn: unknown) => fn as (...args: unknown[]) => unknown;
       for (const [name, call] of [

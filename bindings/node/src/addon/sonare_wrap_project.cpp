@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <limits>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -49,6 +51,24 @@ struct ProjectInstrumentListGuard {
   ~ProjectInstrumentListGuard() {
     if (value.count != 0 && value.items == nullptr) value.count = 0;
     sonare_free_project_instrument_list(&value);
+  }
+};
+
+struct TempoSegmentListGuard {
+  SonareProjectTempoSegmentList value{};
+
+  ~TempoSegmentListGuard() {
+    if (value.count != 0 && value.items == nullptr) value.count = 0;
+    sonare_free_project_tempo_segment_list(&value);
+  }
+};
+
+struct TimeSignatureListGuard {
+  SonareProjectTimeSignatureList value{};
+
+  ~TimeSignatureListGuard() {
+    if (value.count != 0 && value.items == nullptr) value.count = 0;
+    sonare_free_project_time_signature_list(&value);
   }
 };
 
@@ -453,18 +473,13 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio", napi_default_method),
           InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata",
                                                                napi_default_method),
-          InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount", napi_default_method),
-          InstanceMethod<&ProjectWrap::TempoSegmentByIndex>("tempoSegmentByIndex",
-                                                            napi_default_method),
-          InstanceMethod<&ProjectWrap::TimeSignatureByIndex>("timeSignatureByIndex",
-                                                             napi_default_method),
+          InstanceMethod<&ProjectWrap::TempoSegments>("tempoSegments", napi_default_method),
+          InstanceMethod<&ProjectWrap::TimeSignatures>("timeSignatures", napi_default_method),
           InstanceMethod<&ProjectWrap::PpqToSec>("ppqToSec", napi_default_method),
           InstanceMethod<&ProjectWrap::SecToPpq>("secToPpq", napi_default_method),
           InstanceMethod<&ProjectWrap::PositionAtPpq>("positionAtPpq", napi_default_method),
           InstanceMethod<&ProjectWrap::BarStartPpq>("barStartPpq", napi_default_method),
           InstanceMethod<&ProjectWrap::EndPpq>("endPpq", napi_default_method),
-          InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount",
-                                                           napi_default_method),
           InstanceMethod<&ProjectWrap::MarkerCount>("markerCount", napi_default_method),
           InstanceMethod<&ProjectWrap::Destroy>("destroy", napi_default_method),
           StaticMethod<&ProjectWrap::FromJson>("fromJson", napi_default_method),
@@ -562,10 +577,10 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
       sonare_project_deserialize(sonare_node::ElementData(json), json.size(), &handle, &diag);
   std::string diagnostics = diag != nullptr ? diag : "";
   if (diag != nullptr) sonare_free_string(diag);
-  if (err != SONARE_OK) {
+  if (err != SONARE_OK || handle == nullptr) {
     sonare_project_destroy(handle);
     // The last error carries the diagnostics without their codes; the codes stay in diagnostics.
-    sonare_node::ThrowSonareError(env, err);
+    sonare_node::ThrowSonareErrorPreservingRefusal(env, err);
     return env.Undefined();
   }
   if (!with_diagnostics) return ProjectWrap::Wrap(info, handle);
@@ -625,9 +640,11 @@ Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  std::string scene;
-  if (!OptionalStringArg(env, info, 0, "document", "", &scene)) return env.Undefined();
-  ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
+  std::optional<std::string> scene;
+  if (!OptionalStringArg(env, info, 0, "document", &scene)) return env.Undefined();
+  const SonareError err =
+      sonare_project_set_mixer_scene_json(project_, scene ? scene->c_str() : nullptr);
+  if (err != SONARE_OK) sonare_node::ThrowSonareErrorPreservingRefusal(env, err);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -768,38 +785,54 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
+Napi::Value ProjectWrap::TempoSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  size_t index = 0;
-  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
-  SonareProjectTempoSegment seg{};
-  ThrowIfError(env, sonare_project_tempo_segment_by_index(project_, index, &seg));
+  TempoSegmentListGuard segments;
+  ThrowIfError(env, sonare_project_tempo_segments(project_, &segments.value));
   if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = Napi::Object::New(env);
-  // The same three fields setTempoSegments accepts, so a segment read back can
-  // be written straight to another project.
-  out.Set("startPpq", Napi::Number::New(env, seg.start_ppq));
-  out.Set("bpm", Napi::Number::New(env, seg.bpm));
-  out.Set("endBpm", Napi::Number::New(env, seg.end_bpm));
+  if ((segments.value.count != 0 && segments.value.items == nullptr) ||
+      segments.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "tempo segment list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(segments.value.count));
+  for (size_t i = 0; i < segments.value.count; ++i) {
+    const SonareProjectTempoSegment& segment = segments.value.items[i];
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("startPpq", Napi::Number::New(env, segment.start_ppq));
+    item.Set("bpm", Napi::Number::New(env, segment.bpm));
+    item.Set("endBpm", Napi::Number::New(env, segment.end_bpm));
+    out.Set(static_cast<uint32_t>(i), item);
+  }
   return out;
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
+Napi::Value ProjectWrap::TimeSignatures(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  size_t index = 0;
-  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
-  SonareProjectTimeSignatureSegment seg{};
-  ThrowIfError(env, sonare_project_time_signature_by_index(project_, index, &seg));
+  TimeSignatureListGuard signatures;
+  ThrowIfError(env, sonare_project_time_signatures(project_, &signatures.value));
   if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("startPpq", Napi::Number::New(env, seg.start_ppq));
-  out.Set("numerator", Napi::Number::New(env, seg.numerator));
-  out.Set("denominator", Napi::Number::New(env, seg.denominator));
+  if ((signatures.value.count != 0 && signatures.value.items == nullptr) ||
+      signatures.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "time-signature list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(signatures.value.count));
+  for (size_t i = 0; i < signatures.value.count; ++i) {
+    const SonareProjectTimeSignatureSegment& signature = signatures.value.items[i];
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("startPpq", Napi::Number::New(env, signature.start_ppq));
+    item.Set("numerator", Napi::Number::New(env, signature.numerator));
+    item.Set("denominator", Napi::Number::New(env, signature.denominator));
+    out.Set(static_cast<uint32_t>(i), item);
+  }
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -1205,28 +1238,6 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
                         static_cast<int64_t>(audio.ElementLength() / static_cast<size_t>(channels)),
                         channels, sample_rate));
   return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::TempoSegmentCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  size_t out = 0;
-  ThrowIfError(env, sonare_project_tempo_segment_count(project_, &out));
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out));
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::TimeSignatureCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  size_t out = 0;
-  ThrowIfError(env, sonare_project_time_signature_count(project_, &out));
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out));
   SONARE_NODE_CATCH(env)
 }
 

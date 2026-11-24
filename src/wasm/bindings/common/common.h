@@ -368,14 +368,19 @@ std::size_t wasmHeapElementCapacity(std::size_t element_bytes);
 inline constexpr std::size_t kMaxWasmObjectArrayReserve = 1u * 1024u * 1024u;
 /// The CQT-family core names for the lowest frequency and the rate, as its requests spell them.
 inline constexpr std::array<sonare::util::check::MemberKey, 2> kCqtRequestKeys{
-    {{"fmin", "fminHz"}, {"sr", "sampleRate"}}};
+    {{"fmin", "fminHz"}, {"sample_rate", "sampleRate"}}};
 /// The synthesis core names for the rate, frequencies and durations, as their requests spell them.
 inline constexpr std::array<sonare::util::check::MemberKey, 2> kToneRequestKeys{
-    {{"sr", "sampleRate"}, {"duration", "durationSec"}}};
+    {{"sample_rate", "sampleRate"}, {"duration", "durationSec"}}};
 inline constexpr std::array<sonare::util::check::MemberKey, 4> kChirpRequestKeys{
-    {{"fmin", "fminHz"}, {"fmax", "fmaxHz"}, {"sr", "sampleRate"}, {"duration", "durationSec"}}};
+    {{"fmin", "fminHz"},
+     {"fmax", "fmaxHz"},
+     {"sample_rate", "sampleRate"},
+     {"duration", "durationSec"}}};
 inline constexpr std::array<sonare::util::check::MemberKey, 3> kClicksRequestKeys{
-    {{"sr", "sampleRate"}, {"frequency", "frequencyHz"}, {"click_duration", "clickDurationSec"}}};
+    {{"sample_rate", "sampleRate"},
+     {"frequency", "frequencyHz"},
+     {"click_duration", "clickDurationSec"}}};
 /// The HPSS core names for the two median kernels, as hpss() spells them.
 inline constexpr std::array<sonare::util::check::MemberKey, 2> kHpssRequestKeys{
     {{"kernel_size_harmonic", "kernelHarmonic"}, {"kernel_size_percussive", "kernelPercussive"}}};
@@ -391,7 +396,7 @@ inline constexpr std::array<sonare::util::check::MemberKey, 2> kMelRangeKeys{
     {{"fmin", "fminHz"}, {"fmax", "fmaxHz"}}};
 /// The core names the mel and MFCC inverse transforms refuse under, as their requests spell them.
 inline constexpr std::array<sonare::util::check::MemberKey, 5> kInverseRequestKeys{
-    {{"sr", "sampleRate"},
+    {{"sample_rate", "sampleRate"},
      {"M", "power"},
      {"mfcc", "coefficients"},
      {"fmin", "fminHz"},

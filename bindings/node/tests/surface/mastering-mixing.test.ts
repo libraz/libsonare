@@ -524,6 +524,19 @@ describe('mastering mixing surface', () => {
           }),
         ),
       ).toBeInstanceOf(TypeError);
+      expect(
+        thrown(() =>
+          loose(mixingAssistantSuggest)({
+            tracks: assistantTracks(),
+            sampleRate: SR,
+            suggestion_strength: 0,
+          }),
+        ),
+      ).toEqual(
+        new TypeError(
+          'mixingAssistantSuggest: unknown key suggestion_strength (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, sampleRate, suggestionStrength, targetTrackLufs, tempoBpm, tracks)',
+        ),
+      );
     });
 
     it('the source-class lookups are renamed and round-trip', () => {

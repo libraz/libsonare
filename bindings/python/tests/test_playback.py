@@ -238,15 +238,29 @@ def test_reset_clears_state() -> None:
 
 
 @pytest.mark.parametrize(
-    "document",
+    ("document", "message"),
     [
-        {"night_mode": {"amount": 1}},
-        {"target": {"kind": "speakers", "layout": "stereo", "speakers": {"L": {"trimDb": 0.0}}}},
+        (
+            {"night_mode": {"amount": 1}},
+            r"unknown key night_mode \(expected dialogueLevelDb, headTracking, input, lfeMixDb, "
+            r"loudness, nightMode, outputLimiter, room, target, upmix, version\)",
+        ),
+        (
+            {
+                "target": {
+                    "kind": "speakers",
+                    "layout": "stereo",
+                    "speakers": {"L": {"trimDb": 0.0}},
+                }
+            },
+            r"unknown key target\.speakers\.L \(expected center, left, leftSideSurround, "
+            r"leftSurround, right, rightSideSurround, rightSurround\)",
+        ),
     ],
     ids=["snake_case_key", "short_role_token"],
 )
-def test_an_earlier_config_spelling_is_refused_as_invalid_format(document: dict) -> None:
-    with raises_coded(ErrorCode.INVALID_FORMAT, match="earlier spelling"):
+def test_unknown_config_key_is_refused_as_invalid_format(document: dict, message: str) -> None:
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=message):
         PlaybackRenderer(document, sample_rate=SR)
 
 

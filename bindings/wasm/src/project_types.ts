@@ -10,7 +10,7 @@ import type { Project, ProjectTimeline } from './project_class.js';
 import type { EngineMetronomeConfig, MidiFxConfig } from './public_types_engine.js';
 import type { MidiBank } from './public_types_midi_messages.js';
 import type { AutomationCurve } from './public_types_mixing.js';
-import type { KeyMode } from './public_types_music.js';
+import type { KeyMode, TimeSignature } from './public_types_music.js';
 
 // ============================================================================
 // Headless DAW Project
@@ -59,9 +59,21 @@ export interface ProjectBounceOptions {
   /** Patch-driven NativeSynth bound to MIDI destinations. */
   synthInstruments?: ReadonlyArray<ProjectInstrumentBinding<SynthPatch>>;
   /** GS-compatible SoundFont players bound to MIDI destinations. */
-  sf2Instruments?: ReadonlyArray<ProjectInstrumentBinding<Sf2InstrumentConfig>>;
+  sf2Instruments?: ReadonlyArray<ProjectSf2InstrumentBinding>;
   /** JavaScript instruments driven synchronously during the render. */
   instruments?: ReadonlyArray<ProjectInstrumentBinding<ExternalInstrument>>;
+}
+
+/** Selects a project SoundFont. Omit the URI to select the default SoundFont. */
+export interface ProjectSoundFontOptions {
+  /** URI of the SoundFont. Omit for the default SoundFont. */
+  uri?: string;
+}
+
+/** A SoundFont player for a project bounce, with an optional SoundFont URI. */
+export interface ProjectSf2InstrumentBinding extends ProjectInstrumentBinding<Sf2InstrumentConfig> {
+  /** URI of the loaded SoundFont to use. Omit for the default SoundFont. */
+  soundFontUri?: string;
 }
 
 /** A controller profile selected for one destination during a project bounce. */
@@ -664,6 +676,16 @@ export interface ProjectAutoTempoRequest extends ProjectAutoTempoOptions {
   samples: Float32Array;
   /** Sample rate of `samples` in Hz, `[8000, 384000]`. */
   sampleRate: number;
+}
+
+/** Tempo and detected meter of the installed candidate. */
+export interface ProjectAutoTempoResult {
+  /** BPM of the first installed tempo segment. */
+  readonly bpm: number;
+  /** Confidence of the selected tempo candidate. */
+  readonly bpmConfidence: number;
+  /** Detected meter, including when it was not installed. */
+  readonly timeSignature: Readonly<TimeSignature>;
 }
 
 /** Request form of {@link Project.analyzeTempo}. */

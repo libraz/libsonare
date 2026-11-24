@@ -54,7 +54,7 @@ def _load_binding_types() -> tuple[object, ...]:
     if str(PYTHON_SRC) not in sys.path:
         sys.path.insert(0, str(PYTHON_SRC))
     try:
-        from libsonare import Project, SynthPatch
+        from libsonare import Project, ProjectInstrumentBinding, SynthPatch
         from libsonare._runtime import (
             SonareProjectBounceOptions,
             SonareSynthInstrumentBinding,
@@ -77,6 +77,7 @@ def _load_binding_types() -> tuple[object, ...]:
         _from_c_float_array,
         _get_lib,
         _out_float_array,
+        ProjectInstrumentBinding,
     )
 
 
@@ -85,9 +86,7 @@ def _read_fixture() -> tuple[str, bytes]:
         serialized = FIXTURE.read_text(encoding="utf-8")
         payload = json.loads(serialized)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise HarnessFailure(
-            f"cannot read GM project fixture {FIXTURE}: {exc}"
-        ) from exc
+        raise HarnessFailure(f"cannot read GM project fixture {FIXTURE}: {exc}") from exc
 
     if payload.get("version") != 7 or payload.get("sampleRate") != SAMPLE_RATE:
         raise HarnessFailure("fixture must be project version 7 at 48 kHz")
@@ -95,21 +94,13 @@ def _read_fixture() -> tuple[str, bytes]:
     if not isinstance(tracks, list) or len(tracks) != 1:
         raise HarnessFailure("fixture must contain exactly one track")
     track = tracks[0]
-    if (
-        track.get("kind") != "midi"
-        or track.get("midiDestinationId") != 0
-        or track.get("id") != 1
-    ):
+    if track.get("kind") != "midi" or track.get("midiDestinationId") != 0 or track.get("id") != 1:
         raise HarnessFailure("fixture track must be MIDI kind with destination 0")
     clips = payload.get("clips")
     if not isinstance(clips, list) or len(clips) != 1 or clips[0].get("trackId") != 1:
         raise HarnessFailure("fixture must contain one MIDI clip on track 1")
     sources = payload.get("sources")
-    if (
-        not isinstance(sources, list)
-        or len(sources) != 1
-        or sources[0].get("kind") != "midi"
-    ):
+    if not isinstance(sources, list) or len(sources) != 1 or sources[0].get("kind") != "midi":
         raise HarnessFailure("fixture must contain one MIDI source")
 
     events = payload.get("midiContent", {}).get("1")
@@ -119,15 +110,11 @@ def _read_fixture() -> tuple[str, bytes]:
         event = events[index]
         if (
             not isinstance(event, dict)
-            or not math.isclose(
-                float(event.get("ppq", -1.0)), expected_ppq, abs_tol=0.0
-            )
+            or not math.isclose(float(event.get("ppq", -1.0)), expected_ppq, abs_tol=0.0)
             or int(event.get("word0", -1)) != expected_word
             or int(event.get("word1", -1)) != 0
         ):
-            raise HarnessFailure(
-                f"fixture MIDI event {index} is not the canonical GM/C4 event"
-            )
+            raise HarnessFailure(f"fixture MIDI event {index} is not the canonical GM/C4 event")
 
     return serialized, serialized.encode("utf-8")
 
@@ -166,7 +153,6 @@ def _render_c(
     options.total_frames = TOTAL_FRAMES
     options.block_size = BLOCK_SIZE
     options.num_channels = NUM_CHANNELS
-    options.sample_rate = SAMPLE_RATE
     options.instrument_latency_samples = 0
     binding = SonareSynthInstrumentBinding()
     binding.destination_id = 0
@@ -197,14 +183,14 @@ def _render_c(
     return np.asarray(samples, dtype=np.float32)
 
 
-def _render_python(
-    serialized: str, use_gm_programs: bool, types: tuple[object, ...]
-) -> np.ndarray:
-    Project, SynthPatch = types[0], types[1]
+def _render_python(serialized: str, use_gm_programs: bool, types: tuple[object, ...]) -> np.ndarray:
+    Project, SynthPatch, Binding = types[0], types[1], types[8]
     project = Project.from_json(serialized)
     try:
         samples = project.bounce(
-            synth_instruments=[(0, SynthPatch(preset="sine", use_gm_programs=use_gm_programs))],
+            synth_instruments=[
+                Binding(instrument=SynthPatch(preset="sine", use_gm_programs=use_gm_programs))
+            ],
             total_frames=TOTAL_FRAMES,
             block_size=BLOCK_SIZE,
             num_channels=NUM_CHANNELS,
@@ -275,28 +261,16 @@ def _run_js_surface(
             env=os.environ.copy(),
         )
     except OSError as exc:
-        raise HarnessFailure(
-            f"cannot launch {surface} runner {node_executable!r}: {exc}"
-        ) from exc
+        raise HarnessFailure(f"cannot launch {surface} runner {node_executable!r}: {exc}") from exc
     if completed.returncode != 0:
-        detail = (
-            completed.stderr.strip()
-            or completed.stdout.strip()
-            or "no subprocess output"
-        )
-        raise HarnessFailure(
-            f"{surface} runner failed with exit {completed.returncode}: {detail}"
-        )
+        detail = completed.stderr.strip() or completed.stdout.strip() or "no subprocess output"
+        raise HarnessFailure(f"{surface} runner failed with exit {completed.returncode}: {detail}")
     try:
         raw = base64.b64decode("".join(completed.stdout.split()), validate=True)
     except (ValueError, base64.binascii.Error) as exc:
-        raise HarnessFailure(
-            f"{surface} runner returned malformed base64 Float32 payload"
-        ) from exc
+        raise HarnessFailure(f"{surface} runner returned malformed base64 Float32 payload") from exc
     if len(raw) % 4 != 0:
-        raise HarnessFailure(
-            f"{surface} runner returned {len(raw)} non-Float32 payload bytes"
-        )
+        raise HarnessFailure(f"{surface} runner returned {len(raw)} non-Float32 payload bytes")
     return np.frombuffer(raw, dtype="<f4").copy()
 
 
@@ -332,25 +306,18 @@ def _validate_render(name: str, samples: np.ndarray) -> None:
 def _validate_shape_and_finiteness(name: str, samples: np.ndarray) -> None:
     metrics = _metrics(samples)
     if metrics["length"] != TOTAL_FRAMES:
-        raise HarnessFailure(
-            f"{name}: expected {TOTAL_FRAMES} samples, got {metrics['length']}"
-        )
+        raise HarnessFailure(f"{name}: expected {TOTAL_FRAMES} samples, got {metrics['length']}")
     if not metrics["finite"]:
         raise HarnessFailure(f"{name}: output contains NaN or Inf")
 
 
-def _assert_mode_change(
-    surface: str, without_gm: np.ndarray, with_gm: np.ndarray
-) -> float:
+def _assert_mode_change(surface: str, without_gm: np.ndarray, with_gm: np.ndarray) -> float:
     """Require both modes to be exercised and produce observably different audio."""
     if without_gm.size != with_gm.size:
         raise HarnessFailure(
-            f"{surface}: use_gm_programs mode lengths differ "
-            f"({without_gm.size} vs {with_gm.size})"
+            f"{surface}: use_gm_programs mode lengths differ ({without_gm.size} vs {with_gm.size})"
         )
-    delta = float(
-        np.max(np.abs(without_gm.astype(np.float64) - with_gm.astype(np.float64)))
-    )
+    delta = float(np.max(np.abs(without_gm.astype(np.float64) - with_gm.astype(np.float64))))
     if delta <= CONTROL_DELTA:
         raise HarnessFailure(
             f"{surface}: use_gm_programs=false/true delta {delta:.9g} "
@@ -369,8 +336,7 @@ def _compare_to_c_oracle(
     mode = str(use_gm_programs).lower()
     if samples.size != oracle.size:
         raise HarnessFailure(
-            f"{surface} use_gm_programs={mode}: output length differs from "
-            "the matching C oracle"
+            f"{surface} use_gm_programs={mode}: output length differs from the matching C oracle"
         )
     diagnostics = _metrics(samples, oracle)
     if not np.allclose(samples, oracle, atol=ATOL, rtol=RTOL):
@@ -397,15 +363,9 @@ def _format_metric(value: float | bool) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--node", default=os.environ.get("NODE", "node"), help="Node executable"
-    )
-    parser.add_argument(
-        "--node-dist", type=Path, default=NODE_INDEX, help="Node dist/index.js"
-    )
-    parser.add_argument(
-        "--wasm-dist", type=Path, default=WASM_INDEX, help="WASM dist/index.js"
-    )
+    parser.add_argument("--node", default=os.environ.get("NODE", "node"), help="Node executable")
+    parser.add_argument("--node-dist", type=Path, default=NODE_INDEX, help="Node dist/index.js")
+    parser.add_argument("--wasm-dist", type=Path, default=WASM_INDEX, help="WASM dist/index.js")
     return parser.parse_args()
 
 
@@ -425,20 +385,12 @@ def main() -> int:
                 True: _render_python(serialized, True, types),
             },
             "node": {
-                False: _run_js_surface(
-                    "node", serialized_bytes, False, args.node, args.node_dist
-                ),
-                True: _run_js_surface(
-                    "node", serialized_bytes, True, args.node, args.node_dist
-                ),
+                False: _run_js_surface("node", serialized_bytes, False, args.node, args.node_dist),
+                True: _run_js_surface("node", serialized_bytes, True, args.node, args.node_dist),
             },
             "wasm": {
-                False: _run_js_surface(
-                    "wasm", serialized_bytes, False, args.node, args.wasm_dist
-                ),
-                True: _run_js_surface(
-                    "wasm", serialized_bytes, True, args.node, args.wasm_dist
-                ),
+                False: _run_js_surface("wasm", serialized_bytes, False, args.node, args.wasm_dist),
+                True: _run_js_surface("wasm", serialized_bytes, True, args.node, args.wasm_dist),
             },
         }
 
@@ -459,8 +411,7 @@ def main() -> int:
                 print(
                     f"{name} use_gm_programs={mode}: "
                     + " ".join(
-                        f"{key}={_format_metric(value)}"
-                        for key, value in diagnostics.items()
+                        f"{key}={_format_metric(value)}" for key, value in diagnostics.items()
                     )
                     + f" atol={ATOL:g} rtol={RTOL:g} pass=true"
                 )

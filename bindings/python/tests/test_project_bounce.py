@@ -2,23 +2,32 @@
 
 from __future__ import annotations
 
+import ctypes
 import dataclasses
 
 import numpy as np
 import pytest
 
 import libsonare as ls
+import libsonare._project_render as _project_render
 from libsonare import (
     BuiltinSynthConfig,
     EngineMetronomeConfig,
     ErrorCode,
     ExternalInstrument,
     Project,
+    ProjectArticulationBinding,
     ProjectBounceResult,
     ProjectCompileResult,
+    ProjectControllerProfileBinding,
+    ProjectInstrumentBinding,
+    ProjectSf2InstrumentBinding,
+    Sf2InstrumentConfig,
     SonareError,
     SonareValueError,
+    SynthPatch,
 )
+from libsonare._project_render import _ProjectRenderMixin
 
 from ._helpers import raises_coded
 from ._project_helpers import _build_project
@@ -97,7 +106,7 @@ def test_bounce_builtin_instruments_produces_non_silent_audio() -> None:
         assert float(np.max(np.abs(silent))) == 0.0
 
         audio = project.bounce(
-            builtin_instruments=[(0, BuiltinSynthConfig())],
+            builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig())],
             total_frames=48000,
             block_size=128,
             num_channels=2,
@@ -114,7 +123,7 @@ def test_bounce_builtin_instruments_auto_derives_length() -> None:
     project = _build_midi_only_project()
     try:
         audio = project.bounce(
-            builtin_instruments=[(0, BuiltinSynthConfig())],
+            builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig())],
             num_channels=2,
         ).channels
         assert audio.ndim == 2
@@ -130,7 +139,7 @@ def test_bounce_builtin_instruments_accepts_waveform_patch() -> None:
     try:
         patch = BuiltinSynthConfig(waveform="saw", gain=0.3, polyphony=8)
         audio = project.bounce(
-            builtin_instruments=[(0, patch)],
+            builtin_instruments=[ProjectInstrumentBinding(instrument=patch)],
             total_frames=24000,
             num_channels=2,
         ).channels
@@ -146,18 +155,24 @@ def test_builtin_synth_waveform_outside_the_enum_is_rejected() -> None:
         for waveform in (0, 1, 4, -1, True):
             with pytest.raises(TypeError):
                 project.bounce(
-                    builtin_instruments=[(0, BuiltinSynthConfig(waveform=waveform))],
+                    builtin_instruments=[
+                        ProjectInstrumentBinding(instrument=BuiltinSynthConfig(waveform=waveform))
+                    ],
                     total_frames=1200,
                 )
         with pytest.raises(SonareValueError):
             project.bounce(
-                builtin_instruments=[(0, BuiltinSynthConfig(waveform="noise"))],
+                builtin_instruments=[
+                    ProjectInstrumentBinding(instrument=BuiltinSynthConfig(waveform="noise"))
+                ],
                 total_frames=1200,
             )
         # Rejection is by domain, not by the field having stopped working.
         for waveform in ("sine", "saw", "sawtooth", "square", "triangle"):
             project.bounce(
-                builtin_instruments=[(0, BuiltinSynthConfig(waveform=waveform))],
+                builtin_instruments=[
+                    ProjectInstrumentBinding(instrument=BuiltinSynthConfig(waveform=waveform))
+                ],
                 total_frames=1200,
             )
     finally:
@@ -192,7 +207,7 @@ def test_bounce_instruments_hosts_external_callback() -> None:
     instrument = _ConstantInstrument(level=0.25)
     try:
         audio = project.bounce(
-            instruments=[(0, instrument)],
+            instruments=[ProjectInstrumentBinding(instrument=instrument)],
             total_frames=48000,
             block_size=128,
             num_channels=2,
@@ -222,7 +237,7 @@ def test_bounce_instruments_render_only_instrument() -> None:
     project = _build_midi_only_project()
     try:
         audio = project.bounce(
-            instruments=[(0, RenderOnly())],
+            instruments=[ProjectInstrumentBinding(instrument=RenderOnly())],
             total_frames=4800,
             num_channels=2,
         ).channels
@@ -239,7 +254,7 @@ def test_bounce_instruments_auto_length_includes_tail_samples() -> None:
     try:
         dry = _ConstantInstrument(level=0.0)
         no_tail = project.bounce(
-            instruments=[(0, dry)],
+            instruments=[ProjectInstrumentBinding(instrument=dry)],
             block_size=128,
             num_channels=2,
         ).channels
@@ -247,7 +262,7 @@ def test_bounce_instruments_auto_length_includes_tail_samples() -> None:
         wet = _ConstantInstrument(level=0.0)
         wet.tail_samples = 4096
         with_tail = project.bounce(
-            instruments=[(0, wet)],
+            instruments=[ProjectInstrumentBinding(instrument=wet)],
             block_size=128,
             num_channels=2,
         ).channels
@@ -272,7 +287,7 @@ def test_bounce_instruments_propagates_callback_error() -> None:
     try:
         with pytest.raises(ValueError, match="synthesis failed"):
             project.bounce(
-                instruments=[(0, instrument)],
+                instruments=[ProjectInstrumentBinding(instrument=instrument)],
                 total_frames=48000,
                 block_size=32,
                 num_channels=2,
@@ -280,6 +295,94 @@ def test_bounce_instruments_propagates_callback_error() -> None:
         assert instrument.calls == 1
     finally:
         project.close()
+
+
+def test_bounce_preserves_soundfont_reason_with_callback_instrument() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(SonareError, match="urn:missing") as refused:
+            project.bounce(
+                instruments=[
+                    ProjectInstrumentBinding(instrument=_ConstantInstrument(), destination_id=1)
+                ],
+                sf2_instruments=[
+                    ProjectSf2InstrumentBinding(
+                        instrument=Sf2InstrumentConfig(), sound_font_uri="urn:missing"
+                    )
+                ],
+                total_frames=128,
+            )
+        assert refused.value.code == ErrorCode.INVALID_STATE
+        assert refused.value.reason == "unresolvedSoundFont"
+    finally:
+        project.close()
+
+
+def test_count_in_frames_preserves_int64_precision_above_javascript_safe_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = 2**53 + 1
+
+    class FakeLib:
+        @staticmethod
+        def sonare_project_count_in_frames(
+            _handle: object, count_in_bars: int, out_frames: object
+        ) -> int:
+            assert count_in_bars == 16
+            ctypes.cast(out_frames, ctypes.POINTER(ctypes.c_int64)).contents.value = expected
+            return int(ErrorCode.OK)
+
+    class FakeProject(_ProjectRenderMixin):
+        @staticmethod
+        def _require_handle() -> ctypes.c_void_p:
+            return ctypes.c_void_p(1)
+
+    monkeypatch.setattr(_project_render, "_get_lib", lambda: FakeLib())
+    result = FakeProject().count_in_frames(16)
+    assert type(result) is int
+    assert result == expected
+
+
+def test_count_in_frames_marks_negative_native_output_malformed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeLib:
+        @staticmethod
+        def sonare_project_count_in_frames(
+            _handle: object, _count_in_bars: int, out_frames: object
+        ) -> int:
+            ctypes.cast(out_frames, ctypes.POINTER(ctypes.c_int64)).contents.value = -1
+            return int(ErrorCode.OK)
+
+    class FakeProject(_ProjectRenderMixin):
+        @staticmethod
+        def _require_handle() -> ctypes.c_void_p:
+            return ctypes.c_void_p(1)
+
+    monkeypatch.setattr(_project_render, "_get_lib", lambda: FakeLib())
+    with pytest.raises(SonareError, match=r"frames must be non-negative") as malformed:
+        FakeProject().count_in_frames(1)
+    assert malformed.value.code == ErrorCode.INVALID_FORMAT
+
+
+def test_bounce_refuses_binding_shape_before_scalar_domains_without_loading_library(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _project_render,
+        "_get_lib",
+        lambda: pytest.fail("shape refusal must happen before loading the library"),
+    )
+    with pytest.raises(
+        TypeError,
+        match=r"sf2_instruments\[0\] must be a ProjectSf2InstrumentBinding",
+    ):
+        _ProjectRenderMixin.bounce(
+            object(),
+            count_in_bars=17,
+            total_frames=0,
+            sf2_instruments=[(0, Sf2InstrumentConfig())],  # type: ignore[arg-type]
+        )
 
 
 def test_external_instrument_is_exported() -> None:
@@ -295,6 +398,9 @@ def test_bounce_without_instrument_keywords_is_the_plain_bounce() -> None:
         kwargs = {"total_frames": 4800, "block_size": 128, "num_channels": 2}
         plain = project.bounce(**kwargs).channels
         assert float(np.max(np.abs(plain))) == 0.0
+        assert np.array_equal(
+            project.bounce(instrument_latency_samples=None, **kwargs).channels, plain
+        )
         for empty in (
             {},
             {"instruments": None},
@@ -326,12 +432,17 @@ def test_bounce_mixes_instrument_kinds_on_separate_destinations() -> None:
             )
         kwargs = {"total_frames": 12000, "block_size": 128, "num_channels": 2}
         builtin_only = project.bounce(
-            builtin_instruments=[(1, BuiltinSynthConfig())], **kwargs
+            builtin_instruments=[
+                ProjectInstrumentBinding(instrument=BuiltinSynthConfig(), destination_id=1)
+            ],
+            **kwargs,
         ).channels
         external = _ConstantInstrument(level=0.25)
         both = project.bounce(
-            instruments=[(0, external)],
-            builtin_instruments=[(1, BuiltinSynthConfig())],
+            instruments=[ProjectInstrumentBinding(instrument=external)],
+            builtin_instruments=[
+                ProjectInstrumentBinding(instrument=BuiltinSynthConfig(), destination_id=1)
+            ],
             **kwargs,
         ).channels
         assert external.render_calls > 0
@@ -345,13 +456,16 @@ def test_bounce_refuses_a_destination_bound_twice() -> None:
     try:
         with pytest.raises(SonareError):
             project.bounce(
-                builtin_instruments=[(0, BuiltinSynthConfig()), (0, BuiltinSynthConfig())],
+                builtin_instruments=[
+                    ProjectInstrumentBinding(instrument=BuiltinSynthConfig()),
+                    ProjectInstrumentBinding(instrument=BuiltinSynthConfig()),
+                ],
                 total_frames=4800,
             )
         with pytest.raises(SonareError):
             project.bounce(
-                instruments=[(0, _ConstantInstrument())],
-                builtin_instruments=[(0, BuiltinSynthConfig())],
+                instruments=[ProjectInstrumentBinding(instrument=_ConstantInstrument())],
+                builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig())],
                 total_frames=4800,
             )
     finally:
@@ -379,14 +493,20 @@ def test_bounce_count_in_queries_length_and_shifts_the_arrangement() -> None:
             project.count_in_frames(True)  # type: ignore[arg-type]
         with pytest.raises(SonareValueError, match="count_in_bars"):
             project.count_in_frames(-1)
+        for invalid in (1.5, 2**100, -(2**100)):
+            with pytest.raises(
+                SonareValueError,
+                match=r"count_in_bars must be an integer in \[0, 16\]",
+            ):
+                project.count_in_frames(invalid)
 
         without = project.bounce(
-            builtin_instruments=[(0, BuiltinSynthConfig())],
+            builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig())],
             total_frames=4096,
             num_channels=2,
         ).channels
         with_prefix = project.bounce(
-            builtin_instruments=[(0, BuiltinSynthConfig())],
+            builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig())],
             count_in_bars=1,
             total_frames=96000 + 4096,
             num_channels=2,
@@ -395,7 +515,7 @@ def test_bounce_count_in_queries_length_and_shifts_the_arrangement() -> None:
         assert np.count_nonzero(with_prefix[:, :96000]) == 0
         assert np.array_equal(with_prefix[:, 96000:], without)
         short = project.bounce(
-            builtin_instruments=[(0, BuiltinSynthConfig())],
+            builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig())],
             count_in_bars=1,
             total_frames=128,
             num_channels=2,
@@ -433,6 +553,62 @@ def test_bounce_count_in_queries_length_and_shifts_the_arrangement() -> None:
         project.close()
 
 
+def test_bounce_control_binding_records_are_frozen_and_keyword_only() -> None:
+    profile = ProjectControllerProfileBinding(destination_id=0, preset_name="gm")
+    articulation = ProjectArticulationBinding(destination_id=0, channel=1, articulation="poly")
+    assert ls.types.ProjectControllerProfileBinding is type(profile)
+    assert ls.types.ProjectArticulationBinding is type(articulation)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        profile.preset_name = "other"  # type: ignore[misc]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        articulation.channel = 2  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        ProjectControllerProfileBinding(0, "gm")  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        ProjectArticulationBinding(destination_id=0, articulation="poly")  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(
+    ("options", "subject"),
+    [
+        ({"controller_profiles": [(0, "gm")]}, r"controller_profiles\[0\]"),
+        ({"articulations": [(0, 0, "poly")]}, r"articulations\[0\]"),
+        (
+            {
+                "controller_profiles": [
+                    ProjectControllerProfileBinding(destination_id=-1, preset_name=5)
+                ]
+            },
+            r"controller_profiles\[0\]\.preset_name",
+        ),
+        (
+            {
+                "articulations": [
+                    ProjectArticulationBinding(destination_id=0, channel=16, articulation=3)
+                ]
+            },
+            r"articulations\[0\]\.articulation",
+        ),
+    ],
+)
+def test_bounce_control_binding_shapes_precede_domains(options, subject: str) -> None:
+    project = Project.__new__(Project)
+    with pytest.raises(TypeError, match=subject):
+        project.bounce(count_in_bars=17, **options)
+
+
+def test_bounce_control_binding_records_marshal_named_fields() -> None:
+    profiles, names, articulations = _project_render._bounce_bindings(
+        [ProjectControllerProfileBinding(destination_id=7, preset_name="gm")],
+        [ProjectArticulationBinding(destination_id=11, channel=3, articulation="monoLegato")],
+    )
+    assert profiles is not None and articulations is not None
+    assert (profiles[0].destination_id, profiles[0].preset_name) == (7, b"gm")
+    assert names == [b"gm"]
+    assert (articulations[0].destination_id, articulations[0].channel) == (11, 3)
+    assert articulations[0].articulation == 2
+
+
 def test_bounce_new_options_refuse_values_by_keyword() -> None:
     project = _build_midi_only_project()
     try:
@@ -440,57 +616,109 @@ def test_bounce_new_options_refuse_values_by_keyword() -> None:
             project.bounce(metronome=True)  # type: ignore[arg-type]
         with pytest.raises(SonareValueError, match="count_in_bars"):
             project.bounce(count_in_bars=17)
-        with pytest.raises(TypeError, match=r"controller_profiles\[0\] must be a pair"):
-            project.bounce(controller_profiles=[(0,)])  # type: ignore[list-item]
-        with pytest.raises(SonareValueError, match=r"controller_profiles\[0\]\[1\]"):
-            project.bounce(controller_profiles=[(0, "")])
-        with pytest.raises(SonareValueError, match="controller_profiles\\[0\\]\\[1\\]"):
+        with pytest.raises(
+            TypeError,
+            match=r"sf2_instruments\[0\] must be a ProjectSf2InstrumentBinding",
+        ):
             project.bounce(
-                synth_instruments=[(0, "sawLead")],
-                controller_profiles=[(0, "unknown-profile")],
+                count_in_bars=17,
+                total_frames=0,
+                sf2_instruments=[(0, Sf2InstrumentConfig())],  # type: ignore[list-item]
+            )
+        with pytest.raises(
+            TypeError, match=r"controller_profiles\[0\] must be a ProjectControllerProfileBinding"
+        ):
+            project.bounce(controller_profiles=[(0,)])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"controller_profiles\[0\]\.preset_name"):
+            project.bounce(
+                controller_profiles=[
+                    ProjectControllerProfileBinding(destination_id=0, preset_name="")
+                ]
+            )
+        with pytest.raises(SonareValueError, match=r"controller_profiles\[0\]\.preset_name"):
+            project.bounce(
+                synth_instruments=[
+                    ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))
+                ],
+                controller_profiles=[
+                    ProjectControllerProfileBinding(destination_id=0, preset_name="unknown-profile")
+                ],
                 total_frames=128,
             )
-        with pytest.raises(TypeError, match=r"articulations\[0\] must be a triple"):
+        with pytest.raises(
+            TypeError, match=r"articulations\[0\] must be a ProjectArticulationBinding"
+        ):
             project.bounce(articulations=[(0, 0)])  # type: ignore[list-item]
-        with pytest.raises(SonareValueError, match=r"articulations\[0\]\[1\]"):
-            project.bounce(articulations=[(0, 16, "poly")])
-        with pytest.raises(SonareValueError, match=r"articulations\[0\]\[2\]"):
-            project.bounce(articulations=[(0, 0, "unknown")])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"articulations\[0\]\.channel"):
+            project.bounce(
+                articulations=[
+                    ProjectArticulationBinding(destination_id=0, channel=16, articulation="poly")
+                ]
+            )
+        with pytest.raises(SonareValueError, match=r"articulations\[0\]\.articulation"):
+            project.bounce(
+                articulations=[
+                    ProjectArticulationBinding(
+                        destination_id=0,
+                        channel=0,
+                        articulation="unknown",  # type: ignore[arg-type]
+                    )
+                ]
+            )
         with pytest.raises(SonareValueError, match=r"metronome\.click_samples"):
             project.bounce(metronome=EngineMetronomeConfig(click_samples=0))
         with pytest.raises(SonareValueError, match="mutually exclusive"):
             project.bounce(metronome=EngineMetronomeConfig(click_samples=10, click_sec=0.01))
-        with pytest.raises(SonareValueError, match=r"controller_profiles\[1\]\[0\]"):
+        with pytest.raises(SonareValueError, match=r"controller_profiles\[1\]\.destination_id"):
             project.bounce(
-                synth_instruments=[(0, "sawLead")],
-                controller_profiles=[(0, "gm"), (0, "gm")],
+                synth_instruments=[
+                    ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))
+                ],
+                controller_profiles=[
+                    ProjectControllerProfileBinding(destination_id=0, preset_name="gm")
+                ]
+                * 2,
                 total_frames=128,
             )
-        with pytest.raises(SonareValueError, match=r"articulations\[1\]"):
+        with pytest.raises(
+            SonareValueError,
+            match=r"articulations\[1\]\.destination_id.*articulations\[1\]\.channel",
+        ):
             project.bounce(
-                synth_instruments=[(0, "sawLead")],
-                articulations=[(0, 0, "poly"), (0, 0, "monoLegato")],
+                synth_instruments=[
+                    ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))
+                ],
+                articulations=[
+                    ProjectArticulationBinding(destination_id=0, channel=0, articulation="poly"),
+                    ProjectArticulationBinding(
+                        destination_id=0, channel=0, articulation="monoLegato"
+                    ),
+                ],
                 total_frames=128,
             )
 
         # Both control lists reach the native synth when bound to its destination.
         rendered = project.bounce(
-            synth_instruments=[(0, "sawLead")],
-            controller_profiles=[(0, "gm")],
-            articulations=[(0, 0, "poly")],
+            synth_instruments=[ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))],
+            controller_profiles=[
+                ProjectControllerProfileBinding(destination_id=0, preset_name="gm")
+            ],
+            articulations=[
+                ProjectArticulationBinding(destination_id=0, channel=0, articulation="poly")
+            ],
             total_frames=128,
             num_channels=2,
         )
         assert rendered.channels.shape == (2, 128)
         empty_bindings = project.bounce(
-            synth_instruments=[(0, "sawLead")],
+            synth_instruments=[ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))],
             controller_profiles=[],
             articulations=[],
             total_frames=128,
             num_channels=2,
         )
         plain_bindings = project.bounce(
-            synth_instruments=[(0, "sawLead")],
+            synth_instruments=[ProjectInstrumentBinding(instrument=SynthPatch(preset="sawLead"))],
             total_frames=128,
             num_channels=2,
         )

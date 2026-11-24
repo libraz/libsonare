@@ -540,7 +540,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_
 [[entry]]
 kind = "function"
 old = "mastering_insert_param_info"
-changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute"
+changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError ('insert must be one of ...') instead of returning an empty list"
 domain = "mastering"
 rule = "frozen-results"
 test = "bindings/python/tests/test_mastering_insert_timing.py::test_param_info_flags_exclusive_bounds_and_nyquist_ceilings"
@@ -6147,10 +6147,9 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.midi_cc_binding_count"
-changed = "a property (was a method)"
+removed = "use len(engine.midi_cc_bindings())"
 domain = "engine"
-rule = "getters"
-test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+rule = "collections"
 
 [[entry]]
 kind = "method"
@@ -8268,6 +8267,14 @@ domain = "core"
 rule = "unit-in-name"
 
 [[entry]]
+kind = "function"
+old = "mastering_insert_param_names"
+changed = "an insert outside mastering_insert_names() raises SonareValueError ('insert must be one of ...') instead of returning an empty list, as Node and WASM refuse it"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_mastering_insert_param_names_enumerates_keys"
+
+[[entry]]
 kind = "option"
 old = "mastering_insert_param_names(name)"
 new = "mastering_insert_param_names(insert)"
@@ -9635,7 +9642,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.annotate_chords(chords)"
-changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field"
+changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field; omit roman_numeral for absence, because an explicitly empty string is refused"
 domain = "project"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -9918,7 +9925,7 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "method"
 old = "Project.bounce"
-changed = "returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate"
+changed = "returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate. Pass ProjectInstrumentBinding(instrument=..., destination_id=...) for external, built-in and synth instruments, and ProjectSf2InstrumentBinding(instrument=..., destination_id=..., sound_font_uri=...) for SF2. an omitted destination_id (None) is destination 0, and sound_font_uri=None selects the default font. Pass ProjectControllerProfileBinding records in controller_profiles and ProjectArticulationBinding records in articulations. Their fields are required keyword arguments, and tuple entries are removed."
 domain = "project"
 rule = "planar-channels"
 test = "bindings/python/tests/test_project_bounce.py::test_bounce_is_bit_exact_across_two_renders"
@@ -11456,18 +11463,17 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 kind = "method"
 old = "Project.soundfont_preset_count"
 to = "Project.sound_font_preset_count"
-changed = "a property (was a method)"
+changed = "a method with keyword-only uri=None, which selects the default SoundFont; an empty URI is refused"
 domain = "project"
-rule = "getters"
-test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+rule = "individual"
+test = "bindings/python/tests/test_soundfont.py::test_project_sound_fonts_are_selected_by_uri_and_bounce_binding"
 
 [[entry]]
 kind = "method"
 old = "Project.set_mixer_scene_json"
-changed = "returns None; an unknown scene key raises SonareError (INVALID_FORMAT) naming its path instead of being returned as a warning"
+removed = "parse JSON into a MixSceneDocument mapping and call project.set_mixer_scene(scene); pass None to clear the scene"
 domain = "project"
-rule = "error-class-by-cause"
-test = "bindings/python/tests/test_scene_warnings.py::test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path"
+rule = "json-input-kinds"
 
 [[entry]]
 kind = "function"
@@ -12031,30 +12037,38 @@ rule = "one-input-form"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.load_soundfont"
-new = "RealtimeEngine.load_sound_font"
+to = "RealtimeEngine.load_sound_font"
+changed = "renamed; the data must be bytes, bytearray or memoryview"
 domain = "engine"
 rule = "individual"
+test = "bindings/python/tests/test_engine_midi.py::test_engine_sound_font_refuses_non_bytes_like_data_before_native_call"
 
 [[entry]]
 kind = "method"
 old = "Project.load_soundfont"
-new = "Project.load_sound_font"
+to = "Project.load_sound_font"
+changed = "takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode"
 domain = "project"
 rule = "individual"
+test = "bindings/python/tests/test_soundfont.py::test_project_sound_fonts_are_selected_by_uri_and_bounce_binding"
 
 [[entry]]
 kind = "method"
 old = "Project.clear_soundfont"
-new = "Project.clear_sound_font"
+to = "Project.clear_sound_font"
+changed = "takes keyword-only uri=None to clear the named URI; None selects the default SoundFont and an empty URI is refused"
 domain = "project"
 rule = "individual"
+test = "bindings/python/tests/test_soundfont.py::test_project_sound_fonts_are_selected_by_uri_and_bounce_binding"
 
 [[entry]]
 kind = "method"
 old = "Project.soundfont_manifest"
-new = "Project.sound_font_manifest"
+to = "Project.sound_font_manifest"
+changed = "takes keyword-only uri=None to read the manifest for the named URI; None selects the default SoundFont and an empty URI is refused"
 domain = "project"
 rule = "individual"
+test = "bindings/python/tests/test_soundfont.py::test_project_sound_fonts_are_selected_by_uri_and_bounce_binding"
 
 [[entry]]
 kind = "method"
@@ -12137,10 +12151,10 @@ test = "bindings/python/tests/test_engine_input_track.py::test_input_monitor_rou
 kind = "method"
 old = "Mixer.from_scene_json"
 to = "Mixer.from_json"
-changed = "renamed; sample_rate and max_block_size are keywords. Mixer(scene=...) takes the scene as a mapping"
+changed = "renamed; sample_rate and max_block_size are keywords. Mixer(scene=...) takes the scene as a mapping. Both routes refuse unread insert keys by indexed path. JSON text raises INVALID_FORMAT and the mapping raises SonareValueError with a scene prefix. JSON text reports the rejected key exactly as written"
 domain = "engine"
 rule = "construction"
-test = "bindings/python/tests/test_mixing.py::test_a_mixer_is_built_from_a_scene_mapping_or_empty_by_keyword"
+test = "bindings/python/tests/test_mixing.py::test_scene_refuses_unread_insert_params_at_their_path"
 
 [[entry]]
 kind = "method"
@@ -13245,10 +13259,18 @@ rule = "num-channels"
 
 [[entry]]
 kind = "option"
-old = "Project.set_source_audio(channels)"
-new = "Project.set_source_audio(num_channels)"
+old = "Project.set_source_audio(audio)"
+removed = "pass the PCM as channels, equal-length channel buffers or a channels-first ndarray, instead of an interleaved audio buffer"
 domain = "project"
-rule = "num-channels"
+rule = "planar-channels"
+
+[[entry]]
+kind = "option"
+old = "Project.set_source_audio(channels)"
+changed = "channels now supplies the planar PCM itself as equal-length channel buffers or a channels-first ndarray; pass sample_rate as the third argument"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/python/tests/test_project.py::test_replacing_source_audio_carries_its_shape_and_undo_restores_it"
 
 [[entry]]
 kind = "option"
@@ -13835,28 +13857,28 @@ rule = "channel-planes"
 [[entry]]
 kind = "method"
 old = "Project.bounce_with_instruments"
-removed = "call Project.bounce(instruments=[(destination_id, instrument), ...])"
+removed = "call Project.bounce(instruments=[ProjectInstrumentBinding(instrument=..., destination_id=...), ...]); an omitted destination_id (None) is destination 0"
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.bounce_with_builtin_instrument"
-removed = "call Project.bounce(builtin_instruments=[(destination_id, config), ...])"
+removed = "call Project.bounce(builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig(...), destination_id=...), ...]); an omitted destination_id (None) is destination 0"
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.bounce_with_synth_instrument"
-removed = "call Project.bounce(synth_instruments=[(destination_id, patch), ...]); where auto_select_gm was true, build the patch with use_gm_programs=True"
+removed = "call Project.bounce(synth_instruments=[ProjectInstrumentBinding(instrument=SynthPatch(...), destination_id=...), ...]); wrap a preset name in SynthPatch(preset=...), and where auto_select_gm was true set use_gm_programs=True"
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.bounce_with_sf2_instrument"
-removed = "call Project.bounce(sf2_instruments=[(destination_id, config), ...])"
+removed = "call Project.bounce(sf2_instruments=[ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(...), destination_id=..., sound_font_uri=...), ...]); sound_font_uri=None selects the default SoundFont"
 domain = "project"
 rule = "one-entry-per-operation"
 
@@ -14646,13 +14668,6 @@ rule = "json-input-kinds"
 
 [[entry]]
 kind = "option"
-old = "Project.set_mixer_scene_json(scene_json)"
-new = "Project.set_mixer_scene_json(document)"
-domain = "project"
-rule = "json-input-kinds"
-
-[[entry]]
-kind = "option"
 old = "validate_realtime_voice_changer_preset_json(json_text)"
 new = "validate_realtime_voice_changer_preset_json(document)"
 domain = "effects"
@@ -14919,3 +14934,67 @@ old = "VocalEditError.actual_text"
 new = "VocalErrorDetail.actual_text"
 domain = "project"
 rule = "vocal-edit-model"
+
+
+[[entry]]
+kind = "method"
+old = "Project.auto_tempo"
+changed = "returns ProjectAutoTempoResult with bpm, bpm_confidence and the detected TimeSignature, including when apply_time_signatures is false. Every option after sample_rate is keyword-only, and supplied flags must be Boolean"
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_project.py::test_auto_tempo_returns_selected_bpm_confidence_and_meter"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_fade(fade_in_length_ppq)"
+new = "Project.set_clip_fade(fade_in_ppq)"
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_fade(fade_out_length_ppq)"
+new = "Project.set_clip_fade(fade_out_ppq)"
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "Project.set_track_route"
+changed = "None clears channel_strip_ref or output_target; an explicit empty string is refused by the name of that field"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_integer_narrowing.py::test_track_route_refuses_empty_fields_and_none_clears_them"
+
+
+[[entry]]
+kind = "method"
+old = "Project.from_json"
+changed = "a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document"
+domain = "project"
+rule = "json-input-kinds"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_project_document_refuses_unread_insert_params_at_their_path"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scene_warnings"
+changed = "unread insert parameters are refused at load time and no longer appear as warnings"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_mixing.py::test_scene_refuses_unread_insert_params_at_their_path"
+
+[[entry]]
+kind = "method"
+old = "Project.analyze_tempo"
+changed = "Every option after sample_rate is keyword-only, and supplied flags must be Boolean"
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_project.py::test_project_tempo_options_are_keyword_only"
+
+[[entry]]
+kind = "method"
+old = "Project.annotate_chords"
+changed = "A read-only sequence of chord mappings is accepted. Both PPQ endpoints are required, and invalid extension and Roman text errors name the indexed chord field"
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_project.py::test_chord_annotation_requires_both_ppq_endpoints"

@@ -66,6 +66,10 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
   out->param_id = node_narrow_uint32(env, param_id, node_element_field(at, "paramId").c_str());
   out->min_value = FloatProperty(object, "minValue", 0.0f, at);
   out->max_value = FloatProperty(object, "maxValue", 1.0f, at);
+  if (env.IsExceptionPending()) return false;
+  const bool consume = BoolProperty(object, "consume", false, at);
+  if (env.IsExceptionPending()) return false;
+  out->consume = consume ? 1 : 0;
   return !env.IsExceptionPending();
 }
 
@@ -85,6 +89,7 @@ inline Napi::Object CcBindingToObject(Napi::Env env, const SonareMidiCcBinding& 
   out.Set("paramId", Napi::Number::New(env, binding.param_id));
   out.Set("minValue", Napi::Number::New(env, binding.min_value));
   out.Set("maxValue", Napi::Number::New(env, binding.max_value));
+  out.Set("consume", Napi::Boolean::New(env, binding.consume != 0));
   return out;
 }
 

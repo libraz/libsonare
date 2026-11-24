@@ -15,11 +15,15 @@ from libsonare import (
     ErrorCode,
     ExternalMidiEvent,
     MidiCcBinding,
+    ProjectMidiEvent,
     RealtimeEngine,
     Sf2InstrumentConfig,
     SonareError,
     SonareValueError,
     _engine_midi,
+    midi_cc_learn,
+    midi_cc_to_breakpoint,
+    midi_param_to_cc,
 )
 from libsonare._ffi_types_mastering_project import SonareMidiCcBinding
 from libsonare._runtime import _get_lib
@@ -98,11 +102,19 @@ def test_engine_midi_cc_bindings() -> None:
                 param_id=43,
                 min_value=0.0,
                 max_value=1.0,
+                consume=True,
             )
         )
-        assert engine.midi_cc_binding_count == 2
+        bindings = sorted(engine.midi_cc_bindings(), key=lambda binding: binding.cc_number)
+        assert len(bindings) == 2
+        assert [binding.consume for binding in bindings] == [False, True]
         engine.clear_midi_cc_bindings()
-        assert engine.midi_cc_binding_count == 0
+        assert engine.midi_cc_bindings() == []
+        for binding in reversed(bindings):
+            engine.bind_midi_cc(binding)
+        assert sorted(engine.midi_cc_bindings(), key=lambda binding: binding.cc_number) == bindings
+        bindings.clear()
+        assert len(engine.midi_cc_bindings()) == 2
 
 
 class _FakeMidiCcBindingLibrary:
@@ -126,7 +138,7 @@ class _FakeMidiCcBindingLibrary:
         return 0
 
     def sonare_engine_midi_cc_bindings(self, handle: ctypes.c_void_p, out: Any) -> int:
-        rows = self.rows.get(int(handle.value), [])
+        rows = list(reversed(self.rows.get(int(handle.value), [])))
         raw = out._obj
         if self.malformed_list:
             raw.count = 1
@@ -176,15 +188,126 @@ def test_engine_midi_cc_bindings_round_trip_copies_and_preserves_consume(
         first.bind_midi_cc(MidiCcBinding(cc_number=3, param_id=44, consume=1))  # type: ignore[arg-type]
 
     snapshot = first.midi_cc_bindings()
-    assert snapshot == [default, consuming]
     assert snapshot[0].kind == "controlChange7"
     assert fake.bound_consumes == [0, 1]
     for binding in snapshot:
         second.bind_midi_cc(binding)
-    assert second.midi_cc_bindings() == snapshot
-    assert fake.free_calls == 3
+
+    def by_cc_number(binding: MidiCcBinding) -> int:
+        return binding.cc_number
+
+    expected = [default, consuming]
+    assert sorted(snapshot, key=by_cc_number) == expected
+    assert sorted(second.midi_cc_bindings(), key=by_cc_number) == expected
+    snapshot.clear()
+    assert sorted(first.midi_cc_bindings(), key=by_cc_number) == expected
+    assert sorted(second.midi_cc_bindings(), key=by_cc_number) == expected
+    assert fake.free_calls == 5
     first._handle = None
     second._handle = None
+
+
+class _FakeMidiCcUtilityLibrary:
+    def __init__(self) -> None:
+        self.conversion_consumes: list[tuple[int, ...]] = []
+
+    def _consume_values(self, bindings: Any, count: int) -> tuple[int, ...]:
+        values = tuple(int(bindings[index].consume) for index in range(count.value))
+        self.conversion_consumes.append(values)
+        return values
+
+    def sonare_midi_cc_to_breakpoint(self, bindings: Any, count: int, event: Any, out: Any) -> int:
+        self._consume_values(bindings, count)
+        result = out._obj
+        result.ppq = event._obj.ppq
+        result.value = 0.375
+        result.curve_to_next = 0
+        return 0
+
+    def sonare_midi_param_to_cc(
+        self,
+        bindings: Any,
+        count: int,
+        param_id: int,
+        unit_value: float,
+        group: int,
+        ppq: float,
+        out: Any,
+    ) -> int:
+        self._consume_values(bindings, count)
+        result = out._obj
+        result.ppq = ppq
+        result.word0 = 0x20000000
+        result.word1 = 0
+        result.sysex = None
+        result.sysex_size = 0
+        return 0
+
+    def sonare_midi_cc_learn(
+        self,
+        events: Any,
+        count: int,
+        param_id: int,
+        min_value: float,
+        max_value: float,
+        min_movement: int,
+        out: Any,
+    ) -> int:
+        result = out._obj
+        result.cc_number = 7
+        result.channel = 2
+        result.kind = 0
+        result.cc_lsb_number = 0
+        result.selector_msb = 0
+        result.selector_lsb = 0
+        result.consume = 0
+        result.reserved = 0
+        result.param_id = param_id
+        result.min_value = min_value
+        result.max_value = max_value
+        return 0
+
+
+def test_midi_cc_conversion_validates_but_ignores_consume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import libsonare._project_midi as project_midi_module
+
+    fake = _FakeMidiCcUtilityLibrary()
+    monkeypatch.setattr(project_midi_module, "_get_lib", lambda: fake)
+    plain = MidiCcBinding(cc_number=7, param_id=5)
+    consuming = MidiCcBinding(cc_number=7, param_id=5, consume=True)
+    event = ProjectMidiEvent(ppq=2.0, word0=0x20000000)
+
+    assert midi_cc_to_breakpoint([consuming], event) == midi_cc_to_breakpoint([plain], event)
+    assert midi_param_to_cc([consuming], 5, 0.5, 0, ppq=3.0) == midi_param_to_cc(
+        [plain], 5, 0.5, 0, ppq=3.0
+    )
+    assert fake.conversion_consumes == [(1,), (0,), (1,), (0,)]
+
+    invalid = MidiCcBinding(cc_number=7, param_id=5, consume=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"binding\.consume must be a bool"):
+        midi_cc_to_breakpoint([invalid], event)
+    with pytest.raises(TypeError, match=r"binding\.consume must be a bool"):
+        midi_param_to_cc([invalid], 5, 0.5, 0, ppq=3.0)
+    assert fake.conversion_consumes == [(1,), (0,), (1,), (0,)]
+
+
+def test_midi_cc_learned_binding_defaults_to_not_consuming(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import libsonare._project_midi as project_midi_module
+
+    monkeypatch.setattr(project_midi_module, "_get_lib", lambda: _FakeMidiCcUtilityLibrary())
+    learned = midi_cc_learn([], 77, min_value=-1.0, max_value=1.0)
+    assert learned == MidiCcBinding(
+        cc_number=7,
+        channel=2,
+        param_id=77,
+        min_value=-1.0,
+        max_value=1.0,
+        consume=False,
+    )
 
 
 def test_engine_midi_cc_bindings_refuse_inconsistent_owned_list(
@@ -205,7 +328,14 @@ def test_a_cc_binding_mapping_is_a_type_error() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(TypeError, match="MidiCcBinding"):
             engine.bind_midi_cc({"cc_number": 2, "param_id": 43})  # type: ignore[arg-type]
-        assert engine.midi_cc_binding_count == 0
+        assert engine.midi_cc_bindings() == []
+
+
+@pytest.mark.parametrize("data", [10, [1, 2]])
+def test_engine_sound_font_refuses_non_bytes_like_data_before_native_call(data: object) -> None:
+    engine = RealtimeEngine.__new__(RealtimeEngine)
+    with pytest.raises(TypeError, match="data must be bytes-like"):
+        engine.load_sound_font(data)  # type: ignore[arg-type]
 
 
 def test_engine_set_and_clear_midi_fx_round_trips() -> None:

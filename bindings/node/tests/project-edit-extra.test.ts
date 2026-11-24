@@ -522,6 +522,30 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('setTrackRoute refuses empty fields and clears omitted fields', () => {
+    const project = new Project();
+    try {
+      const track = project.addTrack({ kind: 'audio' });
+      project.setTrackRoute(track, 'strip-1', 'master');
+      const before = project.toJson();
+      expect(() => project.setTrackRoute(undefined as never)).toThrow(
+        new TypeError('Project.setTrackRoute: trackId must be a number'),
+      );
+      expect(() => project.setTrackRoute(track, '', 'master')).toThrow(
+        new RangeError('Project.setTrackRoute: channelStripRef must not be empty'),
+      );
+      expect(() => project.setTrackRoute(track, 'strip-1', '')).toThrow(
+        new RangeError('Project.setTrackRoute: outputTarget must not be empty'),
+      );
+      expect(project.toJson()).toBe(before);
+      project.setTrackRoute(track);
+      expect(project.tracks()[0]).not.toHaveProperty('channelStripRef');
+      expect(project.tracks()[0]).not.toHaveProperty('outputTarget');
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('addAutomationLane returns its stable lane id; edit + remove undo cleanly', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });

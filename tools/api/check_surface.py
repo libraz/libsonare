@@ -1277,6 +1277,7 @@ class Ctx:
     dimensionless: dict = field(default_factory=dict)
     catalog: dict = field(default_factory=dict)
     documents: set = field(default_factory=set)
+    python_type_params: set = field(default_factory=set)
     # check id -> what it could not compare, one line each
     not_compared: dict = field(default_factory=lambda: collections.defaultdict(list))
 
@@ -2916,7 +2917,7 @@ def chk_python_public_names(ctx):
         for m in re.finditer(r"(?<![\w.])(_*[A-Z]\w*)", text):
             name = m.group(1)
             cands += 1
-            if name in _PY_ALLOWED or name in ctx.python_all:
+            if name in _PY_ALLOWED or name in ctx.python_all or name in ctx.python_type_params:
                 continue
             if (r["name"], name) in seen:
                 continue
@@ -3404,6 +3405,7 @@ def run(args) -> tuple[int, list[str], dict]:
         all_records=records,
         dimensionless=dimensionless,
         documents=documents,
+        python_type_params=set(inv.get("python_type_params", [])),
         catalog=json.loads(args.catalog_file.read_text(encoding="utf-8"))
         if args.catalog_file.is_file()
         else {},

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ctypes
 import math
+from dataclasses import FrozenInstanceError, fields
 from typing import get_args
 
 import numpy as np
@@ -11,6 +13,7 @@ import pytest
 from libsonare import (
     AutomationPoint,
     CapturePunch,
+    EngineCaptureStatus,
     EngineClip,
     EngineGraphConnection,
     EngineGraphNode,
@@ -28,6 +31,138 @@ from libsonare import (
 )
 
 from ._helpers import scene_strip
+
+
+def test_capture_status_is_a_frozen_exported_record() -> None:
+    status = EngineCaptureStatus(100, 2, True, False, "output", 9, 16)
+    assert [field.name for field in fields(status)] == [
+        "captured_frames",
+        "overflow_count",
+        "armed",
+        "punch_enabled",
+        "source",
+        "record_offset_samples",
+        "dropped_frames",
+    ]
+    assert status.dropped_frames == 16
+    with pytest.raises(FrozenInstanceError):
+        status.overflow_count = 3  # type: ignore[misc]
+
+
+def test_capture_status_preserves_uint64_overflow_and_dropped_frame_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from libsonare import _engine_io
+
+    overflow_count = (1 << 40) + 3
+    dropped_frames = (1 << 40) + 17
+
+    class FakeCaptureLibrary:
+        def sonare_engine_capture_status(self, handle: ctypes.c_void_p, out: object) -> int:
+            record = out._obj  # type: ignore[attr-defined]
+            record.captured_frames = 100
+            record.overflow_count = overflow_count
+            record.armed = 1
+            record.punch_enabled = 0
+            record.source = 0
+            record.record_offset_samples = 0
+            record.dropped_frames = dropped_frames
+            return 0
+
+    fake = FakeCaptureLibrary()
+    monkeypatch.setattr(_engine_io, "_get_lib", lambda: fake)
+    engine = object.__new__(RealtimeEngine)
+    engine._handle = ctypes.c_void_p(1)
+    status = engine.capture_status()
+    assert status.overflow_count == overflow_count
+    assert status.dropped_frames == dropped_frames
+    engine._handle = None
+
+
+def test_capture_status_keeps_cumulative_overflow_across_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from libsonare import _engine_io
+
+    reports = [(0, 0), (2, 32), (3, 48)]
+
+    class FakeCaptureLibrary:
+        next_report = 0
+
+        def sonare_engine_capture_status(self, handle: ctypes.c_void_p, out: object) -> int:
+            record = out._obj  # type: ignore[attr-defined]
+            record.captured_frames = 128
+            record.overflow_count, record.dropped_frames = reports[self.next_report]
+            record.armed = 1
+            record.punch_enabled = 0
+            record.source = 0
+            record.record_offset_samples = 0
+            self.next_report += 1
+            return 0
+
+    fake = FakeCaptureLibrary()
+    monkeypatch.setattr(_engine_io, "_get_lib", lambda: fake)
+    engine = object.__new__(RealtimeEngine)
+    engine._handle = ctypes.c_void_p(1)
+    statuses = [engine.capture_status() for _ in reports]
+    assert [status.overflow_count for status in statuses] == [0, 2, 3]
+    assert [status.dropped_frames for status in statuses] == [0, 32, 48]
+    engine._handle = None
+
+
+def test_capture_status_accumulates_real_overflow_across_blocks() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=16) as engine:
+        engine.configure_capture(capacity_frames=4, num_channels=1, source="input")
+        engine.arm_capture()
+        engine.play()
+        block = [[0.25] * 8]
+
+        engine.process(block)
+        first = engine.capture_status()
+        assert first.captured_frames == 4
+        assert first.overflow_count == 4
+        assert first.dropped_frames == 4
+
+        engine.process(block)
+        second = engine.capture_status()
+        assert second.captured_frames == 4
+        assert second.overflow_count == 12
+        assert second.dropped_frames == 12
+
+        engine.arm_capture(False)
+        engine.reset_capture()
+        reset = engine.capture_status()
+        assert reset.overflow_count == 0
+        assert reset.dropped_frames == 0
+
+
+def test_engine_counter_readers_preserve_uint64_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    import libsonare.engine as engine_module
+
+    values = {
+        "sonare_engine_external_midi_dropped_count": (1 << 40) + 1,
+        "sonare_engine_clip_page_request_overflow_count": (1 << 40) + 2,
+        "sonare_engine_warp_stretch_overflow_count": (1 << 40) + 3,
+    }
+
+    class FakeCounterLibrary:
+        def __getattr__(self, name: str):
+            def read_counter(handle: ctypes.c_void_p, out: object) -> int:
+                out._obj.value = values[name]  # type: ignore[attr-defined]
+                return 0
+
+            return read_counter
+
+    monkeypatch.setattr(engine_module, "_get_lib", lambda: FakeCounterLibrary())
+    engine = object.__new__(RealtimeEngine)
+    engine._handle = ctypes.c_void_p(1)
+    assert engine.external_midi_dropped_count == values["sonare_engine_external_midi_dropped_count"]
+    assert (
+        engine.clip_page_request_overflow_count
+        == values["sonare_engine_clip_page_request_overflow_count"]
+    )
+    assert engine.warp_stretch_overflow_count == values["sonare_engine_warp_stretch_overflow_count"]
+    engine._handle = None
 
 
 def test_engine_drain_meter_telemetry_surround_bus() -> None:
@@ -252,6 +387,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
         capture_status = engine.capture_status()
         assert capture_status.captured_frames == 128
         assert capture_status.overflow_count == 0
+        assert capture_status.dropped_frames == 0
         assert capture_status.armed
         assert capture_status.source == "output"
         assert capture_status.record_offset_samples == 0

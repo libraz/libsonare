@@ -294,7 +294,7 @@ class Project(
         )
         if diag:
             lib.sonare_free_string(diag)
-        _check(rc)
+        _check(rc, literal_document=True)
         obj = cls.__new__(cls)
         obj._handle = handle
         return obj
@@ -329,7 +329,7 @@ class Project(
                 lib.sonare_free_string(diag)
         if coded_refusal and rc != 0 and diagnostics:
             raise _coded_error(rc, diagnostics)
-        _check(rc)
+        _check(rc, literal_document=True)
         obj = cls.__new__(cls)
         obj._handle = handle
         return ProjectDeserializeResult(project=obj, diagnostics=diagnostics)

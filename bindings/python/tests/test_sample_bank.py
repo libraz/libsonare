@@ -11,6 +11,7 @@ import libsonare as ls
 from libsonare import (
     ErrorCode,
     Project,
+    ProjectInstrumentBinding,
     RealtimeEngine,
     SampleBank,
     SonareError,
@@ -65,7 +66,12 @@ def _render(note: int, patch: SynthPatch) -> np.ndarray:
     project = _one_note_project(note)
     try:
         return project.bounce(
-            synth_instruments=[(0, patch)],
+            synth_instruments=[
+                ProjectInstrumentBinding(
+                    instrument=patch,
+                    destination_id=0,
+                )
+            ],
             total_frames=12000,
             num_channels=1,
         ).channels
@@ -259,8 +265,14 @@ def test_each_binding_carries_its_own_bank() -> None:
             def render(banks: tuple[SampleBank, SampleBank]) -> np.ndarray:
                 return project.bounce(
                     synth_instruments=[
-                        (0, _sample_patch(banks[0])),
-                        (1, _sample_patch(banks[1])),
+                        ProjectInstrumentBinding(
+                            instrument=_sample_patch(banks[0]),
+                            destination_id=0,
+                        ),
+                        ProjectInstrumentBinding(
+                            instrument=_sample_patch(banks[1]),
+                            destination_id=1,
+                        ),
                     ],
                     total_frames=12000,
                     num_channels=1,
@@ -389,7 +401,12 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
                 )
                 bank.add_zone(0, sample_index=index)
                 return project.bounce(
-                    synth_instruments=[(0, _sample_patch(bank))],
+                    synth_instruments=[
+                        ProjectInstrumentBinding(
+                            instrument=_sample_patch(bank),
+                            destination_id=0,
+                        )
+                    ],
                     total_frames=12000,
                     num_channels=1,
                 ).channels
@@ -520,7 +537,12 @@ def test_the_sample_loop_mode_token_reaches_the_render() -> None:
                 bank.add_zone(0, sample_index=index)
                 out = project.bounce(
                     synth_instruments=[
-                        (0, SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank)),
+                        ProjectInstrumentBinding(
+                            instrument=SynthPatch(
+                                engine_mode="sample", sample_set=0, sample_bank=bank
+                            ),
+                            destination_id=0,
+                        ),
                     ],
                     total_frames=12000,
                     num_channels=1,

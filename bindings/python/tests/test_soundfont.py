@@ -11,12 +11,15 @@ import pytest
 import libsonare as ls
 from libsonare import (
     Project,
+    ProjectInstrument,
+    ProjectSf2InstrumentBinding,
     RealtimeEngine,
     Sf2InstrumentConfig,
     Sf2ProgramStatus,
     SonareError,
     SonareValueError,
 )
+from libsonare._project_render import _ProjectRenderMixin, _sound_font_uri
 
 # Canonical minimal GS test SoundFont (presets: "Piano 1" at (0,0),
 # "Piano 2" at (0,1), "Standard Kit" at (128,0); program 2 uncovered).
@@ -41,14 +44,66 @@ def _build_midi_only_project() -> Project:
     return project
 
 
+def test_sound_font_uri_helper_names_its_argument_without_loading_the_library() -> None:
+    assert _sound_font_uri(None) is None
+    assert _sound_font_uri("memory://font") == b"memory://font"
+    with pytest.raises(
+        SonareValueError, match=r"sf2_instruments\[2\]\.sound_font_uri must not be empty"
+    ):
+        _sound_font_uri("", "sf2_instruments[2].sound_font_uri")
+    with pytest.raises(TypeError, match=r"sf2_instruments\[2\]\.sound_font_uri must be a str"):
+        _sound_font_uri(1, "sf2_instruments[2].sound_font_uri")  # type: ignore[arg-type]
+    with pytest.raises(SonareValueError, match="must not contain NUL"):
+        _sound_font_uri("memory://font\x00truncated")
+    with pytest.raises(SonareValueError, match="must contain well-formed Unicode"):
+        _sound_font_uri("\ud800")
+    with pytest.raises(TypeError, match="Project.load_sound_font: data must be bytes-like"):
+        _ProjectRenderMixin.load_sound_font(object(), 1)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("uri", "message"),
+    [
+        ("", "must not be empty"),
+        ("memory://font\x00truncated", "must not contain NUL"),
+        ("\ud800", "must contain well-formed Unicode"),
+    ],
+)
+def test_project_sound_font_uri_fields_refuse_invalid_text(uri: str, message: str) -> None:
+    project = Project()
+    try:
+        for operation in (
+            lambda: project.load_sound_font(_SF2_BYTES, uri=uri),
+            lambda: project.clear_sound_font(uri=uri),
+            lambda: project.sound_font_preset_count(uri=uri),
+            lambda: project.sound_font_manifest(uri=uri),
+        ):
+            with pytest.raises(SonareValueError, match=message):
+                operation()
+        with pytest.raises(
+            SonareValueError,
+            match=rf"sf2_instruments\[0\]\.sound_font_uri {message}",
+        ):
+            project.bounce(
+                sf2_instruments=[
+                    ProjectSf2InstrumentBinding(
+                        instrument=Sf2InstrumentConfig(), sound_font_uri=uri
+                    )
+                ],
+                total_frames=128,
+            )
+    finally:
+        project.close()
+
+
 def test_load_sound_font_counts_presets_and_clears() -> None:
     project = Project()
     try:
-        assert project.sound_font_preset_count == 0
+        assert project.sound_font_preset_count() == 0
         project.load_sound_font(_SF2_BYTES)
-        assert project.sound_font_preset_count == 3
+        assert project.sound_font_preset_count() == 3
         project.clear_sound_font()
-        assert project.sound_font_preset_count == 0
+        assert project.sound_font_preset_count() == 0
     finally:
         project.close()
 
@@ -60,7 +115,7 @@ def test_load_sound_font_rejects_malformed_bytes() -> None:
         with pytest.raises(SonareError):
             project.load_sound_font(b"not an sf2 file")
         # The previous SoundFont is kept after a failed load.
-        assert project.sound_font_preset_count == 3
+        assert project.sound_font_preset_count() == 3
         with pytest.raises(ValueError):
             project.load_sound_font(b"")
     finally:
@@ -84,13 +139,86 @@ def test_sound_font_manifest_reports_backends() -> None:
         project.close()
 
 
+def test_project_sound_fonts_are_selected_by_uri_and_bounce_binding() -> None:
+    project = _build_midi_only_project()
+    uri = "memory://font/alternate"
+    other_uri = "memory://font/other"
+    try:
+        assert project.sound_font_preset_count() == 0
+        assert project.sound_font_preset_count(uri=uri) == 0
+        project.load_sound_font(_SF2_BYTES, uri=uri)
+
+        assert project.sound_font_preset_count() == 0
+        assert project.sound_font_preset_count(uri=uri) == 3
+        assert project.sound_font_manifest()[0].backend == "synth"
+        assert project.sound_font_manifest(uri=uri)[0].backend == "sf2"
+
+        fallback = project.bounce(
+            sf2_instruments=[ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig())],
+            total_frames=4096,
+        ).channels
+        selected = project.bounce(
+            sf2_instruments=[
+                ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(), sound_font_uri=uri)
+            ],
+            total_frames=4096,
+        ).channels
+        assert fallback.shape == selected.shape == (2, 4096)
+        assert not np.array_equal(fallback, selected)
+
+        project.load_sound_font(_SF2_BYTES)
+        project.load_sound_font(_SF2_BYTES, uri=other_uri)
+        project.clear_sound_font(uri=uri)
+        assert project.sound_font_preset_count(uri=uri) == 0
+        assert project.sound_font_preset_count() == 3
+        assert project.sound_font_preset_count(uri=other_uri) == 3
+        assert project.sound_font_manifest()[0].backend == "sf2"
+        assert project.sound_font_manifest(uri=uri)[0].backend == "synth"
+
+        config = Sf2InstrumentConfig()
+        project.set_destination_instrument(
+            0, ProjectInstrument(kind="sf2", config=config, sound_font_uri=uri)
+        )
+        with pytest.raises(SonareError, match=uri) as refused:
+            project.bounce(total_frames=4096)
+        assert refused.value.code == ls.ErrorCode.INVALID_STATE
+        assert refused.value.reason == "unresolvedSoundFont"
+        override = project.bounce(
+            sf2_instruments=[
+                ProjectSf2InstrumentBinding(instrument=config, sound_font_uri=other_uri)
+            ],
+            total_frames=4096,
+        ).channels
+        np.testing.assert_allclose(override, selected, atol=1e-7, rtol=1e-6)
+    finally:
+        project.close()
+
+
+def test_sf2_bounce_binding_requires_the_shared_sf2_config() -> None:
+    project = _build_midi_only_project()
+    try:
+        persistent = ProjectInstrument(kind="sf2", config=Sf2InstrumentConfig())
+        with pytest.raises(
+            TypeError,
+            match=r"sf2_instruments\[0\]\.instrument must be a Sf2InstrumentConfig",
+        ):
+            project.bounce(
+                sf2_instruments=[
+                    ProjectSf2InstrumentBinding(instrument=persistent)  # type: ignore[arg-type]
+                ],
+                total_frames=128,
+            )
+    finally:
+        project.close()
+
+
 def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
     project = _build_midi_only_project()
     try:
         # Without a loaded SoundFont the bounce still sounds: the built-in
         # synthesizer GM fallback is the data-free floor.
         fallback = project.bounce(
-            sf2_instruments=[(0, Sf2InstrumentConfig())],
+            sf2_instruments=[ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig())],
             total_frames=4096,
             block_size=128,
             num_channels=2,
@@ -99,7 +227,7 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
 
         project.load_sound_font(_SF2_BYTES)
         audio = project.bounce(
-            sf2_instruments=[(0, Sf2InstrumentConfig(gain=1.0))],
+            sf2_instruments=[ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(gain=1.0))],
             total_frames=4096,
             block_size=128,
             num_channels=2,
@@ -109,7 +237,7 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
         assert float(np.max(np.abs(audio))) > 0.01
 
         again = project.bounce(
-            sf2_instruments=[(0, Sf2InstrumentConfig(gain=1.0))],
+            sf2_instruments=[ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(gain=1.0))],
             total_frames=4096,
             block_size=128,
             num_channels=2,
@@ -120,7 +248,9 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
         # loaded Piano 1 preset, while the default remains SF2-first.
         modeled = project.bounce(
             sf2_instruments=[
-                (0, Sf2InstrumentConfig(gain=1.0, prefer_model_for_modeled_families=True)),
+                ProjectSf2InstrumentBinding(
+                    instrument=Sf2InstrumentConfig(gain=1.0, prefer_model_for_modeled_families=True)
+                ),
             ],
             total_frames=4096,
             block_size=128,
@@ -167,7 +297,11 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
             ],
         )
         return project.bounce(
-            sf2_instruments=[(0, Sf2InstrumentConfig(gain=1.0, clear_bank_rig=clear))],
+            sf2_instruments=[
+                ProjectSf2InstrumentBinding(
+                    instrument=Sf2InstrumentConfig(gain=1.0, clear_bank_rig=clear)
+                )
+            ],
             total_frames=48000,
             block_size=128,
             num_channels=2,

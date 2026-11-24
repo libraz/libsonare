@@ -651,9 +651,6 @@ fields = [
   "engine_telemetry.graph_latency_samples_q8",
   "engine_telemetry.graph_latency_samples",
   # --- Fields a facade deliberately leaves out (category 4) ---
-  # A bounce renders at the project's own rate, the only rate C accepts, so the
-  # facades have no sample rate to pass.
-  "project_bounce_options.sample_rate",
   # A compile result carries the structured diagnostics only. The message text
   # is those diagnostics joined, and the timeline is compileTimeline()'s.
   "project_compile_result.messages",

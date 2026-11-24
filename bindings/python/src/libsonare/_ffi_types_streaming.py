@@ -464,7 +464,7 @@ class SonareStreamStats(CStruct):
         ("total_samples", ctypes.c_size_t),
         ("duration_sec", ctypes.c_float),
         ("pending_frames", ctypes.c_size_t),
-        ("dropped_output_frames", ctypes.c_size_t),
+        ("dropped_output_frames", ctypes.c_uint64),
         ("bpm", ctypes.c_float),
         ("bpm_confidence", ctypes.c_float),
         ("bpm_candidate_count", ctypes.c_size_t),

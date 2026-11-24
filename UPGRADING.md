@@ -305,6 +305,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareStftResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `SonareStreamConfig.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `SonareStreamStats.bpm_candidate_count` | the count is a size_t instead of an int |
+| `SonareStreamStats.dropped_output_frames` | the running tally is a uint64_t instead of a size_t |
 | `SonareStreamStats.pattern_length` | the count is a size_t instead of an int |
 | `sonare_analyze_bpm(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_analyze_dynamics(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
@@ -475,6 +476,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_analyze_bpm(start_bpm)` | removed: omit start_bpm and move n_fft, hop_length, max_candidates and out one position earlier. The result reports NaN when no tempo is measured. Apply any fallback in the caller. |
 | `sonare_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
+| `sonare_decode_channels` | a recognized codec missing from the build returns SONARE_ERROR_NOT_SUPPORTED with reason notCompiledIn. An unrecognized container still returns SONARE_ERROR_INVALID_FORMAT. |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
 | `sonare_polyphonic_set_note_edit(envelope)` | `sonare_polyphonic_set_note_edit(amplitude_envelope)` |
 | `sonare_polyphonic_set_note_edit(envelope_count)` | `sonare_polyphonic_set_note_edit(amplitude_envelope_count)` |
@@ -890,9 +892,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_eq_set_band` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_eq_set_band` | a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys |
 | `sonare_mastering_insert_timing(params)` | `sonare_mastering_insert_timing(params_json)` |
 | `sonare_mixer_from_scene_json(json)` | `sonare_mixer_from_scene_json(document)` |
+| `sonare_mixer_from_scene_json` | An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys. The earlier mixing.ignored_insert_param warning is no longer emitted. |
 
 #### Other individual changes
 
@@ -975,15 +978,15 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareEngineCaptureStatus.overflow_count` | the count is a size_t instead of a uint32_t |
+| `SonareEngineCaptureStatus.overflow_count` | the running tally is a uint64_t instead of a uint32_t |
 | `SonareTransportState.sample_rate` | the sample rate is an int instead of a double |
-| `sonare_engine_clip_page_request_overflow_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_clip_page_request_overflow_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
 | `sonare_engine_configure_scope_telemetry(band_count)` | the count is a size_t instead of an unsigned int |
 | `sonare_engine_configure_scope_telemetry(out_band_count)` | the count is a size_t instead of an unsigned int |
-| `sonare_engine_external_midi_dropped_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_external_midi_dropped_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
 | `sonare_engine_legato_fallback_count(out_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_engine_prepare(sample_rate)` | the sample rate is an int instead of a double |
-| `sonare_engine_warp_stretch_overflow_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_warp_stretch_overflow_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
 | `sonare_midi_route_events(out_overflow_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_playback_renderer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 
@@ -1022,18 +1025,25 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_engine_set_bus_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_bus_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys |
 | `sonare_engine_set_bus_strip_json(scene_json)` | `sonare_engine_set_bus_strip_json(settings_json)` |
-| `sonare_engine_set_bus_strip_json` | takes one bare bus object, the shape a mixer scene holds at buses[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path |
-| `sonare_engine_set_master_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_bus_strip_json` | takes one bare bus object, the shape a mixer scene holds at buses[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path. An unread insert parameter names settings.inserts[i].params.<key> and lists the insert's accepted keys. |
+| `sonare_engine_set_master_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys |
 | `sonare_engine_set_master_strip_json(scene_json)` | `sonare_engine_set_master_strip_json(settings_json)` |
-| `sonare_engine_set_master_strip_json` | takes one bare strip object, the shape a mixer scene holds at strips[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path |
-| `sonare_engine_set_track_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_master_strip_json` | takes one bare strip object, the shape a mixer scene holds at strips[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path. An unread insert parameter names settings.inserts[i].params.<key> and lists the insert's accepted keys. |
+| `sonare_engine_set_track_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys |
 | `sonare_engine_set_track_strip_json(scene_json)` | `sonare_engine_set_track_strip_json(settings_json)` |
-| `sonare_engine_set_track_strip_json` | takes one bare strip object, the shape a mixer scene holds at strips[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path |
+| `sonare_engine_set_track_strip_json` | takes one bare strip object, the shape a mixer scene holds at strips[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path. An unread insert parameter names settings.inserts[i].params.<key> and lists the insert's accepted keys. |
 | `sonare_playback_render_interleaved(config_json)` | `sonare_playback_render_interleaved(document)` |
 | `sonare_playback_renderer_create_json(config_json)` | `sonare_playback_renderer_create_json(document)` |
 | `sonare_playback_renderer_set_config_json(config_json)` | `sonare_playback_renderer_set_config_json(document)` |
+
+#### Historical aliases are removed
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_engine_load_soundfont` | `sonare_engine_load_sound_font` |
+| `sonare_engine_midi_cc_binding_count` | removed: call sonare_engine_midi_cc_bindings, read list.count and release the snapshot with sonare_free_midi_cc_binding_list |
 
 #### An argument that would size a result past the library's limit is refused by name
 
@@ -1047,6 +1057,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareTransportState.bar_count` | `SonareTransportState.bar_index` |
+| `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
+| `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_engine_external_midi_dropped_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_playback_renderer_input_channel_count` | `sonare_playback_renderer_num_input_channels` |
 | `sonare_playback_renderer_output_channel_count` | `sonare_playback_renderer_num_output_channels` |
 
@@ -1062,14 +1076,22 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused |
 | `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
 | `SonareTakeAlignConfig` | leads with uint32_t struct_size; prepare it with sonare_take_align_config_init, after which every field is read literally: hop_length in [1, 65536] (default 512) and bins_per_octave a positive multiple of 12 (default 12); a 0 is no longer the library value, and a NULL config still means those defaults |
+| `sonare_project_annotate_chords` | omit a Roman numeral with NULL. A non-NULL empty string is refused under chords[i].roman_numeral. |
+| `sonare_project_set_track_route` | use NULL to clear either route field. A non-NULL empty channel_strip_ref or output_target is refused by name. |
 | `sonare_project_tempo_options_default` | removed: call sonare_project_tempo_options_init(&options) on a caller-owned struct instead |
 
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one |
+| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. |
 | `sonare_project_fade_curve_from_name` | accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER and the message 'name must be one of linear, equalPower, exponential, logarithmic' |
+
+#### Results are typed values, not JSON strings
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_project_auto_tempo(out_bpm)` | removed: Pass a SonareProjectAutoTempoResult* as out and read out.bpm. |
 
 #### C extends an operation through an Options struct
 
@@ -1079,7 +1101,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareAutomationLaneDescEx` | removed: use SonareAutomationLaneDesc, which now carries target_kind |
 | `SonareAutomationLaneDesc` | initialize with sonare_automation_lane_desc_init. The versioned descriptor carries target_kind and typed target fields, and project-assigned lane IDs are separate |
 | `SonareExternalStemImportRequest.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_external_stem_import_request_init |
-| `SonareProjectBounceOptions` | gains instruments / builtin_instruments / synth_instruments / sf2_instruments and their counts after instrument_latency_samples, so one options record carries the hosted instruments; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults |
+| `SonareProjectBounceOptions.sample_rate` | removed: set the sample rate on the project; bounce always renders at that rate |
+| `SonareProjectBounceOptions` | adds four hosted-instrument lists and counts, then optional metronome, controller_profiles and articulations with their counts, count_in_bars and reserved. Initialize with sonare_project_bounce_options_init and recompile to supply the complete sized record. NULL uses the defaults. Named sentinels request arrangement length and scene master width. Bounce uses the project sample rate; remove sample_rate assignments and uses of SONARE_PROJECT_SAMPLE_RATE_PROJECT. Zero is refused for total_frames, num_channels and block_size. |
 | `SonareProjectMarker` | the record is 16 bytes and carries no name; pass the name to sonare_project_set_marker and read it with sonare_project_marker_name_by_index |
 | `SonareProjectTempoSegment.start_sample` | removed: drop the member; a project holds musical positions only, so the setter ignored it and the getter wrote 0 |
 | `SonareProjectVocalEditApplyDesc.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
@@ -1114,7 +1137,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_analyze_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults) before candidates; initialise the options with sonare_project_tempo_options_init |
 | `sonare_project_auto_tempo_ex` | removed: call sonare_project_auto_tempo with NULL options, candidate_index and apply_time_signatures |
 | `sonare_project_auto_tempo_with_options` | removed: call sonare_project_auto_tempo, which takes the options |
-| `sonare_project_auto_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults), candidate_index and apply_time_signatures before out_bpm; pass 0 and 0 for the former behaviour |
+| `sonare_project_auto_tempo` | takes options (NULL for defaults), candidate_index and apply_time_signatures, followed by required SonareProjectAutoTempoResult* out. apply_time_signatures is int32_t: zero leaves the stored meter alone and a nonzero value installs the detected signatures in the same undoable edit as tempo. Read out.bpm for the selected tempo, out.bpm_confidence for its score and out.time_signature for the detected meter. |
 | `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
 | `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused; out_interleaved is out; out_len, which counted interleaved samples (frames * channels), is size_t* out_frames, which counts sample frames per channel, so a caller sizing the buffer multiplies it by out_channels; out_num_channels is out_channels |
@@ -1217,6 +1240,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_project_deserialize(json)` | `sonare_project_deserialize(document)` |
 | `sonare_project_set_mixer_scene_json(scene_json)` | `sonare_project_set_mixer_scene_json(document)` |
+| `sonare_project_set_mixer_scene_json` | An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys. |
 
 #### Historical aliases are removed
 
@@ -1224,7 +1248,15 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareMidiEventPod.data0` | `SonareMidiEventPod.word0` |
 | `SonareMidiEventPod.data1` | `SonareMidiEventPod.word1` |
+| `sonare_project_clear_soundfont` | `sonare_project_clear_sound_font`: takes a nullable const char* uri after project and clears only that entry. |
+| `sonare_project_load_soundfont` | `sonare_project_load_sound_font`: takes a nullable const char* uri after project, selecting the default SoundFont when NULL. |
 | `sonare_project_set_midi_fx` | removed: call sonare_project_bake_midi_fx(project, clip_id, config_json, NULL, 0, NULL) |
+| `sonare_project_soundfont_manifest` | `sonare_project_sound_font_manifest`: takes const SonareProject* project and a nullable const char* uri before the output buffer. |
+| `sonare_project_soundfont_preset_count` | `sonare_project_sound_font_preset_count`: takes const SonareProject* project and a nullable const char* uri before out_count. |
+| `sonare_project_tempo_segment_by_index` | removed: call sonare_project_tempo_segments, check the index against list.count, read list.items[index] and release the snapshot with sonare_free_project_tempo_segment_list |
+| `sonare_project_tempo_segment_count` | removed: call sonare_project_tempo_segments, read list.count and release the snapshot with sonare_free_project_tempo_segment_list |
+| `sonare_project_time_signature_by_index` | removed: call sonare_project_time_signatures, check the index against list.count, read list.items[index] and release the snapshot with sonare_free_project_time_signature_list |
+| `sonare_project_time_signature_count` | removed: call sonare_project_time_signatures, read list.count and release the snapshot with sonare_free_project_time_signature_list |
 
 #### Versions and features come from *AbiVersion() and capabilities()
 
@@ -1238,6 +1270,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareVocalOperation.cut_source_sample` | `SonareVocalOperation.source_sample` |
 | `SonareVocalOperation.merge_policy` | `SonareVocalOperation.policy` |
+
+#### Other individual changes
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareMidiCcBinding.reserved` | the old uint16_t is split into uint8_t consume followed by uint8_t reserved. Set reserved to zero and set consume to one to suppress live forwarding after automation. |
+| `SonareSf2InstrumentBinding` | adds const char* sound_font_uri at the tail. Set it to NULL for the default font. Recompile code passing an array of these records. |
 
 ## Python
 
@@ -2902,6 +2941,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingEqualizer.magnitude_response(placement)` | one of 'stereo', 'left', 'right', 'mid', 'side' exactly; another case is refused and an ordinal is a TypeError |
 | `StreamingEqualizer.set_phase_mode(mode)` | one of 'zero', 'natural', 'linear'; an ordinal is a TypeError and the hyphenated, underscored and capitalised aliases are refused |
 | `mastering_dynamics_compressor(detector)` | takes a CompressorDetector token ("peak", "rms" or "logRms") only; an int ordinal is TypeError and "log_rms", "logrms" raise SonareValueError |
+| `mastering_insert_param_names` | an insert outside mastering_insert_names() raises SonareValueError ('insert must be one of ...') instead of returning an empty list, as Node and WASM refuse it |
 | `mix_stereo(pan_mode)` | a PanMode token or a sequence of them, default 'balance'; a number is TypeError |
 
 #### Results are typed values, not JSON strings
@@ -3024,7 +3064,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringPresetCatalogEntry` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `MasteringProcessorCatalogEntry` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `mastering_amp_preset_catalog` | returns frozen MasteringAmpPresetCatalogEntry dataclasses read by attribute |
-| `mastering_insert_param_info` | returns frozen MasteringInsertParamInfo dataclasses read by attribute |
+| `mastering_insert_param_info` | returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError ('insert must be one of ...') instead of returning an empty list |
 | `mastering_insert_timing` | returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples |
 | `mastering_processor_catalog` | returns frozen MasteringProcessorCatalogEntry dataclasses read by attribute |
 
@@ -3402,6 +3442,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `Mixer.read_goniometer_latest(max_points)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError |
+| `Mixer.scene_warnings` | unread insert parameters are refused at load time and no longer appear as warnings |
 | `Mixer.strip_by_id` | an unknown id raises SonareValueError instead of KeyError |
 | `Mixer` | a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError. The constructor takes keywords: Mixer(sample_rate=..., scene=<MixSceneDocument mapping>) builds from a scene, an omitted scene builds an empty mixer, a non-mapping scene raises TypeError (parse JSON text with json.loads or use Mixer.from_json); the handle form is gone |
 | `RealtimeEngine.set_midi_fx` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
@@ -3429,7 +3470,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.external_midi_dropped_count` | a property (was a method) |
 | `RealtimeEngine.graph_connection_count` | a property (was a method) |
 | `RealtimeEngine.graph_node_count` | a property (was a method) |
-| `RealtimeEngine.midi_cc_binding_count` | a property (was a method) |
 | `RealtimeEngine.midi_input_pending_count` | a property (was a method) |
 | `RealtimeEngine.midi_instrument_count` | a property (was a method) |
 | `RealtimeEngine.tail_samples` | a property (was a method) |
@@ -3441,6 +3481,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `RealtimeEngine.marker_by_index` | removed: engine.markers()[index], or iterate engine.markers() |
 | `RealtimeEngine.marker_count` | removed: len(engine.markers()) |
+| `RealtimeEngine.midi_cc_binding_count` | removed: use len(engine.midi_cc_bindings()) |
 | `RealtimeEngine.parameter_count` | removed: len(engine.parameters()) |
 | `RealtimeEngine.parameter_info_by_index` | removed: engine.parameters()[index], or iterate engine.parameters() |
 
@@ -3466,7 +3507,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Mixer.constructor(handle)` | removed: build the mixer with Mixer(sample_rate=..., scene=...) or Mixer.from_json; a native handle is not accepted |
 | `Mixer.constructor(scene_warnings)` | removed: the mixer records its own scene load's warnings; read them with scene_warnings() |
-| `Mixer.from_scene_json` | `Mixer.from_json`: renamed; sample_rate and max_block_size are keywords. Mixer(scene=...) takes the scene as a mapping |
+| `Mixer.from_scene_json` | `Mixer.from_json`: renamed; sample_rate and max_block_size are keywords. Mixer(scene=...) takes the scene as a mapping. Both routes refuse unread insert keys by indexed path. JSON text raises INVALID_FORMAT and the mapping raises SonareValueError with a scene prefix. JSON text reports the rejected key exactly as written |
 | `Mixer.to_scene_json` | `Mixer.to_json`: renamed to pair with Mixer.from_json |
 | `PlaybackLoudnessMeter` | num_channels and sample_rate are keyword-only |
 
@@ -3663,7 +3704,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.set_vca_group_gain_db(group_id)` | `Mixer.set_vca_group_gain_db(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.set_vca_group_members(group_id)` | `Mixer.set_vca_group_members(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.strip_by_id(strip_id)` | `Mixer.strip_by_id(id)`: renamed id, the name the Node and WASM mixers use |
-| `RealtimeEngine.load_soundfont` | `RealtimeEngine.load_sound_font` |
+| `RealtimeEngine.load_soundfont` | `RealtimeEngine.load_sound_font`: renamed; the data must be bytes, bytearray or memoryview |
 | `RealtimeEngine.set_markers` | returns the stored markers in the order given (was None); a refused list leaves the stored markers and the allocation counter unchanged |
 | `RealtimeEngine.set_track_strip_surround_pan(distance)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `RealtimeEngine.set_track_strip_surround_pan(elevation)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
@@ -3677,6 +3718,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.add_loop_recording_takes(audio_channels)` | audio_channels is required for interleaved audio (1.x defaulted to 1); planar audio derives it, and an audio_channels beside planar audio raises SonareValueError |
 | `Project.add_loop_recording_takes(audio_sample_rate)` | audio_sample_rate is required (1.x defaulted to 48000); a non-positive rate raises SonareValueError |
+
+#### Physical quantities carry their unit in the name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.set_clip_fade(fade_in_length_ppq)` | `Project.set_clip_fade(fade_in_ppq)` |
+| `Project.set_clip_fade(fade_out_length_ppq)` | `Project.set_clip_fade(fade_out_ppq)` |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -3704,6 +3752,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.set_clip_takes(active_take_id)` | int \| None, default None: None plays the clip's base source and an explicit 0 raises SonareValueError |
 | `Project.set_marker(marker_id)` | set_marker(ppq, *, marker_id=None, name=None, kind=None, key_fifths=None, key_minor=None): ppq first, the rest keyword-only; an omitted marker_id allocates and an explicit 0 raises SonareValueError |
 | `Project.set_marker(name)` | None leaves the marker unnamed; an empty string raises SonareValueError |
+| `Project.set_track_route` | None clears channel_strip_ref or output_target; an explicit empty string is refused by the name of that field |
 | `Project.set_warp_map(name)` | None leaves the map unnamed; an empty string raises SonareValueError |
 | `Project.transcribe_to_clip(reattack_ratio)` | None means no split; an explicit 0, a negative value or a value up to 1 raises SonareValueError |
 | `ProjectClip.loop_length_ppq` | float \| None: None when the clip loops its whole length (was 0.0) |
@@ -3802,7 +3851,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.annotate_chords(chords)` | a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field |
+| `Project.annotate_chords(chords)` | a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field; omit roman_numeral for absence, because an explicitly empty string is refused |
 | `Project.import_external_stems(stems)` | a stem mapping takes name, layout, planar_samples, role and start_frame only, any other key raising SonareValueError naming it; layout is a ProjectStemLayout token ('mono', 'stereo') and a channel count 1 or 2 is TypeError |
 
 #### MIDI message packers and GM lookups are module functions
@@ -3861,7 +3910,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.preview_midi_fx_count` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `Project.set_max_history_bytes(bytes)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a non-integer number or one outside [0, SIZE_MAX] stays SonareValueError |
-| `Project.set_mixer_scene_json` | returns None; an unknown scene key raises SonareError (INVALID_FORMAT) naming its path instead of being returned as a warning |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -3872,7 +3920,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.get_part_rig` | `Project.part_rig` |
 | `Project.get_sample_rate` | `Project.sample_rate`: a property (was the method get_sample_rate) |
 | `Project.get_vocal_edit_dependencies` | `Project.vocal_edit_dependencies` |
-| `Project.soundfont_preset_count` | `Project.sound_font_preset_count`: a property (was a method) |
 
 #### Collections are methods that return arrays
 
@@ -3896,10 +3943,10 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.bounce_with_builtin_instrument` | removed: call Project.bounce(builtin_instruments=[(destination_id, config), ...]) |
-| `Project.bounce_with_instruments` | removed: call Project.bounce(instruments=[(destination_id, instrument), ...]) |
-| `Project.bounce_with_sf2_instrument` | removed: call Project.bounce(sf2_instruments=[(destination_id, config), ...]) |
-| `Project.bounce_with_synth_instrument` | removed: call Project.bounce(synth_instruments=[(destination_id, patch), ...]); where auto_select_gm was true, build the patch with use_gm_programs=True |
+| `Project.bounce_with_builtin_instrument` | removed: call Project.bounce(builtin_instruments=[ProjectInstrumentBinding(instrument=BuiltinSynthConfig(...), destination_id=...), ...]); an omitted destination_id (None) is destination 0 |
+| `Project.bounce_with_instruments` | removed: call Project.bounce(instruments=[ProjectInstrumentBinding(instrument=..., destination_id=...), ...]); an omitted destination_id (None) is destination 0 |
+| `Project.bounce_with_sf2_instrument` | removed: call Project.bounce(sf2_instruments=[ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(...), destination_id=..., sound_font_uri=...), ...]); sound_font_uri=None selects the default SoundFont |
+| `Project.bounce_with_synth_instrument` | removed: call Project.bounce(synth_instruments=[ProjectInstrumentBinding(instrument=SynthPatch(...), destination_id=...), ...]); wrap a preset name in SynthPatch(preset=...), and where auto_select_gm was true set use_gm_programs=True |
 | `Project.compile_timeline` | removed: call Project.compile(with_timeline=True) and read the result's timeline |
 | `Project.set_program(bank)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank select |
 | `Project.set_program_on_channel` | removed: call Project.set_program(clip_id, program, bank_msb=..., bank_lsb=..., group=..., channel=...) |
@@ -3921,13 +3968,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.bounce` | returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate |
-
-#### Channel counts are numChannels
-
-| 1.x | 2.0.0 |
-|---|---|
-| `Project.set_source_audio(channels)` | `Project.set_source_audio(num_channels)` |
+| `Project.bounce` | returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate. Pass ProjectInstrumentBinding(instrument=..., destination_id=...) for external, built-in and synth instruments, and ProjectSf2InstrumentBinding(instrument=..., destination_id=..., sound_font_uri=...) for SF2. an omitted destination_id (None) is destination 0, and sound_font_uri=None selects the default font. Pass ProjectControllerProfileBinding records in controller_profiles and ProjectArticulationBinding records in articulations. Their fields are required keyword arguments, and tuple entries are removed. |
+| `Project.set_source_audio(audio)` | removed: pass the PCM as channels, equal-length channel buffers or a channels-first ndarray, instead of an interleaved audio buffer |
+| `Project.set_source_audio(channels)` | channels now supplies the planar PCM itself as equal-length channel buffers or a channels-first ndarray; pass sample_rate as the third argument |
 
 #### Frequency bounds are f0MinHz/f0MaxHz and fminHz/fmaxHz
 
@@ -3966,7 +4009,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.from_json(json)` | `Project.from_json(document)` |
 | `Project.from_json_with_diagnostics(json)` | `Project.from_json_with_diagnostics(document)` |
-| `Project.set_mixer_scene_json(scene_json)` | `Project.set_mixer_scene_json(document)` |
+| `Project.from_json` | a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document |
+| `Project.set_mixer_scene_json` | removed: parse JSON into a MixSceneDocument mapping and call project.set_mixer_scene(scene); pass None to clear the scene |
 
 #### Historical aliases are removed
 
@@ -4010,10 +4054,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.clear_soundfont` | `Project.clear_sound_font` |
-| `Project.load_soundfont` | `Project.load_sound_font` |
+| `Project.analyze_tempo` | Every option after sample_rate is keyword-only, and supplied flags must be Boolean |
+| `Project.annotate_chords` | A read-only sequence of chord mappings is accepted. Both PPQ endpoints are required, and invalid extension and Roman text errors name the indexed chord field |
+| `Project.auto_tempo` | returns ProjectAutoTempoResult with bpm, bpm_confidence and the detected TimeSignature, including when apply_time_signatures is false. Every option after sample_rate is keyword-only, and supplied flags must be Boolean |
+| `Project.clear_soundfont` | `Project.clear_sound_font`: takes keyword-only uri=None to clear the named URI; None selects the default SoundFont and an empty URI is refused |
+| `Project.load_soundfont` | `Project.load_sound_font`: takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode |
 | `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
-| `Project.soundfont_manifest` | `Project.sound_font_manifest` |
+| `Project.soundfont_manifest` | `Project.sound_font_manifest`: takes keyword-only uri=None to read the manifest for the named URI; None selects the default SoundFont and an empty URI is refused |
+| `Project.soundfont_preset_count` | `Project.sound_font_preset_count`: a method with keyword-only uri=None, which selects the default SoundFont; an empty URI is refused |
 | `ProjectMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only, the field order of EngineMarker |
 | `ProjectSource.channel_count` | `ProjectSource.num_channels` |
 
@@ -4256,7 +4304,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `CapabilityCatalogChain.aliases` | removed: the catalog lists no other chain spellings; every chain key has exactly one |
 | `CapabilityCatalogChainAlias` | removed: the catalog lists no other chain spellings; every chain key has exactly one |
-| `EqBandInput.lookaheadMs` | removed: use detectorDelayMs |
+| `EqBandInput.lookaheadMs` | removed: Use detectorDelayMs. An explicit lookaheadMs is refused as an unknown key with the sorted accepted keys. |
 | `hasFfmpegSupport` | removed: read capabilities().features.ffmpeg |
 | `vocalEditAvailable` | removed: read capabilities().features.vocalEdit |
 
@@ -6235,7 +6283,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
-| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[] |
+| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError ('insert must be one of ...') instead of an empty list |
 | `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |
@@ -6344,7 +6392,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
 | `mixSourceClassNames` | `mixingAssistantSourceClassNames`: renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[] |
-| `suggestMixScene` | `mixingAssistantSuggest`: renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult |
+| `suggestMixScene` | `mixingAssistantSuggest`: renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult. Earlier parameter spellings are refused as unknown keys with TypeError and the sorted accepted keys. |
 
 #### Synchronous construction is new X(config); create() is async
 
@@ -6615,7 +6663,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
 | `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
 | `EngineTrackLane.outputBusId` | absent is the master mix; an explicit 0 is a RangeError |
-| `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError. A typed scene is a call argument. Structured refusals name scene.<path> and use TypeError for shape or RangeError for values. Mixer.fromJson retains InvalidFormat at document paths. |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.metronome` | returns an EngineMetronomeConfig that carries only the click-length spelling in effect |
 | `RealtimeEngine.primeOfflineParameters` | blockSize is optional: omit it for the library default; an explicit 0 is a RangeError |
@@ -6749,17 +6797,18 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineCaptureStatus` | Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
-| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path> |
+| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
-| `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
+| `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref. |
-| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
+| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 
 #### One-shot JavaScript calls take a request object
 
@@ -6812,7 +6861,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain') |
+| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts?) form is gone, part is required (PART_RIG_ALL_PARTS selects every part) and insert params are an object; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain') |
 | `RealtimeEngine.setTrackLanes` | takes readonly EngineTrackLane[]; the bare-number arm is a TypeError |
 | `RealtimeEngine.setTrackStripInsertParamByName` | `RealtimeEngine.setStripInsertParam`: setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
 
@@ -6844,7 +6893,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.getTransportState` | `RealtimeEngine.transportState` |
 | `RealtimeEngine.graphConnectionCount` | readonly getter (was a method) |
 | `RealtimeEngine.graphNodeCount` | readonly getter (was a method) |
-| `RealtimeEngine.midiCcBindingCount` | readonly getter (was a method) |
 | `RealtimeEngine.midiInputPendingCount` | readonly getter (was a method) |
 | `RealtimeEngine.midiInstrumentCount` | readonly getter (was a method) |
 | `RealtimeEngine.tailSamples` | readonly getter (was a method) |
@@ -6876,6 +6924,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | `RealtimeEngine.bindMidiCc` |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.midiCcBindingCount` | removed: Use midiCcBindings().length. The reader returns owned binding rows with a boolean consume field. |
 | `RealtimeEngine.processWithMonitor` | removed: Call process(channels, { withMonitor: true }). |
 | `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
 | `SynthPatch.destinationId` | removed: Pass the destination id as the first argument of setSynthInstrument(destinationId, patch), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
@@ -6885,7 +6934,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineClip.pageProvider.id` | removed: pageProvider takes the ClipPageProvider instance; a number or { id } is refused |
-| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required |
+| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required. An unread insert key is InvalidFormat with its full scene path and the sorted accepted keys. |
 | `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `PlaybackLoudnessMeter.constructor(sampleRate)` | removed: pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `RealtimeEngine.clearClipPage` | removed: call clear(pageIndex) on the ClipPageProvider |
@@ -7102,8 +7151,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
 | `Project.setMarker(ppq)` | removed: pass ppq as a field of ProjectMarkerInput |
 | `Project.setMarker` | takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError |
+| `Project.setTrackRoute` | Omit a route field to clear it. An explicit empty channelStripRef or outputTarget is a RangeError naming the field. trackId is required and an omitted trackId is a TypeError. |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
+| `ProjectChordSymbol.romanNumeral` | Omit romanNumeral to store no label. An explicit empty string is a RangeError naming chords[i].romanNumeral. |
 | `ProjectMidiRouteConfig.filterChannel` | typed number only; null is no longer in the type, and a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.filterGroup` | typed number only; null is no longer in the type, and a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.remapChannel` | typed number only; null is no longer in the type, and a null at runtime still reads as absent |
@@ -7141,7 +7192,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB` | removed: Pass the string 'trackFaderDb' as targetKind; numeric target kinds are refused. |
 | `PROJECT_AUTOMATION_TARGET_TRACK_PAN` | removed: Pass the string 'trackPan' as targetKind; numeric target kinds are refused. |
 | `Project.addTrack` | kind is a name; a number is a TypeError |
-| `Project.annotateChords` | quality is a name |
+| `Project.annotateChords` | quality is a name. Accepts a readonly list and requires startPpq and endPpq on each chord. |
 | `Project.annotateKeys` | mode is a name |
 | `Project.setClipWarpMode` | takes a ProjectWarpMode name; a number is a TypeError |
 | `Project.setOverlapPolicy` | policy is a name; a number is a TypeError |
@@ -7282,7 +7333,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.getPartRig` | `Project.partRig`: partRig({ destinationId, part }) replaces getPartRig(destinationId, part); only the key object is accepted |
 | `Project.getSampleRate` | `Project.sampleRate` |
 | `Project.getVocalEditDependencies` | `Project.vocalEditDependencies` |
-| `Project.soundFontPresetCount` | readonly getter (was a method) |
 | `VocalEditDraft.token` | read the token as a property: draft.token |
 | `VocalEditSession.outputLengthSamples` | readonly getter (was a method) |
 | `VocalEditSession.revision` | read the revision as a property: session.revision |
@@ -7317,7 +7367,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.bounceWithBuiltinInstruments` | removed: Call bounce({ ...options, builtinInstruments: [...] }). |
 | `Project.bounceWithInstrument` | removed: Call bounce({ ...options, instruments: [...] }). |
 | `Project.bounceWithInstruments` | removed: Call bounce({ ...options, instruments: [...] }). |
-| `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
+| `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [{ instrument, destinationId, soundFontUri }] }). Omit soundFontUri for the default font. |
 | `Project.bounceWithSf2Instruments` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
 | `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
 | `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
@@ -7351,7 +7401,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `ExternalSeparatedStem.planarSamples` | `ExternalSeparatedStem.channels` |
 | `Project.addClip` | audio comes as planar channels with sampleRate |
-| `Project.bounce` | returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default |
+| `Project.bounce` | returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. |
 | `Project.importExternalStems` | each stem carries channels instead of planarSamples, and layout is a name |
 | `Project.setSourceAudio(audio)` | removed: pass it as channels in ProjectSourceAudioRequest |
 | `Project.setSourceAudio(channels)` | removed: drop the count; the channel count is channels.length in ProjectSourceAudioRequest |
@@ -7374,7 +7424,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `Project.autoTempo(applyTimeSignatures)` | removed: pass applyTimeSignatures as a field of ProjectAutoTempoOptions |
 | `Project.autoTempo(candidateIndex)` | removed: pass candidateIndex as a field of ProjectAutoTempoOptions |
-| `Project.autoTempo` | takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are options |
+| `Project.autoTempo` | takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are options. Read the former numeric result from result.bpm. The result also has bpmConfidence and the detected timeSignature, even when applyTimeSignatures is false. The returned fields and the detected timeSignature fields are readonly. |
 
 #### Frequency bounds are f0MinHz/f0MaxHz and fminHz/fmaxHz
 
@@ -7436,7 +7486,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AlignTakeToReferenceRequest.binsPerOctave` | a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter') |
 | `AlignTakeToReferenceRequest.hopLength` | an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage |
-| `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed |
+| `Project.clearSoundFont` | clearSoundFont({ uri }?) releases one named SoundFont. Omit the URI for the default font. |
+| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
+| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
+| `Project.loadSoundFont` | loadSoundFont(data, { uri }?) loads or replaces one named SoundFont. Omit the URI for the default font. |
+| `Project.setMixerSceneJson` | removed: Use setMixerScene(scene) with a scene object, or omit it to clear. Unknown keys are TypeError and refusal paths start at scene. Use version 2 or omit the version, and remove the former surroundPan distance and elevation keys. |
+| `Project.soundFontManifest` | soundFontManifest({ uri }?) reports program coverage for the selected SoundFont. Omit the URI for the default font. |
+| `Project.soundFontPresetCount` | soundFontPresetCount({ uri }?) reads one named SoundFont; omit the URI for the default font. An empty URI is refused. |
 | `ProjectClipFade.curve` | removed: give fadeInCurve or fadeOutCurve on ProjectClipFadeRequest |
 | `ProjectClipFade.lengthPpq` | removed: give fadeInPpq or fadeOutPpq on ProjectClipFadeRequest |
 | `ProjectMidiCcBinding.ccLsbNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccLsbNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
@@ -11137,7 +11193,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
-| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[] |
+| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError ('insert must be one of ...') instead of an empty list |
 | `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |
@@ -11296,7 +11352,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
 | `mixSourceClassNames` | `mixingAssistantSourceClassNames`: renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[] |
-| `suggestMixScene` | `mixingAssistantSuggest`: renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult |
+| `suggestMixScene` | `mixingAssistantSuggest`: renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult. Earlier parameter spellings are refused as unknown keys with TypeError and the sorted accepted keys. |
 
 #### Synchronous construction is new X(config); create() is async
 
@@ -11814,7 +11870,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTrackLane.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
 | `EngineTrackLane.trackId` | required in the object form: an absent trackId is refused with TypeError naming lanes[i].trackId (1.x read it as 0) |
 | `EngineTrackSend.busId` | required: an absent busId is refused with TypeError naming sends[i].busId (1.x read it as 0) |
-| `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError. A typed scene is a call argument. Structured refusals name scene.<path> and use TypeError for shape or RangeError for values. Mixer.fromJson retains InvalidFormat at document paths. |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.metronome` | returns EngineMetronomeConfig carrying only the click-length spelling that was set |
 | `RealtimeEngine.popClipPageRequest` | returns undefined (was null) when no request is queued |
@@ -11963,17 +12019,19 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineCaptureStatus` | Includes droppedFrames, the number of frames discarded because the buffer was full. overflowCount counts overflow events; both are numbers. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
-| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path> |
+| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
-| `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
+| `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | `RealtimeEngine.setStripEqBand` |
-| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
+| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
+| `SonareEngine.captureStatus` (`./worklet`) | The capture response includes droppedFrames as a number, beside overflowCount. |
 | `SonareEngine.setBusStripJson` (`./worklet`) | `SonareEngine.setBusStrip` |
 | `SonareEngine.setMasterStripJson` (`./worklet`) | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
 | `SonareEngine.setMidiFx(configJson)` (`./worklet`) | removed: pass it as config in MidiFxConfig |
@@ -12039,7 +12097,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain') |
+| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts) form is removed and part is required (PART_RIG_ALL_PARTS selects every part); inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused on every insert construction route as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain') |
 | `RealtimeEngine.setTrackLanes` | takes readonly EngineTrackLane[]; the bare-number arm is removed |
 | `RealtimeEngine.setTrackStripInsertParamByName` | `RealtimeEngine.setStripInsertParam`: setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
 | `SonareEngine.addClip(buffer)` (`./worklet`) | removed: pass it as channels or pageProvider in EngineClip |
@@ -12096,7 +12154,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.getTransportState` | `RealtimeEngine.transportState` |
 | `RealtimeEngine.graphConnectionCount` | readonly getter (was a method) |
 | `RealtimeEngine.graphNodeCount` | readonly getter (was a method) |
-| `RealtimeEngine.midiCcBindingCount` | readonly getter (was a method) |
 | `RealtimeEngine.midiInputPendingCount` | readonly getter (was a method) |
 | `RealtimeEngine.midiInstrumentCount` | readonly getter (was a method) |
 | `RealtimeEngine.tailSamples` | readonly getter (was a method) |
@@ -12152,7 +12209,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineClip.pageProvider.id` | removed: pageProvider takes the ClipPageProvider instance; a number or { id } is refused |
-| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required |
+| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required; an unread insert params key is refused as InvalidFormat with its indexed document path and the sorted accepted keys |
 | `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `PlaybackLoudnessMeter.constructor(sampleRate)` | removed: pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `RealtimeEngine.clearClipPage` | removed: call clear(pageIndex) on the ClipPageProvider |
@@ -12583,6 +12640,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.meterScratchRenderFrame` | removed: use drainMeterTelemetry(maxRecords) and read the fields of each EngineMeterTelemetry |
 | `RealtimeEngine.meterScratchTargetId` | removed: use drainMeterTelemetry(maxRecords) and read the fields of each EngineMeterTelemetry |
 | `RealtimeEngine.meterScratchValue` | removed: use drainMeterTelemetry(maxRecords) and read the fields of each EngineMeterTelemetry |
+| `RealtimeEngine.midiCcBindingCount` | removed: Use midiCcBindings().length. |
 | `RealtimeEngine.popClipPageRequestToScratch` | removed: use popClipPageRequest(), which returns a ClipPageSampleRequest or undefined |
 | `RealtimeEngine.popExternalMidiToScratch` | removed: use drainExternalMidi(maxRecords), which returns ExternalMidiEvent[] |
 | `RealtimeEngine.popMeterTelemetryToScratch` | removed: use drainMeterTelemetry(maxRecords), which returns EngineMeterTelemetry[] |
@@ -12674,6 +12732,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectAutomationPoint.value` | required: an absent value is refused with TypeError naming points[i].value (1.x read it as 0) |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
+| `ProjectChordSymbol.romanNumeral` | Omit romanNumeral to store no label. An explicit empty string is a RangeError naming chords[i].romanNumeral. |
 | `ProjectMidiRouteConfig.filterChannel` | filterChannel is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.filterGroup` | filterGroup is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.remapChannel` | remapChannel is typed number, not number \| null; a null at runtime still reads as absent |
@@ -12814,7 +12873,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.analyzeTempo` | analyzeTempo also takes one request object { samples, sampleRate, ...options } |
 | `Project.autoTempo(applyTimeSignatures)` | removed: pass applyTimeSignatures as a field of ProjectAutoTempoOptions |
 | `Project.autoTempo(candidateIndex)` | removed: pass candidateIndex as a field of ProjectAutoTempoOptions |
-| `Project.autoTempo` | autoTempo takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are option fields, not positional arguments |
+| `Project.autoTempo` | Both the request and (samples, sampleRate, options?) forms return ProjectAutoTempoResult { bpm, bpmConfidence, timeSignature: { numerator, denominator, confidence } }. The detected meter is returned even when applyTimeSignatures is omitted or false. The returned fields and the detected timeSignature fields are readonly. |
 | `Project.bakeMidiFx(clipId)` | removed: pass clipId as a field of ProjectMidiFxBakeRequest |
 | `Project.bakeMidiFx(configJson)` | removed: pass it as config in ProjectMidiFxBakeRequest |
 | `Project.bakeMidiFx` | the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
@@ -12835,7 +12894,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `Project.setPartRig` | the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain') |
+| `Project.setPartRig` | the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused on every insert construction route as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain') |
 | `VocalEditWorkerReadOptions` | removed: Read the committed state on VocalEditWorkerSession and the draft on the VocalEditWorkerDraft from beginEdit(). |
 | `VocalEditWorkerSession.destinationSampleToSourceSample(options)` | removed: Drop options. Call destinationSampleToSourceSample(noteId, destinationSample) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |
 | `VocalEditWorkerSession.evaluatePitch(options)` | removed: Drop options. Call evaluatePitch(noteId) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |
@@ -12913,7 +12972,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.getPartRig` | `Project.partRig`: partRig({ destinationId, part }) replaces getPartRig(destinationId, part); only the key object is accepted |
 | `Project.getSampleRate` | `Project.sampleRate` |
 | `Project.getVocalEditDependencies` | `Project.vocalEditDependencies` |
-| `Project.soundFontPresetCount` | readonly getter (was a method) |
 | `VocalEditDraft.token` | now a readonly getter, read it without parentheses |
 | `VocalEditSession.outputLengthSamples` | readonly getter (was a method) |
 | `VocalEditSession.revision` | now a readonly getter, read it without parentheses |
@@ -12954,7 +13012,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.bounceWithBuiltinInstruments` | removed: Call bounce({ ...options, builtinInstruments: [...] }). |
 | `Project.bounceWithInstrument` | removed: Call bounce({ ...options, instruments: [...] }). |
 | `Project.bounceWithInstruments` | removed: Call bounce({ ...options, instruments: [...] }). |
-| `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
+| `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [{ instrument, destinationId, soundFontUri }] }). Omit soundFontUri for the default font. |
 | `Project.bounceWithSf2Instruments` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
 | `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
 | `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
@@ -12989,7 +13047,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `ExternalSeparatedStem.planarSamples` | `ExternalSeparatedStem.channels` |
 | `Project.addClip` | addClip takes planar channels plus sampleRate instead of audio, audioChannels and audioSampleRate |
-| `Project.bounce` | bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option |
+| `Project.bounce` | bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. |
 | `Project.importExternalStems` | each stem takes channels instead of planarSamples and layout is 'mono' \| 'stereo' |
 | `Project.setSourceAudio(audio)` | removed: pass it as channels in ProjectSourceAudioInput |
 | `Project.setSourceAudio(channels)` | removed: drop the count; the channel count is channels.length in ProjectSourceAudioInput |
@@ -13089,7 +13147,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipPageStreamerRequest.clipId` | ClipPageStreamerRequest is the union ClipPageSampleRequest \| ClipPagePageRequest; clipId is on both members |
 | `ClipPageStreamerRequest.pageIndex` | only on ClipPagePageRequest; narrow with "pageIndex" in request |
 | `ClipPageStreamerRequest.sample` | only on ClipPageSampleRequest, which also carries channel; narrow with "sample" in request |
-| `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed |
+| `Project.annotateChords` | Accepts a readonly list and requires startPpq and endPpq on each chord. |
+| `Project.clearSoundFont` | Accepts ({ uri }?). Omit the URI to clear only the default SoundFont. |
+| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
+| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
+| `Project.loadSoundFont` | Accepts (data, { uri }?). Omit the URI to replace the default SoundFont. A supplied empty URI is refused. |
+| `Project.setMixerSceneJson` | removed: Pass a MixSceneDocumentInput to setMixerScene(scene), or omit scene to clear it. Unknown scene keys and wrong field types are TypeError. Out-of-domain values are RangeError. |
+| `Project.setTrackRoute` | Omit a route string to clear it. A supplied empty channelStripRef or outputTarget is refused with a RangeError naming the argument. trackId is required and an omitted trackId is a TypeError. |
+| `Project.soundFontManifest` | Accepts ({ uri }?). Omit the URI to inspect the default SoundFont. |
+| `Project.soundFontPresetCount` | soundFontPresetCount({ uri }?) is a method. Omit the URI to count presets in the default SoundFont. |
 | `ProjectMidiCcBinding.ccLsbNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccLsbNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
 | `ProjectMidiCcBinding.ccNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
 | `ProjectMidiCcBinding.selectorLsb` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorLsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
@@ -13339,6 +13405,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `transcribe --min-note-division` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `transcribe --min-ridge-peak-ratio` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `transcribe --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
+| `transcribe` | --json includes tempo_confidence and the detected time_signature (numerator, denominator, confidence) when tempo detection runs; both are omitted with explicit --tempo-bpm |
 | `vqt --hop-length` (native CLI only) | a value outside [1, 65536] is refused as a usage error (exit 2) before the input is read; the library bounds the constant-Q hop so its longest filter stays finite |
 | `vqt --n-bins` (native CLI only) | an --n-bins or --bins-per-octave below 1 and a --filter-scale at or below 0 are refused as usage errors (exit 2) before the input is read, rather than exit 3 |
 
@@ -13552,12 +13619,13 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `mastering-pair-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mastering-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mastering-processor --params` | a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key |
+| `mastering-suggest --params` | unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order |
 | `mix-strip --pan` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mix-strip --width` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `repair --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `repair --output` | leaving it out without --detect, or giving it with --detect, is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `suggest-mix --input` | an entry with an empty track id or an empty path, and a call with no entry, are refused as a usage error (exit 2) before any input is read |
-| `suggest-mix --params` | a malformed entry, a non-numeric value, an unknown or snake_case key and a tempoBpm clash with --tempo-bpm are refused as a usage error (exit 2) before any input is read, with one text on both front-ends |
+| `suggest-mix --params` | malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order |
 
 ### Command line: Realtime engine, synthesis, MIDI and playback
 
@@ -15228,7 +15296,7 @@ const config = { version: 2, lfeMixDb: -6 };
 
 ### Documents in a 1.x spelling are refused
 
-A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names. On Node and WASM the facade refuses only a document argument that is not an object, with `TypeError`; everything inside it (an unknown or snake_case key, a wrong-kind value, an unsupported version) is the core's `SonareError` coded `InvalidFormat`, so code that caught `TypeError` for a misspelt document key must test `codeName === 'InvalidFormat'`.
+A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and an undeclared key's message lists the accepted keys. Nothing converts an old document on load; rewrite it with the 2.0 names. The JSON loaders (`fromJson`, `from_json`) keep `InvalidFormat` at the document path. A typed scene passed as a call argument (`setMixerScene`, the `Mixer` constructor's `scene`) is refused by kind under `scene.<path>`: `TypeError` for an unknown key or wrong type and `RangeError` for an out-of-domain value on Node and WASM, `SonareValueError` in Python.
 
 WASM, 1.x:
 

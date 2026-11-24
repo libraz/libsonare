@@ -167,14 +167,15 @@ void ProjectWasm::annotateChords(val chords) {
     std::vector<uint8_t> exts;
     if (hasProperty(entry, "extensions")) {
       val ext_arr = entry["extensions"];
+      const std::string subject = at + ".extensions";
       if (!val::global("Array").call<bool>("isArray", ext_arr)) {
-        throw WasmTypeError(at + ".extensions must be an array");
+        throw WasmTypeError(subject + " must be an array");
       }
-      const size_t ec = wasmArrayLength(ext_arr, (at + ".extensions").c_str());
+      const size_t ec = wasmArrayLength(ext_arr, subject.c_str());
       exts.reserve(ec);
       for (size_t e = 0; e < ec; ++e) {
-        const std::string subject = at + ".extensions[" + std::to_string(e) + "]";
-        exts.push_back(checkedByteFromVal(ext_arr[e], subject.c_str()));
+        const std::string element_subject = subject + "[" + std::to_string(e) + "]";
+        exts.push_back(checkedByteFromVal(ext_arr[e], element_subject.c_str()));
       }
     }
     ext_storage.push_back(std::move(exts));

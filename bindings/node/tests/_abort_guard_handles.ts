@@ -18,6 +18,7 @@ export const BLOCK = 128;
 export interface NativeCaptureStatus {
   capturedFrames: number;
   overflowCount: number;
+  droppedFrames: number;
   armed: boolean;
   punchEnabled: boolean;
   source: string;
@@ -83,7 +84,7 @@ export interface NativeEngine {
   setExternalMidiClockEnabled(enabled: unknown): void;
   setWarpVoiceCapacity(voices: unknown): void;
   midiInputPendingCount(): number;
-  midiCcBindingCount(): number;
+  midiCcBindings(): unknown[];
   bindMidiCc(binding: unknown): void;
   pushMidiNoteOn(
     destinationId: unknown,
@@ -358,6 +359,10 @@ export interface NativeProject {
   setMidiEvents(clipId: unknown, events?: unknown): void;
   setWarpMap(map: unknown): void;
   setMixerSceneJson(scene: unknown): void;
+  loadSoundFont(data: unknown, uri?: unknown): void;
+  clearSoundFont(uri?: unknown): void;
+  soundFontPresetCount(uri?: unknown): number;
+  soundFontManifest(uri?: unknown): unknown[];
   addAutomationLane(trackId: unknown, desc?: unknown): number;
   editAutomationLane(trackId: unknown, laneId?: unknown, desc?: unknown): void;
   removeAutomationLane(trackId: unknown, laneId?: unknown): void;
@@ -369,8 +374,6 @@ export interface NativeProject {
   trackByIndex(index: unknown): unknown;
   clipByIndex(index: unknown): unknown;
   sourceByIndex(index: unknown): unknown;
-  tempoSegmentByIndex(index: unknown): unknown;
-  timeSignatureByIndex(index: unknown): unknown;
   splitClip(clipId: unknown, ppq?: unknown): number;
   trimClip(clipId: unknown, startPpq?: unknown, lengthPpq?: unknown): void;
   moveClip(clipId: unknown, startPpq?: unknown, trackId?: unknown): void;
@@ -422,7 +425,7 @@ export interface NativeProject {
     sampleRate?: unknown,
     candidateIndex?: unknown,
     applyTimeSignatures?: unknown,
-  ): number;
+  ): { bpm: number; bpmConfidence: number; timeSignature: unknown };
   analyzeTempo(audio: unknown, sampleRate?: unknown): unknown[];
 }
 
@@ -611,7 +614,7 @@ export function transportSnapshot(engine: NativeEngine): string {
     ppq: transport.ppq,
     bpm: transport.bpm,
     midiInputPending: engine.midiInputPendingCount(),
-    midiCcBindings: engine.midiCcBindingCount(),
+    midiCcBindings: engine.midiCcBindings(),
   });
 }
 

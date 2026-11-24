@@ -493,7 +493,24 @@ def test_cqt_human_report(source: Path) -> None:
 def test_cqt_nyquist_relation_is_a_library_refusal(source: Path) -> None:
     result = _run_cli(["cqt", str(source), "--fmin-hz", "20000", "--json"])
     assert result.returncode == EXIT_INVALID_PARAMETER
-    assert "must be less than sr / 2" in result.stderr
+    assert "must be less than sample_rate / 2" in result.stderr
+
+
+def test_a_refused_rate_is_named_sample_rate_not_the_librosa_keyword() -> None:
+    from libsonare import SonareError, SonareValueError
+    from libsonare._cli_common import _error_message
+
+    assert _error_message(SonareValueError("cqt: x must be less than sr / 2")) == (
+        "cqt: x must be less than sample_rate / 2"
+    )
+    assert _error_message(SonareValueError("mel: sr must be an integer")) == (
+        "mel: sample_rate must be an integer"
+    )
+    assert _error_message(SonareValueError("srate, --sr, a.sr and sr() stay")) == (
+        "srate, --sr, a.sr and sr() stay"
+    )
+    coded = SonareError(9, "sr is untouched outside a refusal")
+    assert _error_message(coded) == str(coded)
 
 
 def test_vqt_matches_library(source: Path) -> None:

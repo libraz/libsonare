@@ -341,8 +341,10 @@ export interface CaptureOptions {
 export interface EngineCaptureStatus {
   /** Frames per channel captured so far. */
   capturedFrames: number;
-  /** Number of times captured input did not fit and was dropped. */
+  /** Number of times captured input did not fit and was dropped. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
   overflowCount: number;
+  /** Captured frames discarded because the capture buffer was full. A 64-bit count, exact up to `Number.MAX_SAFE_INTEGER`. */
+  droppedFrames: number;
   /** Whether capture is armed. */
   armed: boolean;
   /** Whether a punch window is configured. */

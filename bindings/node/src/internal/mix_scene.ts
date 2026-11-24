@@ -1,3 +1,4 @@
+import { ErrorCode } from '../errors.js';
 import type { MixSceneBusInput, MixSceneSendInput, MixSceneStripInput } from '../types_mixing.js';
 import {
   PAN_LAW_VALUES,
@@ -5,15 +6,45 @@ import {
   resolveEnumOrdinal,
   SEND_TIMING_VALUES,
 } from '../value_coercion.js';
-import { refuse, refuseType } from './entry.js';
-import { requireListBudget } from './list_budget.js';
-import { isAbsent } from './value_guards.js';
+import { attachRefusal, refusalOf, refuse, refuseType } from './entry.js';
+import { requireListBudget, stringifyWithinBudget } from './list_budget.js';
+import { respellRefusal } from './respell.js';
+import { isAbsent, isPlainRecord } from './value_guards.js';
 
 // The per-strip and per-bus setters take these settings as call arguments, so a wrong type or an unknown token is
 // refused here as TypeError / RangeError. A whole scene document is left to the native reader, which refuses its
 // content as InvalidFormat.
 
 type Loose = Record<string, unknown>;
+
+/** Serialize a typed scene without accepting a replacement root of another shape. */
+export function sceneArgumentJson(scene: unknown): string {
+  if (!isPlainRecord(scene)) {
+    throw refuseType('scene must be an object');
+  }
+  const document = stringifyWithinBudget(scene, 'scene');
+  if (typeof document !== 'string' || !document.startsWith('{')) {
+    throw refuseType('scene must serialize as an object');
+  }
+  return document;
+}
+
+/** Re-root a structured document refusal at the caller's scene argument. */
+export function sceneArgumentRefusal(error: unknown): unknown {
+  const refusal = refusalOf(error);
+  if (refusal?.code !== ErrorCode.InvalidFormat) {
+    return error;
+  }
+  const names = Object.fromEntries(
+    refusal.subjects.map((name) => [name, { name: name ? `scene.${name}` : 'scene', scale: 1 }]),
+  );
+  const rendered = refusalOf(respellRefusal(error, names)) ?? refusal;
+  const argument =
+    rendered.form === 'unknownKey' || rendered.form === 'wrongType'
+      ? refuseType(rendered.text)
+      : refuse(rendered.text);
+  return attachRefusal(argument, { ...rendered, code: ErrorCode.InvalidParameter });
+}
 
 /** A pan-mode token as the native ordinal; a non-string is a `TypeError`, an unknown token a `RangeError`. */
 export function panModeToNative(value: unknown, argName = 'panMode'): number {

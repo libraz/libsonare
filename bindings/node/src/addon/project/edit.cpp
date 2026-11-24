@@ -883,7 +883,9 @@ Napi::Value ProjectWrap::RemoveTrack(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
-  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "trackId", &track_id)) {
+    return env.Undefined();
+  }
   ThrowIfError(env, sonare_project_remove_track(project_, track_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -910,8 +912,10 @@ Napi::Value ProjectWrap::SetTrackRoute(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
-  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
-  // As in RenameTrack, an omitted field goes as nullptr, which clears it like "".
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "trackId", &track_id)) {
+    return env.Undefined();
+  }
+  // An omitted field goes as nullptr to clear it; explicit empty strings reach C for refusal.
   const bool has_strip = info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull();
   const bool has_output = info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull();
   std::string strip;
