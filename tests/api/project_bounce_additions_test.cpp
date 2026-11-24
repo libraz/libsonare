@@ -477,7 +477,7 @@ TEST_CASE("project bounce automatic tail follows the sounded SF2 fallback progra
   sonare_project_bounce_options_init(&options);
   options.sf2_instruments = &sf2;
   options.sf2_instrument_count = 1;
-  const auto render_program = [&](uint8_t program, uint8_t note, int64_t frames = kAutomatic,
+  const auto render_program = [&](uint8_t program, uint8_t note, int64_t frames,
                                   bool sound_note = true) {
     SonareMidiEventPod events[3]{};
     REQUIRE(sonare_midi_program(0.0, 0, 0, program, &events[0]) == SONARE_OK);
@@ -491,7 +491,7 @@ TEST_CASE("project bounce automatic tail follows the sounded SF2 fallback progra
 
   // The idle render includes the arrangement and the default GS system effect budget.
   const auto idle = render_program(kFingeredBass, kBassNote, kAutomatic, false);
-  const auto bass = render_program(kFingeredBass, kBassNote);
+  const auto bass = render_program(kFingeredBass, kBassNote, kAutomatic);
   const auto bass_frames = static_cast<int64_t>(bass.size() / kStereoChannels);
   const auto idle_frames = static_cast<int64_t>(idle.size() / kStereoChannels);
   const auto& bass_patch = sonare::midi::synth::gm_fallback_patch(0, kFingeredBass);
@@ -512,7 +512,7 @@ TEST_CASE("project bounce automatic tail follows the sounded SF2 fallback progra
   CHECK(last_audible_frame > static_cast<int64_t>(kNoteOffPpq * kMusicFrames));
   CHECK(last_audible_frame < bass_frames);
 
-  const auto piano = render_program(0, 60);
+  const auto piano = render_program(0, 60, kAutomatic);
   CHECK(piano.size() > bass.size());
   const size_t last_block = static_cast<size_t>(options.block_size) * kStereoChannels;
   REQUIRE(piano.size() >= last_block);
