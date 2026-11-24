@@ -536,9 +536,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_tempo(double bpm);
   /// Each BPM and nonzero ramp target must be finite and in [1e-6, 100000].
   void set_tempo_segments(std::vector<transport::TempoSegment> segments);
-  /// Throws the capture refusal set_tempo_segments(@p segments) would throw, changing nothing, so
-  /// a caller can refuse a tempo before its first mutation. The segments must already be valid.
-  void check_tempo_segments(const std::vector<transport::TempoSegment>& segments) const;
+  /// Throws the capture refusal installing @p segments would throw, naming @p subject and changing
+  /// nothing, so a caller can refuse a tempo before its first mutation. The segments must already
+  /// be valid.
+  void check_tempo_segments(const std::vector<transport::TempoSegment>& segments,
+                            const char* subject) const;
   void set_time_signature(int numerator, int denominator);
   void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
   int64_t sample_at_ppq(double ppq) const noexcept;
@@ -1552,8 +1554,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   static void check_capture_loop(const CaptureLoop& state,
                                  std::initializer_list<const char*> subjects,
                                  CaptureLoopBound bound = CaptureLoopBound::kLoopAtLeastOffset);
-  void check_tempo_segments_for_capture(const std::vector<transport::TempoSegment>& segments,
-                                        const char* subject) const;
   void adopt_tempo_map_snapshot() noexcept;
   // The whole of prepare()'s acquisition sequence. prepare() wraps it so a
   // throw from any step lands in one place. Returns false when a bound

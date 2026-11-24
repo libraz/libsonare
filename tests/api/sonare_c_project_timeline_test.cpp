@@ -365,6 +365,45 @@ TEST_CASE(
   sonare_project_destroy(base.project);
 }
 
+TEST_CASE("C API names the timeline tempo segments when capture refuses an applied tempo",
+          "[timeline-apply][c_api]") {
+  const std::vector<float> tone = stereo_tone(kSampleRate);
+  TestProject built = build_project(tone);
+  SonareEngine* engine = prepared_engine();
+  apply_project(engine, built.project);
+
+  // A one-quarter loop with capture armed, punch on and a record offset of one pass.
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, 1.0, 1) == SONARE_OK);
+  std::vector<float> plane(static_cast<size_t>(kSampleRate), 0.0f);
+  float* channels[1] = {plane.data()};
+  const SonareEngineCaptureBuffer buffer{channels, 1, static_cast<int64_t>(plane.size())};
+  REQUIRE(sonare_engine_set_capture_buffer(engine, &buffer) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  int64_t pass = 0;
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0, &pass) == SONARE_OK);
+  REQUIRE(sonare_engine_set_record_offset_samples(engine, pass) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 0, pass, 1) == SONARE_OK);
+
+  // Doubling the tempo halves the loop below the stored offset.
+  const SonareProjectTempoSegment faster[] = {{0.0, 240.0, 0.0}};
+  REQUIRE(sonare_project_set_tempo_segments(built.project, faster, 1) == SONARE_OK);
+  SonareProjectTimeline* timeline = compile_timeline(built.project);
+  REQUIRE(sonare_engine_apply_project_timeline(engine, timeline) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_project_timeline_destroy(timeline);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(sonare_last_refusal_subject(0) == std::string("timeline.tempoSegments"));
+  CHECK(std::string(sonare_last_error_message()) ==
+        "timeline.tempoSegments must keep the loop at least " + std::to_string(pass) +
+            " samples long while capture is armed with punch on");
+
+  int64_t unchanged = 0;
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0, &unchanged) == SONARE_OK);
+  CHECK(unchanged == pass);
+  sonare_engine_destroy(engine);
+  sonare_project_destroy(built.project);
+}
+
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("applied timeline binds a 1:1 scene strip like the project bounce mixes it",
           "[timeline-apply][c_api]") {

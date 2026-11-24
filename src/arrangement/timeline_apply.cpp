@@ -1,5 +1,6 @@
 #include <array>
 #include <cmath>
+#include <exception>
 #include <limits>
 #include <new>
 #include <string>
@@ -31,6 +32,13 @@ ApplyResult apply_refused(ErrorCode code, std::string_view message) {
     result.message = message;
   } catch (const std::bad_alloc&) {
   }
+  return result;
+}
+
+// Called inside a handler: keeps the refusal so the entry rethrows it with its subjects.
+ApplyResult apply_refused(const SonareParameterRefusal& refusal) {
+  ApplyResult result = apply_refused(refusal.code(), refusal.what());
+  result.refusal = std::current_exception();
   return result;
 }
 
@@ -244,9 +252,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     transport::check_public_tempo_segments(timeline.tempo_segments, "timeline.tempoSegments",
                                            "endBpm");
   } catch (const SonareParameterRefusal& e) {
-    ApplyResult result = apply_refused(e.code(), e.what());
-    result.refusal = std::current_exception();
-    return result;
+    return apply_refused(e);
   } catch (const std::bad_alloc&) {
     return apply_refused(ErrorCode::OutOfMemory, "out of memory");
   }
@@ -328,7 +334,8 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     engine.check_tempo_segments(
         timeline.tempo_segments.empty()
             ? std::vector<transport::TempoSegment>{transport::kDefaultTempoSegment}
-            : timeline.tempo_segments);
+            : timeline.tempo_segments,
+        "timeline.tempoSegments");
     playback_lanes = resolve_playback_lanes(timeline, &playback_lane_tracks, options.bind_strips);
     result.installed_automation = playback_lanes;
 
@@ -336,6 +343,8 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
 #if defined(SONARE_WITH_ARRANGEMENT)
     prepared_midi = engine.prepare_midi_clips(timeline.midi_clips);
 #endif
+  } catch (const SonareParameterRefusal& e) {
+    return apply_refused(e);
   } catch (const SonareException& e) {
     return apply_refused(e.code(), e.what());
   } catch (const std::bad_alloc&) {

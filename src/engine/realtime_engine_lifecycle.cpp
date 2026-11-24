@@ -665,7 +665,7 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 void RealtimeEngine::set_tempo(double bpm) {
   util::check::within(bpm, transport::kTempoBpmDomain, "bpm");
   std::vector<transport::TempoSegment> segments{{0.0, bpm, 0.0}};
-  check_tempo_segments_for_capture(segments, "bpm");
+  check_tempo_segments(segments, "bpm");
   control_single_tempo_bpm_ = bpm;
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
@@ -681,18 +681,13 @@ void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> seg
     }
     transport::check_public_tempo_segment(segment, i);
   }
-  check_tempo_segments(segments);
+  check_tempo_segments(segments, "segments");
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
 }
 
-void RealtimeEngine::check_tempo_segments(
-    const std::vector<transport::TempoSegment>& segments) const {
-  check_tempo_segments_for_capture(segments, "segments");
-}
-
-void RealtimeEngine::check_tempo_segments_for_capture(
-    const std::vector<transport::TempoSegment>& segments, const char* subject) const {
+void RealtimeEngine::check_tempo_segments(const std::vector<transport::TempoSegment>& segments,
+                                          const char* subject) const {
   CaptureLoop state = current_capture_loop();
   const auto map = build_tempo_map(sample_rate_, segments, control_single_tempo_bpm_);
   state.map = map.get();

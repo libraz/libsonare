@@ -6,6 +6,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <string>
 #include <vector>
@@ -519,13 +520,22 @@ TEST_CASE(
       direct_text = e.what();
     }
   }
-  REQUIRE_FALSE(direct_text.empty());
+  const std::string relation = " must keep the loop at least " + std::to_string(offset) +
+                               " samples long while capture is armed with punch on";
+  CHECK(direct_text == "segments" + relation);
 
+  // The apply names the timeline field it was given, never the setter's own argument.
   const arr::ApplyResult result = arr::apply_to_engine(b, engine, {});
   REQUIRE_FALSE(result.ok());
   CHECK(result.code == ErrorCode::InvalidParameter);
   CHECK(result.outcome == arr::ApplyOutcome::kUnchanged);
-  CHECK(result.message == direct_text);
+  CHECK(result.message == "timeline.tempoSegments" + relation);
+  REQUIRE(result.refusal);
+  try {
+    std::rethrow_exception(result.refusal);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    CHECK(refusal.subjects() == std::vector<std::string>{"timeline.tempoSegments"});
+  }
   CHECK(capture(engine) == before);
   const sonare::transport::TransportState transport = engine.transport_state_control();
   CHECK(transport.looping);
