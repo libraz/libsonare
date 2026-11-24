@@ -228,6 +228,17 @@ const captureError = (run: () => unknown): SonareErrorShape | undefined => {
   }
 };
 
+describe('frame conversion geometry', () => {
+  it('raises a native RangeError and clears the refusal on a valid zero result', () => {
+    for (const convert of [addon.framesToSamples, addon.samplesToFrames]) {
+      const invalid = () => convert(16, 0, 0);
+      expect(invalid).toThrow(RangeError);
+      expect(invalid).toThrow('hop_length must be an integer in [1, 2147483647]');
+      expect(convert(0, 1, 0)).toBe(0);
+    }
+  });
+});
+
 describe('the HPSS positional readers default only an omitted argument', () => {
   const tone = new Float32Array(2048).map((_, i) => Math.sin((2 * Math.PI * 440 * i) / SR));
 

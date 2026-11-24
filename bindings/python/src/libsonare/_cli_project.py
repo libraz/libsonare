@@ -682,11 +682,55 @@ def cmd_midi_render(args: argparse.Namespace) -> int:
 def _transcribe_refusal(args: argparse.Namespace) -> str | None:
     """The refusal of a --transcribe combination decided from argv, or None when it reads."""
     f0_min, f0_max = args.f0_min_hz, args.f0_max_hz
-    if f0_min is not None and f0_max is not None and f0_max <= f0_min:
-        return (
-            f"--f0-max-hz must be greater than --f0-min-hz "
-            f"(--f0-min-hz {f0_min:g}, --f0-max-hz {f0_max:g})"
+    if f0_min is not None or f0_max is not None:
+        import ctypes
+
+        from ._ffi import SonareTranscribeConfig
+        from ._runtime import (
+            SonareValueError,
+            _check,
+            _get_lib,
+            _render_as_given,
+            _Respelling,
+            _to_c_float,
         )
+
+        # C initializes NaN absence and resolves the selected source's defaults, so the CLI does
+        # not carry a second copy of the monophonic/polyphonic range.
+        config = SonareTranscribeConfig()
+        config.polyphonic = int(args.polyphonic)
+        for field, flag, value in (
+            ("f0_min_hz", "--f0-min-hz", f0_min),
+            ("f0_max_hz", "--f0-max-hz", f0_max),
+        ):
+            if value is not None:
+                try:
+                    setattr(config, field, _to_c_float(value, flag).value)
+                except SonareValueError:
+                    return f"argument {flag}: must be finite"
+        lib = _get_lib()
+        rc = int(lib.sonare_validate_transcribe_config(ctypes.byref(config)))
+        if rc == int(ErrorCode.INVALID_PARAMETER):
+            if lib.sonare_last_refusal_subject_count() != 2:
+                rendered = _render_as_given(
+                    lib,
+                    "config",
+                    {
+                        "f0_min_hz": _Respelling("argument --f0-min-hz:"),
+                        "f0_max_hz": _Respelling("argument --f0-max-hz:"),
+                    },
+                )
+                if rendered is not None:
+                    return rendered[0]
+                return (lib.sonare_last_error_message() or b"").decode("utf-8")
+            if f0_min is not None and f0_max is not None:
+                return (
+                    f"--f0-max-hz must be greater than --f0-min-hz "
+                    f"(--f0-min-hz {config.f0_min_hz:g}, --f0-max-hz {config.f0_max_hz:g})"
+                )
+            return "--f0-max-hz must be greater than --f0-min-hz"
+        if rc != 0:
+            _check(rc)
     # 0 is "no split"; a given ratio otherwise has to exceed 1 (the facade's reattack_ratio rule).
     if args.reattack_ratio is not None and args.reattack_ratio != 0 and args.reattack_ratio <= 1:
         return "--reattack-ratio must be 0 (no split) or greater than 1"

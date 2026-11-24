@@ -331,6 +331,28 @@
       "sentinel": null
     },
     {
+      "entry": "audio_dynamic_range",
+      "param": "high_percentile",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
+    },
+    {
+      "entry": "audio_dynamic_range",
+      "param": "low_percentile",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
+    },
+    {
       "entry": "audio_from_file",
       "param": "options.channel_index",
       "kind": "integer",
@@ -2421,6 +2443,28 @@
       "sentinel": null
     },
     {
+      "entry": "frames_to_samples",
+      "param": "hop_length",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "frames_to_samples",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
       "entry": "frames_to_time",
       "param": "hop_length",
       "kind": "integer",
@@ -3464,6 +3508,28 @@
       "hi_included": true,
       "stricter": null,
       "sentinel": null
+    },
+    {
+      "entry": "metering_dynamic_range",
+      "param": "high_percentile",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
+    },
+    {
+      "entry": "metering_dynamic_range",
+      "param": "low_percentile",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "metering_silence_ratio",
@@ -7250,6 +7316,28 @@
       "sentinel": null
     },
     {
+      "entry": "samples_to_frames",
+      "param": "hop_length",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "samples_to_frames",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
       "entry": "scale_correction_semitones",
       "param": "mode_mask",
       "kind": "integer",
@@ -7702,10 +7790,32 @@
     },
     {
       "entry": "spectral_edit",
+      "param": "ops[].end_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "spectral_edit",
       "param": "ops[].mode",
       "kind": "integer",
       "lo": 0,
       "hi": 3,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "spectral_edit",
+      "param": "ops[].start_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

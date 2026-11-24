@@ -17,6 +17,19 @@ describe('boundary regressions (WASM)', () => {
     await init();
   });
 
+  it('names frame conversion geometry on direct module calls', () => {
+    const module = getSonareModule();
+    for (const convert of [module.framesToSamples, module.samplesToFrames]) {
+      const noHop = () => convert(16, 0, 0);
+      const negativeFft = () => convert(16, 512, -1);
+      expect(noHop).toThrow(RangeError);
+      expect(noHop).toThrow('hopLength must be an integer in [1, 2147483647]');
+      expect(negativeFft).toThrow(RangeError);
+      expect(negativeFft).toThrow('nFft must be an integer in [1, 2147483647]');
+      expect(convert(0, 1, 0)).toBe(0);
+    }
+  });
+
   it('rejects inverse matrix overflow shapes before copying or entering the core', () => {
     const module = getSonareModule();
     const tiny = new Float32Array(1);

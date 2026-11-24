@@ -265,13 +265,13 @@ def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = No
             ``[1, 2147483647]``.
     """
     lib = _get_lib()
-    return int(
-        lib.sonare_frames_to_samples(
-            _to_c_int(frames, "frames"),
-            _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
-            _centring_n_fft(n_fft),
-        )
+    result = lib.sonare_frames_to_samples(
+        _to_c_int(frames, "frames"),
+        _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
+        _centring_n_fft(n_fft),
     )
+    _check(lib.sonare_last_error_code())
+    return int(result)
 
 
 @_entry("samples_to_frames")
@@ -285,13 +285,13 @@ def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = N
             ``[1, 2147483647]``.
     """
     lib = _get_lib()
-    return int(
-        lib.sonare_samples_to_frames(
-            _to_c_int(samples, "samples"),
-            _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
-            _centring_n_fft(n_fft),
-        )
+    result = lib.sonare_samples_to_frames(
+        _to_c_int(samples, "samples"),
+        _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
+        _centring_n_fft(n_fft),
     )
+    _check(lib.sonare_last_error_code())
+    return int(result)
 
 
 @_entry("power_to_db")

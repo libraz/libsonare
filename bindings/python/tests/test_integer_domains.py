@@ -144,7 +144,12 @@ _ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
         "n_frames": 8,
         "n_components": 2,
     },
+    "samples_to_frames": {"samples": 1024},
 }
+
+# Keywords whose explicit 0 is refused as the spelling of absence ("omit it"), so the
+# out-of-domain probe steps past it to the first negative value.
+_ZERO_MEANS_OMIT = {("frames_to_samples", "n_fft"), ("samples_to_frames", "n_fft")}
 
 
 # The C types' own ranges, which a binding reader states when no core domain applies.
@@ -240,7 +245,10 @@ def test_a_non_integer_is_refused_in_the_core_domain(
 def test_the_core_refuses_an_integer_outside_the_row_in_the_same_text(
     entry: str, keyword: str, lo: int, hi: int | None, stricter: str | None
 ) -> None:
-    assert _domain_text(keyword, lo, hi, stricter) in _refusal(entry, keyword, lo - 1)
+    below = lo - 1
+    if below == 0 and (entry, keyword) in _ZERO_MEANS_OMIT:
+        below = -1
+    assert _domain_text(keyword, lo, hi, stricter) in _refusal(entry, keyword, below)
 
 
 @pytest.mark.slow

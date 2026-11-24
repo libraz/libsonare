@@ -2249,6 +2249,7 @@
 "tuning_to_reference_hz": {"domain": "analysis", "surfaces": ["c", "node", "python", "wasm"]},
 "ump_words": {"domain": "engine", "surfaces": ["node", "wasm"]},
 "validate_realtime_voice_changer_preset_json": {"domain": "effects", "surfaces": ["python"]},
+"validate_transcribe_config": {"domain": "analysis", "surfaces": ["c"]},
 "value_error": {"domain": "core", "surfaces": ["python"]},
 "vector_normalize": {"domain": "analysis", "surfaces": ["c", "node", "python", "wasm"]},
 "vector_normalize_request": {"domain": "analysis", "surfaces": ["node", "wasm"]},

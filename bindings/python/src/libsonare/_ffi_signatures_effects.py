@@ -318,6 +318,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     # sonare_transcribe + sonare_free_transcribe_result.
     lib.sonare_transcribe_config_init.restype = None
     lib.sonare_transcribe_config_init.argtypes = [ctypes.POINTER(SonareTranscribeConfig)]
+    lib.sonare_validate_transcribe_config.restype = ctypes.c_int32
+    lib.sonare_validate_transcribe_config.argtypes = [ctypes.POINTER(SonareTranscribeConfig)]
     lib.sonare_transcribe.restype = ctypes.c_int32
     lib.sonare_transcribe.argtypes = [
         ctypes.POINTER(ctypes.c_float),

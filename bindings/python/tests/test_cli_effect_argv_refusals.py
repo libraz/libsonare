@@ -95,6 +95,38 @@ def _run_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
             "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 100, --f0-max-hz 50)",
         ),
         (
+            ["transcribe", MISSING, "--f0-min-hz", "2100", *OUT],
+            "--f0-max-hz must be greater than --f0-min-hz",
+        ),
+        (
+            ["transcribe", MISSING, "--polyphonic", "--f0-min-hz", "1800", *OUT],
+            "--f0-max-hz must be greater than --f0-min-hz",
+        ),
+        (
+            ["transcribe", MISSING, "--f0-max-hz", "64", *OUT],
+            "--f0-max-hz must be greater than --f0-min-hz",
+        ),
+        (
+            ["transcribe", MISSING, "--polyphonic", "--f0-max-hz", "54", *OUT],
+            "--f0-max-hz must be greater than --f0-min-hz",
+        ),
+        (
+            ["transcribe", MISSING, "--f0-min-hz", "1e-50", *OUT],
+            "argument --f0-min-hz: must be finite and greater than 0",
+        ),
+        (
+            [
+                "transcribe",
+                MISSING,
+                "--f0-min-hz",
+                "100.000001",
+                "--f0-max-hz",
+                "100.000002",
+                *OUT,
+            ],
+            "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 100, --f0-max-hz 100)",
+        ),
+        (
             ["transcribe", MISSING, "--velocity-floor-db", "5", "-o", "o.mid"],
             "argument --velocity-floor-db: must be finite and less than 0",
         ),

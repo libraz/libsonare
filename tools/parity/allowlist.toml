@@ -92,6 +92,10 @@ python = [
 #     SonareStrip*; every strip op takes an index or an id and resolves the
 #     borrowed handle internally.
 node = [
+  # Intentionally one-sided: the command lines' argv-decidable transcription preflight,
+  # run before opening audio; the facade validates inside the transcribe call it already
+  # makes. Expires if this facade ever wraps the validator.
+  "validate_transcribe_config",
   # Platform constraint: only the WASM worklet must size its output bus before a
   # renderer exists, so the two playback channel-count probes have no mirror here.
   "playback_config_num_output_channels",
@@ -160,6 +164,10 @@ node = [
   "project_assist_apply_json",
 ]
 wasm = [
+  # Intentionally one-sided: the command lines' argv-decidable transcription preflight,
+  # run before opening audio; the facade validates inside the transcribe call it already
+  # makes. Expires if this facade ever wraps the validator.
+  "validate_transcribe_config",
   # Platform constraint: AudioWorkletNode fixes its output channel count before the
   # processor exists, so SonarePlaybackNode reads it from the config and the processor
   # sizes its input planes from the renderer; neither is a public operation of its own.

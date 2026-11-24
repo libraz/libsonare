@@ -66,14 +66,22 @@ int js_time_to_frames(const val& time_val, const val& sr, const val& hop_length)
                         domainNumberFromVal<int>(hop_length, "hopLength", kFrameTimeHopDomain));
 }
 int js_frames_to_samples(const val& frames, const val& hop_length, const val& n_fft) {
-  return frames_to_samples(checkedIntFromVal(frames, "frames"),
-                           checkedIntFromVal(hop_length, "hopLength"),
-                           checkedIntFromVal(n_fft, "nFft"));
+  return util::check::with_camel_paths(
+      [&] {
+        return frames_to_samples(checkedIntFromVal(frames, "frames"),
+                                 checkedIntFromVal(hop_length, "hopLength"),
+                                 checkedIntFromVal(n_fft, "nFft"));
+      },
+      std::array<util::check::MemberKey, 0>{});
 }
 int js_samples_to_frames(const val& samples, const val& hop_length, const val& n_fft) {
-  return samples_to_frames(checkedIntFromVal(samples, "samples"),
-                           checkedIntFromVal(hop_length, "hopLength"),
-                           checkedIntFromVal(n_fft, "nFft"));
+  return util::check::with_camel_paths(
+      [&] {
+        return samples_to_frames(checkedIntFromVal(samples, "samples"),
+                                 checkedIntFromVal(hop_length, "hopLength"),
+                                 checkedIntFromVal(n_fft, "nFft"));
+      },
+      std::array<util::check::MemberKey, 0>{});
 }
 
 val js_power_to_db(val values, const val& ref_val, const val& amin_val, const val& top_db_val) {

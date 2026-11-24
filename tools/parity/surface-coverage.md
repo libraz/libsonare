@@ -25,8 +25,8 @@ The two command-line front-ends get a column each because they are two binaries:
 | room acoustics | 12 | 7/12 | 7/12 | 7/12 | 5/12 | 5/12 |
 | sample bank | 6 | 6/6 | 6/6 | 6/6 | 2/6 | 2/6 |
 | streaming | 31 | 29/31 | 29/31 | 29/31 | 8/31 | 8/31 |
-| transcription | 4 | 3/4 | 4/4 | 4/4 | 2/4 | 2/4 |
+| transcription | 5 | 3/5 | 4/5 | 4/5 | 2/5 | 2/5 |
 | vocal edit | 57 | 43/57 | 56/57 | 56/57 | 11/57 | 11/57 |
 | vocal project | 10 | 6/10 | 10/10 | 10/10 | 2/10 | 2/10 |
 | voice changer | 24 | 22/24 | 23/24 | 23/24 | 2/24 | 2/24 |
-| **all domains** | **1096** | **960/1096** | **1040/1096 (1 core)** | **995/1096 (2 core)** | **189/1096** | **184/1096** |
+| **all domains** | **1097** | **960/1097** | **1040/1097 (1 core)** | **995/1097 (2 core)** | **189/1097** | **184/1097** |

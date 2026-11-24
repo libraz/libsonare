@@ -146,7 +146,13 @@ Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "hopLength", &hop)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 0, &n_fft)) return env.Undefined();
-  return Napi::Number::New(env, sonare_frames_to_samples(frames, hop, n_fft));
+  const int result = sonare_frames_to_samples(frames, hop, n_fft);
+  const SonareError error = sonare_last_error_code();
+  if (error != SONARE_OK) {
+    ThrowSonareErrorPreservingRefusal(env, error);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, result);
   SONARE_NODE_CATCH(env)
 }
 
@@ -159,7 +165,13 @@ Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "hopLength", &hop)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 0, &n_fft)) return env.Undefined();
-  return Napi::Number::New(env, sonare_samples_to_frames(samples, hop, n_fft));
+  const int result = sonare_samples_to_frames(samples, hop, n_fft);
+  const SonareError error = sonare_last_error_code();
+  if (error != SONARE_OK) {
+    ThrowSonareErrorPreservingRefusal(env, error);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, result);
   SONARE_NODE_CATCH(env)
 }
 
