@@ -366,6 +366,7 @@ struct AudioPayloadNames {
   const char* frames;
   const char* channels;
   const char* sample_rate;
+  bool finite_subject_is_indexed = false;
 };
 
 // Throws for the first field of an inline audio payload it rejects; no buffer and
@@ -391,6 +392,10 @@ void check_audio_payload(const AudioPayloadNames& n, const Desc* desc) {
       static_cast<size_t>(desc->audio_frames) * static_cast<size_t>(desc->audio_channels);
   for (size_t index = 0; index < total; ++index) {
     if (!std::isfinite(desc->audio_interleaved[index])) {
+      if (n.finite_subject_is_indexed) {
+        const std::string subject = std::string(n.interleaved) + "[" + std::to_string(index) + "]";
+        util::check::refuse(subject.c_str(), "must be finite");
+      }
       util::check::refuse(n.interleaved,
                           "contains a non-finite sample at index " + std::to_string(index));
     }
@@ -684,7 +689,7 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
   if (const SonareError err = run_validation([&] {
         // Unlike a clip descriptor, this entry has no empty payload: the source needs PCM.
         sonare::util::check::non_null(interleaved, "interleaved");
-        check_audio_payload({"interleaved", "frames", "channels", "sample_rate"}, &desc);
+        check_audio_payload({"interleaved", "frames", "channels", "sample_rate", true}, &desc);
       });
       err != SONARE_OK) {
     return err;

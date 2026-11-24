@@ -94,7 +94,7 @@ inline const char* presence_phrase(const std::string& token, PresenceSpelling sp
 /// @brief Whether @p pattern requires a value to be left out or supplied: it carries a
 ///        required-presence or required-absence token. A presence
 ///        token in a condition (`{is_absent}`, `{is_present}`) requires nothing of its own.
-inline bool requires_presence(const std::string& pattern) {
+inline bool requires_presence(const std::string& pattern) noexcept {
   for (const char* token :
        {"{must_be_absent}", "{must_be_present}", "{must_not_both_be_absent}", "{give_either}"}) {
     if (pattern.find(token) != std::string::npos) return true;
@@ -173,7 +173,7 @@ class SonareParameterRefusal : public SonareException {
   /// @brief Whether the refusal is of the request's shape rather than of a value's domain: an
   ///        unknown key, a wrong type, or a value required to be left out or supplied. It is read
   ///        off the text, so every call site of a presence template gets the same verdict.
-  bool shape_error() const {
+  bool shape_error() const noexcept {
     return form_ == Form::WrongType || form_ == Form::UnknownKey || requires_presence(predicate_);
   }
   /// @brief The first subject.

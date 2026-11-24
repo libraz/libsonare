@@ -117,7 +117,8 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
     }
     const int64_t page_start = page_index * page_frames_;
     if (page_start >= samples_) return false;
-    const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
+    const int64_t max_frames =
+        sonare::engine::clip_page_expected_frame_count(page_index, samples_, page_frames_);
     if (frames != max_frames) return false;
     auto page = std::make_unique<Page>();
     page->frames = frames;

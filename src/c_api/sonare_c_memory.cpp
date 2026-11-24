@@ -282,6 +282,11 @@ const char* sonare_last_refusal_subject(size_t index) { return last_refusal_subj
 
 const char* sonare_last_refusal_entry(void) { return last_refusal_entry(); }
 
+int sonare_last_refusal_is_shape(void) {
+  const auto* refusal = last_parameter_refusal();
+  return refusal != nullptr && refusal->shape_error();
+}
+
 SonareError sonare_last_refusal_render(const char* const* subjects, const double* scales,
                                        size_t subject_count, SonarePresenceSpelling spelling,
                                        char** out_text) {

@@ -344,10 +344,8 @@ SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, i
     util::check::integer_in_range(page_index, 0, pages.page_count() - 1, "page_index");
     util::check::non_null(channels, "channels");
     util::check::one_of(num_channels, std::array<int, 1>{pages.num_channels()}, "num_channels");
-    const int64_t page_start = page_index * pages.page_frames();
-    const int64_t expected_frames =
-        std::min<int64_t>(pages.page_frames(), pages.num_samples() - page_start);
-    util::check::one_of(frames, std::array<int64_t, 1>{expected_frames}, "frames");
+    engine::admit_clip_page_frame_count(page_index, pages.num_samples(), pages.page_frames(),
+                                        frames, "frames");
     for (int ch = 0; ch < pages.num_channels(); ++ch) {
       util::check::non_null(channels[ch], ("channels[" + std::to_string(ch) + "]").c_str());
     }

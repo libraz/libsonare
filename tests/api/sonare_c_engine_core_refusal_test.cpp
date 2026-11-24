@@ -757,6 +757,15 @@ TEST_CASE("clip page provider refusals", "[c_api][engine_refusal]") {
   CHECK(sonare_clip_page_provider_supply(provider, 0, channels, 1, 5) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("frames", refusal::one_of_predicate(std::array<int, 1>{32})));
+
+  SonareClipPageProvider* partial_provider = nullptr;
+  REQUIRE(sonare_clip_page_provider_create(1, 34, 32, &partial_provider) == SONARE_OK);
+  const float partial_page[1] = {};
+  const float* partial_channels[1] = {partial_page};
+  CHECK(sonare_clip_page_provider_supply(partial_provider, 1, partial_channels, 1, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("frames", refusal::one_of_predicate(std::array<int64_t, 1>{2})));
+  sonare_clip_page_provider_destroy(partial_provider);
   const float* null_channel[1] = {nullptr};
   CHECK(sonare_clip_page_provider_supply(provider, 0, null_channel, 1, 32) ==
         SONARE_ERROR_INVALID_PARAMETER);

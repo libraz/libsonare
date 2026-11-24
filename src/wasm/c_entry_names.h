@@ -452,6 +452,7 @@ inline constexpr std::string_view kTokens[] = {
     "last_error_message",
     "last_error_reason",
     "last_refusal_entry",
+    "last_refusal_is_shape",
     "last_refusal_render",
     "last_refusal_subject",
     "last_refusal_subject_count",

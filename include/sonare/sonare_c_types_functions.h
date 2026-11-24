@@ -683,6 +683,11 @@ const char* sonare_last_refusal_subject(size_t index);
 ///   error on the same thread. This accessor records no error and clears none.
 const char* sonare_last_refusal_entry(void);
 
+/// @brief 1 for a recorded wrong type, unknown key, or missing or unexpected argument.
+/// @return 0 for a value-domain refusal or when no refusal is recorded.
+/// @note Reading this thread-local status does not clear the error.
+int sonare_last_refusal_is_shape(void);
+
 /// @brief Renders the last parameter refusal's message with @p subjects in place of its own.
 /// @param subjects @p subject_count replacement subjects, in the order of
 ///   @ref sonare_last_refusal_subject.
