@@ -2142,22 +2142,27 @@ TEST_CASE("project C surface MIDI 2.0 builders refuse out-of-range fields", "[pr
 TEST_CASE("project C surface MIDI builders define the event on a rejected call",
           "[project][midi]") {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  SonareMidiEventPod pod;
-  std::memset(&pod, 0xA5, sizeof(pod));
+  const uint8_t sysex[] = {0xf0, 0xf7};
+  const SonareMidiEventPod populated{1.0, 1u, 2u, sysex, sizeof(sysex)};
+  auto pod = populated;
+  const auto check_cleared = [&] {
+    CHECK(pod.ppq == 0.0);
+    CHECK(pod.word0 == 0u);
+    CHECK(pod.word1 == 0u);
+    CHECK(pod.sysex == nullptr);
+    CHECK(pod.sysex_size == 0u);
+  };
+
   REQUIRE(sonare_midi_note_on(0.0, 16, 0, 60, 100, &pod) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(pod.ppq == 0.0);
-  CHECK(pod.word0 == 0u);
-  CHECK(pod.word1 == 0u);
+  check_cleared();
 
-  std::memset(&pod, 0xA5, sizeof(pod));
+  pod = populated;
   REQUIRE(sonare_midi_pitch_bend(0.0, 0, 0, 16384, &pod) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(pod.ppq == 0.0);
-  CHECK(pod.word0 == 0u);
+  check_cleared();
 
-  std::memset(&pod, 0xA5, sizeof(pod));
+  pod = populated;
   REQUIRE(sonare_midi2_note_on(0.0, 0, 0, 128, 0, 0, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(pod.ppq == 0.0);
-  CHECK(pod.word0 == 0u);
+  check_cleared();
 
   REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 #endif
