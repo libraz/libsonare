@@ -1095,9 +1095,10 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
   const SonareError err = do_project_bounce(project, options, instruments.hosted, count_in_frames,
                                             &audio, &samples, &channels);
   if (err != SONARE_OK) return err;
-  const int64_t prefix = options != nullptr && options->total_frames > 0
-                             ? std::min(count_in_frames, options->total_frames)
-                             : count_in_frames;
+  const int64_t prefix =
+      options != nullptr && options->total_frames != SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT
+          ? std::min(count_in_frames, options->total_frames)
+          : count_in_frames;
   const SonareError click_err =
       add_bounce_count_in(&audio, &samples, channels, prefix, options ? options->block_size : 0,
                           rate, click_map, click);
