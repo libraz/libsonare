@@ -120,16 +120,6 @@ SonareError refuse_state(const char* message) {
   return SONARE_ERROR_INVALID_STATE;
 }
 
-SonareError refuse_state_with_diagnostic(const char* message,
-                                         const std::vector<arr::Diagnostic>& diagnostics) {
-  const auto error = std::find_if(diagnostics.begin(), diagnostics.end(), [](const auto& d) {
-    return d.severity == arr::Diagnostic::Severity::kError;
-  });
-  if (error == diagnostics.end() || error->message.empty()) return refuse_state(message);
-  const std::string detail = std::string(message) + ": " + error->message;
-  return refuse_state(detail.c_str());
-}
-
 // The subject naming one hosted instrument as the caller's array spells it.
 std::string instrument_subject(size_t index) {
   return "options.instruments[" + std::to_string(index) + "]";

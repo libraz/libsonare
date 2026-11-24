@@ -920,6 +920,29 @@ TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_
 #endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_project_sound_font_manifest names the first compile error", "[project][sf2]") {
+  const std::string json =
+      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":"audio",)"
+      R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
+      R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
+      R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
+      R"("fadeIn":{"lengthPpq":0,"curve":"linear"},"fadeOut":{"lengthPpq":0,"curve":"linear"},)"
+      R"("loopMode":"off","loopLengthPpq":0,"warpRefId":0}]})";
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, nullptr) == SONARE_OK);
+  REQUIRE(project != nullptr);
+
+  size_t total = 9;
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, nullptr, 0, &total) ==
+          SONARE_ERROR_INVALID_STATE);
+  CHECK(total == 0);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "the project does not compile: clip references a source id that is not registered");
+  sonare_project_destroy(project);
+}
+#endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("project SoundFont entries refuse an argument by its header name", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

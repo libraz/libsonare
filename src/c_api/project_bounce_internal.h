@@ -21,6 +21,19 @@
 
 namespace sonare_c_bounce_detail {
 
+// An INVALID_STATE refusal for a project that does not compile or a mix that does not
+// schedule; the message carries the first error diagnostic when one has text.
+inline SonareError refuse_state_with_diagnostic(const char* message,
+                                                const std::vector<arr::Diagnostic>& diagnostics) {
+  const auto error = std::find_if(diagnostics.begin(), diagnostics.end(), [](const auto& d) {
+    return d.severity == arr::Diagnostic::Severity::kError;
+  });
+  std::string detail = message;
+  if (error != diagnostics.end() && !error->message.empty()) detail += ": " + error->message;
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, detail.c_str());
+  return SONARE_ERROR_INVALID_STATE;
+}
+
 inline bool checked_nonnegative_add(int64_t lhs, int64_t rhs, int64_t* out) noexcept {
   return lhs >= 0 && rhs >= 0 && sonare::numeric::checked_add(lhs, rhs, out);
 }

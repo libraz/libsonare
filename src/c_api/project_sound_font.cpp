@@ -209,10 +209,8 @@ SonareError sonare_project_sound_font_manifest(const SonareProject* project, con
   arr::CompileResult compiled =
       arr::compile(project->history.project(), project->history.midi_content(), project->audio, {});
   if (!compiled.timeline.has_value()) {
-    sonare_c_detail::set_last_error(
-        SONARE_ERROR_INVALID_STATE,
-        "the project does not compile; its compile diagnostics name the cause");
-    return SONARE_ERROR_INVALID_STATE;
+    return sonare_c_bounce_detail::refuse_state_with_diagnostic("the project does not compile",
+                                                                compiled.diagnostics);
   }
   const std::vector<SonareSf2ProgramStatus> manifest = build_manifest(
       *compiled.timeline, project->sound_font(key), project->history.project().sample_rate());
