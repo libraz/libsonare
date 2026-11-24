@@ -14,6 +14,7 @@ import struct
 import subprocess
 import sys
 import wave
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,23 @@ def _run_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
         text=True,
         env=env,
     )
+
+
+@pytest.fixture(params=["python", "native"])
+def run_cli(
+    request: pytest.FixtureRequest,
+) -> Callable[[list[str]], subprocess.CompletedProcess[str]]:
+    if request.param == "python":
+        return _run_cli
+    root = Path(__file__).resolve().parents[3]
+    binary = Path(os.environ.get("SONARE_NATIVE_CLI") or root / "build/bin/sonare-cli")
+    if not binary.is_file():
+        pytest.skip("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+
+    def run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([str(binary), *args], capture_output=True, text=True)
+
+    return run
 
 
 def _write(path: Path, samples: list[float]) -> Path:
@@ -90,6 +108,31 @@ def _json(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
     assert result.returncode == 0, result.stderr
     payload: dict[str, Any] = json.loads(result.stdout)
     return payload
+
+
+def test_mastering_profile_omits_unmeasured_fields_and_nests_defects(
+    run_cli: Callable[[list[str]], subprocess.CompletedProcess[str]], tmp_path: Path, clipped: Path
+) -> None:
+    silence = _write(tmp_path / "silence.wav", [0.0] * FRAMES)
+    unmeasured = _json(run_cli(["mastering-profile", str(silence), "--json"]))
+    assert "bpm" not in unmeasured
+    assert "defects" not in unmeasured
+
+    measured = _json(
+        run_cli(["mastering-profile", str(clipped), "--params", "detectDefects=1", "--json"])
+    )
+    defects = measured["defects"]
+    assert defects.keys() == {"click", "clip", "crackle", "hum", "noise", "reverb"}
+    assert defects["clip"]["clipped_samples"] > 0
+
+
+def test_plp_json_reports_statistics_without_echoing_tempo_bounds(
+    run_cli: Callable[[list[str]], subprocess.CompletedProcess[str]], source: Path
+) -> None:
+    result = _json(run_cli(["plp", str(source), "--bpm-min", "50", "--bpm-max", "150", "--json"]))
+    assert result.keys() == {"n_frames", "stats"}
+    assert result["n_frames"] > 0
+    assert result["stats"].keys() == {"min", "max", "mean", "std"}
 
 
 def test_melody_matches_library(source: Path) -> None:

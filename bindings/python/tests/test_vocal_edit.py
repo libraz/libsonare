@@ -314,6 +314,16 @@ def test_vocal_detail_is_frozen_and_specific_to_vocal_errors() -> None:
     assert not hasattr(plain_error, "detail")
 
 
+def test_vocal_edit_error_constructor_accepts_named_reason() -> None:
+    error = VocalEditError(
+        ErrorCode.INVALID_PARAMETER,
+        "invalid vocal edit",
+        reason="invalidInput",
+    )
+
+    assert error.detail.reason == "invalidInput"
+
+
 def test_premature_finalize_keeps_render_job_usable() -> None:
     source, analysis = _source_and_analysis()
     with (

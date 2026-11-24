@@ -1535,6 +1535,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.from_buffer(data)` | `Audio.from_buffer(samples)` |
 | `Audio.mastering_process(processor_name)` | `Audio.mastering_apply_processor(processor)` |
 | `Audio.pitch_yin(fill_na)` | removed: had no effect: YIN reads no fill flag |
+| `SonareError` | The common C-ABI exception translator now raises SonareValueError for native INVALID_PARAMETER, a subclass of SonareError and ValueError. Except SonareError still catches it. Except ValueError now catches these refusals too. Replace checks that required the exact SonareError class. |
 | `libsonare[dev]` | removed: the development tools are dependency groups; contributors run `uv sync` in bindings/python |
 
 ### Python: Analysis and features
@@ -2277,10 +2278,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Section.canonical_name` | `Section.name` |
 | `Section.name` | a field filled by the analysis functions, with no fallback spelling built from type; a Section built by hand takes name and group, which no longer default to an empty string and 0 |
 | `StreamAnalyzer.reset(base_sample_offset)` | `StreamAnalyzer.reset(start_sample)` |
+| `StreamBarChord.root` | The chord root is PitchClass, an IntEnum. Construct with PitchClass(value) and use int(root) when the exact int type is required. |
+| `StreamChordChange.root` | The chord root is PitchClass, an IntEnum. Construct with PitchClass(value) and use int(root) when the exact int type is required. |
 | `StreamFrames.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesI16.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesU8.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `analyze_bpm(start_bpm)` | removed: omit start_bpm. If passed positionally, move n_fft, hop_length and max_candidates one position earlier. The result's bpm is None when no tempo is measured. Apply any fallback in the caller. |
+| `decode_channels` | Returns DecodedChannels. Read channels and sample_rate instead of unpacking the two-tuple. |
 | `note_segments` | voicing is voiced= (per-frame flags) or voiced_prob= by keyword, exactly one of them: both or neither raises SonareValueError; frame_rate follows f0_hz |
 | `pitch_yin(fill_na)` | removed: had no effect: YIN reads no fill flag |
 
@@ -2728,9 +2732,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `DeclipReport.interpolated_runs` | `DeclipReport.unreconstructed_runs`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs |
 | `DeclipReport.linked_runs` | 0 unless link_channels=True is passed to a multichannel entry point |
+| `NoteEdit.amplitude_envelope` | The amplitude envelope is typed as an ndarray of float32. Convert typed float64 arrays with np.asarray(envelope, dtype=np.float32). |
 | `PitchDecomposition.centre_hz` | `PitchDecompositionResult.center_hz`: None for a note with no usable pitch (was 0.0) |
 | `RealtimeVoiceChangerConfig.from_pod` | removed: the C struct mirror is internal; build the record by keyword, or read RealtimeVoiceChanger.config |
 | `RealtimeVoiceChangerConfig.to_pod` | removed: the C struct mirror is internal; pass the record itself as RealtimeVoiceChanger(config=...) |
+| `ReverbDetection.late_predictability` | The value is float \| None. Check for None before using it in arithmetic when late-reverb predictability was not measured. |
+| `RoomGeometry.band_absorption` | When present, the typed-dictionary value is a float32 ndarray instead of list[float]. Construct it with np.asarray(values, dtype=np.float32) and use .tolist() where a list is needed. |
+| `assign_note_targets` | Returns AssignNoteTargetsResult with notes (tuple of NoteObject) and assigned_count. Read the attributes instead of unpacking the two-tuple. Use list(result.notes) when mutation is needed. |
 | `auto_tune(reference_midi)` | `auto_tune(scale_reference_midi)` |
 | `auto_tune(strength)` | `auto_tune(retune_amount)` |
 | `extract_notes` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
@@ -3690,6 +3698,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineCaptureStatus` | The exported dataclass constructor now requires dropped_frames as a seventh argument. Supply the capture buffer's cumulative dropped-frame count. |
 | `EngineMarker.id` | required on EngineMarker, the stored record; pass an EngineMarkerInput with id omitted to have set_markers allocate the lowest id above every id the engine has stored or assigned that the list does not carry |
 | `EngineMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...)); a marker without an id is an EngineMarkerInput |
 | `Mixer.add_bus(bus_id)` | `Mixer.add_bus(id)`: renamed id, the name the Node and WASM mixers use |
@@ -3708,6 +3717,10 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_markers` | returns the stored markers in the order given (was None); a refused list leaves the stored markers and the allocation counter unchanged |
 | `RealtimeEngine.set_track_strip_surround_pan(distance)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `RealtimeEngine.set_track_strip_surround_pan(elevation)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `SynthPatch.lfo_shape` | Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled "default". Omit the field or use "default" to keep the preset setting. |
+| `SynthPatch.retrigger` | Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled "default". Omit the field or use "default" to keep the preset setting. |
+| `SynthPatch.sample_key_track` | Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled "default". Omit the field or use "default" to keep the preset setting. |
+| `SynthPatch.waveform` | Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled "default". Omit the field or use "default" to keep the preset setting. |
 | `TransportState.bar_count` | `TransportState.bar_index` |
 
 ### Python: Projects, arrangement and vocal editing
@@ -4054,16 +4067,23 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `MidiCcBinding` | Construct with keyword arguments, including cc_number and param_id. Positional construction is no longer accepted. Previously required cc_lsb_number, selector_msb, selector_lsb, min_value and max_value now have defaults. |
+| `Project.add_midi_clip` | Returns ProjectMidiClipResult. Read track_id and clip_id instead of unpacking the two-tuple. |
 | `Project.analyze_tempo` | Every option after sample_rate is keyword-only, and supplied flags must be Boolean |
 | `Project.annotate_chords` | A read-only sequence of chord mappings is accepted. Both PPQ endpoints are required, and invalid extension and Roman text errors name the indexed chord field |
 | `Project.auto_tempo` | returns ProjectAutoTempoResult with bpm, bpm_confidence and the detected TimeSignature, including when apply_time_signatures is false. Every option after sample_rate is keyword-only, and supplied flags must be Boolean |
 | `Project.clear_soundfont` | `Project.clear_sound_font`: takes keyword-only uri=None to clear the named URI; None selects the default SoundFont and an empty URI is refused |
+| `Project.last_bounce_compile_result` | Returns None before any bounce has produced a compile result. Check for None before accessing ProjectCompileResult fields. |
 | `Project.load_soundfont` | `Project.load_sound_font`: takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode |
 | `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
 | `Project.soundfont_manifest` | `Project.sound_font_manifest`: takes keyword-only uri=None to read the manifest for the named URI; None selects the default SoundFont and an empty URI is refused |
 | `Project.soundfont_preset_count` | `Project.sound_font_preset_count`: a method with keyword-only uri=None, which selects the default SoundFont; an empty URI is refused |
 | `ProjectMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only, the field order of EngineMarker |
 | `ProjectSource.channel_count` | `ProjectSource.num_channels` |
+| `VocalEditDraft.notes` | Returns VocalNotesResult. Read notes and transitions instead of unpacking the two-tuple. |
+| `VocalEditError` | Pass a VocalReason string such as "none" to the reason constructor keyword. Integer reason ordinals no longer type-check and omission now defaults to "none". |
+| `VocalEditSession.history` | Returns VocalHistory. Read can_undo and can_redo instead of unpacking the two-tuple. |
+| `VocalEditSession.notes` | Returns VocalNotesResult. Read notes and transitions instead of unpacking the two-tuple. |
 
 ## Node
 
@@ -13413,7 +13433,14 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `bpm` | In --json output bpm is omitted when tempo is unmeasured, for example on silence. Check for presence before reading the number. |
+| `chroma` | On both front ends, SONARE_LEGACY_EXIT no longer forces failures to exit 1. Handle the class-specific exit codes, for example 2 for a chroma usage error. |
+| `decompose-stems --hop-length` | An omitted hop is one quarter of the effective FFT size. Pass --hop-length 512 to retain the fixed v1.10.0 hop when changing the FFT size. |
+| `key --high-pass-hz` | Defaults to 80 Hz instead of 0 Hz. Pass --high-pass-hz 0 to retain unfiltered analysis. |
 | `key --use-hpss` | `key --hpss` |
+| `plp` | The --json result no longer echoes tempo_min and tempo_max. Read the bounds from the command invocation or pass --bpm-min and --bpm-max explicitly. The pulse statistics remain in the result. |
+| `rhythm` | In --json output bpm, pattern_regularity, syncopation and tempo_stability are omitted when unmeasured. Check for presence instead of assuming numeric fallbacks on silence. |
+| `timbre` | In --json output brightness, complexity, density, roughness and warmth are omitted when unmeasured. Check for presence before reading these numbers. |
 | `transcribe --group` | removed, no replacement: a Standard MIDI File carries no UMP group, so the written file never depended on it; leave the flag out |
 
 ### Command line: Effects, separation, repair and room acoustics
@@ -13540,6 +13567,13 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `voice-change --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `voice-preset-validate --set` | a malformed assignment is refused as a usage error (exit 2) with one text on both front-ends |
 
+#### Other individual changes
+
+| 1.x | 2.0.0 |
+|---|---|
+| `room-morph` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override. |
+| `synthesize-rir` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override. |
+
 ### Command line: Mastering, mixing and loudness
 
 #### Physical quantities carry their unit in the name
@@ -13626,6 +13660,12 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `repair --output` | leaving it out without --detect, or giving it with --detect, is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `suggest-mix --input` | an entry with an empty track id or an empty path, and a call with no entry, are refused as a usage error (exit 2) before any input is read |
 | `suggest-mix --params` | malformed entries, unread keys, invalid numeric values, out-of-domain tempoBpm, nFft and hopLength values, and a tempoBpm clash with --tempo-bpm are usage errors (exit 2) before any input is read on both front-ends. An earlier key spelling is an unknown key and the refusal lists the accepted keys in sorted order |
+
+#### Other individual changes
+
+| 1.x | 2.0.0 |
+|---|---|
+| `mastering-profile` | In --json output bpm and defects may be absent when unmeasured. When present, defects groups measurements under click, clip, crackle, hum, noise and reverb instead of the old flat keys. For example, read defects.clip.clipped_samples in place of the flat clipping count. |
 
 ### Command line: Realtime engine, synthesis, MIDI and playback
 

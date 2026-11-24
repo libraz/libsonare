@@ -585,6 +585,14 @@ rule = "error-class-by-cause"
 test = "bindings/python/tests/test_error_contract.py::test_code_name_is_the_shared_spelling_of_every_member"
 
 [[entry]]
+kind = "class"
+old = "SonareError"
+changed = "The common C-ABI exception translator now raises SonareValueError for native INVALID_PARAMETER, a subclass of SonareError and ValueError. Except SonareError still catches it. Except ValueError now catches these refusals too. Replace checks that required the exact SonareError class."
+domain = "core"
+rule = "individual"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_resample_refuses"
+
+[[entry]]
 kind = "method"
 old = "Audio.from_buffer"
 changed = "sample_rate is required; it no longer defaults to 48000"
@@ -5096,10 +5104,26 @@ test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_estimate_c
 
 [[entry]]
 kind = "field"
+old = "StreamChordChange.root"
+changed = "The chord root is PitchClass, an IntEnum. Construct with PitchClass(value) and use int(root) when the exact int type is required."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_estimate_carries_a_key_and_a_named_chord"
+
+[[entry]]
+kind = "field"
 old = "StreamBarChord.quality"
 changed = "a CHORD_QUALITIES token (was the ordinal)"
 domain = "analysis"
 rule = "string-closed-sets"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_estimate_carries_a_key_and_a_named_chord"
+
+[[entry]]
+kind = "field"
+old = "StreamBarChord.root"
+changed = "The chord root is PitchClass, an IntEnum. Construct with PitchClass(value) and use int(root) when the exact int type is required."
+domain = "analysis"
+rule = "individual"
 test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_estimate_carries_a_key_and_a_named_chord"
 
 [[entry]]
@@ -6647,6 +6671,38 @@ test = "bindings/python/tests/test_sample_bank.py::test_patch_sample_fields_roun
 
 [[entry]]
 kind = "field"
+old = "SynthPatch.lfo_shape"
+changed = "Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled \"default\". Omit the field or use \"default\" to keep the preset setting."
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.retrigger"
+changed = "Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled \"default\". Omit the field or use \"default\" to keep the preset setting."
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.sample_key_track"
+changed = "Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled \"default\". Omit the field or use \"default\" to keep the preset setting."
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.waveform"
+changed = "Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled \"default\". Omit the field or use \"default\" to keep the preset setting."
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "field"
 old = "SynthModRouting.source"
 changed = "takes the exact lowerCamel mod source token (ampEnv, filterEnv, keyTrack, modWheel, expressionCc, pitchBend)"
 domain = "engine"
@@ -7026,6 +7082,14 @@ changed = "typed as the EngineCaptureSource Literal ('output' | 'input')"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
+[[entry]]
+kind = "type"
+old = "EngineCaptureStatus"
+changed = "The exported dataclass constructor now requires dropped_frames as a seventh argument. Supply the capture buffer's cumulative dropped-frame count."
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_engine_telemetry.py::test_capture_status_is_a_frozen_exported_record"
 
 [[entry]]
 kind = "method"
@@ -10041,6 +10105,14 @@ old = "MidiCcBinding.kind"
 changed = "a ProjectMidiCcBindingKind token ('controlChange7', 'controlChange14', 'rpn', 'nrpn') instead of an ordinal; a number is TypeError and another spelling raises SonareValueError"
 domain = "project"
 rule = "string-closed-sets"
+test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
+
+[[entry]]
+kind = "type"
+old = "MidiCcBinding"
+changed = "Construct with keyword arguments, including cc_number and param_id. Positional construction is no longer accepted. Previously required cc_lsb_number, selector_msb, selector_lsb, min_value and max_value now have defaults."
+domain = "project"
+rule = "individual"
 test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
 
 [[entry]]
@@ -13926,6 +13998,14 @@ rule = "input-types"
 
 [[entry]]
 kind = "field"
+old = "NoteEdit.amplitude_envelope"
+changed = "The amplitude envelope is typed as an ndarray of float32. Convert typed float64 arrays with np.asarray(envelope, dtype=np.float32)."
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_note_targets.py::test_note_edit_amplitude_envelope_has_float32_annotation"
+
+[[entry]]
+kind = "field"
 old = "PercussiveEvent.onset_sec"
 removed = "give onset_sec on a PercussiveEventInput; a returned PercussiveEvent carries the sample spelling only"
 domain = "effects"
@@ -14897,6 +14977,14 @@ rule = "vocal-edit-model"
 test = "bindings/python/tests/test_vocal_edit.py::test_render_job_cancellation_is_call_scoped"
 
 [[entry]]
+kind = "class"
+old = "VocalEditError"
+changed = "Pass a VocalReason string such as \"none\" to the reason constructor keyword. Integer reason ordinals no longer type-check and omission now defaults to \"none\"."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_vocal_edit.py::test_vocal_edit_error_constructor_accepts_named_reason"
+
+[[entry]]
 kind = "field"
 old = "VocalEditError.field"
 new = "VocalErrorDetail.field"
@@ -14966,6 +15054,13 @@ domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_integer_narrowing.py::test_track_route_refuses_empty_fields_and_none_clears_them"
 
+[[entry]]
+kind = "method"
+old = "Project.add_midi_clip"
+changed = "Returns ProjectMidiClipResult. Read track_id and clip_id instead of unpacking the two-tuple."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_project.py::test_add_midi_clip_is_one_undo_transaction"
 
 [[entry]]
 kind = "method"
@@ -14993,8 +15088,72 @@ test = "bindings/python/tests/test_project.py::test_project_tempo_options_are_ke
 
 [[entry]]
 kind = "method"
+old = "Project.last_bounce_compile_result"
+changed = "Returns None before any bounce has produced a compile result. Check for None before accessing ProjectCompileResult fields."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_project_bounce.py::test_last_bounce_compile_result_is_none_before_any_bounce"
+
+[[entry]]
+kind = "method"
 old = "Project.annotate_chords"
 changed = "A read-only sequence of chord mappings is accepted. Both PPQ endpoints are required, and invalid extension and Roman text errors name the indexed chord field"
 domain = "project"
 rule = "individual"
 test = "bindings/python/tests/test_project.py::test_chord_annotation_requires_both_ppq_endpoints"
+
+[[entry]]
+kind = "field"
+old = "ReverbDetection.late_predictability"
+changed = "The value is float | None. Check for None before using it in arithmetic when late-reverb predictability was not measured."
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_mastering_repair_detect.py::test_late_predictability_is_absent_unless_the_wpe_stage_runs"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometry.band_absorption"
+changed = "When present, the typed-dictionary value is a float32 ndarray instead of list[float]. Construct it with np.asarray(values, dtype=np.float32) and use .tolist() where a list is needed."
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_acoustic.py::test_room_geometry_from_estimate_feeds_synthesize_rir"
+
+[[entry]]
+kind = "function"
+old = "assign_note_targets"
+changed = "Returns AssignNoteTargetsResult with notes (tuple of NoteObject) and assigned_count. Read the attributes instead of unpacking the two-tuple. Use list(result.notes) when mutation is needed."
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_note_targets.py::test_assignment_writes_the_shift_its_target_asks_for"
+
+[[entry]]
+kind = "function"
+old = "decode_channels"
+changed = "Returns DecodedChannels. Read channels and sample_rate instead of unpacking the two-tuple."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_decode_channels.py::test_decode_channels_matches_the_core_decoder"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.notes"
+changed = "Returns VocalNotesResult. Read notes and transitions instead of unpacking the two-tuple."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_vocal_edit.py::test_draft_edit_evaluate_commit_and_restore"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.history"
+changed = "Returns VocalHistory. Read can_undo and can_redo instead of unpacking the two-tuple."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_vocal_edit.py::test_history_flags_follow_commit_undo_and_redo"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.notes"
+changed = "Returns VocalNotesResult. Read notes and transitions instead of unpacking the two-tuple."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_vocal_edit.py::test_draft_edit_evaluate_commit_and_restore"

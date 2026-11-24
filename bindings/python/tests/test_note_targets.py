@@ -14,8 +14,10 @@ floor, which is the whole failure mode a configuration surface has.
 from __future__ import annotations
 
 import math
+from typing import get_type_hints
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 import libsonare
@@ -56,6 +58,10 @@ def _note(onset_sample: int, offset_sample: int, median_hz: float | None = A4_HZ
         amplitude=np.zeros(0, dtype=np.float32),
         edit=NoteEdit(time_stretch_ratio=1.0),
     )
+
+
+def test_note_edit_amplitude_envelope_has_float32_annotation() -> None:
+    assert get_type_hints(NoteEdit)["amplitude_envelope"] == npt.NDArray[np.float32]
 
 
 def _answer(

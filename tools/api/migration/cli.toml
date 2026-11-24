@@ -144,6 +144,14 @@ rule = "tempo-range"
 test = "bindings/python/tests/test_cli_option_advanced.py::test_plp_omitted_bpm_bounds_keep_the_library_range"
 
 [[entry]]
+kind = "command"
+old = "plp"
+changed = "The --json result no longer echoes tempo_min and tempo_max. Read the bounds from the command invocation or pass --bpm-min and --bpm-max explicitly. The pulse statistics remain in the result."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_cli_feature_commands.py::test_plp_json_reports_statistics_without_echoing_tempo_bounds"
+
+[[entry]]
 kind = "flag"
 old = "mastering --ceiling-db"
 new = "mastering --ceiling-dbtp"
@@ -1788,6 +1796,14 @@ rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
+kind = "command"
+old = "room-morph"
+changed = "An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override."
+domain = "effects"
+rule = "individual"
+test = "tests/cli/cli_contract_test.cpp::CLI room placement left out is the default placement scaled to the room"
+
+[[entry]]
 kind = "flag"
 old = "scale-quantize --mode-mask"
 changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
@@ -2475,6 +2491,14 @@ rule = "cli-front-end-parity"
 test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio bindings and outputs from argv"
 
 [[entry]]
+kind = "command"
+old = "synthesize-rir"
+changed = "An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override."
+domain = "effects"
+rule = "individual"
+test = "tests/cli/cli_contract_test.cpp::CLI room placement left out is the default placement scaled to the room"
+
+[[entry]]
 kind = "flag"
 old = "project.bounce --audio"
 changed = "a binding that is not <source_id>=FILE, or whose id is outside 1-4294967295, is refused as a usage error (exit 2) before the project is read"
@@ -2517,8 +2541,64 @@ test = "bindings/python/tests/test_cli_note_edit.py::test_pitch_frames_cli_lists
 
 [[entry]]
 kind = "command"
+old = "bpm"
+changed = "In --json output bpm is omitted when tempo is unmeasured, for example on silence. Check for presence before reading the number."
+domain = "analysis"
+rule = "individual"
+test = "tests/cli/cli_contract_test.cpp::CLI rhythm and bpm report no tempo on silence whatever the start tempo"
+
+[[entry]]
+kind = "command"
+old = "rhythm"
+changed = "In --json output bpm, pattern_regularity, syncopation and tempo_stability are omitted when unmeasured. Check for presence instead of assuming numeric fallbacks on silence."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_cli_feature_commands.py::test_tempo_rhythm_timbre_and_pitch_leave_unmeasured_values_out_over_silence"
+
+[[entry]]
+kind = "command"
+old = "timbre"
+changed = "In --json output brightness, complexity, density, roughness and warmth are omitted when unmeasured. Check for presence before reading these numbers."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_cli_feature_commands.py::test_tempo_rhythm_timbre_and_pitch_leave_unmeasured_values_out_over_silence"
+
+[[entry]]
+kind = "command"
 old = "transcribe"
 changed = "--json includes tempo_confidence and the detected time_signature (numerator, denominator, confidence) when tempo detection runs; both are omitted with explicit --tempo-bpm"
 domain = "analysis"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_sections_stems_transcribe_mix.py::test_transcribe_reports_the_tempo_it_detected"
+
+[[entry]]
+kind = "command"
+old = "mastering-profile"
+changed = "In --json output bpm and defects may be absent when unmeasured. When present, defects groups measurements under click, clip, crackle, hum, noise and reverb instead of the old flat keys. For example, read defects.clip.clipped_samples in place of the flat clipping count."
+domain = "mastering"
+rule = "individual"
+test = "bindings/python/tests/test_cli_feature_commands.py::test_mastering_profile_omits_unmeasured_fields_and_nests_defects"
+
+[[entry]]
+kind = "command"
+old = "chroma"
+changed = "On both front ends, SONARE_LEGACY_EXIT no longer forces failures to exit 1. Handle the class-specific exit codes, for example 2 for a chroma usage error."
+domain = "analysis"
+rule = "individual"
+test = "tests/cli/cli_contract_test.cpp::CLI generic parser failures use the usage exit code"
+
+[[entry]]
+kind = "flag"
+old = "decompose-stems --hop-length"
+changed = "An omitted hop is one quarter of the effective FFT size. Pass --hop-length 512 to retain the fixed v1.10.0 hop when changing the FFT size."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_cli_stated_defaults.py::None derives a quarter of the FFT size in the core"
+
+[[entry]]
+kind = "flag"
+old = "key --high-pass-hz"
+changed = "Defaults to 80 Hz instead of 0 Hz. Pass --high-pass-hz 0 to retain unfiltered analysis."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_cli_stated_defaults.py::test_key_options_left_out_are_not_passed"
