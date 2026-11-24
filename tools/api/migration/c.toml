@@ -4446,7 +4446,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_engine_bind_midi_cc"
-changed = "takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value"
+changed = "takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value; a non-zero cc_lsb_number unless kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming the field and binding.kind (1.x ignored it)"
 domain = "engine"
 rule = "one-entry-per-operation"
 test = "tests/api/sonare_c_engine_midi_test.cpp::sonare_engine MIDI CC binding drives engine parameter"
@@ -4827,10 +4827,90 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_midi_cc_to_breakpoint"
-changed = "a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE"
+changed = "a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE; a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind (1.x ignored it)"
 domain = "engine"
 rule = "error-class-by-cause"
 test = "tests/api/project_readers_test.cpp::SysEx is not converted to a breakpoint"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm_instrument_name"
+changed = "a program outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming program (1.x: NULL with no error); NULL with SONARE_OK now means only an unnamed slot or a build without arrangement support"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm_family_name"
+changed = "a family outside [0, 15] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming family (1.x: NULL with no error)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm_family_first_program"
+changed = "a family outside [0, 15] still returns -1 and now sets SONARE_ERROR_INVALID_PARAMETER naming family (1.x: -1 with no error)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm2_instrument_name"
+changed = "a bank_lsb or program outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming that argument (1.x: NULL with no error)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm_drum_name"
+changed = "a note outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming note (1.x: NULL with no error); an unnamed note in range stays NULL with SONARE_OK"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm2_drum_set_name"
+changed = "a bank_lsb outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming bank_lsb (1.x: NULL with no error)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_gm2_drum_name"
+changed = "a bank_lsb or note outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming that argument (1.x: NULL with no error)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_cc_name"
+changed = "a controller outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming controller (1.x: NULL with no error); an unnamed controller in range stays NULL with SONARE_OK"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_per_note_controller_name"
+changed = "the index domain is [0, 255] (1.x: [0, 127]); an index outside it returns NULL with SONARE_ERROR_INVALID_PARAMETER naming index (1.x: NULL with no error)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_midi_test.cpp::MIDI name lookup indexes refuse outside their declared domains"
+
+[[entry]]
+kind = "function"
+old = "sonare_midi_param_to_cc"
+changed = "a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it)"
+domain = "engine"
+rule = "individual"
+test = "tests/api/engine_midi_cc_bindings_test.cpp::MIDI CC conversion routes refuse nonzero inactive fields"
 
 [[entry]]
 kind = "function"

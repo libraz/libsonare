@@ -1036,7 +1036,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_engine_set_midi_fx` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
-| `sonare_midi_cc_to_breakpoint` | a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE |
+| `sonare_midi_cc_name` | a controller outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming controller (1.x: NULL with no error); an unnamed controller in range stays NULL with SONARE_OK |
+| `sonare_midi_cc_to_breakpoint` | a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE; a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind (1.x ignored it) |
 
 #### Each operation has exactly one entry point
 
@@ -1050,7 +1051,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMeterTelemetryRecord.true_peak_db_r` | removed: read true_peak_dbtp[1] |
 | `SonareMeterTelemetryRecordWide` | removed: use SonareMeterTelemetryRecord, which carries the same per-plane fields |
 | `sonare_engine_bind_midi_cc_binding` | removed: call sonare_engine_bind_midi_cc, which takes the SonareMidiCcBinding |
-| `sonare_engine_bind_midi_cc` | takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value |
+| `sonare_engine_bind_midi_cc` | takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value; a non-zero cc_lsb_number unless kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming the field and binding.kind (1.x ignored it) |
 | `sonare_engine_drain_meter_telemetry_wide` | removed: call sonare_engine_drain_meter_telemetry, which fills the per-plane record |
 | `sonare_engine_prepare_with_channels` | removed: call sonare_engine_prepare, which takes max_channels |
 | `sonare_engine_prepare` | takes int max_channels after telemetry_capacity (0 selects 64, negative is refused); pass 0 for the former five-argument call |
@@ -1106,6 +1107,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_engine_external_midi_dropped_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_midi_param_to_cc` | a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it) |
 | `sonare_playback_renderer_input_channel_count` | `sonare_playback_renderer_num_input_channels` |
 | `sonare_playback_renderer_output_channel_count` | `sonare_playback_renderer_num_output_channels` |
 
@@ -1255,6 +1257,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_midi_gm2_drum_name` | a bank_lsb or note outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming that argument (1.x: NULL with no error) |
+| `sonare_midi_gm2_drum_set_name` | a bank_lsb outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming bank_lsb (1.x: NULL with no error) |
+| `sonare_midi_gm2_instrument_name` | a bank_lsb or program outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming that argument (1.x: NULL with no error) |
+| `sonare_midi_gm_drum_name` | a note outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming note (1.x: NULL with no error); an unnamed note in range stays NULL with SONARE_OK |
+| `sonare_midi_gm_family_first_program` | a family outside [0, 15] still returns -1 and now sets SONARE_ERROR_INVALID_PARAMETER naming family (1.x: -1 with no error) |
+| `sonare_midi_gm_family_name` | a family outside [0, 15] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming family (1.x: NULL with no error) |
+| `sonare_midi_gm_instrument_name` | a program outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming program (1.x: NULL with no error); NULL with SONARE_OK now means only an unnamed slot or a build without arrangement support |
+| `sonare_midi_per_note_controller_name` | the index domain is [0, 255] (1.x: [0, 127]); an index outside it returns NULL with SONARE_ERROR_INVALID_PARAMETER naming index (1.x: NULL with no error) |
 | `sonare_project_apply_vocal_edit` | refuses a malformed SVE1 payload with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, before anything is published to the project |
 | `sonare_project_preview_midi_fx_count` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_project_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
