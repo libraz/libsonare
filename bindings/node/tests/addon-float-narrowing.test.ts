@@ -337,8 +337,120 @@ function inputMonitorOutput(gain: number): number {
   }
 }
 
-// These routes use the shared MFCC lifter domain.
-const MFCC_DOMAIN_ARGUMENTS: FloatArgument[] = [
+/** Optional floats whose numeric domain is owned by the core. */
+const CORE_DOMAIN_FLOAT_ARGUMENTS: FloatArgument[] = [
+  {
+    name: 'melToStft fminHz',
+    site: 'features/advanced.cpp MelToStft fminHz',
+    control: [0, 300],
+    call: (v) =>
+      magnitudeSum(
+        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, v, 0, false).magnitude,
+      ),
+  },
+  {
+    name: 'melToStft fmaxHz',
+    site: 'features/advanced.cpp MelToStft fmaxHz',
+    control: [0, 4000],
+    call: (v) =>
+      magnitudeSum(
+        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 0, v, false).magnitude,
+      ),
+  },
+  {
+    name: 'melToAudio fminHz',
+    site: 'features/advanced.cpp MelToAudio fminHz',
+    control: [0, 300],
+    call: (v) =>
+      magnitudeSum(
+        native.melToAudio(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 256, v, 0, 4, false),
+      ),
+  },
+  {
+    name: 'melToAudio fmaxHz',
+    site: 'features/advanced.cpp MelToAudio fmaxHz',
+    control: [0, 4000],
+    call: (v) =>
+      magnitudeSum(
+        native.melToAudio(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 256, 0, v, 4, false),
+      ),
+  },
+  {
+    name: 'mfccToAudio fminHz',
+    site: 'features/advanced.cpp MfccToAudio fminHz',
+    control: [0, 300],
+    call: (v) =>
+      magnitudeSum(
+        native.mfccToAudio(
+          MFCC.coefficients,
+          MFCC.nMfcc,
+          MFCC.nFrames,
+          32,
+          SAMPLE_RATE,
+          512,
+          256,
+          v,
+          0,
+          4,
+          false,
+          0,
+        ),
+      ),
+  },
+  {
+    name: 'mfccToAudio fmaxHz',
+    site: 'features/advanced.cpp MfccToAudio fmaxHz',
+    control: [0, 4000],
+    call: (v) =>
+      magnitudeSum(
+        native.mfccToAudio(
+          MFCC.coefficients,
+          MFCC.nMfcc,
+          MFCC.nFrames,
+          32,
+          SAMPLE_RATE,
+          512,
+          256,
+          0,
+          v,
+          4,
+          false,
+          0,
+        ),
+      ),
+  },
+  {
+    name: 'cyclicTempogram bpmMin',
+    site: 'features/rhythm.cpp CyclicTempogram bpmMin',
+    control: [60, 150],
+    call: (v) => native.cyclicTempogram(PULSED, SAMPLE_RATE, 512, 384, v, 20).data[5],
+  },
+  {
+    name: 'melSpectrogram fminHz',
+    site: 'sonare_wrap_features.cpp MelSpectrogramFn fminHz',
+    control: [0, 300],
+    call: (v) =>
+      JSON.stringify(native.melSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, 32, v, 0, false)),
+  },
+  {
+    name: 'melSpectrogram fmaxHz',
+    site: 'sonare_wrap_features.cpp MelSpectrogramFn fmaxHz',
+    control: [0, 4000],
+    call: (v) =>
+      JSON.stringify(native.melSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, 32, 0, v, false)),
+  },
+  {
+    name: 'mfcc fminHz',
+    site: 'sonare_wrap_features.cpp Mfcc fminHz',
+    control: [0, 300],
+    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, v)),
+  },
+  {
+    name: 'mfcc fmaxHz',
+    site: 'sonare_wrap_features.cpp Mfcc fmaxHz',
+    control: [0, 2000],
+    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, v)),
+  },
   {
     name: 'mfccToMel lifter',
     site: 'features/advanced.cpp MfccToMel lifter',
@@ -482,92 +594,12 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
       ),
   },
   {
-    name: 'melToStft fmin',
-    site: 'features/advanced.cpp MelToStft fmin',
-    control: [0, 300],
-    call: (v) =>
-      magnitudeSum(
-        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, v, 0, false).magnitude,
-      ),
-  },
-  {
-    name: 'melToStft fmax',
-    site: 'features/advanced.cpp MelToStft fmax',
-    control: [0, 4000],
-    call: (v) =>
-      magnitudeSum(
-        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 0, v, false).magnitude,
-      ),
-  },
-  {
-    name: 'melToAudio fmin',
-    site: 'features/advanced.cpp MelToAudio fmin',
-    control: [0, 300],
-    call: (v) =>
-      magnitudeSum(
-        native.melToAudio(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 256, v, 0, 4, false),
-      ),
-  },
-  {
-    name: 'melToAudio fmax',
-    site: 'features/advanced.cpp MelToAudio fmax',
-    control: [0, 4000],
-    call: (v) =>
-      magnitudeSum(
-        native.melToAudio(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 256, 0, v, 4, false),
-      ),
-  },
-  {
     name: 'griffinLim momentum',
     site: 'features/advanced.cpp GriffinLim momentum',
     control: [0, 0.99],
     call: (v) =>
       magnitudeSum(
         native.griffinLim(STFT.magnitude, STFT.nBins, STFT.nFrames, SAMPLE_RATE, 512, 256, 8, v),
-      ),
-  },
-  {
-    name: 'mfccToAudio fmin',
-    site: 'features/advanced.cpp MfccToAudio fmin',
-    control: [0, 300],
-    call: (v) =>
-      magnitudeSum(
-        native.mfccToAudio(
-          MFCC.coefficients,
-          MFCC.nMfcc,
-          MFCC.nFrames,
-          32,
-          SAMPLE_RATE,
-          512,
-          256,
-          v,
-          0,
-          4,
-          false,
-          0,
-        ),
-      ),
-  },
-  {
-    name: 'mfccToAudio fmax',
-    site: 'features/advanced.cpp MfccToAudio fmax',
-    control: [0, 4000],
-    call: (v) =>
-      magnitudeSum(
-        native.mfccToAudio(
-          MFCC.coefficients,
-          MFCC.nMfcc,
-          MFCC.nFrames,
-          32,
-          SAMPLE_RATE,
-          512,
-          256,
-          0,
-          v,
-          4,
-          false,
-          0,
-        ),
       ),
   },
   {
@@ -667,12 +699,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     site: 'analysis/metering.cpp ParseScaleArgs referenceMidi',
     control: [0, 69.5],
     call: (v) => native.scaleCorrectionSemitones(0, 0b101010110101, 60.4, v),
-  },
-  {
-    name: 'cyclicTempogram bpmMin',
-    site: 'features/rhythm.cpp CyclicTempogram bpmMin',
-    control: [60, 150],
-    call: (v) => native.cyclicTempogram(PULSED, SAMPLE_RATE, 512, 384, v, 20).data[5],
   },
   {
     name: 'plp bpmMin',
@@ -896,32 +922,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => JSON.stringify(native.normalizeStereo(AUDIO, AUDIO, SAMPLE_RATE, v)),
   },
   {
-    name: 'melSpectrogram fmin',
-    site: 'sonare_wrap_features.cpp MelSpectrogramFn fmin',
-    control: [0, 300],
-    call: (v) =>
-      JSON.stringify(native.melSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, 32, v, 0, false)),
-  },
-  {
-    name: 'melSpectrogram fmax',
-    site: 'sonare_wrap_features.cpp MelSpectrogramFn fmax',
-    control: [0, 4000],
-    call: (v) =>
-      JSON.stringify(native.melSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, 32, 0, v, false)),
-  },
-  {
-    name: 'mfcc fmin',
-    site: 'sonare_wrap_features.cpp Mfcc fmin',
-    control: [0, 300],
-    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, v)),
-  },
-  {
-    name: 'mfcc fmax',
-    site: 'sonare_wrap_features.cpp Mfcc fmax',
-    control: [0, 2000],
-    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, v)),
-  },
-  {
     name: 'piptrack fminHz',
     site: 'sonare_wrap_features.cpp Piptrack fminHz',
     control: [150, 1000],
@@ -1071,7 +1071,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
 
 describe('an optional float argument is refused rather than saturated', () => {
   it.each(
-    [...FINITE_ARGUMENTS, ...MFCC_DOMAIN_ARGUMENTS].map(
+    [...FINITE_ARGUMENTS, ...CORE_DOMAIN_FLOAT_ARGUMENTS].map(
       (argument) => [argument.name, argument] as const,
     ),
   )('%s', (_name, argument) => {
@@ -1167,6 +1167,31 @@ describe('the table covers the whole reader population', () => {
       );
     const sites = new Set(FINITE_ARGUMENTS.map((argument) => argument.site));
     expect(sites.size).toBe(calls.length);
+  });
+
+  it('drives every optional positional float reader that delegates its domain to the core', () => {
+    const sites = addonSources()
+      .filter((source) => source.file !== 'sonare_wrap_options.h')
+      .flatMap(({ file, text }) => {
+        let functionName = '';
+        const sites: string[] = [];
+        for (const line of text.split('\n')) {
+          const definition = line.match(/^Napi::Value (?:\w+::)*(\w+)\(/);
+          if (definition) {
+            functionName = definition[1];
+          }
+          const reader =
+            line.match(/OptionalDomainFloatArg\(env, info, \d+, "([^"]+)"/) ??
+            line.match(/\bDomainDoubleValue\(env, info\[\d+\], "([^"]+)"/);
+          if (reader) {
+            sites.push(`${file} ${functionName} ${reader[1]}`);
+          }
+        }
+        return sites;
+      });
+    expect(sites.sort()).toEqual(
+      CORE_DOMAIN_FLOAT_ARGUMENTS.map((argument) => argument.site).sort(),
+    );
   });
 
   it('reads both gammas against the gamma domain, outside that population', () => {
