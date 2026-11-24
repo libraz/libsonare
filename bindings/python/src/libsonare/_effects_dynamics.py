@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, SupportsFloat
 
 import numpy as np
 
@@ -14,7 +15,7 @@ from ._ffi import (
     SonareGateConfig,
     SonareTransientShaperConfig,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _domain_float, _narrow_double, _narrow_float
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -31,6 +32,23 @@ from ._types_mastering import DynamicsProcessorResult
 
 def _coerce_compressor_detector(value: CompressorDetector, key: str) -> int:
     return _token_ordinal(value, _COMPRESSOR_DETECTORS, key)
+
+
+def _gate_range_db(value: object) -> float | ctypes.c_float:
+    """Narrow a gate range without turning a finite value into the mute sentinel."""
+    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
+        try:
+            number = float(value)
+        except (OverflowError, TypeError, ValueError):
+            pass
+        else:
+            if (
+                math.isnan(number)
+                or number == math.inf
+                or (number == -math.inf and value == number)
+            ):
+                return _domain_float(number, "range_db")
+    return _narrow_float(value, "range_db")
 
 
 def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
@@ -161,7 +179,8 @@ def mastering_dynamics_gate(
         attack_ms: Attack time in milliseconds (default 2); one time constant, about
             63% of the way at the set time.
         release_ms: Release time in milliseconds (default 80); as ``attack_ms``.
-        range_db: Closed-state attenuation in dB (default -80).
+        range_db: Closed-state attenuation in dB (default -80). Negative infinity
+            mutes the closed gate.
         hold_ms: Minimum open time in milliseconds (default 0).
         close_threshold_db: Hysteresis close-threshold in dB; clamped to
             ``<= threshold_db`` (default -50).
@@ -175,7 +194,7 @@ def mastering_dynamics_gate(
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         attack_ms=_narrow_double(attack_ms, "attack_ms"),
         release_ms=_narrow_double(release_ms, "release_ms"),
-        range_db=_narrow_double(range_db, "range_db"),
+        range_db=_gate_range_db(range_db),
         hold_ms=_narrow_double(hold_ms, "hold_ms"),
         close_threshold_db=_narrow_double(close_threshold_db, "close_threshold_db"),
         key_high_pass_hz=0.0

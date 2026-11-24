@@ -965,11 +965,7 @@ def zero_crossings(
         A 1-D ``int32`` array of zero-crossing sample indices.
     """
     lib = _get_lib()
-    # A non-finite sample does not merely propagate here: it compares unequal to
-    # itself, so the sign test fabricates crossings on both sides of it that are
-    # absent from the same signal without the NaN.
-    sample_buf = _validate_samples(samples)
-    c_array, length = _to_c_float_array(sample_buf)
+    c_array, length = _to_c_float_array(samples)
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_zero_crossings(
             c_array,

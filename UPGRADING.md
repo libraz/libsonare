@@ -2993,6 +2993,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `waveform_peak_pyramid(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `waveform_peaks(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `mastering_dynamics_gate(range_db)` | range_db refuses a finite value beyond float width and accepts -inf as the muted closed gate (1.x narrowed a value below -3.4e38 to -inf, muting the gate, and refused -inf itself) |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |

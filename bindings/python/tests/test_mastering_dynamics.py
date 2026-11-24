@@ -13,6 +13,7 @@ import pytest
 
 from libsonare import (
     DynamicsProcessorResult,
+    ErrorCode,
     SonareValueError,
     mastering_dynamics_compressor,
     mastering_dynamics_gate,
@@ -134,6 +135,28 @@ class TestGate:
         omitted = mastering_dynamics_gate(x, SR).samples
         zero = mastering_dynamics_gate(x, SR, key_high_pass_hz=0.0).samples
         np.testing.assert_array_equal(zero, omitted)
+
+    def test_negative_infinite_range_db_is_supported(self) -> None:
+        samples = np.zeros(512, dtype=np.float32)
+        result = mastering_dynamics_gate(samples, SR, range_db=float("-inf"))
+        assert result.samples.shape == samples.shape
+        assert result.samples.dtype == np.float32
+
+    @pytest.mark.parametrize("range_db", [1.0, float("inf"), float("nan")])
+    def test_range_db_uses_native_domain(self, range_db: float) -> None:
+        samples = np.zeros(512, dtype=np.float32)
+        with pytest.raises(SonareValueError) as caught:
+            mastering_dynamics_gate(samples, SR, range_db=range_db)
+        assert caught.value.code == ErrorCode.INVALID_PARAMETER
+        assert str(caught.value) == "mastering_dynamics_gate: range_db must be finite and at most 0"
+
+    def test_range_db_refuses_finite_values_outside_float_width(self) -> None:
+        samples = np.zeros(512, dtype=np.float32)
+        with pytest.raises(SonareValueError) as caught:
+            mastering_dynamics_gate(samples, SR, range_db=-1e39)
+        assert str(caught.value) == (
+            "mastering_dynamics_gate: range_db must be finite and in [-3.4028235e38, 3.4028235e38]"
+        )
 
     def test_refuses_a_negative_key_high_pass(self) -> None:
         x = sine(440.0, 0.1, sr=SR, amp=0.5)

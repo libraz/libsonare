@@ -308,6 +308,12 @@ def test_resample_accepts(case: dict) -> None:
     assert out.shape[0] > 0
 
 
+def test_resample_accepts_empty_samples_with_valid_rates() -> None:
+    out = libsonare.resample(np.empty(0, dtype=np.float32), 22050, 44100)
+    assert out.dtype == np.float32
+    assert out.shape == (0,)
+
+
 @pytest.mark.parametrize("case", _RESAMPLE["refused"], ids=lambda case: case["id"])
 def test_resample_refuses(case: dict) -> None:
     error_class = _ERROR_CLASS[case["cause"]]
@@ -621,3 +627,25 @@ def test_midi_fx_config_refused_as_an_argument(case: dict, setter: str) -> None:
     with pytest.raises(SonareValueError, match=re.escape(case["message"])) as caught:
         _FX_SETTERS[setter](case["config"])
     assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+
+
+def test_tonnetz_accepts_a_twelve_row_empty_chromagram() -> None:
+    out = libsonare.tonnetz(np.empty((12, 0), dtype=np.float32))
+    assert out.dtype == np.float32
+    assert out.shape == (6, 0)
+
+
+def test_resample_refuses_a_non_finite_sample_by_name() -> None:
+    with pytest.raises(SonareValueError) as caught:
+        libsonare.resample(np.array([0.0, np.inf], dtype=np.float32), 22050, 44100)
+    assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+    assert str(caught.value) == "resample: samples contains a non-finite sample at index 1"
+
+
+def test_tonnetz_refuses_a_non_finite_chromagram_element_by_name() -> None:
+    chromagram = np.zeros((12, 1), dtype=np.float32)
+    chromagram[2, 0] = np.nan
+    with pytest.raises(SonareValueError) as caught:
+        libsonare.tonnetz(chromagram)
+    assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+    assert str(caught.value) == "tonnetz: chromagram contains a non-finite sample at index 2"

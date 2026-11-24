@@ -1859,6 +1859,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "option"
+old = "mastering_dynamics_gate(range_db)"
+changed = "range_db refuses a finite value beyond float width and accepts -inf as the muted closed gate (1.x narrowed a value below -3.4e38 to -inf, muting the gate, and refused -inf itself)"
+domain = "mastering"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_mastering_dynamics.py::test_range_db_refuses_finite_values_outside_float_width"
+
+[[entry]]
+kind = "option"
 old = "mastering_dynamics_transient_shaper(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"

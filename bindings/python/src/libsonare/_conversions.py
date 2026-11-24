@@ -808,7 +808,9 @@ def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
     a float32 array of shape ``(6, n_frames)``.
     """
     lib = _get_lib()
-    c_array, n_chroma, n_frames = _to_c_float_matrix(chromagram, arg_name="chromagram")
+    c_array, n_chroma, n_frames = _to_c_float_matrix(
+        chromagram, arg_name="chromagram", scan=False, allow_empty=True
+    )
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tonnetz(
             c_array,
@@ -818,6 +820,8 @@ def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
             ctypes.byref(out_length),
         )
         _check(rc)
+        if n_frames == 0:
+            return np.empty((6, 0), dtype=np.float32)
         return _from_c_float_columns(out, out_length.value, n_frames)
 
 
@@ -1111,7 +1115,6 @@ def _resample_float32(
 
 
 @_entry("resample")
-@_guard_buffer("samples")
 def resample(
     samples: Sequence[float] | list[float],
     sample_rate: int,

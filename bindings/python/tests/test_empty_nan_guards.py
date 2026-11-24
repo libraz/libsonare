@@ -88,7 +88,6 @@ _SAMPLE_WRAPPERS = {
     "chroma_cens": lambda buf: chroma_cens(buf, SR),
     "chroma_cqt": lambda buf: chroma_cqt(buf, SR),
     "bass_chroma": lambda buf: bass_chroma(buf, SR),
-    "zero_crossings": lambda buf: zero_crossings(buf),
     "pitch_tuning": lambda buf: pitch_tuning(buf),
     "harmonic": lambda buf: harmonic(buf, SR),
     "percussive": lambda buf: percussive(buf, SR),
@@ -438,10 +437,13 @@ class TestSpectralTransformsMatchSiblingGuards:
         assert exc_info.value.code == 4
 
 
-class TestNonFiniteInputYieldsNoPlausibleResult:
-    """Input with no usable data must fail rather than resolve to a normal answer."""
+class TestZeroCrossingsInput:
+    def test_accepts_empty_samples(self):
+        result = zero_crossings(np.empty(0, dtype=np.float32))
+        assert result.dtype == np.int32
+        assert result.shape == (0,)
 
-    def test_zero_crossings_rejects_nan_rather_than_fabricating_crossings(self):
+    def test_rejects_nan_rather_than_fabricating_crossings(self):
         # A non-finite sample compares unequal to itself, so the sign test would
         # report crossings on both sides of it that the clean signal does not have.
         alternating = np.array([1.0, -1.0] * 16, dtype=np.float32)
@@ -453,6 +455,10 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
             match=r"^zero_crossings: samples contains a non-finite sample at index 10$",
         ):
             zero_crossings(corrupted)
+
+
+class TestNonFiniteInputYieldsNoPlausibleResult:
+    """Input with no usable data must fail rather than resolve to a normal answer."""
 
     def test_pitch_tuning_rejects_an_all_non_finite_track(self):
         # Non-finite entries are dropped like non-positive ones, so a track with
