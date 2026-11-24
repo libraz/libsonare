@@ -36,11 +36,12 @@ describe('sample-count operations keep sampleRate as a shape-only field', () => 
     expect(() => call({ samples, sampleRate: 'bad', ...options })).toThrow(TypeError);
   });
 
-  it.each([
+  type PositionalSampleCall = (samples: Float32Array, sampleRate: number) => ArrayLike<number>;
+  it.each<[string, PositionalSampleCall, ArrayLike<number>]>([
     ['preemphasis', preemphasis, new Float32Array(0)],
     ['deemphasis', deemphasis, new Float32Array(0)],
     ['zeroCrossings', zeroCrossings, new Int32Array(0)],
-  ] as const)('%s returns an empty typed array', (_name, fn, expected) => {
+  ])('%s returns an empty typed array', (_name, fn, expected) => {
     expect(fn(new Float32Array(0), sampleRate)).toEqual(expected);
   });
 
