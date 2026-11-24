@@ -705,6 +705,7 @@ void sonare_free_note_targets(SonareNoteTarget* targets);
 ///          pitch and no target, which is a different thing from having no pitch.
 /// @param notes The note set to edit, in place. May be NULL when @p note_count
 ///        is 0. Only @c median_hz, the sample bounds and @c edit are read.
+///        Each onset must be nonnegative and each offset must be greater than its onset.
 /// @param sample_rate Converts each note's sample span to seconds; must be > 0.
 /// @param targets May be NULL when @p target_count is 0, which assigns nothing
 ///        and applies the policy to every note carrying a pitch.

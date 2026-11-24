@@ -310,6 +310,50 @@
     },
     {
       "entry": "assign_note_targets",
+      "param": "config.max_correction_semitones",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "assign_note_targets",
+      "param": "config.min_overlap_ratio",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "assign_note_targets",
+      "param": "notes[].offset_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "after_onset",
+      "sentinel": null
+    },
+    {
+      "entry": "assign_note_targets",
+      "param": "notes[].onset_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "assign_note_targets",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 1,
@@ -5427,7 +5471,7 @@
       "entry": "pcen",
       "param": "n_bins",
       "kind": "integer",
-      "lo": 0,
+      "lo": 1,
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
@@ -5438,7 +5482,7 @@
       "entry": "pcen",
       "param": "n_frames",
       "kind": "integer",
-      "lo": 0,
+      "lo": 1,
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
@@ -7471,6 +7515,17 @@
     },
     {
       "entry": "sample_bank_add_sample",
+      "param": "desc.root_key",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
+      "entry": "sample_bank_add_sample",
       "param": "n_frames",
       "kind": "integer",
       "lo": 1,
@@ -7490,6 +7545,50 @@
       "hi_included": true,
       "stricter": null,
       "sentinel": null
+    },
+    {
+      "entry": "sample_bank_add_zone",
+      "param": "zone.key_hi",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
+      "entry": "sample_bank_add_zone",
+      "param": "zone.key_lo",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "sample_bank_add_zone",
+      "param": "zone.vel_hi",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
+      "entry": "sample_bank_add_zone",
+      "param": "zone.vel_lo",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "samples_to_frames",

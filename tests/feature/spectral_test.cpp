@@ -1120,6 +1120,35 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
                     "y contains a non-finite sample at index 1");
 }
 
+TEST_CASE("rhythm envelope inputs refuse non-finite caller values", "[domain-rhythm-envelope]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const std::vector<float> envelope{0.25f, nan, 0.5f};
+  TempogramConfig tempogram_config;
+  tempogram_config.win_length = 2;
+
+  CHECK_THROWS_WITH(tempogram(envelope, 22050, tempogram_config),
+                    "onset_envelope contains a non-finite sample at index 1");
+
+  PlpConfig plp_config;
+  plp_config.sr = 22050;
+  plp_config.win_length = 2;
+  CHECK_THROWS_WITH(plp(envelope, plp_config),
+                    "onset_envelope contains a non-finite sample at index 1");
+
+  const auto audio = create_noise_audio();
+  tempogram_config.win_length = 32;
+  plp_config.win_length = 384;
+  const auto measured_plp = plp(audio, plp_config);
+  const auto measured_tempogram = tempogram(audio, tempogram_config);
+  REQUIRE_FALSE(measured_plp.empty());
+  REQUIRE(measured_tempogram.size() == tempogram_config.win_length * measured_plp.size());
+  for (const auto* measured : {&measured_tempogram, &measured_plp}) {
+    CHECK(std::all_of(measured->begin(), measured->end(),
+                      [](float value) { return std::isfinite(value); }));
+    CHECK(*std::max_element(measured->begin(), measured->end()) > 0.0f);
+  }
+}
+
 TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral][refusal]") {
   const std::vector<float> env(64, 1.0f);
   const float nan = std::numeric_limits<float>::quiet_NaN();

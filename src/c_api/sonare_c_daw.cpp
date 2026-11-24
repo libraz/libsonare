@@ -585,18 +585,11 @@ SonareError resolve_note_target_config(const SonareNoteTargetAssignConfig* confi
                               SONARE_NOTE_TARGET_UNMATCHED_NEAREST}));
     });
   }
-  if (const SonareError err = run_validation([&] {
-        util::check::in_range(config->min_overlap_ratio, 0.0, 1.0, "config.min_overlap_ratio");
-        util::check::at_least(config->max_correction_semitones, 0.0,
-                              "config.max_correction_semitones");
-      });
-      err != SONARE_OK) {
-    return err;
-  }
   out.unmatched_policy = policy;
   out.min_overlap_ratio = config->min_overlap_ratio;
   out.max_correction_semitones = config->max_correction_semitones;
-  return SONARE_OK;
+  return run_validation(
+      [&] { editing::note_model::detail::validate_note_target_assign_config(out); });
 }
 
 #endif

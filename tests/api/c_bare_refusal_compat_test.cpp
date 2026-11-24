@@ -164,6 +164,27 @@ TEST_CASE("sonare_vector_normalize names the norm it refuses", "[c_api][compat]"
   REQUIRE(last_message() == "out_length must not be NULL");
 }
 
+TEST_CASE("sonare_pcen requires non-empty dimensions and clears outputs", "[domain-pcen]") {
+  const std::vector<float> values(4, 0.5f);
+  float sentinel = 1.0f;
+  float* out = &sentinel;
+  size_t out_length = 99;
+
+  REQUIRE(sonare_pcen(values.data(), 0, 2, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f, &out,
+                      &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(last_message() == "n_bins must be an integer in [1, 2147483647]");
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  out = &sentinel;
+  out_length = 99;
+  REQUIRE(sonare_pcen(values.data(), 2, 0, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f, &out,
+                      &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(last_message() == "n_frames must be an integer in [1, 2147483647]");
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+}
+
 TEST_CASE("sonare_pcen and sonare_tonnetz name the refused matrix argument", "[c_api][compat]") {
   const std::vector<float> values(12, 0.5f);
   float* out = nullptr;
@@ -172,16 +193,16 @@ TEST_CASE("sonare_pcen and sonare_tonnetz name the refused matrix argument", "[c
 
   REQUIRE(sonare_pcen(values.data(), -1, 3, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f, &out,
                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(last_message() == "n_bins must be an integer in [0, 2147483647]");
+  REQUIRE(last_message() == "n_bins must be an integer in [1, 2147483647]");
   REQUIRE(sonare_pcen(values.data(), 4, -1, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f, &out,
                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(last_message() == "n_frames must be an integer in [0, 2147483647]");
+  REQUIRE(last_message() == "n_frames must be an integer in [1, 2147483647]");
   REQUIRE(sonare_pcen(values.data(), max_int, max_int, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f,
                       &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "n_bins times n_frames must be at most " + kBufferLimit);
   REQUIRE(sonare_pcen(nullptr, 4, 3, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f, &out,
                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(last_message() == "values must not be NULL when n_bins and n_frames are not 0");
+  REQUIRE(last_message() == "values must not be NULL");
   REQUIRE(sonare_pcen(values.data(), 4, 3, 22050, 512, 0.4f, 0.98f, 2.0f, 0.5f, 1e-6f, nullptr,
                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "out must not be NULL");

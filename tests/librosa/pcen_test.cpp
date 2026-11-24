@@ -5,6 +5,7 @@
 #include "core/pcen.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -111,6 +112,25 @@ TEST_CASE("pcen rejects malformed and non-finite configuration", "[librosa][pcen
   }
 }
 
+TEST_CASE("pcen refuses empty matrix dimensions and non-finite values", "[domain-pcen]") {
+  PcenConfig config;
+  config.b = {0.5f};
+  const std::vector<float> values{0.5f, 0.25f};
+  const std::vector<float> non_finite{0.5f, std::numeric_limits<float>::infinity()};
+
+  CHECK_THROWS_WITH(pcen(values, 0, 2, config), "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(pcen(values, 1, 0, config), "n_frames must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(pcen(non_finite, 1, 2, config),
+                    "values contains a non-finite sample at index 1");
+  CHECK_THROWS_WITH(pcen(static_cast<const float*>(nullptr), 500001, 1000, config),
+                    "n_bins times n_frames must be at most 500000000");
+
+  const auto result = pcen(values, 1, 2, config);
+  REQUIRE(result.size() == 2);
+  CHECK(std::isfinite(result[0]));
+  CHECK(std::isfinite(result[1]));
+}
+
 TEST_CASE("pcen vector overload requires the declared matrix size", "[librosa][pcen][edge]") {
   PcenConfig cfg;
   cfg.b = {0.5f};
@@ -120,7 +140,7 @@ TEST_CASE("pcen vector overload requires the declared matrix size", "[librosa][p
                     SonareException);
   REQUIRE(throws_invalid_parameter_with_message(
       [&] { pcen(std::vector<float>{}, std::numeric_limits<int>::max(), 2, cfg); },
-      "values must hold n_bins * n_frames values"));
+      "n_bins times n_frames must be at most 500000000"));
 }
 
 namespace {

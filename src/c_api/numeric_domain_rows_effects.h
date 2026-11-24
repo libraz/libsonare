@@ -13,6 +13,7 @@
 #include "c_api/ppq_domains.h"
 #include "core/audio.h"
 #include "core/spectrum.h"
+#include "editing/note_model/note_target.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/scale_quantizer.h"
 #include "effects/silence.h"
@@ -22,6 +23,14 @@ namespace sonare_c_detail {
 
 /// @brief The rows, sorted by (entry, param).
 inline const NumericDomainRow kEffectsDomainRows[] = {
+    {"assign_note_targets", "config.max_correction_semitones",
+     sonare::editing::note_model::detail::kNoteTargetMaxCorrectionDomain, nullptr},
+    {"assign_note_targets", "config.min_overlap_ratio",
+     sonare::editing::note_model::detail::kNoteTargetOverlapRatioDomain, nullptr},
+    {"assign_note_targets", "notes[].offset_sample",
+     sonare::editing::note_model::detail::kNoteTargetSamplePositionDomain, "after_onset"},
+    {"assign_note_targets", "notes[].onset_sample",
+     sonare::editing::note_model::detail::kNoteTargetSamplePositionDomain, nullptr},
     {"assign_note_targets", "sample_rate", kNoteTargetSampleRateDomain, nullptr},
     {"biquad_filter", "config.type", kBiquadFilterTypeDomain, nullptr},
     {"clip_page_provider_create", "num_channels", kEngineClipPageChannelsDomain, nullptr},
@@ -168,8 +177,17 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
      nullptr},
     {"render_percussive_events", "config.n_fft", sonare::kColaNFftDomain, "even"},
     {"sample_bank_add_sample", "desc.loop_mode", kSampleLoopModeDomain, nullptr},
+    {"sample_bank_add_sample", "desc.root_key",
+     sonare::util::check::with_sentinel(kMidiDataByteDomain, 0), nullptr},
     {"sample_bank_add_sample", "n_frames", kSampleBankFrameCountDomain, nullptr},
     {"sample_bank_add_zone", "set_index", kKeymapSetIndexDomain, nullptr},
+    {"sample_bank_add_zone", "zone.key_hi",
+     sonare::util::check::with_sentinel(kMidiDataByteDomain, 0), nullptr},
+    {"sample_bank_add_zone", "zone.key_lo", kMidiDataByteDomain, nullptr},
+    {"sample_bank_add_zone", "zone.vel_hi",
+     sonare::util::check::with_sentinel(kMidiDataByteDomain, 0), nullptr},
+    {"sample_bank_add_zone", "zone.vel_lo",
+     sonare::util::check::with_sentinel(kMidiDataByteDomain, 0), nullptr},
     {"spectral_edit", "config.heal_radius_frames", kSpectralEditHealRadiusDomain, nullptr},
     {"spectral_edit", "config.n_fft", sonare::kSpectralEditNFftDomain, "power_of_two"},
     {"spectral_edit", "config.window", kSpectralEditWindowDomain, nullptr},

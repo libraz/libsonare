@@ -47,6 +47,38 @@
 
 [[entry]]
 kind = "function"
+old = "sonare_pcen"
+changed = "n_bins or n_frames of zero is refused as SONARE_ERROR_INVALID_PARAMETER instead of returning an empty matrix; call it only with positive dimensions"
+domain = "analysis"
+rule = "finite-or-refused"
+test = "tests/api/c_bare_refusal_compat_test.cpp::sonare_pcen requires non-empty dimensions and clears outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_sample_bank_add_sample"
+changed = "desc.root_key above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being clamped; pass a MIDI key in [0, 127], where 0 keeps the default"
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/bindings/binding_sample_bank_test.cpp::sample-bank MIDI keys are bounded while zero defaults remain available"
+
+[[entry]]
+kind = "function"
+old = "sonare_sample_bank_add_zone"
+changed = "zone.key_lo, zone.key_hi, zone.vel_lo or zone.vel_hi above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being stored; pass ordered MIDI keys and velocities in [0, 127]"
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/bindings/binding_sample_bank_test.cpp::sample-bank MIDI keys are bounded while zero defaults remain available"
+
+[[entry]]
+kind = "function"
+old = "sonare_assign_note_targets"
+changed = "a note with a negative onset_sample or an offset_sample at or before onset_sample is refused as SONARE_ERROR_INVALID_PARAMETER; pass nonnegative onsets and strictly later offsets"
+domain = "effects"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::note-target assignment refuses bad spans before applying any edits"
+
+[[entry]]
+kind = "function"
 old = "sonare_vocal_edit_api_version"
 new = "sonare_vocal_edit_abi_version"
 domain = "core"

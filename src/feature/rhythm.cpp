@@ -105,12 +105,14 @@ std::vector<std::complex<float>> fourier_tempogram_complex(const std::vector<flo
 
 }  // namespace
 
-std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
+std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
                              const TempogramConfig& config) {
-  // The autocorrelation tempogram operates purely on the onset envelope and its
-  // hop/window config; sr is kept only for API symmetry with the BPM-axis
-  // helpers (tempogram_ratio, plp) that do need it.
-  (void)sr;
+  validate_offline_audio_samples("onset_envelope", onset_envelope.data(), onset_envelope.size(), 0);
+  return detail::tempogram_of_envelope(onset_envelope, config);
+}
+
+std::vector<float> detail::tempogram_of_envelope(const std::vector<float>& onset_envelope,
+                                                 const TempogramConfig& config) {
   util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
   util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   if (onset_envelope.empty()) return {};
@@ -183,7 +185,7 @@ std::vector<float> tempogram(const Audio& audio, const TempogramConfig& config) 
   OnsetConfig onset_cfg;
   onset_cfg.center = config.center;
   const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
-  return tempogram(env, audio.sample_rate(), config);
+  return detail::tempogram_of_envelope(env, config);
 }
 
 namespace detail {
@@ -287,6 +289,12 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
 }
 
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
+  validate_offline_audio_samples("onset_envelope", onset_envelope.data(), onset_envelope.size(), 0);
+  return detail::plp_of_envelope(onset_envelope, config);
+}
+
+std::vector<float> detail::plp_of_envelope(const std::vector<float>& onset_envelope,
+                                           const PlpConfig& config) {
   util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
   util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   util::check::integer_within<int>(config.sr, kRhythmCountDomain, "sample_rate");
@@ -405,7 +413,7 @@ std::vector<float> plp(const Audio& audio, const PlpConfig& config) {
   const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
   PlpConfig adjusted = config;
   adjusted.sr = audio.sample_rate();
-  return plp(env, adjusted);
+  return detail::plp_of_envelope(env, adjusted);
 }
 
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,

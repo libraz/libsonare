@@ -764,6 +764,13 @@ TEST_CASE("the note-target entries refuse their arguments by name", "[c_api][eng
   CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &bad, &assigned) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.max_correction_semitones must be finite and at least 0");
+  bad = config;
+  bad.max_correction_semitones = std::numeric_limits<float>::infinity();
+  assigned = 99;
+  CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &bad, &assigned) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.max_correction_semitones must be finite and at least 0");
+  CHECK(assigned == 0);
 
   SonareNoteTarget broken = target;
   broken.start_sec = std::numeric_limits<double>::quiet_NaN();
@@ -781,6 +788,96 @@ TEST_CASE("the note-target entries refuse their arguments by name", "[c_api][eng
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
         "targets[0].target_midi must be finite and in [-3.4028235e38, 3.4028235e38]");
+}
+
+TEST_CASE("note-target assignment refuses bad spans before applying any edits",
+          "[domain-note-targets]") {
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
+  const SonareNoteTarget target{0.0, 2.0, 72.0f};
+
+  const auto check_refusal = [&](int64_t onset, int64_t offset, const std::string& expected) {
+    SonareNoteObject note{};
+    sonare_note_edit_init(&note.edit);
+    note.onset_sample = onset;
+    note.offset_sample = offset;
+    note.median_hz = 440.0f;
+    note.edit.pitch_semitones = 3.5f;
+    note.edit.muted = 1;
+    note.edit.gain_db = -2.0f;
+    const int64_t before_onset = note.onset_sample;
+    const int64_t before_offset = note.offset_sample;
+    const float before_pitch = note.edit.pitch_semitones;
+    const int32_t before_muted = note.edit.muted;
+    const float before_gain = note.edit.gain_db;
+    size_t assigned = 99;
+    CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &config, &assigned) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == expected);
+    CHECK(assigned == 0);
+    CHECK(note.onset_sample == before_onset);
+    CHECK(note.offset_sample == before_offset);
+    CHECK(note.edit.pitch_semitones == before_pitch);
+    CHECK(note.edit.muted == before_muted);
+    CHECK(note.edit.gain_db == before_gain);
+  };
+
+  SECTION("negative onset") {
+    check_refusal(-1, 100, "notes[0].onset_sample must be an integer of at least 0");
+  }
+  SECTION("negative offset") {
+    check_refusal(0, -1, "notes[0].offset_sample must be an integer of at least 0");
+  }
+  SECTION("equal endpoints") {
+    check_refusal(10, 10, "notes[0].offset_sample must be greater than notes[0].onset_sample");
+  }
+  SECTION("reversed endpoints") {
+    check_refusal(10, 9, "notes[0].offset_sample must be greater than notes[0].onset_sample");
+  }
+
+  SonareNoteObject valid{};
+  sonare_note_edit_init(&valid.edit);
+  valid.onset_sample = 0;
+  valid.offset_sample = kRate;
+  valid.median_hz = 440.0f;
+  size_t assigned = 0;
+  REQUIRE(sonare_assign_note_targets(&valid, 1, kRate, &target, 1, &config, &assigned) ==
+          SONARE_OK);
+  CHECK(assigned == 1);
+  CHECK(std::abs(valid.edit.pitch_semitones - 3.0f) < 1.0e-5f);
+}
+
+TEST_CASE("note-target configuration refuses nonfinite limits without editing notes",
+          "[domain-note-targets]") {
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
+  SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
+  note.onset_sample = 0;
+  note.offset_sample = kRate;
+  note.median_hz = 440.0f;
+  note.edit.pitch_semitones = 2.0f;
+  const SonareNoteObject before = note;
+  const SonareNoteTarget target{0.0, 2.0, 72.0f};
+
+  config.min_overlap_ratio = std::numeric_limits<float>::quiet_NaN();
+  size_t assigned = 99;
+  CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &config, &assigned) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.min_overlap_ratio must be finite and in [0, 1]");
+  CHECK(assigned == 0);
+  CHECK(note.edit.pitch_semitones == before.edit.pitch_semitones);
+  CHECK(note.edit.muted == before.edit.muted);
+
+  config.min_overlap_ratio = 0.5f;
+  config.max_correction_semitones = std::numeric_limits<float>::infinity();
+  assigned = 99;
+  CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &config, &assigned) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.max_correction_semitones must be finite and at least 0");
+  CHECK(assigned == 0);
+  CHECK(note.edit.pitch_semitones == before.edit.pitch_semitones);
+  CHECK(note.edit.muted == before.edit.muted);
 }
 
 TEST_CASE("a refusal of a value left out renders NULL, None or omitted by the spelling asked for",

@@ -15,9 +15,11 @@
 /// decisions, not derivations.
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "editing/note_model/note_object.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::note_model {
 
@@ -41,13 +43,26 @@ enum class UnmatchedTargetPolicy {
 
 struct NoteTargetAssignConfig {
   UnmatchedTargetPolicy unmatched_policy = UnmatchedTargetPolicy::Leave;
-  /// Fraction of the note that must overlap a target for it to count.
+  /// Fraction of the note that must overlap a target.
   float min_overlap_ratio = 0.5f;
-  /// The assigned shift saturates here rather than being refused, matching
-  /// formant_shift_semitones: a reference an octave out is a wrong reference,
-  /// and a rejected call tells the caller less than a bounded correction does.
+  /// Maximum absolute shift to apply after the input is validated.
   float max_correction_semitones = 12.0f;
 };
+
+namespace detail {
+
+inline constexpr util::check::NumericDomain kNoteTargetSamplePositionDomain =
+    util::check::integer_domain_of<std::int64_t>(0);
+inline constexpr util::check::NumericDomain kNoteTargetOverlapRatioDomain =
+    util::check::real_domain(0.0, 1.0);
+inline constexpr util::check::NumericDomain kNoteTargetMaxCorrectionDomain =
+    util::check::real_domain_above(0.0, true);
+
+/// Shared by native callers and the C adapter; throws a parameter refusal on invalid input.
+void validate_note_target_assign_config(const NoteTargetAssignConfig& config);
+void validate_note_target_note_spans(const std::vector<NoteObject>& notes);
+
+}  // namespace detail
 
 /// @brief Writes each note's pitch_shift_semitones from the target it overlaps.
 /// @details Rewrites @p notes in place, so `edit` means the same field going in
@@ -57,7 +72,10 @@ struct NoteTargetAssignConfig {
 ///          overlap is at least @c min_overlap_ratio of the note's own span;
 ///          ties go to the target that starts first. The shift is
 ///          `target_midi - midi_of(median_hz)`, saturated at
-///          @c max_correction_semitones.
+///          @c max_correction_semitones. The ratio must be finite and in [0, 1],
+///          the correction finite and at least 0, and each note span must have
+///          a nonnegative onset and an offset greater than its onset; invalid
+///          values are refused before any note is changed.
 ///
 ///          **A note whose @c median_hz is not finite and positive is never
 ///          assigned and never edited, whatever the policy says.** Such a note

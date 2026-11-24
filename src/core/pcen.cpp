@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "core/audio.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
@@ -26,7 +27,15 @@ float derive_b(float time_constant, int sr, int hop_length) {
 }  // namespace
 
 std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConfig& config) {
+  const std::size_t n_values = detail::checked_pcen_element_count(n_bins, n_frames);
   util::check::non_null(S, "values");
+  validate_offline_audio_samples("values", S, n_values, 0);
+  return detail::pcen_with_validated_values(S, n_bins, n_frames, n_values, config);
+}
+
+std::vector<float> detail::pcen_with_validated_values(const float* S, int n_bins, int n_frames,
+                                                      std::size_t n_values,
+                                                      const PcenConfig& config) {
   util::check::finite_float(config.time_constant, "time_constant");
   util::check::finite_float(config.gain, "gain");
   util::check::finite_float(config.bias, "bias");
@@ -44,9 +53,6 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
     if (!std::isfinite(value)) {
       throw SonareException(ErrorCode::InvalidParameter, "zi values must be finite");
     }
-  }
-  if (n_bins <= 0 || n_frames <= 0) {
-    return {};
   }
   if (config.eps <= 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "eps must be strictly positive");
@@ -88,7 +94,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
   const bool logarithmic = config.power == 0.0f;
   const float bias_term = logarithmic ? 0.0f : finite_pow(config.bias, config.power);
 
-  std::vector<float> out(static_cast<size_t>(n_bins) * n_frames);
+  std::vector<float> out(n_values);
   // Bin-major: S and out are row-major [n_bins x n_frames], so both sides of a bin are one
   // contiguous row. The recursion runs along t within a bin and bins are independent, so
   // keeping t ascending per bin replays the identical operation sequence on each chain and
@@ -120,15 +126,13 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
 
 std::vector<float> pcen(const std::vector<float>& S, int n_bins, int n_frames,
                         const PcenConfig& config) {
-  if (n_bins > 0 && n_frames > 0) {
-    std::size_t expected = 0;
-    if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
-        S.size() != expected) {
-      util::check::refuse_relation({"values", "n_bins", "n_frames"},
-                                   "{0} must hold {1} * {2} values");
-    }
+  const std::size_t n_values = detail::checked_pcen_element_count(n_bins, n_frames);
+  if (S.size() != n_values) {
+    util::check::refuse_relation({"values", "n_bins", "n_frames"},
+                                 "{0} must hold {1} * {2} values");
   }
-  return pcen(S.data(), n_bins, n_frames, config);
+  validate_offline_audio_samples("values", S.data(), n_values, 0);
+  return detail::pcen_with_validated_values(S.data(), n_bins, n_frames, n_values, config);
 }
 
 }  // namespace sonare

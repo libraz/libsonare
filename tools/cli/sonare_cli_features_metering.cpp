@@ -279,7 +279,7 @@ int cmd_tempogram(const CliArgs& args, const Audio& audio) {
   TempogramConfig config;
   config.hop_length = args.get_int("hop-length", config.hop_length);
   config.win_length = args.get_int("win-length", config.win_length);
-  auto values = tempogram(envelope, audio.sample_rate(), config);
+  auto values = detail::tempogram_of_envelope(envelope, config);
   const int n_frames =
       config.win_length > 0 ? static_cast<int>(values.size()) / config.win_length : 0;
   Stats stats = Stats::compute(values);
@@ -324,7 +324,7 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
   if (args.has("bpm-min")) config.tempo_min = args.get_float("bpm-min", config.tempo_min);
   if (args.has("bpm-max")) config.tempo_max = args.get_float("bpm-max", config.tempo_max);
   config.win_length = args.get_int("win-length", config.win_length);
-  auto values = plp(envelope, config);
+  auto values = detail::plp_of_envelope(envelope, config);
   Stats stats = Stats::compute(values);
 
   if (args.json_output) {

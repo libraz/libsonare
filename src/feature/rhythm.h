@@ -63,8 +63,10 @@ struct TempogramConfig {
 ///         centered on frame j of the onset envelope.
 ///         With center=false frame j covers env[j : j + win_length] and
 ///         n_frames = len - win_length + 1, as librosa frames it; an envelope
-///         shorter than win_length throws InvalidParameter. The same holds for
-///         fourier_tempogram and cyclic_tempogram.
+///         shorter than win_length throws InvalidParameter. The same length rule holds
+///         for fourier_tempogram and cyclic_tempogram.
+/// @throws SonareException(InvalidParameter) when a caller-supplied envelope contains a
+///         non-finite value, named by index.
 std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
                              const TempogramConfig& config = TempogramConfig());
 
@@ -78,6 +80,9 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
                                      const TempogramConfig& config = TempogramConfig());
 
 namespace detail {
+/// Processes an onset envelope without scanning it; for library-computed envelopes.
+std::vector<float> tempogram_of_envelope(const std::vector<float>& onset_envelope,
+                                         const TempogramConfig& config);
 /// No finiteness refusal: a library-computed envelope may be non-finite on finite input.
 std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset_envelope,
                                                  const TempogramConfig& config);
@@ -167,8 +172,16 @@ struct PlpConfig {
 /// @param onset_envelope Onset strength envelope frames.
 /// @param config Configuration parameters.
 /// @return Pulse curve of length onset_envelope.size().
+/// @throws SonareException(InvalidParameter) when a caller-supplied envelope contains a
+///         non-finite value, named by index.
 std::vector<float> plp(const std::vector<float>& onset_envelope,
                        const PlpConfig& config = PlpConfig());
+
+namespace detail {
+/// Processes an onset envelope without scanning it; for library-computed envelopes.
+std::vector<float> plp_of_envelope(const std::vector<float>& onset_envelope,
+                                   const PlpConfig& config);
+}  // namespace detail
 
 /// @brief Convenience overload computing PLP directly from audio.
 std::vector<float> plp(const Audio& audio, const PlpConfig& config = PlpConfig());

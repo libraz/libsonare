@@ -31,7 +31,7 @@ typedef struct SonareSampleBank SonareSampleBank;
 /// Zero-initialize then override: a zero-init desc is an unlooped sample rooted
 /// at middle C and played at the render's own rate.
 typedef struct {
-  uint8_t root_key;       ///< MIDI key at which the sample sounds at its recorded pitch; 0 => 60
+  uint8_t root_key;       ///< MIDI key [0, 127] at recorded pitch; 0 => 60
   float fine_tune_cents;  ///< Fine tuning of the whole sample in cents; must be finite
   double source_rate;     ///< Rate in Hz the sample was recorded at; 0 => the render's own rate
   uint32_t loop_start;    ///< Loop start as a frame offset inside this sample
@@ -51,7 +51,8 @@ typedef struct {
 /// being a note-off rather than a dynamic; @c key_lo of zero is simply the
 /// lowest key. So `{ .key_lo = 48 }` is 48..127 at every velocity, and an
 /// untouched rectangle is the whole keyboard. The one rectangle this cannot
-/// express is the single key 0.
+/// express is the single key 0. Every key and velocity value must be in [0, 127];
+/// an out-of-range field is refused without changing the bank.
 typedef struct {
   uint8_t key_lo;         ///< Lowest MIDI key covered (inclusive); 0 is the lowest key
   uint8_t key_hi;         ///< Highest MIDI key covered (inclusive); 0 => 127

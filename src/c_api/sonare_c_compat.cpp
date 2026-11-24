@@ -347,13 +347,13 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
                         float eps, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
+  size_t n_values = 0;
   if (const SonareError err = run_validation([&] {
-        check_matrix_size(n_bins, n_frames, "n_bins", "n_frames");
-        if (n_bins != 0 && n_frames != 0 && values == nullptr) {
-          util::check::refuse("values", "{must_be_present} when n_bins and n_frames are not 0");
+        n_values = sonare::detail::checked_pcen_element_count(n_bins, n_frames);
+        if (values == nullptr) {
+          util::check::refuse("values", "{must_be_present}");
         }
-        refuse_invalid_buffer("values", "length", values,
-                              static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), true);
+        refuse_invalid_buffer("values", "length", values, n_values, true);
       });
       err != SONARE_OK) {
     return err;
@@ -369,7 +369,9 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
   config.bias = bias;
   config.power = power;
   config.eps = eps;
-  return copy_vector(pcen(values, n_bins, n_frames, config), out, out_length);
+  return copy_vector(
+      sonare::detail::pcen_with_validated_values(values, n_bins, n_frames, n_values, config), out,
+      out_length);
   SONARE_C_CATCH
 }
 
@@ -422,7 +424,8 @@ SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sam
   config.mode =
       mode == SONARE_TEMPOGRAM_COSINE ? TempogramMode::kCosine : TempogramMode::kAutocorrelation;
   std::vector<float> input(onset_envelope, onset_envelope + length);
-  const std::vector<float> result = tempogram(input, sample_rate, config);
+  (void)sample_rate;
+  const std::vector<float> result = detail::tempogram_of_envelope(input, config);
   // The core frames the envelope (one frame per window when not centered), so read the count back.
   *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(config.win_length));
   return copy_vector(result, out, out_length);
@@ -476,7 +479,7 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
   std::vector<float> input(onset_envelope, onset_envelope + length);
   return copy_vector(
       with_c_names(std::array<CName, 2>{{{"tempo_min", "bpm_min"}, {"tempo_max", "bpm_max"}}},
-                   [&] { return plp(input, config); }),
+                   [&] { return detail::plp_of_envelope(input, config); }),
       out, out_length);
   SONARE_C_CATCH
 }

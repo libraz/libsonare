@@ -168,6 +168,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareTimbreResult.roughness` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
 | `SonareTimbreResult.warmth` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_pcen` | n_bins or n_frames of zero is refused as SONARE_ERROR_INVALID_PARAMETER instead of returning an empty matrix; call it only with positive dimensions |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |
@@ -548,6 +554,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_assign_note_targets` | a note with a negative onset_sample or an offset_sample at or before onset_sample is refused as SONARE_ERROR_INVALID_PARAMETER; pass nonnegative onsets and strictly later offsets |
 | `sonare_normalize_rms` | the result is no longer hard-clipped to [-1, 1]: one gain brings the RMS exactly to target_db and can leave peaks above full scale; a finite target above 0 dB is accepted |
 | `sonare_normalize` | a finite target above 0 dB is reached rather than refused, and the result is not clipped; a caller writing to an integer format fits or limits it |
 
@@ -977,6 +984,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareEngineMidiClipSchedule` | leads with uint32_t struct_size; prepare it with sonare_engine_midi_clip_schedule_init, after which every field is read literally: length_samples SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED (-1) is open-ended and 0 is refused; a looping clip needs loop_length_samples of at least 1, and an open-ended clip refuses a fade-out |
 | `SonareEngineSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_engine_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
 | `sonare_engine_bounce_options_default` | removed: call sonare_engine_bounce_options_init(&options) on a caller-owned struct instead; set num_channels before bouncing (a 0 width is refused) |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_sample_bank_add_sample` | desc.root_key above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being clamped; pass a MIDI key in [0, 127], where 0 keeps the default |
+| `sonare_sample_bank_add_zone` | zone.key_lo, zone.key_hi, zone.vel_lo or zone.vel_hi above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being stored; pass ordered MIDI keys and velocities in [0, 127] |
 
 #### String values are lowerCamelCase tokens
 

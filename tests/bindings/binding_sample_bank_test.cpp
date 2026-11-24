@@ -112,6 +112,80 @@ TEST_CASE("a sample bank rejects what it cannot hold", "[project][sample_bank]")
   sonare_sample_bank_destroy(nullptr);  // documented no-op
 }
 
+TEST_CASE("sample-bank MIDI keys are bounded while zero defaults remain available",
+          "[domain-sample-bank]") {
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
+  const std::array<float, 2> pcm{};
+  SonareSampleDesc sample{};
+  uint32_t index = 77;
+
+  sample.root_key = 128;
+  CHECK(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &sample, &index) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "desc.root_key must be an integer in [0, 127]");
+  CHECK(index == 0);
+  size_t sample_count = 9;
+  REQUIRE(sonare_sample_bank_sample_count(bank, &sample_count) == SONARE_OK);
+  CHECK(sample_count == 0);
+
+  sample.root_key = 0;  // The C zero sentinel still selects middle C.
+  REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &sample, &index) ==
+          SONARE_OK);
+  REQUIRE(index == 0);
+  sample.root_key = 127;
+  REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &sample, &index) ==
+          SONARE_OK);
+  CHECK(index == 1);
+
+  SonareSampleZoneDesc zone{};
+  zone.sample_index = index;
+  const struct {
+    const char* subject;
+    uint8_t SonareSampleZoneDesc::*field;
+  } invalid_fields[] = {
+      {"zone.key_lo", &SonareSampleZoneDesc::key_lo},
+      {"zone.key_hi", &SonareSampleZoneDesc::key_hi},
+      {"zone.vel_lo", &SonareSampleZoneDesc::vel_lo},
+      {"zone.vel_hi", &SonareSampleZoneDesc::vel_hi},
+  };
+  for (const auto& field : invalid_fields) {
+    SonareSampleZoneDesc invalid = zone;
+    invalid.*(field.field) = 128;
+    CHECK(sonare_sample_bank_add_zone(bank, 0, &invalid) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string(field.subject) + " must be an integer in [0, 127]");
+  }
+  size_t set_count = 99;
+  REQUIRE(sonare_sample_bank_set_count(bank, &set_count) == SONARE_OK);
+  CHECK(set_count == 0);
+
+  // Zero keeps each documented default, and a valid rectangle still loads.
+  REQUIRE(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_OK);
+  SonareSampleZoneDesc valid = zone;
+  valid.key_lo = 126;
+  valid.key_hi = 127;
+  valid.vel_lo = 126;
+  valid.vel_hi = 127;
+  REQUIRE(sonare_sample_bank_add_zone(bank, 0, &valid) == SONARE_OK);
+
+  SonareSampleZoneDesc inverted = zone;
+  inverted.key_lo = 127;
+  inverted.key_hi = 126;
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &inverted) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "zone.key_lo must not exceed zone.key_hi");
+  inverted = zone;
+  inverted.vel_lo = 127;
+  inverted.vel_hi = 126;
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &inverted) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "zone.vel_lo must not exceed zone.vel_hi");
+
+  set_count = 99;
+  REQUIRE(sonare_sample_bank_set_count(bank, &set_count) == SONARE_OK);
+  CHECK(set_count == 1);
+  sonare_sample_bank_destroy(bank);
+}
+
 TEST_CASE("a sample bank refuses a value it could not attribute later", "[project][sample_bank]") {
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();

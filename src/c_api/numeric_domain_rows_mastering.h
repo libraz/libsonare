@@ -14,6 +14,7 @@
 #include "c_api/segment_input_domains.h"
 #include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
+#include "core/pcen.h"
 #include "core/spectrum.h"
 #include "effects/common/room_field_checks.h"
 #include "feature/inverse.h"
@@ -220,8 +221,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"mfcc_to_mel", "n_frames", sonare::kInverseFramesDomain, nullptr},
     {"mfcc_to_mel", "n_mels", sonare::kInverseMelBandsDomain, nullptr},
     {"mfcc_to_mel", "n_mfcc", sonare::kInverseMfccCountDomain, nullptr},
-    {"pcen", "n_bins", kMatrixDimensionDomain, nullptr},
-    {"pcen", "n_frames", kMatrixDimensionDomain, nullptr},
+    {"pcen", "n_bins", sonare::kPcenMatrixDimensionDomain, nullptr},
+    {"pcen", "n_frames", sonare::kPcenMatrixDimensionDomain, nullptr},
     {"room_morph", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain, nullptr},
     {"room_morph", "config.air_humidity_percent",
      sonare::effects::common::kAirHumidityPercentDomain, nullptr},

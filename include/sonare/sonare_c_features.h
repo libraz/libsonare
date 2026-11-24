@@ -1320,6 +1320,9 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
 SonareError sonare_vector_normalize(const float* values, size_t length, SonareNormType norm,
                                     float threshold, float** out, size_t* out_length);
 
+/// @brief Applies PCEN to a row-major spectrogram with positive bin and frame counts.
+/// @note The matrix is limited to 500000000 elements. Non-finite values in @p values are
+///       refused by index.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,
                         size_t hop_length, float time_constant, float gain, float bias, float power,

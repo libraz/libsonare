@@ -6,6 +6,7 @@
 #include <string>
 
 #include "c_api/daw_config_domains.h"
+#include "c_api/midi_input_domains.h"
 #include "midi/synth/sample_bank.h"
 #include "sample_bank_internal.h"
 #include "sonare_c_internal.h"
@@ -55,8 +56,11 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(desc);
+  // Root key zero keeps its documented middle-C default.
   // loop_mode is a SoundFont sampleModes value, 0..3; 2 is the spec's "unused, no loop".
   if (const SonareError err = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_within(desc->root_key, sonare_c_detail::kMidiDataByteDomain,
+                                            "desc.root_key");
         sonare::util::check::integer_within(desc->loop_mode, sonare_c_detail::kSampleLoopModeDomain,
                                             "desc.loop_mode");
       });
@@ -117,6 +121,19 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(zone);
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_within(zone->key_lo, sonare_c_detail::kMidiDataByteDomain,
+                                            "zone.key_lo");
+        sonare::util::check::integer_within(zone->key_hi, sonare_c_detail::kMidiDataByteDomain,
+                                            "zone.key_hi");
+        sonare::util::check::integer_within(zone->vel_lo, sonare_c_detail::kMidiDataByteDomain,
+                                            "zone.vel_lo");
+        sonare::util::check::integer_within(zone->vel_hi, sonare_c_detail::kMidiDataByteDomain,
+                                            "zone.vel_hi");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_TRY
   sonare::midi::synth::SampleZoneDesc cpp;
   // Every bound defaults on its own, so narrowing one edge never collapses

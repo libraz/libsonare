@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "core/convert.h"
 
@@ -19,21 +20,6 @@ double gap_seconds(double a_start, double a_end, double b_start, double b_end) {
   return std::max(0.0, std::max(b_start - a_end, a_start - b_end));
 }
 
-/// A bad ratio reads as the strictest one rather than the loosest: an
-/// under-matching run reports it in the assignment count, while a config that
-/// silently matched everything would look like a successful one.
-float resolve_min_overlap_ratio(float ratio) {
-  if (!std::isfinite(ratio)) return 1.0f;
-  return std::clamp(ratio, 0.0f, 1.0f);
-}
-
-/// Non-finite or negative saturates every correction to zero, which leaves the
-/// take as recorded instead of shifting it by a value nothing bounded.
-float resolve_max_correction(float semitones) {
-  if (!std::isfinite(semitones) || semitones < 0.0f) return 0.0f;
-  return semitones;
-}
-
 bool has_measured_pitch(const NoteObject& note) {
   return std::isfinite(note.median_hz) && note.median_hz > 0.0f;
 }
@@ -46,13 +32,41 @@ void apply_target(NoteObject& note, float target_midi, float max_correction) {
 
 }  // namespace
 
+namespace detail {
+
+void validate_note_target_assign_config(const NoteTargetAssignConfig& config) {
+  util::check::within(config.min_overlap_ratio, kNoteTargetOverlapRatioDomain,
+                      "config.min_overlap_ratio");
+  util::check::within(config.max_correction_semitones, kNoteTargetMaxCorrectionDomain,
+                      "config.max_correction_semitones");
+}
+
+void validate_note_target_note_spans(const std::vector<NoteObject>& notes) {
+  for (std::size_t i = 0; i < notes.size(); ++i) {
+    const NoteObject& note = notes[i];
+    const std::string onset_subject = util::check::indexed_subject("notes", i, "onset_sample");
+    const std::string offset_subject = util::check::indexed_subject("notes", i, "offset_sample");
+    util::check::integer_within(note.onset_sample, kNoteTargetSamplePositionDomain,
+                                onset_subject.c_str());
+    util::check::integer_within(note.offset_sample, kNoteTargetSamplePositionDomain,
+                                offset_subject.c_str());
+    if (note.offset_sample <= note.onset_sample) {
+      util::check::refuse_relation({offset_subject, onset_subject}, "{0} must be greater than {1}");
+    }
+  }
+}
+
+}  // namespace detail
+
 size_t assign_note_targets(std::vector<NoteObject>& notes, int sample_rate,
                            const std::vector<NoteTarget>& targets,
                            const NoteTargetAssignConfig& config) {
   if (sample_rate <= 0) return 0;
+  detail::validate_note_target_assign_config(config);
+  detail::validate_note_target_note_spans(notes);
   const double rate = static_cast<double>(sample_rate);
-  const float min_ratio = resolve_min_overlap_ratio(config.min_overlap_ratio);
-  const float max_correction = resolve_max_correction(config.max_correction_semitones);
+  const float min_ratio = config.min_overlap_ratio;
+  const float max_correction = config.max_correction_semitones;
 
   size_t assigned = 0;
   for (NoteObject& note : notes) {

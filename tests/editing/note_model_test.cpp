@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <random>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -2574,6 +2575,72 @@ NoteObject note_at(double start_sec, double end_sec, float midi) {
 }
 
 }  // namespace
+
+TEST_CASE("assign_note_targets validates spans and limits before changing any note",
+          "[domain-note-targets]") {
+  const std::vector<NoteTarget> targets{{0.0, 2.0, 72.0f}};
+  const auto check_unchanged = [&](std::vector<NoteObject> notes, const std::string& expected) {
+    const auto before = notes;
+    REQUIRE_THROWS_WITH(assign_note_targets(notes, kSampleRate, targets, {}), expected);
+    REQUIRE(notes.size() == before.size());
+    for (size_t i = 0; i < notes.size(); ++i) {
+      CHECK(notes[i].onset_sample == before[i].onset_sample);
+      CHECK(notes[i].offset_sample == before[i].offset_sample);
+      CHECK(notes[i].edit.pitch_shift_semitones == before[i].edit.pitch_shift_semitones);
+      CHECK(notes[i].edit.muted == before[i].edit.muted);
+    }
+  };
+
+  SECTION("onset is nonnegative") {
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f), note_at(1.0, 2.0, 60.0f)};
+    notes[1].onset_sample = -1;
+    check_unchanged(std::move(notes), "notes[1].onset_sample must be an integer of at least 0");
+  }
+  SECTION("offset is nonnegative") {
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f), note_at(1.0, 2.0, 60.0f)};
+    notes[1].offset_sample = -1;
+    check_unchanged(std::move(notes), "notes[1].offset_sample must be an integer of at least 0");
+  }
+  SECTION("offset follows onset") {
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f), note_at(1.0, 2.0, 60.0f)};
+    notes[1].offset_sample = notes[1].onset_sample;
+    check_unchanged(std::move(notes),
+                    "notes[1].offset_sample must be greater than notes[1].onset_sample");
+  }
+  SECTION("overlap ratio is in range") {
+    NoteTargetAssignConfig config;
+    config.min_overlap_ratio = 1.01f;
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f)};
+    const auto before = notes;
+    REQUIRE_THROWS_WITH(assign_note_targets(notes, kSampleRate, targets, config),
+                        "config.min_overlap_ratio must be finite and in [0, 1]");
+    CHECK(notes[0].edit.pitch_shift_semitones == before[0].edit.pitch_shift_semitones);
+  }
+  SECTION("overlap ratio must be finite") {
+    NoteTargetAssignConfig config;
+    config.min_overlap_ratio = std::numeric_limits<float>::quiet_NaN();
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f)};
+    REQUIRE_THROWS_WITH(assign_note_targets(notes, kSampleRate, targets, config),
+                        "config.min_overlap_ratio must be finite and in [0, 1]");
+    CHECK(notes[0].edit.pitch_shift_semitones == 0.0f);
+  }
+  SECTION("maximum correction must be finite and nonnegative") {
+    NoteTargetAssignConfig config;
+    config.max_correction_semitones = std::numeric_limits<float>::infinity();
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f)};
+    const auto before = notes;
+    REQUIRE_THROWS_WITH(assign_note_targets(notes, kSampleRate, targets, config),
+                        "config.max_correction_semitones must be finite and at least 0");
+    CHECK(notes[0].edit.pitch_shift_semitones == before[0].edit.pitch_shift_semitones);
+  }
+  SECTION("valid boundaries remain accepted") {
+    NoteTargetAssignConfig config;
+    config.min_overlap_ratio = 0.0f;
+    config.max_correction_semitones = 0.0f;
+    std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f)};
+    REQUIRE_NOTHROW(assign_note_targets(notes, kSampleRate, targets, config));
+  }
+}
 
 TEST_CASE("assign_note_targets lands each note on the pitch its target names",
           "[note_model][note_target]") {

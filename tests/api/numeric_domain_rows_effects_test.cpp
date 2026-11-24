@@ -762,6 +762,7 @@ SonareError probe_sample_bank_add_sample(const std::string& param, double value)
   SonareSampleDesc desc{};
   size_t n_frames = 8;
   if (is_param(param, "n_frames")) n_frames = as_size(value);
+  if (is_param(param, "desc.root_key")) desc.root_key = as_u8(value);
   if (is_param(param, "desc.loop_mode")) desc.loop_mode = static_cast<int>(value);
   uint32_t index = 0;
   const SonareError err = sonare_sample_bank_add_sample(bank, data.data(), n_frames, &desc, &index);
@@ -769,11 +770,22 @@ SonareError probe_sample_bank_add_sample(const std::string& param, double value)
   return err;
 }
 
-SonareError probe_sample_bank_add_zone(const std::string&, double value) {
+SonareError probe_sample_bank_add_zone(const std::string& param, double value) {
   SonareSampleBank* bank = nullptr;
   REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
-  const SonareSampleZoneDesc zone{};
-  const SonareError err = sonare_sample_bank_add_zone(bank, as_u32(value), &zone);
+  const std::array<float, 8> data{};
+  SonareSampleDesc sample_desc{};
+  uint32_t sample_index = 0;
+  REQUIRE(sonare_sample_bank_add_sample(bank, data.data(), data.size(), &sample_desc,
+                                        &sample_index) == SONARE_OK);
+  SonareSampleZoneDesc zone{};
+  zone.sample_index = sample_index;
+  if (is_param(param, "zone.key_lo")) zone.key_lo = as_u8(value);
+  if (is_param(param, "zone.key_hi")) zone.key_hi = as_u8(value);
+  if (is_param(param, "zone.vel_lo")) zone.vel_lo = as_u8(value);
+  if (is_param(param, "zone.vel_hi")) zone.vel_hi = as_u8(value);
+  const uint32_t set_index = is_param(param, "set_index") ? as_u32(value) : 0;
+  const SonareError err = sonare_sample_bank_add_zone(bank, set_index, &zone);
   sonare_sample_bank_destroy(bank);
   return err;
 }
@@ -917,10 +929,25 @@ SonareError probe_merge_notes(const std::string& param, double value) {
   return err;
 }
 
-SonareError probe_assign_note_targets(const std::string&, double value) {
+SonareError probe_assign_note_targets(const std::string& param, double value) {
+  SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
+  note.onset_sample = 0;
+  note.offset_sample = 100;
+  note.median_hz = 220.0f;
+  SonareNoteTarget target{0.0, 1.0, 69.0f};
+  SonareNoteTargetAssignConfig config{};
+  sonare_note_target_assign_config_init(&config);
+  if (is_param(param, "notes[].onset_sample")) note.onset_sample = as_i64(value);
+  if (is_param(param, "notes[].offset_sample")) note.offset_sample = as_i64(value);
+  if (is_param(param, "config.min_overlap_ratio"))
+    config.min_overlap_ratio = static_cast<float>(value);
+  if (is_param(param, "config.max_correction_semitones")) {
+    config.max_correction_semitones = static_cast<float>(value);
+  }
   size_t assigned = 0;
-  return sonare_assign_note_targets(nullptr, 0, static_cast<int>(value), nullptr, 0, nullptr,
-                                    &assigned);
+  const int sample_rate = is_param(param, "sample_rate") ? static_cast<int>(value) : kAnalysisRate;
+  return sonare_assign_note_targets(&note, 1, sample_rate, &target, 1, &config, &assigned);
 }
 
 #endif  // SONARE_WITH_PITCH_EDITOR
@@ -1098,6 +1125,7 @@ double inside_value(const NumericDomainRow& row) {
   const std::string param = row.param;
   if (ends_with(param, "n_fft")) return 2048.0;
   if (ends_with(param, "sample_rate")) return 48000.0;
+  if (param == "notes[].offset_sample") return 1.0;
   return lowest_inside_value(row);
 }
 
@@ -1115,6 +1143,38 @@ TEST_CASE("an effects value outside its row's domain is refused under the row's 
 TEST_CASE("an effects value inside its row's domain is not refused under the row's subject",
           "[numeric_domains][c_api]") {
   require_inside_accepted(built_table(), probes(), inside_value);
+}
+
+TEST_CASE("sample-bank MIDI byte rows reject out-of-range keys and accept zero sentinels",
+          "[domain-sample-bank]") {
+  std::vector<NumericDomainRow> rows;
+  for (const NumericDomainRow& row : kEffectsDomainRows) {
+    if (std::string(row.entry).find("sample_bank_add_") == 0 &&
+        (std::string(row.param).find("root_key") != std::string::npos ||
+         std::string(row.param).find("zone.key_") != std::string::npos ||
+         std::string(row.param).find("zone.vel_") != std::string::npos)) {
+      rows.push_back(row);
+    }
+  }
+  const NumericDomainTable table{"sample_bank", rows.data(), rows.size()};
+  require_sorted(table);
+  require_outside_refused(table, probes());
+  require_inside_accepted(table, probes());
+}
+
+TEST_CASE("note-target spans and limits reject values outside their declared domains",
+          "[domain-note-targets]") {
+  std::vector<NumericDomainRow> rows;
+  for (const NumericDomainRow& row : kEffectsDomainRows) {
+    if (std::string(row.entry) == "assign_note_targets" &&
+        std::string(row.param) != "sample_rate") {
+      rows.push_back(row);
+    }
+  }
+  const NumericDomainTable table{"note_targets", rows.data(), rows.size()};
+  require_sorted(table);
+  require_outside_refused(table, probes());
+  require_inside_accepted(table, probes(), inside_value);
 }
 
 TEST_CASE("spectral region sample positions reject negatives but keep the zero boundary",

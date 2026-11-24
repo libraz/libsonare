@@ -455,8 +455,8 @@ SonareError probe_waveform_peak_pyramid(const std::string& param, double value) 
 }
 
 SonareError probe_pcen(const std::string& param, double value) {
-  int n_bins = 4;
-  int n_frames = 4;
+  int n_bins = 1;
+  int n_frames = 1;
   if (is_param(param, "n_bins")) n_bins = as_int(value);
   if (is_param(param, "n_frames")) n_frames = as_int(value);
   float* out = nullptr;
