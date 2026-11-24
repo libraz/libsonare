@@ -149,12 +149,12 @@ Before merging, the maintainer brings a change here to the following:
 
 Before merging, the maintainer brings a change here to the following:
 
-- The error class follows the cause, not the layer that refused. A refused argument is a `TypeError` when its shape is wrong (a wrong type, or a key the request object or parameter bag does not declare) and a `RangeError` when a value is outside its domain; Python raises `SonareValueError` for both.
+- The cause determines the error class. Node and WASM raise `TypeError` for a wrong type, invalid shape or undeclared key and `RangeError` for an out-of-domain value. Python raises `TypeError` for a wrong type or shape and `SonareValueError` (a `ValueError`) for an out-of-domain value or unknown name.
 - A call's shape is checked before its values: on Node and WASM a missing or wrong-typed field, an undeclared key or a surplus argument is a `TypeError` raised before any `RangeError`, whichever call form is used.
 - A JSON input is a document only when the library writes that format or publishes its schema and the entry loads it (a project, a mixer scene, a preset, a playback configuration): the C parameter is `document` and its refusal is `InvalidFormat` at a document path. Any other JSON input is an argument: C spells it `<root>_json`, each facade `<root>`, and every refusal, a parse failure included, is `InvalidParameter` named from `<root>` — also when its shape is part of a written format (`overrides`, a strip's `settings`).
-- A typed object a facade serializes into a document parameter is still an argument: a key or value refused inside it is named from the caller's argument and raised as `TypeError`/`RangeError` (`SonareValueError` in Python).
+- A typed object a facade serializes into a document parameter is an argument. Refusals name the caller's argument path. Node and WASM choose `TypeError` or `RangeError` from the refusal kind. Python raises `SonareValueError` when the native reader refuses the serialized contents.
 - A value in the library's own output that a binding's reader cannot accept (an ordinal or token outside the binding's table, a null that names no infinite end, a result failing the reader's check) is `InvalidFormat` on every surface. `Unknown` is only a failure whose cause has no code.
-- That holds whether the binding or the library refused the argument, so every C-ABI `INVALID_PARAMETER` surfaces that way. Any other failure (object state, unsupported feature, allocation, decoding) is a `SonareError` carrying the C-ABI code.
+- A C-ABI `INVALID_PARAMETER` becomes an argument error. Python translates that code to `SonareValueError`. Other C-ABI failures (object state, unsupported feature, allocation, decoding) raise `SonareError` carrying the code.
 - A loader refusing the content of a document it was handed (a form the library writes or ships a schema for, such as a project, scene or chain config, or HRTF bytes) reports `INVALID_FORMAT`.
 - JSON that is only one call's arguments (insert `params`, `overrides`, a part rig's `inserts`, a MIDI-FX `config`) is an argument, so even malformed text there is `INVALID_PARAMETER`; a reader shared by both takes its code from the caller.
 - A null-handle constructor reads its error code from `sonare_last_error_code()` rather than hard-coding one.
@@ -188,7 +188,7 @@ Before merging, the maintainer brings a change here to the following:
 - A name carries its unit (`Sec`, `Hz`, `Db`, `Samples`); a bare `peak` or `rms` is a linear amplitude and is listed in `tools/api/dimensionless_names.toml` with class `magnitude`.
 - A bank select is `{ msb, lsb }` on Node and WASM and `bank_msb`/`bank_lsb` in Python.
 - A type that mirrors part of a platform interface carries `@mirrors <Interface>` (for example `@mirrors AudioContext`); the members the interface also declares keep the platform's names, and the surface check lists them instead of flagging them.
-- A refusal names the real parameter (`options.<member>`, `config.<member>`) and is raised as `TypeError`/`RangeError` (`SonareValueError` in Python) or a coded `SonareError` by cause.
+- A refusal names the real parameter (`options.<member>`, `config.<member>`). See [Errors and arguments](#errors-and-arguments) for the exception class.
 - A cause two parameters share names both (`left and right have no measurable level`); `make test-python` fails on a refusal whose subject is no parameter of its entry.
 - `make surface-check` returns rc=0 on a change that touches a public name, token, default or flag; CI runs it too.
 - A renamed, removed or reshaped public name has its row in the surface's ledger under `tools/api/migration/`, rendered by `make upgrade-notes`.

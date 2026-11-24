@@ -103,21 +103,15 @@ class SonareError(RuntimeError):
 
 
 class SonareValueError(SonareError, ValueError):
-    """Exception raised when the binding rejects a caller-supplied argument.
+    """Exception for an out-of-domain value or an unknown name.
 
-    Deriving from both :class:`SonareError` and :class:`ValueError` is the
-    compatibility contract, not an implementation detail: every
-    argument-validation failure the binding raises must be caught by
-    ``except ValueError`` (the plain type argument validation has always used)
-    and by ``except SonareError`` (the binding's own error hierarchy), so
-    neither style of caller needs to know which one a given entry point picks.
+    This exception derives from :class:`SonareError` and :class:`ValueError`.
+    A wrong type or shape caught by the binding raises :class:`TypeError`
+    through :func:`_refuse_type`. The binding translates a C-ABI
+    ``INVALID_PARAMETER`` into this class.
 
-    Every refused caller argument is this class, whether the binding caught it
-    or the C ABI answered ``INVALID_PARAMETER``; the refusal contract is by
-    cause, not by layer. Unlike :class:`SonareError`, the message is the plain
-    validation text with no ``[code]`` prefix. :attr:`code` defaults to
-    :attr:`ErrorCode.INVALID_PARAMETER` so error-class and exit-code mapping
-    treat both origins identically.
+    The message contains the validation text with the public entry name
+    when available. :attr:`code` defaults to :attr:`ErrorCode.INVALID_PARAMETER`.
     """
 
     def __init__(self, message: str, code: int = ErrorCode.INVALID_PARAMETER) -> None:
