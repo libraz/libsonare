@@ -1324,7 +1324,7 @@ typedef struct {
   int64_t length_samples;
   int loop;  ///< Non-zero loops the clip; negative is refused. Default 0
   /// Loop period in samples, read when @c loop is set; positive. Default 0, so a looping clip
-  /// must set it.
+  /// must set it and a one-shot clip must leave it at 0.
   int64_t loop_length_samples;
   uint32_t destination_id;  ///< Id of the instrument destination the events are sent to
   const SonareEngineMidiEvent*

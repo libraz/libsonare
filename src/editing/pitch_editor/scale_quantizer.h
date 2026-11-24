@@ -29,6 +29,7 @@ struct ScaleQuantizerConfig {
 
 class ScaleQuantizer {
  public:
+  /// @brief Configures a root in [0, 11] and a twelve-bit mask; zero selects chromatic tuning.
   explicit ScaleQuantizer(ScaleQuantizerConfig config = {});
 
   /// Quantizes to the configured scale grid. Equidistant ties select the lower

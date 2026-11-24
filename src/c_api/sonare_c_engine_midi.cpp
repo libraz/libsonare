@@ -266,6 +266,10 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
           if (src.loop != 0) {
             util::check::integer_within(src.loop_length_samples, kEngineMidiClipLoopLengthDomain,
                                         subject("loop_length_samples").c_str());
+          } else if (src.loop_length_samples != 0) {
+            util::check::refuse_relation(
+                {subject("loop_length_samples"), subject("loop")},
+                util::refusal::kMidiClipLoopLengthUnlessLoopEnabledRelation);
           }
           util::check::non_null_when_count(src.events, src.event_count, subject("events").c_str(),
                                            subject("event_count").c_str());

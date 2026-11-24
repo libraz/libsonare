@@ -571,6 +571,39 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
+TEST_CASE("one-shot MIDI clips refuse a supplied loop period", "[c_api][domain-midi-clip]") {
+  SonareEngine* engine = prepared_engine();
+  const SonareEngineMidiEvent event{0, 0x20906464u, 0, 0, 0, 1, 0, 0, 0};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
+  clip.id = 1;
+  clip.length_samples = 1024;
+  clip.events = &event;
+  clip.event_count = 1;
+
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(engine->engine.midi_clip_count() == 1);
+
+  for (const int64_t loop_length : {-2, 64}) {
+    CAPTURE(loop_length);
+    SonareEngineMidiClipSchedule candidates[] = {clip, clip};
+    candidates[1].id = 2;
+    candidates[1].loop_length_samples = loop_length;
+    CHECK(sonare_engine_set_midi_clips(engine, candidates, 2) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error() == "clips[1].loop_length_samples must be 0 unless clips[1].loop is enabled");
+    CHECK(engine->engine.midi_clip_count() == 1);
+  }
+
+  clip.loop_length_samples = 0;
+  CHECK(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  clip.loop = 1;
+  clip.loop_length_samples = 64;
+  CHECK(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  CHECK(engine->engine.midi_clip_count() == 1);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("engine MIDI clips refuse each member by name", "[c_api][engine_refusal]") {
   SonareEngine* engine = prepared_engine();
   const SonareEngineMidiEvent event{0, 0x20906464u, 0, 0, 0, 1, 0, 0, 0};

@@ -529,6 +529,33 @@ TEST_CASE("ScaleQuantizer maps all chroma to enabled scale degrees", "[pitch_edi
   REQUIRE_THAT(quantizer.quantize_midi(66.0f), WithinAbs(65.0f, 0.0001f));
 }
 
+TEST_CASE("ScaleQuantizer validates root and mode-mask domains", "[pitch_editor][domain-scale]") {
+  constexpr uint16_t major = 0b101010110101;
+  const auto refusal_text = [](ScaleQuantizerConfig config) {
+    try {
+      ScaleQuantizer quantizer(config);
+      (void)quantizer;
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      return std::string(error.what());
+    }
+    return std::string();
+  };
+
+  CHECK(refusal_text({-1, major, 69.0f}) == "root must be an integer in [0, 11]");
+  CHECK(refusal_text({12, major, 69.0f}) == "root must be an integer in [0, 11]");
+  CHECK(refusal_text({0, 0x1000, 69.0f}) == "mode_mask must be an integer in [1, 4095]");
+
+  REQUIRE_NOTHROW(ScaleQuantizer({0, major, 69.0f}));
+  REQUIRE_NOTHROW(ScaleQuantizer({11, major, 69.0f}));
+  REQUIRE_NOTHROW(ScaleQuantizer({0, 1, 69.0f}));
+  REQUIRE_NOTHROW(ScaleQuantizer({0, 0x0FFF, 69.0f}));
+
+  // A zero mask is the direct C++ API's documented chromatic fallback.
+  const ScaleQuantizer chromatic({0, 0, 69.5f});
+  CHECK_THAT(chromatic.quantize_midi(60.4f), WithinAbs(60.0f, 0.0001f));
+}
+
 TEST_CASE("ScaleQuantizer reference MIDI shifts the tuning grid", "[pitch_editor]") {
   constexpr uint16_t c_major = 0b101010110101;
   const ScaleQuantizer concert_pitch({0, c_major, 69.0f});
@@ -538,7 +565,7 @@ TEST_CASE("ScaleQuantizer reference MIDI shifts the tuning grid", "[pitch_editor
   REQUIRE_THAT(raised_grid.quantize_midi(69.1f), WithinAbs(69.25f, 0.0001f));
 }
 
-TEST_CASE("ScaleQuantizer validates only the reference MIDI domain", "[pitch_editor]") {
+TEST_CASE("ScaleQuantizer validates the reference MIDI domain", "[pitch_editor]") {
   const float infinity = std::numeric_limits<float>::infinity();
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float negative_neighbor = std::nextafter(0.0f, -1.0f);

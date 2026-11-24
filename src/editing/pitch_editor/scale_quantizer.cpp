@@ -8,6 +8,10 @@
 namespace sonare::editing::pitch_editor {
 
 ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {
+  util::check::integer_within(config_.root, kScaleRootDomain, "root");
+  if (config_.mode_mask != 0) {
+    util::check::integer_within(config_.mode_mask, kScaleModeMaskDomain, "mode_mask");
+  }
   util::check::in_range(config_.reference_midi, 0.0, kMaxReferenceMidi, "reference_midi");
 }
 

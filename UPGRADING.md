@@ -1108,6 +1108,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_engine_external_midi_dropped_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_engine_set_midi_clips` | a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period) |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_midi_param_to_cc` | a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it) |
 | `sonare_playback_renderer_input_channel_count` | `sonare_playback_renderer_num_input_channels` |

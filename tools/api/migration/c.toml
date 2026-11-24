@@ -4445,6 +4445,14 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
+old = "sonare_engine_set_midi_clips"
+changed = "a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period)"
+domain = "engine"
+rule = "individual"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::one-shot MIDI clips refuse a supplied loop period"
+
+[[entry]]
+kind = "function"
 old = "sonare_engine_bind_midi_cc"
 changed = "takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value; a non-zero cc_lsb_number unless kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming the field and binding.kind (1.x ignored it)"
 domain = "engine"

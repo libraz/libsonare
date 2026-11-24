@@ -234,5 +234,8 @@ inline constexpr const char* kCcLsbNumberUnlessControlChange14Relation =
 /// @brief "{0} must be 0 unless {1} is RPN or NRPN", for MIDI parameter selectors.
 inline constexpr const char* kCcSelectorUnlessRpnOrNrpnRelation =
     "{0} must be 0 unless {1} is RPN or NRPN";
+/// @brief "{0} must be 0 unless {1} is enabled", for a MIDI clip's loop length when looping is off.
+inline constexpr const char* kMidiClipLoopLengthUnlessLoopEnabledRelation =
+    "{0} must be 0 unless {1} is enabled";
 
 }  // namespace sonare::util::refusal
