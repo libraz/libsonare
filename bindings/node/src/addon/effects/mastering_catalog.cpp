@@ -129,12 +129,12 @@ Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   // sonare_mastering_insert_param_names(name) returns a thread-local '\n'-joined
-  // const char* (NOT to be freed); split it into a JS string[] like the *_names
-  // getters. An unknown name yields an empty string -> empty array.
+  // const char* (NOT to be freed), or NULL with the refusal of an undeclared insert;
+  // split it into a JS string[] like the *_names getters.
   const std::string name = node_narrow_string(env, info[0], "name");
   const char* joined = sonare_mastering_insert_param_names(name.c_str());
   if (joined == nullptr) {
-    ThrowLastSonareError(env, "mastering insert param names: ", SONARE_ERROR_UNKNOWN);
+    ThrowLastSonareError(env, "", SONARE_ERROR_UNKNOWN);
     return env.Undefined();
   }
   Napi::Array out = Napi::Array::New(env);
@@ -164,8 +164,8 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
     Napi::TypeError::New(env, "name must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  // A JSON array ("[]" for an unknown name) the TS facade parses into the typed
-  // MasteringInsertParamInfo[]. An omitted sample rate is the rate-less query (C rate 0).
+  // A JSON array the TS facade parses into the typed MasteringInsertParamInfo[]; the C entry
+  // refuses an undeclared insert. An omitted sample rate is the rate-less query (C rate 0).
   const std::string name = node_narrow_string(env, info[0], "name");
   int sample_rate = 0;
   const bool at_rate = !(info[1].IsUndefined() || info[1].IsNull());
@@ -176,7 +176,7 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   char* json = nullptr;
   const SonareError err = sonare_mastering_insert_param_info(name.c_str(), sample_rate, &json);
   if (err != SONARE_OK) {
-    ThrowSonareError(env, err, "mastering insert param info: ");
+    ThrowSonareError(env, err);
     return env.Undefined();
   }
   std::string out(json);

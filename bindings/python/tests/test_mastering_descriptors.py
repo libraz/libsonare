@@ -70,9 +70,21 @@ def test_param_info_serves_the_catalog_rows_of_an_offline_repair_stage() -> None
         assert tuple(info) == catalog[stage].params
         assert all(param.id is None for param in info)
     with pytest.raises(
-        libsonare.SonareValueError, match="^mastering_insert_param_info: insert must be one of "
+        libsonare.SonareValueError,
+        match=r"^mastering_insert_param_info: unknown insert processor: repair\.noSuchStage$",
     ):
         libsonare.mastering_insert_param_info("repair.noSuchStage")
+
+
+@pytest.mark.parametrize("call", ["mastering_insert_param_info", "mastering_insert_param_names"])
+def test_a_retired_insert_id_is_refused_with_its_current_spelling(call: str) -> None:
+    import libsonare
+
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=rf"^{call}: unknown insert processor: eq\.pultec \(renamed to eq\.passiveTube\)$",
+    ):
+        getattr(libsonare, call)("eq.pultec")
 
 
 @pytest.mark.parametrize("stage", ["effects.reverb.room", "effects.acoustic.roomMorph"])

@@ -2949,7 +2949,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingEqualizer.magnitude_response(placement)` | one of 'stereo', 'left', 'right', 'mid', 'side' exactly; another case is refused and an ordinal is a TypeError |
 | `StreamingEqualizer.set_phase_mode(mode)` | one of 'zero', 'natural', 'linear'; an ordinal is a TypeError and the hyphenated, underscored and capitalised aliases are refused |
 | `mastering_dynamics_compressor(detector)` | takes a CompressorDetector token ("peak", "rms" or "logRms") only; an int ordinal is TypeError and "log_rms", "logrms" raise SonareValueError |
-| `mastering_insert_param_names` | an insert outside mastering_insert_names() raises SonareValueError ('insert must be one of ...') instead of returning an empty list, as Node and WASM refuse it |
+| `mastering_insert_param_names` | an undeclared insert raises SonareValueError 'mastering_insert_param_names: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list |
 | `mix_stereo(pan_mode)` | a PanMode token or a sequence of them, default 'balance'; a number is TypeError |
 
 #### Results are typed values, not JSON strings
@@ -3072,7 +3072,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringPresetCatalogEntry` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `MasteringProcessorCatalogEntry` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `mastering_amp_preset_catalog` | returns frozen MasteringAmpPresetCatalogEntry dataclasses read by attribute |
-| `mastering_insert_param_info` | returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError ('insert must be one of ...') instead of returning an empty list |
+| `mastering_insert_param_info` | returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError 'mastering_insert_param_info: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list |
 | `mastering_insert_timing` | returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples |
 | `mastering_processor_catalog` | returns frozen MasteringProcessorCatalogEntry dataclasses read by attribute |
 
@@ -6265,7 +6265,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MixSceneStrip.sourceLayout` | string -> ChannelLayout |
 | `SendTiming` | 'preFader' \| 'postFader' (numbers refused at every reader) |
 | `masteringInsertNames` | masteringInsertNames(): MasteringInsertName[] |
-| `masteringInsertParamNames` | masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[] |
+| `masteringInsertParamNames` | masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]; an undeclared insert is a RangeError 'masteringInsertParamNames: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list |
 | `masteringPlatformNames` | masteringPlatformNames(): MasteringPlatform[] |
 | `mixingScenePresetNames` | mixingScenePresetNames(): MixScenePreset[] |
 
@@ -6348,7 +6348,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
-| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError ('insert must be one of ...') instead of an empty list |
+| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list |
 | `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |

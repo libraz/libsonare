@@ -13572,18 +13572,18 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertName
 [[entry]]
 kind = "function"
 old = "masteringInsertParamInfo"
-changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError ('insert must be one of ...') instead of an empty list"
+changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
+test = "bindings/node/tests/mastering-descriptors.test.ts::serves the catalog rows of an offline repair stage"
 
 [[entry]]
 kind = "function"
 old = "masteringInsertParamNames"
-changed = "masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]"
+changed = "masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]; an undeclared insert is a RangeError 'masteringInsertParamNames: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list"
 domain = "mastering"
 rule = "string-closed-sets"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertParamNames refuses an unknown insert"
+test = "bindings/node/tests/mastering-descriptors.test.ts::refuses a retired insert id with the current spelling named"
 
 [[entry]]
 kind = "function"

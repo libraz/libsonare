@@ -126,7 +126,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
         params: {} as never,
         sampleRate: 48000,
       }),
-    ).toThrowError(/unknown insert processor/);
+    ).toThrow(new RangeError('masteringInsertTiming: unknown insert processor: nope.nope'));
   });
 });
 

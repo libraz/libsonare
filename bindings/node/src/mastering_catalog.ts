@@ -19,7 +19,7 @@ import type {
   SoloProcessor,
   StereoAnalysis,
 } from './types.js';
-import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
+import { assertSampleRate, assertString, requestOnly } from './validation.js';
 
 /** Names of the built-in mastering presets. */
 export function masteringPresetNames(): MasteringPreset[] {
@@ -123,11 +123,7 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
   return withEntry('masteringInsertParamNames', () => {
-    assertClosedToken(
-      insert,
-      withEntry('masteringInsertParamNames', () => masteringInsertNames()),
-      'insert',
-    );
+    assertString(insert, 'insert');
     return addon.masteringInsertParamNames(insert);
   });
 }
@@ -162,7 +158,7 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
  * that are not automation targets (no `id`, `rtSafe` false — they take
  * effect only when the insert is built). The names are the same set
  * {@link masteringInsertParamNames} returns, plus any automation target
- * construction does not read. Returns an empty array for an unknown name.
+ * construction does not read.
  *
  * With `sampleRate`, a key whose `maxRelativeTo` is `"nyquist"` reports, as
  * `max` and `maxExclusive`, the bound accepted when the insert is built and
@@ -171,18 +167,15 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
  * 48 kHz probe.
  *
  * @throws {TypeError} when the request is the wrong type or `insert` is not a string
- * @throws {RangeError} for a `sampleRate` outside the supported range
+ * @throws {RangeError} for an `insert` that is no processor catalog id, or a
+ *   `sampleRate` outside the supported range
  */
 export function masteringInsertParamInfo(
   request: MasteringInsertParamInfoRequest,
 ): MasteringInsertParamInfo[] {
   return withEntry('masteringInsertParamInfo', () => {
     const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
-    assertClosedToken(
-      r.insert,
-      masteringProcessorCatalog().map((entry) => entry.id),
-      'insert',
-    );
+    assertString(r.insert, 'insert');
     if (!isAbsent(r.sampleRate)) {
       assertSampleRate(r.sampleRate);
     }

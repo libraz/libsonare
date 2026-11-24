@@ -850,7 +850,8 @@ def test_mastering_insert_param_names_enumerates_keys() -> None:
     assert "band0.frequencyHz" in mastering_insert_param_names("eq.parametric")
     # An unknown insert is an out-of-domain argument, never an empty parameter list.
     with pytest.raises(
-        SonareValueError, match="^mastering_insert_param_names: insert must be one of "
+        SonareValueError,
+        match=r"^mastering_insert_param_names: unknown insert processor: not\.a\.real\.processor$",
     ):
         mastering_insert_param_names("not.a.real.processor")
 

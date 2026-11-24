@@ -540,7 +540,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_
 [[entry]]
 kind = "function"
 old = "mastering_insert_param_info"
-changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError ('insert must be one of ...') instead of returning an empty list"
+changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError 'mastering_insert_param_info: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list"
 domain = "mastering"
 rule = "frozen-results"
 test = "bindings/python/tests/test_mastering_insert_timing.py::test_param_info_flags_exclusive_bounds_and_nyquist_ceilings"
@@ -8333,10 +8333,10 @@ rule = "unit-in-name"
 [[entry]]
 kind = "function"
 old = "mastering_insert_param_names"
-changed = "an insert outside mastering_insert_names() raises SonareValueError ('insert must be one of ...') instead of returning an empty list, as Node and WASM refuse it"
+changed = "an undeclared insert raises SonareValueError 'mastering_insert_param_names: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list"
 domain = "mastering"
 rule = "string-closed-sets"
-test = "bindings/python/tests/test_mixing.py::test_mastering_insert_param_names_enumerates_keys"
+test = "bindings/python/tests/test_mastering_descriptors.py::test_a_retired_insert_id_is_refused_with_its_current_spelling"
 
 [[entry]]
 kind = "option"

@@ -123,7 +123,10 @@ def test_insert_timing_rejects_an_unknown_insert() -> None:
     """An unknown processor name is rejected rather than answering zero."""
     import libsonare
 
-    with pytest.raises(libsonare.SonareValueError, match="insert must be one of "):
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=r"^mastering_insert_timing: unknown insert processor: nope\.nope$",
+    ):
         libsonare.mastering_insert_timing("nope.nope", {}, 48000)
 
 

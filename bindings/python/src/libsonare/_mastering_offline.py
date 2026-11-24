@@ -301,7 +301,6 @@ def mastering_insert_param_names(insert: str) -> list[str]:
     The native layer returns a thread-local, newline-joined string the caller
     must NOT free (same convention as the other ``*_names`` getters).
     """
-    _require_known(insert, "insert", mastering_insert_names)
     lib = _get_lib()
     raw = lib.sonare_mastering_insert_param_names(_utf8_arg(insert, "insert"))
     if raw is None:
@@ -330,7 +329,6 @@ def mastering_insert_param_info(
     host). Without it the rate-less answer is returned, with the 24000 cap of
     the 48 kHz probe. A rate outside the supported range raises.
     """
-    _require_known(insert, "insert", lambda: [entry.id for entry in mastering_processor_catalog()])
     lib = _get_lib()
     # The C 0 is the rate-less query, so an explicit 0 is refused here rather than read as it.
     raw = _call_string(
@@ -358,10 +356,13 @@ def mastering_insert_timing(
     ``params`` is keyed as in :func:`mastering_insert_param_info` and shaped as
     the document a scene or strip insert is built from; each value matches its
     key's declared ``type``: a bool or finite number, the ``choices`` name of an
-    ``enum`` key, a ``str`` for a ``string`` key, a sequence of finite numbers
-    for an ``array`` key. A wrong type is a ``TypeError``. A key the insert does
-    not read is refused rather than ignored, because an ignored key would answer
-    for a configuration the caller did not ask for.
+    ``enum`` key, a ``str`` for a ``string`` key, or an iterable of finite numbers
+    for an ``array`` key.
+
+    Raises:
+        TypeError: If a parameter has the wrong type at the binding.
+        SonareValueError: If a parameter is non-finite or the library refuses an
+            argument, including an undeclared parameter key.
     """
     lib = _get_lib()
     payload = _insert_params(insert, params)
@@ -524,15 +525,6 @@ def mastering_apply_processor_stereo(
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
-
-
-def _require_known(value: object, name: str, names: Callable[[], Sequence[str]]) -> None:
-    """Refuse ``value`` unless ``names()`` lists it: a non-string by type, else by domain."""
-    allowed = names()
-    if not isinstance(value, str):
-        raise _refuse_type(f"{name} must be one of {', '.join(allowed)}")
-    if value not in allowed:
-        raise _refuse(f"{name} must be one of {', '.join(allowed)}")
 
 
 def _enum_value(processor: str | None, key: str, name: str) -> float:

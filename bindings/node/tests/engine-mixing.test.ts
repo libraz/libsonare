@@ -1015,11 +1015,7 @@ describe('RealtimeEngine native binding', () => {
     expect(dryWet?.rtSafe).toBe(true);
     expect(typeof dryWet?.id).toBe('number');
     expect(() => masteringInsertParamInfo({ insert: 'nope.nope' as never })).toThrow(
-      new RangeError(
-        `masteringInsertParamInfo: insert must be one of ${masteringProcessorCatalog()
-          .map((entry) => entry.id)
-          .join(', ')}`,
-      ),
+      new RangeError('masteringInsertParamInfo: unknown insert processor: nope.nope'),
     );
 
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
