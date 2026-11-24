@@ -715,7 +715,6 @@ def register_analysis_parsers(
             help="Chroma smoothing window in seconds (default: 2.0)",
         ),
         minimum=0,
-        exclusive_minimum=True,
     )
     chords_p.add_argument(
         "--threshold",

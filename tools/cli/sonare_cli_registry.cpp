@@ -1019,15 +1019,15 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {}, validate_key_arguments);
     // `smoothing-window` and `hmm-beam-width` carry the C entry point's domains;
     // `min-duration` and `threshold` are checked by ChordAnalyzer itself and so
-    // need none. A zero smoothing window is the one the analyzer accepts and the
-    // C entry refuses, and a negative beam width is never truncated against, so
-    // `--hmm-beam-width -1` silently ran an unbeamed search.
+    // need none. A zero smoothing window smooths over at most one hop, and a negative
+    // beam width is never truncated against, so `--hmm-beam-width -1` silently ran an
+    // unbeamed search.
     add_command(
         commands, "chords", true,
         {library_default(with_domain(global_int("n-fft"), at_least(1.0)), "2048"),
          library_default(global_int("hop-length"), "512"),
          library_default(number_value("min-duration-sec"), "0.3"),
-         library_default(with_domain(number_value("smoothing-window"), greater_than(0.0)), "2.0"),
+         library_default(with_domain(number_value("smoothing-window"), at_least(0.0)), "2.0"),
          library_default(number_value("threshold"), "0.5"), flag("with-seventh"),
          library_default(with_domain(nullable_string_value("chroma-method"),
                                      choices_of({"cqt", "stft", "nnls"})),

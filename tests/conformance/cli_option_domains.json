@@ -134,7 +134,7 @@
       "option": "smoothing-window",
       "choices": [],
       "minimum": 0.0,
-      "exclusive_minimum": true,
+      "exclusive_minimum": false,
       "maximum": null,
       "exclusive_maximum": false
     },

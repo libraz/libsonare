@@ -186,6 +186,19 @@ def test_key_candidates_shorthand_is_resolved_in_one_place() -> None:
     assert '(value == "true") ? 5' in native.read_text(encoding="utf-8")
 
 
+def test_chords_zero_smoothing_is_a_valid_explicit_option(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    parser = _parser()
+    args = parser.parse_args(["chords", "input.wav", "--smoothing-window", "0"])
+    assert args.smoothing_window == 0.0
+
+    with pytest.raises(SystemExit) as refusal:
+        parser.parse_args(["chords", "input.wav", "--smoothing-window", "-1"])
+    assert refusal.value.code == 2
+    assert "argument --smoothing-window: must be finite and at least 0" in capsys.readouterr().err
+
+
 def test_dynamic_range_argv_compares_native_float_percentiles() -> None:
     parser = _parser()
     args = parser.parse_args(
