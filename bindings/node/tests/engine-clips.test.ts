@@ -5,6 +5,15 @@ import { describe, expect, it } from 'vitest';
 import { ClipPageProvider, ErrorCode, FileClipPageProvider, RealtimeEngine } from '../src/index.js';
 
 describe('RealtimeEngine native binding', () => {
+  it('returns undefined when no clip-page request is queued', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expect(engine.popClipPageRequest()).toBeUndefined();
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('rejects clips without channels or a page provider without aborting', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setClips([{ id: 1, startPpq: 0 }])).toThrow(

@@ -5949,8 +5949,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ExtractNotesRequest` | declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`). Omit voicedProb or use undefined instead of passing null. |
-| `HumDetection.harmonicDbfs` | number[] -> Float32Array |
-| `NoiseDetection.bandFloorDbfs` | number[] -> Float32Array |
+| `HumDetection.harmonicDbfs` | number[] -> Float32Array, in the detection result and in the mono dehum and denoise reports alike |
+| `NoiseDetection.bandFloorDbfs` | number[] -> Float32Array, in the detection result and in the mono dehum and denoise reports alike |
 | `NoteTrackRequest` | `ExtractNotesRequest` |
 | `RealtimeVoiceChangerConfig.formantMode` | 'relative'\|'absolute' -> FormantMode |
 | `RirSynthOptions` | `SynthesizeRirRequest` |
@@ -6774,6 +6774,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError. A typed scene is a call argument. Structured refusals name scene.<path> and use TypeError for shape or RangeError for values. Mixer.fromJson retains InvalidFormat at document paths. |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.metronome` | returns an EngineMetronomeConfig that carries only the click-length spelling in effect |
+| `RealtimeEngine.popClipPageRequest` | returns undefined (was null) when no request is queued |
 | `RealtimeEngine.primeOfflineParameters` | blockSize is optional: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null); null is the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |

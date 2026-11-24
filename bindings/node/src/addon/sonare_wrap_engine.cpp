@@ -647,6 +647,12 @@ Napi::Value RealtimeEngineWrap::CountInEndSample(const Napi::CallbackInfo& info)
   int64_t out = 0;
   ThrowIfError(env, sonare_engine_count_in_end_sample(engine_, start_sample, bars, &out));
   if (env.IsExceptionPending()) return env.Undefined();
+  constexpr int64_t kMaxSafeJsInteger = static_cast<int64_t>(sonare_node::kMaxSafeInteger);
+  if (out < -kMaxSafeJsInteger || out > kMaxSafeJsInteger) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "endSample is not exactly representable as a number");
+    return env.Undefined();
+  }
   return Napi::Number::New(env, static_cast<double>(out));
   SONARE_NODE_CATCH(env)
 }

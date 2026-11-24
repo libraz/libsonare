@@ -307,6 +307,13 @@ Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
   if (!RequiredDomainDoubleValue(env, info[0], "ppq", &ppq)) return env.Undefined();
   int64_t sample = 0;
   ThrowIfError(env, sonare_engine_sample_at_ppq(engine_, ppq, &sample));
+  if (env.IsExceptionPending()) return env.Undefined();
+  constexpr int64_t kMaxSafeJsInteger = static_cast<int64_t>(sonare_node::kMaxSafeInteger);
+  if (sample < -kMaxSafeJsInteger || sample > kMaxSafeJsInteger) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "sample is not exactly representable as a number");
+    return env.Undefined();
+  }
   return Napi::Number::New(env, static_cast<double>(sample));
   SONARE_NODE_CATCH(env)
 }

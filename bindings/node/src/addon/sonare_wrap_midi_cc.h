@@ -14,6 +14,7 @@
 #include "c_api/midi_input_domains.h"
 #include "midi/cc_map.h"
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_utils.h"
 
 namespace sonare_node {
 
@@ -75,14 +76,17 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
 
 /// @brief Write a binding descriptor in the shape @ref CcBindingFromObject reads.
 inline Napi::Object CcBindingToObject(Napi::Env env, const SonareMidiCcBinding& binding) {
+  const auto kind_names = CcBindingKindNames();
+  if (binding.kind >= kind_names.size()) {
+    throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                          "unknown MIDI CC binding kind ordinal: " + std::to_string(binding.kind));
+  }
   Napi::Object out = Napi::Object::New(env);
   out.Set("ccNumber", Napi::Number::New(env, binding.cc_number));
   if (binding.channel != SONARE_MIDI_CC_ANY_CHANNEL) {
     out.Set("channel", Napi::Number::New(env, binding.channel));
   }
-  out.Set("kind",
-          Napi::String::New(env, sonare::midi::to_string(
-                                     static_cast<sonare::midi::CcBindingKind>(binding.kind))));
+  out.Set("kind", Napi::String::New(env, kind_names[binding.kind]));
   out.Set("ccLsbNumber", Napi::Number::New(env, binding.cc_lsb_number));
   out.Set("selectorMsb", Napi::Number::New(env, binding.selector_msb));
   out.Set("selectorLsb", Napi::Number::New(env, binding.selector_lsb));

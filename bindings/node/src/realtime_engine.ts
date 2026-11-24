@@ -644,6 +644,8 @@ export class RealtimeEngine {
    *
    * @param ppq Position in quarter notes (PPQ), in [0, 1e12].
    * @returns Sample index.
+   * @throws {SonareError} with code `InvalidFormat` if the sample index is outside the
+   * safe-integer range.
    */
   sampleAtPpq(ppq: number): number {
     return this.native.sampleAtPpq(ppq);
@@ -822,6 +824,8 @@ export class RealtimeEngine {
    * beginning of the bar containing `startSample` (a mid-bar start gets a short first bar), and
    * every counted bar has the length of the time signature in effect at `startSample`.
    * Returns `startSample` when `bars <= 0`.
+   * @throws {SonareError} with code `InvalidFormat` if the end sample is outside the
+   * safe-integer range.
    */
   countInEndSample(startSample: number, bars: number): number {
     return this.native.countInEndSample(startSample, bars);
@@ -1460,10 +1464,10 @@ export class RealtimeEngine {
   }
 
   /**
-   * Pops the oldest pending clip-page sample request raised by the audio thread, or `null` when none
-   * is queued. Supply the page through the clip-page provider.
+   * Pops the oldest pending clip-page sample request raised by the audio thread, or `undefined` when
+   * none is queued. Supply the page through the clip-page provider.
    */
-  popClipPageRequest(): ClipPageSampleRequest | null {
+  popClipPageRequest(): ClipPageSampleRequest | undefined {
     return this.native.popClipPageRequest();
   }
 

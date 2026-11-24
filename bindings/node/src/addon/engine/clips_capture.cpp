@@ -640,7 +640,7 @@ Napi::Value RealtimeEngineWrap::PopClipPageRequest(const Napi::CallbackInfo& inf
   SonareClipPageRequest request{};
   int has_request = 0;
   ThrowIfError(env, sonare_engine_pop_clip_page_request(engine_, &request, &has_request));
-  if (!has_request) return env.Null();
+  if (!has_request) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("clipId", Napi::Number::New(env, request.clip_id));
   out.Set("channel", Napi::Number::New(env, request.channel));

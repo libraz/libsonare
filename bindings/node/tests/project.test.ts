@@ -397,6 +397,8 @@ it('reads chord annotations with owned extensions and no unset numeral', () => {
     project.annotateChords(chords);
     const annotations = project.chordAnnotations();
     expect(annotations).toEqual(chords);
+    expect(Object.hasOwn(annotations[0], 'modulationBoundary')).toBe(true);
+    expect(typeof annotations[0].modulationBoundary).toBe('boolean');
     expect(annotations[0].romanNumeral).toBe('V7');
     expect(annotations[1]).not.toHaveProperty('romanNumeral');
     expect(annotations[2]).not.toHaveProperty('romanNumeral');
@@ -2157,6 +2159,11 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       minValue: -1,
       maxValue: 1,
     });
+    if (!learned14) {
+      throw new Error('expected the two controllers to produce a binding');
+    }
+    expect(Object.hasOwn(learned14, 'kind')).toBe(true);
+    expect(typeof learned14.kind).toBe('string');
     expect(learned14).toMatchObject({
       kind: 'controlChange14',
       ccNumber: 1,

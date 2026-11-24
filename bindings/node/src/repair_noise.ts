@@ -82,7 +82,12 @@ export function masteringRepairDenoiseClassical(...args: unknown[]): DenoiseResu
     );
     assertAudioInput(r.samples, r.sampleRate, r);
     assertRepairGeometry(r);
-    return addon.masteringRepairDenoiseClassical(r.samples, r.sampleRate, repairNativeOptions(r));
+    const result = addon.masteringRepairDenoiseClassical(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+    return { ...result, report: denoiseReport(result.report) };
   });
 }
 
@@ -273,7 +278,8 @@ export function masteringRepairDehum(...args: unknown[]): DehumResult {
   return withEntry('masteringRepairDehum', () => {
     const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return addon.masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+    const result = addon.masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+    return { ...result, report: dehumReport(result.report) };
   });
 }
 

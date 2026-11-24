@@ -10045,10 +10045,10 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::takes clipThresholdD
 [[entry]]
 kind = "field"
 old = "HumDetection.harmonicDbfs"
-changed = "number[] -> Float32Array"
+changed = "number[] -> Float32Array, in the detection result and in the mono dehum and denoise reports alike"
 domain = "effects"
 rule = "type-names"
-test = "bindings/node/tests/surface/effects-repair.test.ts::carry Float32Array detection arrays"
+test = "bindings/node/tests/surface/effects-repair.test.ts::mono repair reports return typed detection arrays"
 
 [[entry]]
 kind = "field"
@@ -10199,10 +10199,10 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 [[entry]]
 kind = "field"
 old = "NoiseDetection.bandFloorDbfs"
-changed = "number[] -> Float32Array"
+changed = "number[] -> Float32Array, in the detection result and in the mono dehum and denoise reports alike"
 domain = "effects"
 rule = "type-names"
-test = "bindings/node/tests/surface/effects-repair.test.ts::carry Float32Array detection arrays"
+test = "bindings/node/tests/surface/effects-repair.test.ts::mono repair reports return typed detection arrays"
 
 [[entry]]
 kind = "type"
@@ -12008,6 +12008,14 @@ old = "ClipPageRequest"
 new = "ClipPageSampleRequest"
 domain = "engine"
 rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popClipPageRequest"
+changed = "returns undefined (was null) when no request is queued"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/engine-clips.test.ts::returns undefined when no clip-page request is queued"
 
 [[entry]]
 kind = "function"

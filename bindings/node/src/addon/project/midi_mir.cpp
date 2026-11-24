@@ -637,6 +637,12 @@ Napi::Value ProjectWrap::ChordAnnotations(const Napi::CallbackInfo& info) {
   Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(chords.value.count));
   for (size_t i = 0; i < chords.value.count; ++i) {
     const SonareProjectChordSymbol& chord = chords.value.items[i];
+    if (chord.modulation_boundary != 0 && chord.modulation_boundary != 1) {
+      sonare_node::ThrowSonareErrorMessage(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          "unknown modulation boundary value: " + std::to_string(chord.modulation_boundary));
+      return env.Undefined();
+    }
     if (chord.extension_count > kChordExtensionCapacity ||
         (chord.extension_count != 0 && chord.extensions == nullptr)) {
       sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,

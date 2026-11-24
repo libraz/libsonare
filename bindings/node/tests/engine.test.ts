@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { EngineBounceOptions } from '../src/index.js';
 import {
   Audio,
+  ErrorCode,
   engineAbiVersion,
   isSonareError,
   RealtimeEngine,
@@ -313,6 +314,12 @@ describe('RealtimeEngine native binding', () => {
     expect(engine.metronome().clickSec).toBeCloseTo(0.01, 6);
     expect(engine.metronome().clickSamples).toBeUndefined();
     expect(engine.countInEndSample(0, 2)).toBe(288000);
+    expect(() => engine.countInEndSample(Number.MAX_SAFE_INTEGER, 2)).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining('endSample is not exactly representable as a number'),
+      }),
+    );
     engine.setMetronome({ enabled: false });
     engine.addParameter({
       id: 7,
@@ -755,6 +762,12 @@ describe('RealtimeEngine native binding', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setTempo(60);
     expect(engine.sampleAtPpq(1.5)).toBe(72000);
+    expect(() => engine.sampleAtPpq(1e12)).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining('sample is not exactly representable as a number'),
+      }),
+    );
     let badPpqError: unknown;
     try {
       engine.sampleAtPpq(Number.NaN);

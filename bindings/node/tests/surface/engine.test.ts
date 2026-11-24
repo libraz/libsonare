@@ -1045,6 +1045,8 @@ describe('RealtimeEngine instruments and MIDI', () => {
       const byCcNumber = (a: { ccNumber: number }, b: { ccNumber: number }) =>
         a.ccNumber - b.ccNumber;
       const bindings = engine.midiCcBindings().sort(byCcNumber);
+      expect(Object.hasOwn(bindings[0], 'kind')).toBe(true);
+      expect(typeof bindings[0].kind).toBe('string');
       expect(bindings).toEqual([
         {
           ccNumber: 7,

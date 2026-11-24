@@ -232,6 +232,27 @@ describe('repair: results are {channels, reports}', () => {
     expectTypeOf(floor.bandFloorDbfs).toEqualTypeOf<Float32Array>();
   });
 
+  it('mono repair reports return typed detection arrays with the detected values', () => {
+    const hum = sonare.masteringRepairDetectHum({ samples: left, sampleRate });
+    const floor = sonare.masteringRepairDetectNoiseFloor({ samples: left, sampleRate });
+    const dehum = sonare.masteringRepairDehum({ samples: left, sampleRate });
+    const denoise = sonare.masteringRepairDenoiseClassical({ samples: left, sampleRate });
+
+    expect(Object.hasOwn(dehum.report.detected, 'harmonicDbfs')).toBe(true);
+    expect(Object.hasOwn(denoise.report.detected, 'bandFloorDbfs')).toBe(true);
+    expect(Object.hasOwn(denoise.report.detected, 'bandFloorBand')).toBe(true);
+    expect(dehum.report.detected.harmonicDbfs).toBeInstanceOf(Float32Array);
+    expect(denoise.report.detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
+    expect(denoise.report.detected.bandFloorBand).toBeInstanceOf(Int32Array);
+    expect(Array.from(dehum.report.detected.harmonicDbfs)).toEqual(Array.from(hum.harmonicDbfs));
+    expect(Array.from(denoise.report.detected.bandFloorDbfs)).toEqual(
+      Array.from(floor.bandFloorDbfs),
+    );
+    expect(Array.from(denoise.report.detected.bandFloorBand)).toEqual(
+      Array.from(floor.bandFloorBand),
+    );
+  });
+
   it('removed result type names are gone', () => {
     // @ts-expect-error the Stereo/Linked result names were replaced by one result type per operation
     // biome-ignore lint/correctness/noUnusedVariables: the alias exists only to carry the expected error
