@@ -206,15 +206,17 @@ def _rows() -> list[tuple[str, str, int, int | None, str | None]]:
 def _refusal(entry: str, keyword: str, value: object) -> str:
     fn = getattr(libsonare, entry)
     given = _ENTRY_REQUIRED.get(entry, {})
+    parameters = inspect.signature(fn).parameters
     kwargs = {
         name: given.get(name, _REQUIRED.get(name))
-        for name, p in inspect.signature(fn).parameters.items()
+        for name, p in parameters.items()
         if p.default is p.empty
         and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
         and name != keyword
     }
-    if keyword in _PAIRED:
-        kwargs[_PAIRED[keyword]] = 0
+    paired = _PAIRED.get(keyword)
+    if paired is not None and paired in parameters:
+        kwargs[paired] = _REQUIRED[paired]
     with pytest.raises((SonareError, TypeError, ValueError)) as caught:
         fn(**kwargs, **{keyword: value})
     return str(caught.value)
