@@ -11,6 +11,9 @@
 
 #ifdef SONARE_WITH_MASTERING
 
+#include "mastering/api/chain.h"
+#include "util/exception.h"
+
 namespace {
 
 std::string last_message() {
@@ -153,6 +156,55 @@ TEST_CASE("the streaming chain setter names the refused key or value",
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(prepared.chain, "k", 1.0e39) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "value must be finite and in [-3.4028235e38, 3.4028235e38]");
+}
+
+TEST_CASE("the streaming chain names the supplied planes on a prepared-width mismatch",
+          "[c_api][mastering][streaming]") {
+  PreparedChain prepared;
+  float left = 0.0f;
+  float right = 0.0f;
+
+  SECTION("mono input to a stereo chain") {
+    REQUIRE(sonare_streaming_mastering_chain_prepare(prepared.chain, 48000, 128, 2) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_process_stereo(prepared.chain, &left, &right, 1) ==
+            SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(prepared.chain, &left, 1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "samples must match the prepared channel count");
+    REQUIRE(sonare_last_refusal_entry() != nullptr);
+    CHECK(std::string(sonare_last_refusal_entry()) == "streaming_mastering_chain_process_mono");
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "samples");
+  }
+
+  SECTION("stereo input to a mono chain") {
+    REQUIRE(sonare_streaming_mastering_chain_prepare(prepared.chain, 48000, 128, 1) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(prepared.chain, &left, 1) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_process_stereo(prepared.chain, &left, &right, 1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "left and right must match the prepared channel count");
+    REQUIRE(sonare_last_refusal_entry() != nullptr);
+    CHECK(std::string(sonare_last_refusal_entry()) == "streaming_mastering_chain_process_stereo");
+    REQUIRE(sonare_last_refusal_subject_count() == 2);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "left");
+    CHECK(std::string(sonare_last_refusal_subject(1)) == "right");
+  }
+}
+
+TEST_CASE("the streaming chain names value when a direct setter cannot narrow it",
+          "[c_api][mastering][streaming]") {
+  using namespace sonare::mastering::api;
+  StreamingMasteringChain chain(streaming_chain_config_from_json(
+      R"({"params":{"eq.tilt.enabled":true,"eq.tilt.tiltDb":1}})"));
+  chain.prepare(48000, 128, 1);
+  REQUIRE_NOTHROW(chain.set_parameter("eq.tilt.tiltDb", 2.0));
+  try {
+    chain.set_parameter("eq.tilt.tiltDb", std::numeric_limits<double>::max());
+    FAIL("the value must be refused before narrowing");
+  } catch (const sonare::SonareParameterRefusal& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(error.subject() == "value");
+  }
 }
 
 #endif  // SONARE_WITH_MASTERING

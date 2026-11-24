@@ -440,9 +440,8 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
                           "StreamingMasteringChain::process_block called before prepare()");
   }
   if (num_channels != prepared_channels_) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "StreamingMasteringChain::process_block num_channels mismatch with prepare()");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "num_channels",
+                                            "must match the prepared channel count");
   }
   if (num_samples < 0 || num_samples > max_block_size_) {
     throw SonareException(
@@ -577,7 +576,7 @@ void StreamingMasteringChain::set_parameter(const std::string& key, double value
   }
   if (!std::isfinite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "value",
                                             ::sonare::util::json::schema::kFloatRangePredicate)
         .as_caller_spelled();
   }

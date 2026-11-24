@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "c_api/mastering_streaming_internal.h"
+#include "c_api/streaming_mastering_chain_process.h"
 #include "core/audio.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/streaming_preview.h"
@@ -351,8 +352,7 @@ SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteri
     return finite;
   }
   SONARE_C_TRY
-  float* channels[] = {samples};
-  handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
+  streaming_mastering_chain_process_mono(*handle->chain, samples, static_cast<int>(num_samples));
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -377,8 +377,8 @@ SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMaste
     return finite;
   }
   SONARE_C_TRY
-  float* channels[] = {left, right};
-  handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
+  streaming_mastering_chain_process_stereo(*handle->chain, left, right,
+                                           static_cast<int>(num_samples));
   return SONARE_OK;
   SONARE_C_CATCH
 }
