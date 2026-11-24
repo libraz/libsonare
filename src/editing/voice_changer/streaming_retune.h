@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "rt/param_smoother.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -40,10 +42,12 @@ struct StreamingRetuneFieldNames {
 /// @brief Why @p config is refused, or an empty string when it is accepted.
 /// @details The one statement of the retune domain: semitones finite in [-24, 24], mix finite in
 ///          [0, 1], grain_size 0 (automatic) or a multiple of 4 in [4, 8192]. A refusal reads
-///          "<fn>: <name> <predicate>"; a null @p fn leaves the subject out. An accepted config
-///          builds no string, so the check is cheap enough for the audio thread.
-std::string streaming_retune_config_problem(const StreamingRetuneConfig& config, const char* fn,
-                                            const StreamingRetuneFieldNames& names);
+///          "<fn>: <name> <predicate>". A null @p fn leaves off the function prefix.
+///          @p out_refusal optionally receives the same field and predicate.
+///          An accepted config builds no string.
+std::string streaming_retune_config_problem(
+    const StreamingRetuneConfig& config, const char* fn, const StreamingRetuneFieldNames& names,
+    std::optional<SonareParameterRefusal>* out_refusal = nullptr);
 
 /// @brief Low-latency streaming pitch shifter with cross-block continuity.
 /// @details Uses fixed-size Hann-windowed grains, overlap-added at the analysis

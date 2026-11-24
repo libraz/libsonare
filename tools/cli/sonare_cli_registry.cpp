@@ -563,7 +563,36 @@ CliValidationError validate_voice_change(const CliArgs& args) {
     }
   }
 #endif
-  return {voice_set_refusal(args.get_string_list("set"))};
+  if (auto refusal = voice_set_refusal(args.get_string_list("set")); !refusal.empty()) {
+    return {std::move(refusal)};
+  }
+#ifdef SONARE_WITH_VOICE_CHANGER
+  // The selected built-in is known before audio is read, so validate its effective --set values
+  // here. File-backed preset documents remain runtime refusals after their contents are loaded.
+  if (has_preset && !has_preset_pack && args.has("set")) {
+    const auto preset_id =
+        catalog_token(args.get_string("preset"),
+                      editing::voice_changer::realtime_voice_changer_preset_names());
+    const auto preset =
+        editing::voice_changer::realtime_voice_changer_preset_from_id(preset_id);
+    const std::string base =
+        editing::voice_changer::realtime_voice_changer_preset_json(preset);
+    VoiceSetOverlay overlay;
+    const std::string merged =
+        apply_voice_preset_sets(base, args.get_string_list("set"), &overlay);
+    editing::voice_changer::RealtimeVoiceChangerConfig config;
+    std::string error;
+    std::optional<SonareParameterRefusal> parameter_refusal;
+    if (!editing::voice_changer::realtime_voice_changer_config_from_input(
+            merged, &config, &error, &parameter_refusal)) {
+      if (parameter_refusal) {
+        return {respell_voice_set_refusal(*parameter_refusal, overlay).what()};
+      }
+      return {error.empty() ? "invalid voice preset" : error};
+    }
+  }
+#endif
+  return {};
 }
 
 #ifdef SONARE_WITH_VOICE_CHANGER

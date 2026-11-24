@@ -16,6 +16,7 @@
 #include <map>
 #include <numeric>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -138,6 +139,14 @@ std::string library_token(std::string_view flag, std::string_view value,
 /// library's own refusal still reports it.
 std::string catalog_token(const std::string& value, const std::vector<std::string>& tokens);
 std::string read_plain_text_file(const std::string& path);
+/// A duplicate key in a loaded CLI document, retaining the loader's InvalidFormat cause so
+/// command-specific verdicts can choose their published exit status without parsing the text.
+class CliDuplicateDocumentError : public SonareException {
+ public:
+  explicit CliDuplicateDocumentError(const std::string& message)
+      : SonareException(ErrorCode::InvalidFormat, message) {}
+};
+sonare::util::json::Value parse_cli_json_document(const std::string& text);
 /// @brief Throws a failed C entry's refusal as the library's coded error; a non-null @p root is
 ///        dropped from the front of each refusal subject.
 [[noreturn]] void throw_c_failure(SonareError err, const char* root,
@@ -183,11 +192,43 @@ bool read_binary_file(const std::string& path, std::vector<uint8_t>* out);
 std::string lowercase_cli_value(std::string value);
 
 std::vector<std::string> split_string(const std::string& text, char delimiter);
+/// A document path component; array indexes render without a dot, while every object key keeps
+/// the schema path's dot even when the key itself starts with a bracket.
+struct VoiceSetPathPart {
+  std::string value;
+  bool array_index = false;
+
+  friend bool operator==(const VoiceSetPathPart& left, const VoiceSetPathPart& right) {
+    return left.value == right.value && left.array_index == right.array_index;
+  }
+  friend bool operator<(const VoiceSetPathPart& left, const VoiceSetPathPart& right) {
+    if (left.array_index != right.array_index) return left.array_index < right.array_index;
+    return left.value < right.value;
+  }
+};
+using VoiceSetPath = std::vector<VoiceSetPathPart>;
+/// The assignment that owns a current path and the normalized path assigned by that occurrence.
+struct VoiceSetSource {
+  std::string assignment;
+  VoiceSetPath value_path;
+  bool intermediate_container = false;
+};
+/// Effective --set provenance plus untouched document paths used to preserve ambiguous subjects.
+struct VoiceSetOverlay {
+  std::map<VoiceSetPath, VoiceSetSource> assignment_by_path;
+  std::set<VoiceSetPath> untouched_document_paths;
+};
+/// Applies the shared dotted-path mutation. When @p overlay is supplied, records which assignment
+/// created or replaced each structured path without changing the document's behavior.
 void set_json_path(sonare::util::json::Value& root, const std::string& path,
-                   sonare::util::json::Value value);
+                   sonare::util::json::Value value, VoiceSetOverlay* overlay = nullptr,
+                   std::string_view assignment = {});
 std::string find_voice_preset_in_pack(const std::string& pack_json, const std::string& preset_id);
 std::string apply_voice_preset_sets(std::string config_text,
-                                    const std::vector<std::string>& assignments);
+                                    const std::vector<std::string>& assignments,
+                                    VoiceSetOverlay* overlay = nullptr);
+SonareParameterRefusal respell_voice_set_refusal(const SonareParameterRefusal& refusal,
+                                                 const VoiceSetOverlay& overlay);
 PitchClass parse_pitch_class_option(const std::string& value);
 std::vector<Mode> parse_mode_list_option(const std::string& value);
 KeyProfileType parse_key_profile_option(const std::string& value);

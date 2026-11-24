@@ -401,6 +401,14 @@ void note_output_fit(const CliArgs& args, const OutputFit& fit) {
             << " dB so its peak fits full scale instead of clipping" << color::reset << "\n";
 }
 
+sonare::util::json::Value parse_cli_json_document(const std::string& text) {
+  try {
+    return sonare::util::json::parse_strict(text);
+  } catch (const sonare::util::json::JsonDuplicateKeyError& error) {
+    throw CliDuplicateDocumentError(error.what());
+  }
+}
+
 sonare::util::json::Value parse_cli_json_scalar(const std::string& raw) {
   try {
     return sonare::util::json::parse(raw);
@@ -409,25 +417,8 @@ sonare::util::json::Value parse_cli_json_scalar(const std::string& raw) {
   }
 }
 
-void set_json_path(sonare::util::json::Value& root, const std::string& path,
-                   sonare::util::json::Value value) {
-  auto parts = split_string(path, '.');
-  if (parts.empty()) throw std::invalid_argument("empty --set path");
-  if (!root.is_object()) root = sonare::util::json::Object{};
-  sonare::util::json::Value* cursor = &root;
-  for (size_t i = 0; i + 1 < parts.size(); ++i) {
-    auto& object = cursor->as_object();
-    auto it = object.find(parts[i]);
-    if (it == object.end() || !it->second.is_object()) {
-      it = object.insert_or_assign(parts[i], sonare::util::json::Object{}).first;
-    }
-    cursor = &it->second;
-  }
-  cursor->as_object()[parts.back()] = std::move(value);
-}
-
 std::string find_voice_preset_in_pack(const std::string& pack_json, const std::string& preset_id) {
-  const auto root = sonare::util::json::parse(pack_json);
+  const auto root = parse_cli_json_document(pack_json);
   const auto* presets = root.find("presets");
   if (presets == nullptr || !presets->is_array()) {
     throw std::invalid_argument("preset pack must contain a presets array");
@@ -447,23 +438,210 @@ std::string find_voice_preset_in_pack(const std::string& pack_json, const std::s
   return sonare::util::json::dump(*match);
 }
 
+namespace {
+
+bool voice_set_path_has_prefix(const VoiceSetPath& path, const VoiceSetPath& prefix) {
+  return path.size() >= prefix.size() &&
+         std::equal(prefix.begin(), prefix.end(), path.begin());
+}
+
+std::string voice_set_flatten_path(const VoiceSetPath& path) {
+  std::string flat;
+  for (const auto& part : path) {
+    if (part.array_index) {
+      flat += "[" + part.value + "]";
+    } else {
+      if (!flat.empty()) flat.push_back('.');
+      flat += part.value;
+    }
+  }
+  return flat;
+}
+
+void erase_voice_set_subtree(std::map<VoiceSetPath, VoiceSetSource>* paths,
+                             const VoiceSetPath& prefix) {
+  for (auto it = paths->begin(); it != paths->end();) {
+    if (voice_set_path_has_prefix(it->first, prefix)) {
+      it = paths->erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void erase_voice_set_subtree(std::set<VoiceSetPath>* paths, const VoiceSetPath& prefix) {
+  for (auto it = paths->begin(); it != paths->end();) {
+    if (voice_set_path_has_prefix(*it, prefix)) {
+      it = paths->erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void collect_voice_set_document_paths(const sonare::util::json::Value& value,
+                                      const VoiceSetPath& path,
+                                      std::set<VoiceSetPath>* paths) {
+  if (value.is_object()) {
+    for (const auto& [key, child] : value.as_object()) {
+      VoiceSetPath child_path = path;
+      child_path.push_back({key, false});
+      paths->insert(child_path);
+      collect_voice_set_document_paths(child, child_path, paths);
+    }
+  } else if (value.is_array()) {
+    for (size_t index = 0; index < value.as_array().size(); ++index) {
+      VoiceSetPath child_path = path;
+      child_path.push_back({std::to_string(index), true});
+      paths->insert(child_path);
+      collect_voice_set_document_paths(value.as_array()[index], child_path, paths);
+    }
+  }
+}
+
+}  // namespace
+
+void set_json_path(sonare::util::json::Value& root, const std::string& path,
+                   sonare::util::json::Value value, VoiceSetOverlay* overlay,
+                   std::string_view assignment) {
+  auto parts = split_string(path, '.');
+  if (parts.empty()) throw std::invalid_argument("empty --set path");
+  if (!root.is_object()) {
+    root = sonare::util::json::Object{};
+    if (overlay != nullptr) {
+      overlay->assignment_by_path.clear();
+      overlay->untouched_document_paths.clear();
+    }
+  }
+  sonare::util::json::Value* cursor = &root;
+  VoiceSetPath assigned_path;
+  for (const auto& part : parts) assigned_path.push_back({part, false});
+  VoiceSetPath current;
+  for (size_t i = 0; i + 1 < parts.size(); ++i) {
+    auto& object = cursor->as_object();
+    auto it = object.find(parts[i]);
+    current.push_back({parts[i], false});
+    if (it == object.end() || !it->second.is_object()) {
+      if (overlay != nullptr) {
+        erase_voice_set_subtree(&overlay->assignment_by_path, current);
+        erase_voice_set_subtree(&overlay->untouched_document_paths, current);
+        overlay->assignment_by_path[current] = {std::string(assignment), assigned_path, true};
+      }
+      it = object.insert_or_assign(parts[i], sonare::util::json::Object{}).first;
+    }
+    cursor = &it->second;
+  }
+
+  current.push_back({parts.back(), false});
+  if (overlay != nullptr) {
+    erase_voice_set_subtree(&overlay->assignment_by_path, current);
+    erase_voice_set_subtree(&overlay->untouched_document_paths, current);
+  }
+  cursor->as_object()[parts.back()] = std::move(value);
+  if (overlay != nullptr) {
+    const auto record = [&](const auto& self, const sonare::util::json::Value& current_value,
+                            const VoiceSetPath& current_path) -> void {
+      overlay->assignment_by_path[current_path] = {std::string(assignment), assigned_path, false};
+      if (current_value.is_object()) {
+        for (const auto& [key, child] : current_value.as_object()) {
+          VoiceSetPath child_path = current_path;
+          child_path.push_back({key, false});
+          self(self, child, child_path);
+        }
+      } else if (current_value.is_array()) {
+        for (size_t index = 0; index < current_value.as_array().size(); ++index) {
+          VoiceSetPath child_path = current_path;
+          child_path.push_back({std::to_string(index), true});
+          self(self, current_value.as_array()[index], child_path);
+        }
+      }
+    };
+    record(record, cursor->as_object().at(parts.back()), current);
+  }
+}
+
 // One --set occurrence is one PATH=VALUE assignment. The value reaches the JSON
 // parser byte for byte, so an object, an array, or a string that carries its own
 // commas survives; splitting the occurrences on any separator would tear those
 // apart with no escape available to the caller.
 std::string apply_voice_preset_sets(std::string config_text,
-                                    const std::vector<std::string>& assignments) {
+                                    const std::vector<std::string>& assignments,
+                                    VoiceSetOverlay* overlay) {
+  if (overlay != nullptr) *overlay = {};
   if (assignments.empty()) return config_text;
-  auto root = sonare::util::json::parse(config_text);
+  auto root = parse_cli_json_document(config_text);
+  if (overlay != nullptr) {
+    collect_voice_set_document_paths(root, {}, &overlay->untouched_document_paths);
+  }
   for (const auto& assignment : assignments) {
     if (assignment.empty()) continue;
     // The command validator (voice_set_refusal) has already refused a malformed assignment.
     const auto eq = assignment.find('=');
     const std::string path = assignment.substr(0, eq);
     auto value = parse_cli_json_scalar(assignment.substr(eq + 1));
-    set_json_path(root, path, value);
+    set_json_path(root, path, std::move(value), overlay, path);
   }
   return sonare::util::json::dump(root);
+}
+
+namespace {
+
+std::optional<std::string> voice_set_caller_subject(const std::string& subject,
+                                                    const VoiceSetOverlay& overlay) {
+  const VoiceSetSource* owner = nullptr;
+  size_t owner_length = 0;
+  for (const auto& [path, source] : overlay.assignment_by_path) {
+    const std::string candidate = voice_set_flatten_path(path);
+    const bool exact = candidate == subject;
+    const bool descendant =
+        subject.size() > candidate.size() &&
+        subject.compare(0, candidate.size(), candidate) == 0 &&
+        (subject[candidate.size()] == '.' || subject[candidate.size()] == '[');
+    if (!exact && !descendant) continue;
+    if (candidate.size() < owner_length) continue;
+    if (candidate.size() == owner_length && owner != nullptr &&
+        (owner->assignment != source.assignment || owner->value_path != source.value_path ||
+         owner->intermediate_container != source.intermediate_container)) {
+      return std::nullopt;
+    }
+    owner = &source;
+    owner_length = candidate.size();
+  }
+  if (owner == nullptr) return std::nullopt;
+  for (const auto& path : overlay.untouched_document_paths) {
+    if (voice_set_flatten_path(path) == subject) return std::nullopt;
+  }
+  if (owner->intermediate_container) {
+    return cli_bag_subject("--set", owner->assignment);
+  }
+  const std::string assigned_path = voice_set_flatten_path(owner->value_path);
+  if (subject.size() < assigned_path.size() ||
+      subject.compare(0, assigned_path.size(), assigned_path) != 0 ||
+      (subject.size() > assigned_path.size() && subject[assigned_path.size()] != '.' &&
+       subject[assigned_path.size()] != '[')) {
+    return std::nullopt;
+  }
+  return cli_bag_subject("--set",
+                         owner->assignment + subject.substr(assigned_path.size()));
+}
+
+}  // namespace
+
+SonareParameterRefusal respell_voice_set_refusal(const SonareParameterRefusal& refusal,
+                                                 const VoiceSetOverlay& overlay) {
+  bool has_argument_subject = false;
+  for (const auto& subject : refusal.subjects()) {
+    if (voice_set_caller_subject(subject, overlay)) {
+      has_argument_subject = true;
+      break;
+    }
+  }
+  const ErrorCode code =
+      has_argument_subject ? ErrorCode::InvalidParameter : refusal.code();
+  return refusal.respelled(code, [&](const std::string& subject) {
+    if (const auto spelled = voice_set_caller_subject(subject, overlay)) return *spelled;
+    return subject;
+  }, false);
 }
 
 void print_float_values(const CliArgs& args, const std::vector<float>& values) {

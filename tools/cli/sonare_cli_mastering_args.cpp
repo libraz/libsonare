@@ -354,7 +354,13 @@ std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& 
   try {
     sonare::util::json::Value document;
     try {
-      document = sonare::util::json::parse(text);
+      if (subject == "--platforms-file") {
+        document = parse_cli_json_document(text);
+      } else {
+        document = sonare::util::json::parse(text);
+      }
+    } catch (const CliDuplicateDocumentError&) {
+      throw;
     } catch (const std::exception&) {
       document = sonare::util::json::Value();
     }

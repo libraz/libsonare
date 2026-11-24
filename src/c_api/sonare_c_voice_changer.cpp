@@ -596,8 +596,10 @@ SonareError sonare_realtime_voice_changer_config_from_json(const char* document,
   const std::string config_text = document && document[0] != '\0' ? document : "neutralMonitor";
   editing::voice_changer::RealtimeVoiceChangerConfig config;
   std::string error;
-  if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
-                                                                        &error)) {
+  std::optional<sonare::SonareParameterRefusal> refusal;
+  if (!editing::voice_changer::realtime_voice_changer_config_from_input(
+          config_text, &config, &error, &refusal)) {
+    if (refusal) throw std::move(*refusal);
     set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
@@ -867,10 +869,12 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* docum
   SONARE_C_TRY
   std::string normalized;
   std::string error;
-  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(document, &normalized,
-                                                                           &error)) {
+  std::optional<sonare::SonareParameterRefusal> refusal;
+  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(
+          document, &normalized, &error, &refusal)) {
     const char* message = error.empty() ? "invalid preset JSON" : error.c_str();
     *out_error = copy_string(message);
+    if (refusal) throw std::move(*refusal);
     set_last_error(SONARE_ERROR_INVALID_FORMAT, message);
     return SONARE_ERROR_INVALID_FORMAT;
   }

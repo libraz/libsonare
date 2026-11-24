@@ -4,8 +4,10 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "editing/voice_changer/realtime.h"
@@ -50,9 +52,40 @@ namespace {
 namespace schema = sonare::util::json::schema;
 using schema::Kind;
 
-[[noreturn]] void refuse(const std::string& message) {
-  throw SonareException(ErrorCode::InvalidFormat, message);
-}
+class ConfigErrorSink {
+ public:
+  ConfigErrorSink(std::string* text, std::optional<SonareParameterRefusal>* refusal)
+      : text_(text), refusal_(refusal) {
+    if (text_) text_->clear();
+    if (refusal_) refusal_->reset();
+  }
+
+  void raw(std::string_view text) {
+    if (text_) text_->assign(text);
+    if (refusal_) refusal_->reset();
+  }
+
+  void refuse(SonareParameterRefusal refusal) {
+    if (refusal.code() != ErrorCode::InvalidFormat) {
+      refusal = refusal.respelled(
+          ErrorCode::InvalidFormat, [](const std::string& subject) { return subject; }, false);
+    }
+    if (text_) *text_ = refusal.what();
+    if (refusal_) *refusal_ = std::move(refusal);
+  }
+
+  [[noreturn]] void throw_failure() const {
+    if (refusal_ && *refusal_) throw **refusal_;
+    throw SonareException(ErrorCode::InvalidFormat,
+                          text_ && !text_->empty() ? *text_ : "invalid voice changer config");
+  }
+
+ private:
+  std::string* text_;
+  std::optional<SonareParameterRefusal>* refusal_;
+};
+
+[[noreturn]] void refuse(SonareParameterRefusal refusal) { throw refusal; }
 
 // The readers below run on a validated document; a present key of the wrong type is still refused
 // by its path, and only an absent key keeps the fallback. @p section is the enclosing object's
@@ -61,7 +94,8 @@ const sonare::util::json::Value* object_section(const sonare::util::json::Value&
                                                 const char* section, const char* key) {
   const auto* value = object.find(key);
   if (value != nullptr && !value->is_object()) {
-    refuse(schema::must_be(schema::child_path(section, key), Kind::Object));
+    refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, schema::child_path(section, key), "must be an object"));
   }
   return value;
 }
@@ -70,7 +104,10 @@ float object_number(const sonare::util::json::Value& object, const char* section
                     float fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse(schema::must_be(schema::child_path(section, key), Kind::Number));
+  if (!value->is_number()) {
+    refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, schema::child_path(section, key), "must be a number"));
+  }
   // An overflow reads as an infinity, which the config validator refuses by name.
   return value->as_float();
 }
@@ -89,7 +126,10 @@ int object_int(const sonare::util::json::Value& object, const char* section, con
                int fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse(schema::must_be(schema::child_path(section, key), Kind::Number));
+  if (!value->is_number()) {
+    refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, schema::child_path(section, key), "must be a number"));
+  }
   return json_number_to_int(value->as_number(), fallback);
 }
 
@@ -100,7 +140,8 @@ constexpr const char* kGrainZeroPredicate = "must not be 0; omit it for the auto
 int object_grain(const sonare::util::json::Value& object, const char* section, const char* key) {
   const int grain = object_int(object, section, key, 0);
   if (object.find(key) != nullptr && grain == 0) {
-    refuse(schema::refusal(schema::child_path(section, key), kGrainZeroPredicate));
+    refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, schema::child_path(section, key), kGrainZeroPredicate));
   }
   return grain;
 }
@@ -112,14 +153,20 @@ void object_steps(const sonare::util::json::Value& object, const char* section, 
   const auto* value = object.find(key);
   if (!value) return;
   const std::string path = schema::child_path(section, key);
-  if (!value->is_array()) refuse(schema::must_be(path, Kind::Array));
+  if (!value->is_array()) {
+    refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, path, "must be an array"));
+  }
   const auto& items = value->as_array();
   if (items.size() > static_cast<std::size_t>(kMaxHarmonyVoices)) {
-    refuse(schema::refusal(path,
-                           "must have at most " + std::to_string(kMaxHarmonyVoices) + " entries"));
+    refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, path,
+        "must have at most " + std::to_string(kMaxHarmonyVoices) + " entries"));
   }
   for (std::size_t i = 0; i < items.size(); ++i) {
-    if (!items[i].is_number()) refuse(schema::must_be(schema::index_path(path, i), Kind::Number));
+    if (!items[i].is_number()) {
+      refuse(SonareParameterRefusal::wrong_type(
+          ErrorCode::InvalidFormat, schema::index_path(path, i), "must be a number"));
+    }
     steps[i] = json_number_to_int(items[i].as_number(), steps[i]);
   }
 }
@@ -129,10 +176,13 @@ int object_enum_value(const sonare::util::json::Value& object, const char* secti
   const auto* value = object.find(key);
   if (!value) return fallback;
   const std::string path = schema::child_path(section, key);
-  if (!value->is_string()) refuse(schema::must_be(path, Kind::String));
+  if (!value->is_string()) {
+    refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, path, "must be a string"));
+  }
   int parsed = fallback;
   if (!enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
-    refuse(schema::refusal(path, "must be " + enum_spelling_list(rows, count)));
+    refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, path, "must be " + enum_spelling_list(rows, count)));
   }
   return parsed;
 }
@@ -164,17 +214,23 @@ FormantMode object_formant_mode(const sonare::util::json::Value& object, const c
   const auto* value = object.find(key);
   if (!value) return fallback;
   const std::string path = schema::child_path(section, key);
-  if (!value->is_string()) refuse(schema::must_be(path, Kind::String));
+  if (!value->is_string()) {
+    refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, path, "must be a string"));
+  }
   FormantMode mode;
   if (formant_mode_from_spelling(value->as_string(), &mode)) return mode;
-  refuse(schema::refusal(path, kFormantModePredicate));
+  refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, path,
+                                           kFormantModePredicate));
 }
 
 bool object_bool(const sonare::util::json::Value& object, const char* section, const char* key,
                  bool fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_bool()) refuse(schema::must_be(schema::child_path(section, key), Kind::Boolean));
+  if (!value->is_bool()) {
+    refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, schema::child_path(section, key), "must be a boolean"));
+  }
   return value->as_bool();
 }
 
@@ -346,14 +402,95 @@ std::string trim_copy(std::string_view text) {
   return std::string(text.substr(first, last - first));
 }
 
-using sonare::util::json::schema::has_allowed_keys;
-using sonare::util::json::schema::require_key;
-using sonare::util::json::schema::require_number;
-using sonare::util::json::schema::require_string;
+bool has_allowed_keys(const sonare::util::json::Value& object,
+                      std::initializer_list<std::string_view> keys, std::string_view path,
+                      ConfigErrorSink& sink) {
+  if (!object.is_object()) {
+    const std::string subject = path.empty() ? "the document" : std::string(path);
+    sink.refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, subject, "must be an object"));
+    return false;
+  }
+  for (const auto& [key, _value] : object.as_object()) {
+    bool allowed = false;
+    for (std::string_view accepted : keys) {
+      if (key == accepted) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) {
+      std::vector<std::string> accepted;
+      accepted.reserve(keys.size());
+      for (std::string_view item : keys) accepted.emplace_back(item);
+      sink.refuse(SonareParameterRefusal::unknown(
+          ErrorCode::InvalidFormat, schema::child_path(path, key),
+          schema::expected_keys(accepted)));
+      return false;
+    }
+  }
+  return true;
+}
+
+bool require_key(const sonare::util::json::Value& object, const char* key, std::string_view path,
+                 ConfigErrorSink& sink) {
+  if (object.find(key) != nullptr) return true;
+  sink.refuse(SonareParameterRefusal::predicate(
+      ErrorCode::InvalidFormat, schema::child_path(path, key), "must be given"));
+  return false;
+}
+
+bool require_number(const sonare::util::json::Value& object, const char* key, double lo, double hi,
+                    std::string_view path, ConfigErrorSink& sink, bool integer = false) {
+  const std::string at = schema::child_path(path, key);
+  const auto* value = object.find(key);
+  if (!value) {
+    sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, at, "must be given"));
+    return false;
+  }
+  if (!value->is_number()) {
+    sink.refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, at, "must be a number"));
+    return false;
+  }
+  const double number = value->as_number();
+  if (!std::isfinite(number) || (integer && std::floor(number) != number) || number < lo ||
+      number > hi) {
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, at,
+        integer ? schema::integer_range_predicate(lo, hi) : schema::range_predicate(lo, hi)));
+    return false;
+  }
+  return true;
+}
+
+bool require_string(const sonare::util::json::Value& object, const char* key, std::size_t min_len,
+                    std::size_t max_len, std::string_view path, ConfigErrorSink& sink) {
+  const std::string at = schema::child_path(path, key);
+  const auto* value = object.find(key);
+  if (!value) {
+    sink.refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, at, "must be given"));
+    return false;
+  }
+  if (!value->is_string()) {
+    sink.refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, at, "must be a string"));
+    return false;
+  }
+  const auto& text = value->as_string();
+  if (text.size() < min_len || text.size() > max_len) {
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, at,
+        "must be a string of " + std::to_string(min_len) + " to " +
+            std::to_string(max_len) + " characters"));
+    return false;
+  }
+  return true;
+}
 
 bool require_in(const sonare::util::json::Value& object, const char* key, const Range& range,
-                const char* path, std::string* error, bool integer = false) {
-  return require_number(object, key, range.lo, range.hi, path, error, integer);
+                const char* path, ConfigErrorSink& sink, bool integer = false) {
+  return require_number(object, key, range.lo, range.hi, path, sink, integer);
 }
 
 /// Verifies the preset id matches the schema regex `^[a-z0-9][A-Za-z0-9._-]*$` and
@@ -376,39 +513,39 @@ inline bool is_valid_preset_id(std::string_view s) noexcept {
 }
 
 bool require_enum_in(const sonare::util::json::Value& object, const char* key, const char* path,
-                     std::string* error, const EnumName* rows, std::size_t count) {
+                     ConfigErrorSink& sink, const EnumName* rows, std::size_t count) {
   const auto* value = object.find(key);
   int parsed = 0;
   if (value != nullptr && value->is_string() &&
       enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
     return true;
   }
-  if (error) {
-    *error = schema::refusal(schema::child_path(path, key),
-                             "must be " + enum_spelling_list(rows, count));
-  }
+  sink.refuse(SonareParameterRefusal::predicate(
+      ErrorCode::InvalidFormat, schema::child_path(path, key),
+      "must be " + enum_spelling_list(rows, count)));
   return false;
 }
 
 template <typename Enum>
 bool require_enum(const sonare::util::json::Value& object, const char* key, const char* path,
-                  std::string* error) {
+                  ConfigErrorSink& sink) {
   const auto& names = EnumNames<Enum>::kNames;
-  return require_enum_in(object, key, path, error, names.data(), names.size());
+  return require_enum_in(object, key, path, sink, names.data(), names.size());
 }
 
 bool require_bool(const sonare::util::json::Value& object, const char* key, const char* path,
-                  std::string* error) {
+                  ConfigErrorSink& sink) {
   const auto* value = object.find(key);
   if (value != nullptr && value->is_bool()) return true;
-  if (error) *error = schema::must_be(schema::child_path(path, key), Kind::Boolean);
+  sink.refuse(SonareParameterRefusal::wrong_type(
+      ErrorCode::InvalidFormat, schema::child_path(path, key), "must be a boolean"));
   return false;
 }
 
 // How a section key is checked. A null @c check is a range test over @c range; @c required
 // is whether the key must be present at all.
 using FieldCheck = bool (*)(const sonare::util::json::Value&, const char*, const char*,
-                            std::string*);
+                            ConfigErrorSink&);
 
 struct FieldSpec {
   const char* key;
@@ -433,16 +570,17 @@ constexpr FieldSpec bool_field(const char* key, bool required = true) {
 }
 
 // A key whose value is checked elsewhere; only its presence is required here.
-bool accept_any(const sonare::util::json::Value&, const char*, const char*, std::string*) {
+bool accept_any(const sonare::util::json::Value&, const char*, const char*, ConfigErrorSink&) {
   return true;
 }
 
 bool require_formant_mode(const sonare::util::json::Value& object, const char* key,
-                          const char* path, std::string* error) {
+                          const char* path, ConfigErrorSink& sink) {
   const auto* mode = object.find(key);
   FormantMode parsed;
   if (!mode->is_string() || !formant_mode_from_spelling(mode->as_string(), &parsed)) {
-    if (error) *error = schema::refusal(schema::child_path(path, key), kFormantModePredicate);
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, schema::child_path(path, key), kFormantModePredicate));
     return false;
   }
   return true;
@@ -450,9 +588,10 @@ bool require_formant_mode(const sonare::util::json::Value& object, const char* k
 
 template <std::size_t N>
 bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec (&fields)[N],
-                        std::string_view path, std::string* error) {
+                        std::string_view path, ConfigErrorSink& sink) {
   if (!object.is_object()) {
-    if (error) *error = schema::must_be(path, Kind::Object);
+    sink.refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, std::string(path), "must be an object"));
     return false;
   }
   for (const auto& [key, _value] : object.as_object()) {
@@ -464,12 +603,11 @@ bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec
       }
     }
     if (!allowed) {
-      if (error) {
-        std::vector<std::string> accepted;
-        for (const FieldSpec& field : fields) accepted.emplace_back(field.key);
-        *error = schema::unknown_key_expected(schema::child_path(path, key),
-                                              schema::expected_keys(accepted));
-      }
+      std::vector<std::string> accepted;
+      for (const FieldSpec& field : fields) accepted.emplace_back(field.key);
+      sink.refuse(SonareParameterRefusal::unknown(
+          ErrorCode::InvalidFormat, schema::child_path(path, key),
+          schema::expected_keys(accepted)));
       return false;
     }
   }
@@ -479,16 +617,16 @@ bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec
 // Allowed keys, then required keys, then each present key's check, in table order.
 template <std::size_t N>
 bool validate_range_section(const sonare::util::json::Value& section, const char* path,
-                            const FieldSpec (&fields)[N], std::string* error) {
-  if (!has_allowed_fields(section, fields, path, error)) return false;
+                            const FieldSpec (&fields)[N], ConfigErrorSink& sink) {
+  if (!has_allowed_fields(section, fields, path, sink)) return false;
   for (const FieldSpec& field : fields) {
-    if (field.required && !require_key(section, field.key, path, error)) return false;
+    if (field.required && !require_key(section, field.key, path, sink)) return false;
   }
   for (const FieldSpec& field : fields) {
     if (!field.required && section.find(field.key) == nullptr) continue;
     const bool ok = field.check != nullptr
-                        ? field.check(section, field.key, path, error)
-                        : require_in(section, field.key, field.range, path, error, field.integer);
+                        ? field.check(section, field.key, path, sink)
+                        : require_in(section, field.key, field.range, path, sink, field.integer);
     if (!ok) return false;
   }
   return true;
@@ -497,9 +635,9 @@ bool validate_range_section(const sonare::util::json::Value& section, const char
 // A section checked only when present.
 template <std::size_t N>
 bool validate_optional_section(const sonare::util::json::Value& parent, const char* key,
-                               const char* path, const FieldSpec (&fields)[N], std::string* error) {
+                               const char* path, const FieldSpec (&fields)[N], ConfigErrorSink& sink) {
   const auto* section = parent.find(key);
-  return section == nullptr || validate_range_section(*section, path, fields, error);
+  return section == nullptr || validate_range_section(*section, path, fields, sink);
 }
 
 bool grain_in_domain(double n) {
@@ -514,17 +652,19 @@ std::string grain_domain_predicate() {
 
 // An absent grain is the automatic one; a written 0 is refused by name rather than as out of range.
 bool require_grain(const sonare::util::json::Value& object, const char* key, const char* path,
-                   std::string* error) {
+                   ConfigErrorSink& sink) {
   const auto* value = object.find(key);
   if (value->is_number() && value->as_number() == 0.0) {
-    if (error) *error = schema::refusal(schema::child_path(path, key), kGrainZeroPredicate);
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, schema::child_path(path, key), kGrainZeroPredicate));
     return false;
   }
   if (value->is_number() && !grain_in_domain(value->as_number())) {
-    if (error) *error = schema::refusal(schema::child_path(path, key), grain_domain_predicate());
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, schema::child_path(path, key), grain_domain_predicate()));
     return false;
   }
-  return require_in(object, key, kGrainSize, path, error, true);
+  return require_in(object, key, kGrainSize, path, sink, true);
 }
 
 constexpr FieldSpec kRetuneFields[] = {
@@ -621,15 +761,15 @@ constexpr FieldSpec kMidiFields[] = {
 };
 
 // The voice transformer sections of a dsp object. Present sections are validated in full.
-bool validate_transform_sections(const sonare::util::json::Value& dsp, std::string* error) {
+bool validate_transform_sections(const sonare::util::json::Value& dsp, ConfigErrorSink& sink) {
   if (!validate_optional_section(dsp, "voiceEngine", "dsp.voiceEngine", kVoiceEngineFields,
-                                 error) ||
+                                 sink) ||
       !validate_optional_section(dsp, "pitchCorrection", "dsp.pitchCorrection",
-                                 kPitchCorrectionFields, error)) {
+                                 kPitchCorrectionFields, sink)) {
     return false;
   }
   if (const auto* section = dsp.find("harmony")) {
-    if (!validate_range_section(*section, "dsp.harmony", kHarmonyFields, error)) return false;
+    if (!validate_range_section(*section, "dsp.harmony", kHarmonyFields, sink)) return false;
     // One step per harmony voice at least, three at most.
     const auto& steps = *section->find("steps");
     const auto voices = static_cast<std::size_t>(section->find("voices")->as_number());
@@ -642,60 +782,59 @@ bool validate_transform_sections(const sonare::util::json::Value& dsp, std::stri
       }
     }
     if (!steps_ok) {
-      if (error) {
-        *error = schema::refusal(
-            schema::child_path("dsp.harmony", "steps"),
-            "must be an array of at most " + std::to_string(kMaxHarmonyVoices) + " integers in [" +
-                schema::bound_text(kHarmonyStep.lo) + ", " + schema::bound_text(kHarmonyStep.hi) +
-                "], at least one per voice of dsp.harmony.voices");
-      }
+      const std::string predicate =
+          "{0} must be an array of at most " + std::to_string(kMaxHarmonyVoices) +
+          " integers in [" + schema::bound_text(kHarmonyStep.lo) + ", " +
+          schema::bound_text(kHarmonyStep.hi) + "], at least one per voice of {1}";
+      sink.refuse(SonareParameterRefusal::relation(
+          ErrorCode::InvalidFormat, {"dsp.harmony.steps", "dsp.harmony.voices"}, predicate));
       return false;
     }
   }
-  return validate_optional_section(dsp, "vocoder", "dsp.vocoder", kVocoderFields, error) &&
-         validate_optional_section(dsp, "character", "dsp.character", kCharacterFields, error) &&
+  return validate_optional_section(dsp, "vocoder", "dsp.vocoder", kVocoderFields, sink) &&
+         validate_optional_section(dsp, "character", "dsp.character", kCharacterFields, sink) &&
          validate_optional_section(dsp, "reverbVariation", "dsp.reverbVariation",
-                                   kReverbVariationFields, error) &&
-         validate_optional_section(dsp, "midi", "dsp.midi", kMidiFields, error);
+                                   kReverbVariationFields, sink) &&
+         validate_optional_section(dsp, "midi", "dsp.midi", kMidiFields, sink);
 }
 
 constexpr std::array<const char*, 7> kTransformSections = {
     "voiceEngine", "pitchCorrection", "harmony", "vocoder", "character", "reverbVariation", "midi"};
 
-bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* error) {
+bool validate_dsp_section(const sonare::util::json::Value& dsp, ConfigErrorSink& sink) {
   if (!has_allowed_keys(
           dsp,
           {"inputGainDb", "outputGainDb", "wetMix", "retune", "formant", "eq", "gate", "compressor",
            "deesser", "reverb", "limiter", "voiceEngine", "pitchCorrection", "harmony", "vocoder",
            "character", "reverbVariation", "midi"},
-          "dsp", error)) {
+          "dsp", sink)) {
     return false;
   }
   for (const char* key :
        {"retune", "formant", "eq", "gate", "compressor", "deesser", "reverb", "limiter"}) {
-    if (!require_key(dsp, key, "dsp", error)) return false;
+    if (!require_key(dsp, key, "dsp", sink)) return false;
   }
   for (const char* key : kTransformSections) {
-    if (!require_key(dsp, key, "dsp", error)) return false;
+    if (!require_key(dsp, key, "dsp", sink)) return false;
   }
-  if (!validate_transform_sections(dsp, error)) return false;
-  if (dsp.find("inputGainDb") && !require_in(dsp, "inputGainDb", kInputGainDb, "dsp", error)) {
+  if (!validate_transform_sections(dsp, sink)) return false;
+  if (dsp.find("inputGainDb") && !require_in(dsp, "inputGainDb", kInputGainDb, "dsp", sink)) {
     return false;
   }
-  if (dsp.find("outputGainDb") && !require_in(dsp, "outputGainDb", kOutputGainDb, "dsp", error)) {
+  if (dsp.find("outputGainDb") && !require_in(dsp, "outputGainDb", kOutputGainDb, "dsp", sink)) {
     return false;
   }
-  if (dsp.find("wetMix") && !require_in(dsp, "wetMix", kUnit, "dsp", error)) return false;
+  if (dsp.find("wetMix") && !require_in(dsp, "wetMix", kUnit, "dsp", sink)) return false;
 
-  if (!validate_range_section(*dsp.find("retune"), "dsp.retune", kRetuneFields, error) ||
-      !validate_range_section(*dsp.find("formant"), "dsp.formant", kFormantFields, error) ||
-      !validate_range_section(*dsp.find("eq"), "dsp.eq", kEqFields, error) ||
-      !validate_range_section(*dsp.find("gate"), "dsp.gate", kGateFields, error) ||
+  if (!validate_range_section(*dsp.find("retune"), "dsp.retune", kRetuneFields, sink) ||
+      !validate_range_section(*dsp.find("formant"), "dsp.formant", kFormantFields, sink) ||
+      !validate_range_section(*dsp.find("eq"), "dsp.eq", kEqFields, sink) ||
+      !validate_range_section(*dsp.find("gate"), "dsp.gate", kGateFields, sink) ||
       !validate_range_section(*dsp.find("compressor"), "dsp.compressor", kCompressorFields,
-                              error) ||
-      !validate_range_section(*dsp.find("deesser"), "dsp.deesser", kDeesserFields, error) ||
-      !validate_range_section(*dsp.find("reverb"), "dsp.reverb", kReverbFields, error) ||
-      !validate_range_section(*dsp.find("limiter"), "dsp.limiter", kLimiterFields, error)) {
+                              sink) ||
+      !validate_range_section(*dsp.find("deesser"), "dsp.deesser", kDeesserFields, sink) ||
+      !validate_range_section(*dsp.find("reverb"), "dsp.reverb", kReverbFields, sink) ||
+      !validate_range_section(*dsp.find("limiter"), "dsp.limiter", kLimiterFields, sink)) {
     return false;
   }
   return true;
@@ -705,16 +844,16 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
 // into the ordinary DSP config before a RealtimeVoiceChanger is constructed;
 // no macro state reaches the audio-thread POD path.
 bool apply_macro_section(const sonare::util::json::Value& macros,
-                         RealtimeVoiceChangerConfig* config, std::string* error) {
+                         RealtimeVoiceChangerConfig* config, ConfigErrorSink& sink) {
   if (!has_allowed_keys(
           macros,
           {"pitch", "formant", "brightness", "space", "intensity", "noiseControl", "sibilance"},
-          "macros", error)) {
+          "macros", sink)) {
     return false;
   }
   auto optional_number = [&](const char* key, double min, double max, float* target) -> bool {
     if (macros.find(key) == nullptr) return true;
-    if (!require_number(macros, key, min, max, "macros", error)) return false;
+    if (!require_number(macros, key, min, max, "macros", sink)) return false;
     *target = macros.find(key)->as_float();
     return true;
   };
@@ -724,27 +863,27 @@ bool apply_macro_section(const sonare::util::json::Value& macros,
     return false;
   }
   if (const auto* value = macros.find("brightness")) {
-    if (!require_number(macros, "brightness", 0.0, 1.0, "macros", error)) return false;
+    if (!require_number(macros, "brightness", 0.0, 1.0, "macros", sink)) return false;
     const float centered = value->as_float() * 2.0f - 1.0f;
     config->formant.brightness = centered;
     config->eq.presence_db = centered * 6.0f;
     config->eq.air_db = centered * 4.0f;
   }
   if (const auto* value = macros.find("space")) {
-    if (!require_number(macros, "space", 0.0, 1.0, "macros", error)) return false;
+    if (!require_number(macros, "space", 0.0, 1.0, "macros", sink)) return false;
     config->reverb.mix = value->as_float() * 0.45f;
   }
   if (const auto* value = macros.find("intensity")) {
-    if (!require_number(macros, "intensity", 0.0, 1.0, "macros", error)) return false;
+    if (!require_number(macros, "intensity", 0.0, 1.0, "macros", sink)) return false;
     config->compressor.ratio = 1.0f + value->as_float() * 4.0f;
   }
   if (const auto* value = macros.find("noiseControl")) {
-    if (!require_number(macros, "noiseControl", 0.0, 1.0, "macros", error)) return false;
+    if (!require_number(macros, "noiseControl", 0.0, 1.0, "macros", sink)) return false;
     config->gate.threshold_db = -90.0f + value->as_float() * 45.0f;
     config->gate.range_db = value->as_float() * 48.0f;
   }
   if (const auto* value = macros.find("sibilance")) {
-    if (!require_number(macros, "sibilance", 0.0, 1.0, "macros", error)) return false;
+    if (!require_number(macros, "sibilance", 0.0, 1.0, "macros", sink)) return false;
     config->deesser.threshold_db = -6.0f - value->as_float() * 30.0f;
     config->deesser.range_db = value->as_float() * 18.0f;
   }
@@ -766,16 +905,18 @@ bool is_step_triple(const sonare::util::json::Value& value) {
 }
 
 // Reads a document whose keys and types were already checked; the config validator runs after it.
-RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& root) {
+RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& root,
+                                                ConfigErrorSink& sink) {
   RealtimeVoiceChangerConfig c;
   if (const auto* macros = root.find("macros")) {
-    std::string error;
-    if (!apply_macro_section(*macros, &c, &error)) refuse(error);
+    if (!apply_macro_section(*macros, &c, sink)) sink.throw_failure();
     return c;
   }
   const bool flat = root.find("retunePitchSemitones") != nullptr;
   const auto* dsp = flat ? &root : object_section(root, "", "dsp");
-  if (dsp == nullptr) refuse(schema::missing_key("dsp"));
+  if (dsp == nullptr) {
+    refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, "dsp", "must be given"));
+  }
   const auto& object = *dsp;
   const char* base = flat ? "" : "dsp";
   c.input_gain_db = object_number(object, base, "inputGainDb", c.input_gain_db);
@@ -993,49 +1134,47 @@ RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& r
 
 // The preset document reader: every key known, every required key given, every value typed and
 // in its domain, then the whole configuration through the config validator.
-bool read_preset_document(const sonare::util::json::Value& root, RealtimeVoiceChangerConfig* config,
-                          std::string* error) {
+bool read_preset_document(const sonare::util::json::Value& root,
+                          RealtimeVoiceChangerConfig* config, ConfigErrorSink& sink) {
   if (!has_allowed_keys(root,
                         {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"},
-                        "", error)) {
+                        "", sink)) {
     return false;
   }
   for (const char* key : {"schemaVersion", "id", "name", "category"}) {
-    if (!require_key(root, key, "", error)) return false;
+    if (!require_key(root, key, "", sink)) return false;
   }
   const auto& schema_version = *root.find("schemaVersion");
   if (!schema_version.is_number()) {
-    if (error) *error = schema::must_be("schemaVersion", Kind::Number);
+    sink.refuse(SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidFormat, "schemaVersion", "must be a number"));
     return false;
   }
   if (const double n = schema_version.as_number();
       n != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
-    if (error) {
-      const bool whole = std::isfinite(n) && std::floor(n) == n;
-      const char* written_for = !whole ? ""
-                                : n < kVoiceChangerPresetSchemaVersion
-                                    ? "; the document was written for an older schema"
-                                    : "; the document was written for a newer schema";
-      *error = schema::refusal("schemaVersion",
-                               "must be " + std::to_string(kVoiceChangerPresetSchemaVersion) +
-                                   ", the version this release reads" + written_for);
-    }
+    const bool whole = std::isfinite(n) && std::floor(n) == n;
+    const char* written_for = !whole ? ""
+                              : n < kVoiceChangerPresetSchemaVersion
+                                  ? "; the document was written for an older schema"
+                                  : "; the document was written for a newer schema";
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, "schemaVersion",
+        "must be " + std::to_string(kVoiceChangerPresetSchemaVersion) +
+            ", the version this release reads" + written_for));
     return false;
   }
-  if (!require_string(root, "id", 1, 96, "", error)) return false;
+  if (!require_string(root, "id", 1, 96, "", sink)) return false;
   if (!is_valid_preset_id(root.find("id")->as_string())) {
-    if (error) {
-      *error = schema::refusal("id",
-                               "must start with a lowercase letter or a digit and hold only "
-                               "letters, digits, '.', '_' and '-'");
-    }
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, "id",
+        "must start with a lowercase letter or a digit and hold only letters, digits, '.', '_' and '-'"));
     return false;
   }
-  if (!require_string(root, "name", 1, 96, "", error)) return false;
-  if (root.find("description") && !require_string(root, "description", 0, 512, "", error)) {
+  if (!require_string(root, "name", 1, 96, "", sink)) return false;
+  if (root.find("description") && !require_string(root, "description", 0, 512, "", sink)) {
     return false;
   }
-  if (!require_string(root, "category", 1, 16, "", error)) return false;
+  if (!require_string(root, "category", 1, 16, "", sink)) return false;
   {
     static constexpr std::array<EnumName, 11> kCategories = {{{0, "monitor"},
                                                               {0, "bright"},
@@ -1051,25 +1190,34 @@ bool read_preset_document(const sonare::util::json::Value& root, RealtimeVoiceCh
     const auto& category = root.find("category")->as_string();
     int unused = 0;
     if (!enum_value_from_spelling(kCategories.data(), kCategories.size(), category, &unused)) {
-      if (error) {
-        *error = schema::refusal(
-            "category", "must be " + enum_spelling_list(kCategories.data(), kCategories.size()));
-      }
+      sink.refuse(SonareParameterRefusal::predicate(
+          ErrorCode::InvalidFormat, "category",
+          "must be " + enum_spelling_list(kCategories.data(), kCategories.size())));
       return false;
     }
   }
   const auto* dsp = root.find("dsp");
   const auto* macros = root.find("macros");
   if ((dsp == nullptr) == (macros == nullptr)) {
-    if (error) *error = "the document must hold exactly one of dsp and macros";
+    sink.refuse(SonareParameterRefusal::relation(
+        ErrorCode::InvalidFormat, {"dsp", "macros"},
+        "the document must hold exactly one of {0} and {1}"));
     return false;
   }
-  if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
-  *config = parse_config_value(root);
+  if (dsp != nullptr && !validate_dsp_section(*dsp, sink)) return false;
+  *config = parse_config_value(root, sink);
   // What only the whole configuration can say; the same rule create and set_config apply.
-  return validate_realtime_voice_changer_config(
-      *config, nullptr, error,
-      dsp != nullptr ? ConfigFieldSpelling::PresetDocument : ConfigFieldSpelling::Member);
+  std::string validation_error;
+  std::optional<SonareParameterRefusal> refusal;
+  if (!validate_realtime_voice_changer_config(
+          *config, nullptr, &validation_error,
+          dsp != nullptr ? ConfigFieldSpelling::PresetDocument : ConfigFieldSpelling::Member,
+          &refusal)) {
+    if (refusal) sink.refuse(*refusal);
+    else sink.raw(validation_error);
+    return false;
+  }
+  return true;
 }
 
 }  // namespace
@@ -1104,14 +1252,15 @@ std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset) {
   return out;
 }
 
-bool validate_realtime_voice_changer_preset_json(std::string_view json,
-                                                 std::string* normalized_json, std::string* error) {
+bool validate_realtime_voice_changer_preset_json(
+    std::string_view json, std::string* normalized_json, std::string* error,
+    std::optional<SonareParameterRefusal>* out_refusal) {
   if (normalized_json) normalized_json->clear();
-  if (error) error->clear();
+  ConfigErrorSink sink(error, out_refusal);
   try {
     const auto root = sonare::util::json::admit_strict(trim_copy(json));
     RealtimeVoiceChangerConfig config;
-    if (!read_preset_document(root, &config, error)) return false;
+    if (!read_preset_document(root, &config, sink)) return false;
     if (normalized_json) {
       // The caller's own identity is written back, so a pack's ids survive the round trip.
       const auto* description = root.find("description");
@@ -1121,26 +1270,31 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
                            root.find("category")->as_string(), config);
     }
     return true;
+  } catch (const SonareParameterRefusal& refusal) {
+    sink.refuse(refusal);
+    return false;
   } catch (const std::exception& ex) {
-    if (error) *error = ex.what();
+    sink.raw(ex.what());
     return false;
   }
 }
 
-bool realtime_voice_changer_config_from_input(std::string_view text,
-                                              RealtimeVoiceChangerConfig* config,
-                                              std::string* error) {
+bool realtime_voice_changer_config_from_input(
+    std::string_view text, RealtimeVoiceChangerConfig* config, std::string* error,
+    std::optional<SonareParameterRefusal>* out_refusal) {
   if (config) *config = {};
-  if (error) error->clear();
+  ConfigErrorSink sink(error, out_refusal);
   if (!config) {
-    if (error) *error = "output config must not be null";
+    sink.refuse(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidFormat, "output config", "must not be null"));
     return false;
   }
 
   try {
     const std::string input = trim_copy(text);
     if (input.empty()) {
-      if (error) *error = "voice changer config must not be empty";
+      sink.refuse(SonareParameterRefusal::predicate(
+          ErrorCode::InvalidFormat, "voice changer config", "must not be empty"));
       return false;
     }
     if (input.front() != '{') {
@@ -1266,10 +1420,9 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           if (key != transform_key) continue;
           if (key == "harmonySteps") {
             if (!is_step_triple(_value)) {
-              if (error) {
-                *error = schema::refusal(
-                    key, "must be an array of " + std::to_string(kMaxHarmonyVoices) + " integers");
-              }
+              sink.refuse(SonareParameterRefusal::predicate(
+                  ErrorCode::InvalidFormat, key,
+                  "must be an array of " + std::to_string(kMaxHarmonyVoices) + " integers"));
               return false;
             }
           } else {
@@ -1280,7 +1433,11 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
                                : kind == Kind::Boolean ? _value.is_bool()
                                                        : _value.is_number();
             if (!typed) {
-              if (error) *error = schema::must_be(key, kind);
+              sink.refuse(SonareParameterRefusal::wrong_type(
+                  ErrorCode::InvalidFormat, key,
+                  kind == Kind::String ? "must be a string"
+                  : kind == Kind::Boolean ? "must be a boolean"
+                                          : "must be a number"));
               return false;
             }
           }
@@ -1289,15 +1446,18 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
         // The automatic grain is the absent key; a present one is a whole size in range.
         if (key == "retuneGrainSizeSamples") {
           if (!_value.is_number()) {
-            if (error) *error = schema::must_be(key, Kind::Number);
+            sink.refuse(SonareParameterRefusal::wrong_type(
+                ErrorCode::InvalidFormat, key, "must be a number"));
             return false;
           }
           if (_value.as_number() == 0.0) {
-            if (error) *error = schema::refusal(key, kGrainZeroPredicate);
+            sink.refuse(SonareParameterRefusal::predicate(
+                ErrorCode::InvalidFormat, key, kGrainZeroPredicate));
             return false;
           }
           if (!grain_in_domain(_value.as_number())) {
-            if (error) *error = schema::refusal(key, grain_domain_predicate());
+            sink.refuse(SonareParameterRefusal::predicate(
+                ErrorCode::InvalidFormat, key, grain_domain_predicate()));
             return false;
           }
           allowed = true;
@@ -1305,49 +1465,54 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
         // formantMode is optional: documents written before the mode existed omit it.
         if (key == "formantMode") {
           if (!_value.is_string()) {
-            if (error) *error = schema::must_be(key, Kind::String);
+            sink.refuse(SonareParameterRefusal::wrong_type(
+                ErrorCode::InvalidFormat, key, "must be a string"));
             return false;
           }
           allowed = true;
         }
         if (!allowed) {
-          if (error) {
-            std::vector<std::string> accepted(kFlatPodKeys.begin(), kFlatPodKeys.end());
-            accepted.insert(accepted.end(), kTransformKeys.begin(), kTransformKeys.end());
-            accepted.emplace_back("retuneGrainSizeSamples");
-            accepted.emplace_back("formantMode");
-            *error = schema::unknown_key_expected(key, schema::expected_keys(accepted));
-          }
+          std::vector<std::string> accepted(kFlatPodKeys.begin(), kFlatPodKeys.end());
+          accepted.insert(accepted.end(), kTransformKeys.begin(), kTransformKeys.end());
+          accepted.emplace_back("retuneGrainSizeSamples");
+          accepted.emplace_back("formantMode");
+          sink.refuse(SonareParameterRefusal::unknown(
+              ErrorCode::InvalidFormat, key, schema::expected_keys(accepted)));
           return false;
         }
       }
       for (const char* key : kFlatPodKeys) {
-        if (!require_key(root, key, "", error)) return false;
+        if (!require_key(root, key, "", sink)) return false;
         const auto* value = root.find(key);
         const bool is_isp_enabled = std::string_view(key) == "limiterEnableIspLimiter";
         if (is_isp_enabled ? !value->is_bool() : !value->is_number()) {
-          if (error) *error = schema::must_be(key, is_isp_enabled ? Kind::Boolean : Kind::Number);
+          sink.refuse(SonareParameterRefusal::wrong_type(
+              ErrorCode::InvalidFormat, key,
+              is_isp_enabled ? "must be a boolean" : "must be a number"));
           return false;
         }
       }
       for (const char* key : kTransformKeys) {
-        if (!require_key(root, key, "", error)) return false;
+        if (!require_key(root, key, "", sink)) return false;
       }
       // An integer key is checked before the int conversion could clamp it; a float key's overflow
       // reads as an infinity, which the config validator refuses by name.
       for (const IntegerKey& integer : kIntegerKeys) {
         const double n = root.find(std::string(integer.key))->as_number();
         if (!(std::floor(n) == n && n >= integer.range.lo && n <= integer.range.hi)) {
-          if (error) {
-            *error = schema::refusal(
-                integer.key, schema::integer_range_predicate(integer.range.lo, integer.range.hi));
-          }
+          sink.refuse(SonareParameterRefusal::predicate(
+              ErrorCode::InvalidFormat, std::string(integer.key),
+              schema::integer_range_predicate(integer.range.lo, integer.range.hi)));
           return false;
         }
       }
-      RealtimeVoiceChangerConfig parsed = parse_config_value(root);
-      if (!validate_realtime_voice_changer_config(parsed, nullptr, error,
-                                                  ConfigFieldSpelling::FlatPod)) {
+      RealtimeVoiceChangerConfig parsed = parse_config_value(root, sink);
+      std::string validation_error;
+      std::optional<SonareParameterRefusal> refusal;
+      if (!validate_realtime_voice_changer_config(parsed, nullptr, &validation_error,
+                                                  ConfigFieldSpelling::FlatPod, &refusal)) {
+        if (refusal) sink.refuse(*refusal);
+        else sink.raw(validation_error);
         return false;
       }
       *config = parsed;
@@ -1355,11 +1520,14 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     }
 
     RealtimeVoiceChangerConfig parsed;
-    if (!read_preset_document(root, &parsed, error)) return false;
+    if (!read_preset_document(root, &parsed, sink)) return false;
     *config = parsed;
     return true;
+  } catch (const SonareParameterRefusal& refusal) {
+    sink.refuse(refusal);
+    return false;
   } catch (const std::exception& ex) {
-    if (error) *error = ex.what();
+    sink.raw(ex.what());
     return false;
   }
 }

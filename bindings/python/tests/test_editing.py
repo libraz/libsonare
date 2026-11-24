@@ -3,6 +3,7 @@
 import inspect
 import json
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -547,8 +548,12 @@ def test_realtime_voice_changer_invalid_json_config() -> None:
     """The validator and the constructor read a preset document with one strict reader."""
     result = libsonare.validate_realtime_voice_changer_preset_json('{"malformed":"json structure"}')
     assert result["ok"] is False
-    assert result["error"] == "unknown key malformed"
-    with raises_coded(ErrorCode.INVALID_FORMAT, match="unknown key malformed"):
+    unknown = (
+        "unknown key malformed "
+        "(expected category, description, dsp, id, macros, name, schemaVersion)"
+    )
+    assert result["error"] == unknown
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=re.escape(unknown)):
         libsonare.RealtimeVoiceChanger(
             48000, num_channels=1, config={"malformed": "json structure"}
         )

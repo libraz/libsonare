@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,6 +36,7 @@
 #include "rt/stage_gate.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -701,8 +703,10 @@ std::string realtime_voice_changer_field_path(std::string_view member,
 /// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones * mix / 12)
 ///          and must lie in [kFormantFactorMin, kFormantFactorMax]. On failure @p error is
 ///          @ref absolute_formant_reach_refusal's text in @p spelling.
-bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
-                               ConfigFieldSpelling spelling = ConfigFieldSpelling::Member);
+bool formant_warp_is_reachable(
+    const RealtimeVoiceChangerConfig& config, std::string* error,
+    ConfigFieldSpelling spelling = ConfigFieldSpelling::Member,
+    std::optional<SonareParameterRefusal>* out_refusal = nullptr);
 
 /// @brief Validates a configuration: every field finite and inside its documented range.
 /// @details Returns false, with @p error reading "<path> must ..." (e.g. "formant.factor must be
@@ -714,17 +718,19 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
 ///          constructed. Allocates only when it fails and @p error is non-null.
 bool validate_realtime_voice_changer_config(
     const RealtimeVoiceChangerConfig& config, RealtimeVoiceChangerConfig* normalized,
-    std::string* error, ConfigFieldSpelling spelling = ConfigFieldSpelling::Member);
+    std::string* error, ConfigFieldSpelling spelling = ConfigFieldSpelling::Member,
+    std::optional<SonareParameterRefusal>* out_refusal = nullptr);
 
 /// @brief The one voice changer configuration reader: a preset id, a complete flat POD, or a
 ///        preset document that satisfies the preset schema.
 /// @details An unknown key, a duplicate key, a missing key, a value of the wrong type and a value
 ///          outside its domain are all refused, with @p error reading "<path> must ..." or
 ///          "unknown key <path>" from the document root; nothing inherits a default. Empty input is
-///          refused. On failure @p config is default constructed.
-bool realtime_voice_changer_config_from_input(std::string_view input,
-                                              RealtimeVoiceChangerConfig* config,
-                                              std::string* error);
+///          refused. On failure @p config is default constructed; @p out_refusal receives the
+///          structured refusal when the cause names a document field.
+bool realtime_voice_changer_config_from_input(
+    std::string_view input, RealtimeVoiceChangerConfig* config, std::string* error,
+    std::optional<SonareParameterRefusal>* out_refusal = nullptr);
 /// @brief @ref realtime_voice_changer_config_from_input as a throwing call.
 /// @throws SonareException(InvalidFormat) with the reader's refusal text.
 RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view json);
@@ -734,7 +740,8 @@ std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConf
 std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset);
 /// @brief Checks a preset document with the same reader, and writes it back normalized with the
 ///        caller's own id, name, description and category.
-bool validate_realtime_voice_changer_preset_json(std::string_view json,
-                                                 std::string* normalized_json, std::string* error);
+bool validate_realtime_voice_changer_preset_json(
+    std::string_view json, std::string* normalized_json, std::string* error,
+    std::optional<SonareParameterRefusal>* out_refusal = nullptr);
 
 }  // namespace sonare::editing::voice_changer

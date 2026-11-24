@@ -205,7 +205,7 @@ def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> 
         assert rejected.returncode == 3
         payload = json.loads(rejected.stdout)
         assert payload["ok"] is False
-        assert payload["error"] == "macros.pitch must be a number"
+        assert payload["error"] == "--set macros.pitch must be a number"
 
 
 def test_normalize_cli_reports_target_db_end_to_end() -> None:

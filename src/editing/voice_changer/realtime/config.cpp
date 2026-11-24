@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -92,90 +93,108 @@ std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
 
 }  // namespace
 
-bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
-                                            RealtimeVoiceChangerConfig* normalized,
-                                            std::string* error, ConfigFieldSpelling spelling) {
+namespace {
+
+void publish_refusal(const SonareParameterRefusal& refusal, std::string* error,
+                     std::optional<SonareParameterRefusal>* out_refusal) {
+  if (error) *error = refusal.what();
+  if (out_refusal) *out_refusal = refusal;
+}
+
+}  // namespace
+
+bool validate_realtime_voice_changer_config(
+    const RealtimeVoiceChangerConfig& config, RealtimeVoiceChangerConfig* normalized,
+    std::string* error, ConfigFieldSpelling spelling,
+    std::optional<SonareParameterRefusal>* out_refusal) {
   if (error) error->clear();
+  if (out_refusal) out_refusal->reset();
   bool ok = true;
   const auto path = [spelling](std::string_view member) { return field_path(member, spelling); };
-  // The success path builds no strings: text is composed only once a field fails.
-  visit_scalar_fields(config, [&](const char* name, const float& v, const Range& r, float) {
-    if (!ok || (v >= static_cast<float>(r.lo) && v <= static_cast<float>(r.hi))) return;
+  const auto reject = [&](const SonareParameterRefusal& refusal) {
     ok = false;
-    if (error) *error = schema::refusal(path(name), schema::range_predicate(r.lo, r.hi));
+    publish_refusal(refusal, error, out_refusal);
+  };
+
+  visit_scalar_fields(config, [&](const char* name, const float& value, const Range& range, float) {
+    if (!ok || (value >= static_cast<float>(range.lo) && value <= static_cast<float>(range.hi))) {
+      return;
+    }
+    reject(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, path(name), schema::range_predicate(range.lo, range.hi)));
   });
   if (ok && config.formant_mode != FormantMode::Relative &&
       config.formant_mode != FormantMode::Absolute) {
-    ok = false;
-    if (error) *error = schema::refusal(path("formant.mode"), "must be 'relative' or 'absolute'");
+    reject(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, path("formant.mode"), "must be 'relative' or 'absolute'"));
   }
   if (ok) {
-    // The retune stage states its own domain; the scalars above already passed, so only the grain
-    // can be refused here.
-    std::string problem = streaming_retune_config_problem(
-        config.retune, nullptr, {"retune.pitchSemitones", "retune.mix", "retune.grainSizeSamples"});
-    if (!problem.empty()) {
-      ok = false;
-      if (error && spelling != ConfigFieldSpelling::Member) {
-        const std::string semitones = path("retune.pitchSemitones");
-        const std::string mix = path("retune.mix");
-        const std::string grain = path("retune.grainSizeSamples");
-        problem = streaming_retune_config_problem(config.retune, nullptr,
-                                                  {semitones.c_str(), mix.c_str(), grain.c_str()});
-      }
-      if (error) *error = std::move(problem);
+    std::optional<SonareParameterRefusal> refusal;
+    streaming_retune_config_problem(
+        config.retune, nullptr,
+        {"retune.pitchSemitones", "retune.mix", "retune.grainSizeSamples"}, &refusal);
+    if (refusal) {
+      reject(refusal->respelled(
+          refusal->code(), [&](const std::string& subject) { return path(subject); }, false));
     }
   }
   visit_enum_fields(config, [&](const char* name, bool declared) {
     if (!ok || declared) return;
-    ok = false;
-    if (error) *error = schema::refusal(path(name), "must name a declared value");
+    reject(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, path(name), "must name a declared value"));
   });
-  visit_integer_fields(config, [&](const char* name, const int& v, const Range& r) {
-    if (!ok || (v >= static_cast<int>(r.lo) && v <= static_cast<int>(r.hi))) return;
-    ok = false;
-    if (error) *error = schema::refusal(path(name), schema::integer_range_predicate(r.lo, r.hi));
+  visit_integer_fields(config, [&](const char* name, const int& value, const Range& range) {
+    if (!ok || (value >= static_cast<int>(range.lo) && value <= static_cast<int>(range.hi))) return;
+    reject(SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, path(name),
+        schema::integer_range_predicate(range.lo, range.hi)));
   });
-  // The grain engine has no f0, so nothing that needs one can run on it.
+
+  // The grain engine has no f0, so name both it and the selected feature that requires one.
   if (ok && config.voice_engine.engine == PitchEngine::Grain) {
-    std::string needs_f0;
+    std::string field;
+    std::string requirement;
     if (config.pitch_correction.mode != PitchCorrectionMode::Off) {
-      needs_f0 = path("pitchCorrection.mode") + " other than 'off'";
+      field = "pitchCorrection.mode";
+      requirement = " other than 'off'";
     } else if (config.harmony.voices > 0) {
-      needs_f0 = path("harmony.voices") + " above 0";
+      field = "harmony.voices";
+      requirement = " above 0";
     } else if (config.vocoder.enabled) {
-      needs_f0 = path("vocoder.enabled");
+      field = "vocoder.enabled";
     }
-    if (!needs_f0.empty()) {
-      ok = false;
-      if (error) {
-        *error = schema::refusal(path("voiceEngine.engine"), "must be 'psola' for " + needs_f0 +
-                                                                 ": the grain engine tracks no f0");
-      }
+    if (!field.empty()) {
+      reject(SonareParameterRefusal::relation(
+          ErrorCode::InvalidParameter, {path("voiceEngine.engine"), path(field)},
+          "{0} must be 'psola' for {1}" + requirement +
+              ": the grain engine tracks no f0"));
     }
   }
   // Only a tempo delay can outrun the line: an echo's own delay range ends at its length.
   if (ok && space_delay_exceeds_limit(config.reverb_variation)) {
-    ok = false;
-    if (error) {
-      *error = schema::refusal(path("reverbVariation.tempoBpm"),
-                               "must give a delay of at most " +
-                                   schema::bound_text(kMaxSpaceDelayMs) + " ms at " +
-                                   path("reverbVariation.division") + ", the delay line's length");
-    }
+    reject(SonareParameterRefusal::relation(
+        ErrorCode::InvalidParameter,
+        {path("reverbVariation.tempoBpm"), path("reverbVariation.division")},
+        "{0} must give a delay of at most " + schema::bound_text(kMaxSpaceDelayMs) +
+            " ms at {1}, the delay line's length"));
   }
   // Only the grain engine warps the formants ahead of the shift. Psola resamples its grains by the
   // factor itself, whatever the shift, so the factor's own range is its whole contract there.
-  if (ok && config.voice_engine.engine == PitchEngine::Grain &&
-      !formant_warp_is_reachable(config, error, spelling)) {
-    ok = false;
+  if (ok && config.voice_engine.engine == PitchEngine::Grain) {
+    std::optional<SonareParameterRefusal> refusal;
+    if (!formant_warp_is_reachable(config, nullptr, spelling, &refusal) && refusal) {
+      reject(*refusal);
+    }
   }
   if (normalized) *normalized = ok ? config : RealtimeVoiceChangerConfig{};
   return ok;
 }
 
-bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
-                               ConfigFieldSpelling spelling) {
+bool formant_warp_is_reachable(
+    const RealtimeVoiceChangerConfig& config, std::string* error,
+    ConfigFieldSpelling spelling, std::optional<SonareParameterRefusal>* out_refusal) {
+  if (error) error->clear();
+  if (out_refusal) out_refusal->reset();
   if (config.formant_mode != FormantMode::Absolute ||
       absolute_formant_reachable(config.formant.factor, config.retune.semitones,
                                  config.retune.mix)) {
@@ -185,7 +204,7 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
       config.formant.factor, config.retune.semitones, config.retune.mix,
       {field_path("formant.factor", spelling), field_path("formant.mode", spelling),
        field_path("retune.pitchSemitones", spelling), field_path("retune.mix", spelling)});
-  if (error) *error = refusal->what();
+  if (refusal) publish_refusal(*refusal, error, out_refusal);
   return false;
 }
 

@@ -13825,7 +13825,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `voice-change --preset-json` | a preset document the library refuses (an unknown field, an earlier schemaVersion) exits 5 as an invalid format on the native CLI too, rather than 3 |
+| `voice-change --preset-json` | a preset document the library refuses (an unknown field, an earlier schemaVersion) exits 5 as an invalid format on the native CLI too, rather than 3; a duplicate key also exits 5 at its document path, including when --set would otherwise overwrite it |
 
 #### Pitch and formant shifts are named in semitones
 
@@ -13896,7 +13896,8 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `trim-silence --top-db` | giving it with --threshold-db is refused as a usage error (exit 2) before the input is read on both front-ends |
 | `voice-change --formant-mode` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `voice-change --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `voice-preset-validate --set` | a malformed assignment is refused as a usage error (exit 2) with one text on both front-ends |
+| `voice-change --set` | an invalid override of a built-in preset is refused before the audio is read as a usage error (exit 2). An invalid override of a preset loaded from a file exits 3 instead of 5 after the preset is read. The refusal names the supplied key as --set KEY |
+| `voice-preset-validate --set` | a malformed assignment is refused as a usage error (exit 2) with one text on both front-ends. A validation error in an override names the supplied key as --set KEY in the result and still exits 3 |
 
 #### Other individual changes
 
@@ -13918,7 +13919,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | 1.x | 2.0.0 |
 |---|---|
 | `mastering --ceiling-db` | `mastering --ceiling-dbtp` |
-| `mastering-streaming --platforms` | each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported before the input is read, with a refused field named --platforms [INDEX].KEY, while a --platforms-file document is still refused after it (exit 3) |
+| `mastering-streaming --platforms` | each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported before the input is read, with a refused field named --platforms [INDEX].KEY, while non-duplicate --platforms-file refusals remain runtime invalid parameters (exit 3) |
 | `mastering-suggest --ceiling-db` | `mastering-suggest --ceiling-dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
@@ -13985,6 +13986,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `mastering-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mastering-processor --params` | a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY |
 | `mastering-profile --params` | a value that cannot be read as a finite number now exits 2 before input is read instead of exiting 3 after decoding. This also applies to the numeric --params bags of eq, mastering-pair-processor, mastering-pair-analyze and mastering-stereo-analyze. The refusal names the supplied key as --params KEY |
+| `mastering-streaming --platforms-file` | duplicate object keys are refused as InvalidFormat (exit 5), with the duplicate JSON path |
 | `mastering-suggest --params` | unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order. A refusal names the supplied key as --params KEY |
 | `mix-strip --pan` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mix-strip --width` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -14016,6 +14018,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `mix --input` (python CLI only) | an entry with an empty strip id or an empty path is refused as a usage error (exit 2) before any input is read |
 | `mix --output` (python CLI only) | giving it without --input, or --input without it, is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mix --sample-rate` (python CLI only) | a rate outside 8000-384000 is refused as a usage error (exit 2) before any input is read |
+| `playback --config` | a duplicate key is refused as an invalid document (exit 5) at its document path before flags are overlaid |
 | `playback --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 
 #### Other individual changes

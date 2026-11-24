@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
@@ -13,9 +14,13 @@ if TYPE_CHECKING:
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
+    SONARE_ERROR_INVALID_PARAMETER,
+    SonareError,
     _apply_voice_sets,
     _audio_array,
     _catalog_token,
+    _cli_voice_set_subjects,
+    _DuplicateJsonKeyError,
     _emit_effect_result,
     _find_cli_token,
     _fmt_optional,
@@ -85,6 +90,7 @@ from ._cli_options import (
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._effects_level import _DEFAULT_NORMALIZE_TARGET_DB
+from ._runtime import _get_lib, _render_as_given
 
 
 def _hpss_refusal(args: argparse.Namespace) -> str | None:
@@ -159,7 +165,29 @@ def _voice_change_refusal(args: argparse.Namespace) -> str | None:
         refusal = _builtin_voice_preset_refusal(preset)
         if refusal is not None:
             return refusal
-    return _voice_set_refusal(assignments)
+    refusal = _voice_set_refusal(assignments)
+    if refusal is not None:
+        return refusal
+    if assignments and preset is not None and not preset_json and not preset_pack:
+        from . import (
+            realtime_voice_changer_preset_json,
+            realtime_voice_changer_preset_names,
+        )
+        from ._effects_voice import _validate_voice_config_for_cli
+
+        builtin = _catalog_token(preset, realtime_voice_changer_preset_names())
+        base = json.loads(realtime_voice_changer_preset_json(builtin))
+        writes: list[tuple[tuple[str, ...], tuple[str, ...], str, int]] = []
+        config = _apply_voice_sets(base, assignments, provenance=writes)
+        if isinstance(config, dict):
+            try:
+                with _cli_voice_set_subjects(writes, config):
+                    _validate_voice_config_for_cli(config)
+            except SonareError as error:
+                if error.code == SONARE_ERROR_INVALID_PARAMETER:
+                    return str(error)
+                raise
+    return None
 
 
 def _voice_preset_refusal(args: argparse.Namespace) -> str | None:
@@ -602,10 +630,13 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     uses_realtime_preset = bool(preset_source or assignments)
     latency_samples = 0
     if uses_realtime_preset:
+        from ._effects_voice import _VoicePresetDocument
+
         preset: str | dict[str, Any]
         if preset_json:
             with open(preset_json, encoding="utf-8") as fh:
-                preset = json.load(fh)
+                document = fh.read()
+            preset = _VoicePresetDocument(document)
         elif preset_pack:
             assert preset_id is not None  # a pack without --preset was refused above
             preset = _load_voice_preset_pack(preset_pack, preset_id)
@@ -614,10 +645,21 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             # A built-in preset is named by its library id in any letter case.
             builtin = _catalog_token(preset_id, realtime_voice_changer_preset_names())
             preset = (
-                json.loads(realtime_voice_changer_preset_json(builtin)) if assignments else builtin
+                json.loads(realtime_voice_changer_preset_json(builtin))
+                if assignments
+                else builtin
             )
-        # A string left here is the catalog-resolved library id; anything else is the document.
-        config = cast("VoicePresetId | dict[str, Any]", _apply_voice_sets(preset, assignments))
+        # A plain string is the catalog id; a mapping or _VoicePresetDocument is a document.
+        writes: list[tuple[tuple[str, ...], tuple[str, ...], str, int]] = []
+        config = cast(
+            "VoicePresetId | dict[str, Any]",
+            _apply_voice_sets(preset, assignments, provenance=writes),
+        )
+        if assignments and isinstance(config, dict):
+            from ._effects_voice import _validate_voice_config_for_cli
+
+            with _cli_voice_set_subjects(writes, config):
+                _validate_voice_config_for_cli(config)
         # Probe the same prepared C-ABI configuration used by the one-shot
         # realtime entry point.  Latency depends on the resolved config and
         # sample rate, so it must not be a hard-coded preset constant.
@@ -684,21 +726,47 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
     path = args.preset_json or args.file
     if not path:
         raise FileNotFoundError("voice-preset-validate requires a JSON file")
-    if args.preset:
-        preset = _load_voice_preset_pack(path, args.preset)
-        updated_preset = _apply_voice_sets(preset, args.set)
-        text = json.dumps(updated_preset)
+    writes: list[tuple[tuple[str, ...], tuple[str, ...], str, int]] = []
+    try:
+        if args.preset:
+            preset = _load_voice_preset_pack(path, args.preset)
+            text_or_preset = _apply_voice_sets(preset, args.set, provenance=writes)
+            text = json.dumps(text_or_preset)
+        else:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            text_or_preset = _apply_voice_sets(text, args.set, provenance=writes)
+            text = (
+                json.dumps(text_or_preset)
+                if isinstance(text_or_preset, dict)
+                else text_or_preset
+            )
+    except _DuplicateJsonKeyError as error:
+        payload = {"ok": False, "error": error.text}
+        print(_strict_json_dumps(payload) if args.json else error.text)
+        return EXIT_INVALID_PARAMETER
+
+    mapped_override = False
+    if args.set and isinstance(text_or_preset, dict):
+        with _cli_voice_set_subjects(writes, text_or_preset) as mapper:
+            result = validate_realtime_voice_changer_preset_json(text)
+            if not result.get("ok"):
+                rendered = _render_as_given(_get_lib(), None, None)
+                mapped_override = mapper.matched
+                if mapped_override and rendered is not None:
+                    result = {**result, "error": rendered[0]}
     else:
-        with open(path, encoding="utf-8") as fh:
-            text = fh.read()
-        text_or_preset = _apply_voice_sets(text, args.set)
-        text = json.dumps(text_or_preset) if isinstance(text_or_preset, dict) else text_or_preset
-    result = validate_realtime_voice_changer_preset_json(text)
+        result = validate_realtime_voice_changer_preset_json(text)
     normalized = result.get("normalizedJson")
     if not result.get("ok") or not normalized:
         error = str(result.get("error", "invalid voice preset"))
         payload = {"ok": False, "error": error}
-        print(_strict_json_dumps(payload) if args.json else error)
+        if args.json:
+            print(_strict_json_dumps(payload))
+        elif mapped_override:
+            print(error, file=sys.stderr)
+        else:
+            print(error)
         return EXIT_INVALID_PARAMETER
     payload = {"ok": True, "normalized_json": str(normalized)}
     print(_strict_json_dumps(payload) if args.json else str(normalized))

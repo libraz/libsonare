@@ -884,6 +884,34 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json round-trips preset
   sonare_free_string(normalized);
 }
 
+TEST_CASE("C voice preset readers record named document refusals", "[voice_changer][json][c_api]") {
+  constexpr const char* kDocument = R"json({
+    "schemaVersion":4,"id":"macro-voice","name":"Macro Voice","category":"custom",
+    "macros":{"pitch":[1,2]}
+  })json";
+  constexpr const char* kSubject = "macros.pitch";
+  constexpr const char* kMessage = "macros.pitch must be a number";
+  char* normalized = nullptr;
+  char* out_error = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_validate_preset_json(kDocument, &normalized, &out_error) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(normalized == nullptr);
+  REQUIRE(out_error != nullptr);
+  const std::string error(out_error);
+  sonare_free_string(out_error);
+  CHECK(error == kMessage);
+  REQUIRE(sonare_last_refusal_subject_count() == 1u);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == kSubject);
+
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_config_from_json(kDocument, &config) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_last_refusal_subject_count() == 1u);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == kSubject);
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             Catch::Matchers::ContainsSubstring(kMessage));
+}
+
 TEST_CASE("sonare_realtime_voice_changer_validate_preset_json returns a code on every input",
           "[voice_changer][c-api]") {
   // The entry point is guarded by SONARE_C_TRY/SONARE_C_CATCH like its

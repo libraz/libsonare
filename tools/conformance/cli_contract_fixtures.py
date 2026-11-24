@@ -221,6 +221,13 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         preset_path = directory / f"preset_{name}.json"
         preset_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         paths[f"preset_{name}"] = str(preset_path)
+    duplicate_grain = directory / "preset_duplicate_grain.json"
+    custom = json.dumps(fixtures["presets"]["custom"], separators=(",", ":"))
+    duplicate_grain.write_text(
+        custom.replace('"grainSizeSamples":', '"grainSizeSamples":4,"grainSizeSamples":', 1),
+        encoding="utf-8",
+    )
+    paths["preset_duplicate_grain"] = str(duplicate_grain)
     # The custom preset with only its retune grain changed, one document per size.
     for size in fixtures["preset_grain_sizes"]:
         preset = copy.deepcopy(fixtures["presets"]["custom"])
@@ -237,6 +244,18 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         playback_config_path = directory / f"playback_config_{name}.json"
         playback_config_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         paths[f"playback_config_{name}"] = str(playback_config_path)
+    duplicate_kind = directory / "playback_config_duplicate_kind.json"
+    duplicate_kind.write_text(
+        '{"target":{"kind":"headphones","kind":"speakers","layout":"stereo"}}',
+        encoding="utf-8",
+    )
+    paths["playback_config_duplicate_kind"] = str(duplicate_kind)
+    duplicate_platform = directory / "platforms_duplicate.json"
+    duplicate_platform.write_text(
+        '[{"name":"custom","name":"duplicate","target_lufs":-14,"ceiling_dbtp":-1}]',
+        encoding="utf-8",
+    )
+    paths["platforms_duplicate"] = str(duplicate_platform)
     for name, value in fixtures["melodies"].items():
         melody_path = directory / f"melody_{name}.mid"
         _write_smf(melody_path, value)

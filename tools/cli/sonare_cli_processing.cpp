@@ -797,29 +797,37 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     // --preset-pack entry remains identified by the explicit --preset value.
     if (has_preset) preset_id = requested_preset;
     std::string config_text = requested_preset;
+    VoiceSetOverlay set_overlay;
     if (args.has("preset-json")) {
       config_text = read_plain_text_file(args.get_string("preset-json"));
     } else if (args.has("preset-pack")) {
-      config_text = find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
-                                              requested_preset);
+      config_text =
+          find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
+                                    requested_preset);
     } else {
       // A built-in id is a parameter, so an unknown or empty one is refused as one.
       const auto id =
           editing::voice_changer::realtime_voice_changer_preset_from_id(requested_preset);
       config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
     }
-    if (args.has("set"))
-      config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"));
+    if (args.has("set")) {
+      config_text =
+          apply_voice_preset_sets(config_text, args.get_string_list("set"), &set_overlay);
+    }
 
     // The library's one preset reader, as the C ABI and Python use it: an unknown,
     // missing or duplicate key and any value outside its domain are refused, so a
     // hand-written preset never renders with defaults or a clamped value.
     editing::voice_changer::RealtimeVoiceChangerConfig config;
     std::string config_error;
-    if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
-                                                                          &config_error)) {
-      // A refused preset document is a format error, as the C ABI reports it; the reader's
-      // text already names the key from the document root.
+    std::optional<SonareParameterRefusal> parameter_refusal;
+    if (!editing::voice_changer::realtime_voice_changer_config_from_input(
+            config_text, &config, &config_error, &parameter_refusal)) {
+      if (parameter_refusal) {
+        const auto refusal = respell_voice_set_refusal(*parameter_refusal, set_overlay);
+        throw sonare::SonareException(refusal.code(), refusal.what(), refusal.reason());
+      }
+      // Non-structured document failures keep the reader's existing format-error classification.
       throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, config_error);
     }
     // The library runs the latency-compensated one-shot, so the CLI keeps no block loop of its
@@ -934,16 +942,34 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
     }
   }
   std::string config_text = read_plain_text_file(path);
-  if (args.has("preset")) {
-    config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
+  VoiceSetOverlay set_overlay;
+  std::string error;
+  try {
+    if (args.has("preset")) {
+      config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
+    }
+    if (args.has("set")) {
+      config_text =
+          apply_voice_preset_sets(config_text, args.get_string_list("set"), &set_overlay);
+    }
+  } catch (const CliDuplicateDocumentError& duplicate) {
+    error = duplicate.what();
   }
-  if (args.has("set")) {
-    config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"));
+  if (!error.empty()) {
+    if (args.json_output) {
+      JsonBuilder().begin_object().kv("ok", false).kv("error", error).end_object().print();
+    } else {
+      std::cerr << error << "\n";
+    }
+    return 3;
   }
   std::string normalized;
-  std::string error;
-  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(config_text, &normalized,
-                                                                           &error)) {
+  std::optional<SonareParameterRefusal> parameter_refusal;
+  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(
+          config_text, &normalized, &error, &parameter_refusal)) {
+    if (parameter_refusal) {
+      error = respell_voice_set_refusal(*parameter_refusal, set_overlay).what();
+    }
     if (error.empty()) error = "invalid voice preset";
     if (args.json_output) {
       JsonBuilder().begin_object().kv("ok", false).kv("error", error).end_object().print();

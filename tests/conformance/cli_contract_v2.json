@@ -10683,7 +10683,7 @@
           "artifact": "none",
           "stdout": "json",
           "stdout_contains": [
-            "macros.pitch must be a number"
+            "--set macros.pitch must be a number"
           ]
         },
         {
@@ -10751,6 +10751,73 @@
           "stdout": "json",
           "stdout_contains": [
             "schemaVersion must be 4, the version this release reads; the document was written for an older schema"
+          ]
+        },
+        {
+          "id": "set_unknown_field",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_custom}",
+            "--set",
+            "dsp.formant.bogus=1",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "failure",
+          "artifact": "none",
+          "stdout": "json",
+          "stdout_contains": [
+            "unknown key --set dsp.formant.bogus (expected amount, body, brightness, factor, mode, nasal)"
+          ]
+        },
+        {
+          "id": "set_report_unrelated_document_field",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_grain_6}",
+            "--set",
+            "name=Renamed",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "failure",
+          "artifact": "none",
+          "stdout": "json",
+          "stdout_contains": [
+            "dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "set_repairs_document_with_last_value",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_grain_6}",
+            "--set",
+            "dsp.retune.grainSizeSamples=1",
+            "--set",
+            "dsp.retune.grainSizeSamples=64",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "set_plain_text_refusal",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_valid}",
+            "--set",
+            "macros.pitch=[1,2]"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set macros.pitch must be a number"
           ]
         }
       ],
@@ -11212,6 +11279,48 @@
           ]
         },
         {
+          "id": "duplicate_preset_key",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_duplicate_grain}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "duplicate key dsp.retune.grainSizeSamples"
+          ]
+        },
+        {
+          "id": "duplicate_preset_key_with_set",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_duplicate_grain}",
+            "--set",
+            "dsp.retune.grainSizeSamples=8",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "duplicate key dsp.retune.grainSizeSamples"
+          ]
+        },
+        {
           "id": "grain_4_accepted",
           "argv": [
             "voice-change",
@@ -11240,6 +11349,100 @@
             "dsp.retune.grainSizeSamples=6",
             "--json"
           ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "builtin_set_domain_refused_before_read",
+          "argv": [
+            "voice-change",
+            "/nonexistent/sonare-conformance/voice-set-input.wav",
+            "-o",
+            "{output}",
+            "--preset",
+            "neutralMonitor",
+            "--set",
+            "dsp..retune.grainSizeSamples=6",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set dsp..retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "builtin_set_unknown_created_ancestor_before_read",
+          "argv": [
+            "voice-change",
+            "/nonexistent/sonare-conformance/voice-set-input.wav",
+            "-o",
+            "{output}",
+            "--preset",
+            "neutralMonitor",
+            "--set",
+            "dsp.typo.child=1",
+            "--set",
+            "dsp.typo.second=2",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "unknown key --set dsp.typo.child (expected character, compressor, deesser, eq, formant, gate, harmony, inputGainDb, limiter, midi, outputGainDb, pitchCorrection, retune, reverb, reverbVariation, vocoder, voiceEngine, wetMix)"
+          ]
+        },
+        {
+          "id": "builtin_set_mixed_relation_before_read",
+          "argv": [
+            "voice-change",
+            "/nonexistent/sonare-conformance/voice-set-input.wav",
+            "-o",
+            "{output}",
+            "--preset",
+            "brightIdol",
+            "--set",
+            "dsp.voiceEngine.engine=grain",
+            "--set",
+            "dsp.formant.mode=absolute",
+            "--set",
+            "dsp.formant.factor=0.6",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set dsp.formant.factor must be finite and in [0.693, 1.65] when --set dsp.formant.mode is absolute at dsp.retune.pitchSemitones 4 and dsp.retune.mix 1 (the warp it needs must lie in [0.55, 1.65])"
+          ]
+        },
+        {
+          "id": "file_set_does_not_mask_document_domain",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_6}",
+            "--set",
+            "name=Renamed",
+            "--json"
+          ],
           "exit": 5,
           "payload": "none",
           "artifact": "none",
@@ -11247,6 +11450,96 @@
           "stderr": "nonempty",
           "stderr_contains": [
             "dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "flat_document_set_grain_refused",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_flat}",
+            "--set",
+            "retuneGrainSizeSamples=0",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set retuneGrainSizeSamples must not be 0"
+          ]
+        },
+        {
+          "id": "builtin_set_replacement_missing_field_before_read",
+          "argv": [
+            "voice-change",
+            "/nonexistent/sonare-conformance/voice-set-input.wav",
+            "-o",
+            "{output}",
+            "--preset",
+            "neutralMonitor",
+            "--set",
+            "dsp..formant.amount=0.5",
+            "--set",
+            "dsp.formant={\"factor\":1}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set dsp.formant.amount must be given"
+          ]
+        },
+        {
+          "id": "builtin_set_nonfinite_token_before_read",
+          "argv": [
+            "voice-change",
+            "/nonexistent/sonare-conformance/voice-set-input.wav",
+            "-o",
+            "{output}",
+            "--preset",
+            "neutralMonitor",
+            "--set",
+            "dsp.retune.pitchSemitones=NaN",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--set dsp.retune.pitchSemitones must be a number"
+          ]
+        },
+        {
+          "id": "builtin_set_literal_bracket_key_before_read",
+          "argv": [
+            "voice-change",
+            "/nonexistent/sonare-conformance/voice-set-input.wav",
+            "-o",
+            "{output}",
+            "--preset",
+            "neutralMonitor",
+            "--set",
+            "dsp.formant.[x]=1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "unknown key --set dsp.formant.[x] (expected amount, body, brightness, factor, mode, nasal)"
           ]
         }
       ],
@@ -20574,6 +20867,24 @@
           "stderr_contains": [
             "--platforms [0].ceiling_dbtp must be given"
           ]
+        },
+        {
+          "id": "platforms_file_duplicate_key_refused",
+          "argv": [
+            "mastering-streaming",
+            "{audio}",
+            "--platforms-file",
+            "{platforms_duplicate}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "duplicate key [0].name"
+          ]
         }
       ],
       "artifacts": {}
@@ -24526,6 +24837,16 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": ["unknown key outputLimiter.ceilingDbtp"]
+        },
+        {
+          "id": "config_duplicate_key_refused",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--config", "{playback_config_duplicate_kind}", "--target", "stereo", "--json"],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": ["duplicate key target.kind"]
         },
         {
           "id": "config_null_value_refused",
@@ -29979,6 +30300,9 @@
       "takes_other_rate": "{\"version\":7,\"sampleRate\":48000,\"sources\":[{\"kind\":\"audio\",\"id\":1,\"uri\":\"\",\"channelCount\":1,\"sampleRateHint\":22050,\"storageHandleId\":0},{\"kind\":\"audio\",\"id\":2,\"uri\":\"\",\"channelCount\":1,\"sampleRateHint\":32000,\"storageHandleId\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":\"audio\",\"channelStripRef\":\"\",\"outputTarget\":\"\",\"midiDestinationId\":0,\"automationLanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":\"audio\",\"channelStripRef\":\"\",\"outputTarget\":\"\",\"midiDestinationId\":0,\"automationLanes\":[]}],\"clips\":[{\"id\":1,\"trackId\":1,\"sourceId\":1,\"startPpq\":0,\"lengthPpq\":960,\"sourceOffsetPpq\":0,\"gain\":1,\"fadeIn\":{\"lengthPpq\":0,\"curve\":\"linear\"},\"fadeOut\":{\"lengthPpq\":0,\"curve\":\"linear\"},\"loopMode\":\"off\",\"loopLengthPpq\":0,\"warpRefId\":0,\"warpMode\":\"off\"},{\"id\":2,\"trackId\":2,\"sourceId\":2,\"startPpq\":0,\"lengthPpq\":960,\"sourceOffsetPpq\":0,\"gain\":1,\"fadeIn\":{\"lengthPpq\":0,\"curve\":\"linear\"},\"fadeOut\":{\"lengthPpq\":0,\"curve\":\"linear\"},\"loopMode\":\"off\",\"loopLengthPpq\":0,\"warpRefId\":0,\"warpMode\":\"off\"}],\"warpMaps\":[]}"
     },
     "presets": {
+      "flat": {
+        "wetMix": 1
+      },
       "valid": {
         "schemaVersion": 4,
         "id": "contract-fixture",

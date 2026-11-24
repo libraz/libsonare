@@ -43,7 +43,7 @@ Value playback_config_document(const CliArgs& args) {
   Value root = Value(Object{});
   if (args.has("config")) {
     const std::string path = args.get_string("config");
-    root = sonare::util::json::parse(read_plain_text_file(path));
+    root = parse_cli_json_document(read_plain_text_file(path));
     // Refused, not silently treated as an absent --config: matching the
     // Python CLI's own --config path, which rejects a non-object root.
     if (!root.is_object()) {

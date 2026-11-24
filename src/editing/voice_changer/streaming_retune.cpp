@@ -53,19 +53,28 @@ void refuse_if_invalid(const StreamingRetuneConfig& config) {
 }
 }  // namespace
 
-std::string streaming_retune_config_problem(const StreamingRetuneConfig& config, const char* fn,
-                                            const StreamingRetuneFieldNames& names) {
+std::string streaming_retune_config_problem(
+    const StreamingRetuneConfig& config, const char* fn, const StreamingRetuneFieldNames& names,
+    std::optional<SonareParameterRefusal>* out_refusal) {
+  if (out_refusal) out_refusal->reset();
+  const auto fail = [&](const char* field, const std::string& predicate) {
+    if (out_refusal) {
+      *out_refusal =
+          SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, field, predicate);
+    }
+    return refusal(fn, field, predicate);
+  };
   if (!(std::isfinite(config.semitones) && config.semitones >= -kMaxRetuneSemitones &&
         config.semitones <= kMaxRetuneSemitones)) {
-    return refusal(fn, names.semitones, bound_text(-kMaxRetuneSemitones, kMaxRetuneSemitones));
+    return fail(names.semitones, bound_text(-kMaxRetuneSemitones, kMaxRetuneSemitones));
   }
   if (!(std::isfinite(config.mix) && config.mix >= 0.0f && config.mix <= 1.0f)) {
-    return refusal(fn, names.mix, bound_text(0.0, 1.0));
+    return fail(names.mix, bound_text(0.0, 1.0));
   }
   if (config.grain_size != 0 &&
       (config.grain_size < kRetuneGrainStep || config.grain_size > kMaxRetuneGrainSize ||
        config.grain_size % kRetuneGrainStep != 0)) {
-    return refusal(fn, names.grain_size,
+    return fail(names.grain_size,
                    "must be a multiple of " + std::to_string(kRetuneGrainStep) + " in [" +
                        std::to_string(kRetuneGrainStep) + ", " +
                        std::to_string(kMaxRetuneGrainSize) + "]");

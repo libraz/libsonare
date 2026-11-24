@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import math
 from collections.abc import Sequence
 from pathlib import Path
@@ -12,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from ._cli_common import (
+    _cli_load_json_document,
     _cli_token,
     _json_key_to_snake_case,
     _library_token,
@@ -133,7 +133,7 @@ def _load_playback_config_document(path: str) -> dict[str, Any]:
     """
     try:
         with open(path, encoding="utf-8") as fh:
-            loaded = json.load(fh)
+            loaded = _cli_load_json_document(fh.read())
     except OSError as exc:
         raise SonareValueError(f"cannot open --config file: {path}") from exc
     if not isinstance(loaded, dict):

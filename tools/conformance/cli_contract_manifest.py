@@ -629,11 +629,11 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         presets = fixtures["presets"]
         if _exact(
             presets,
-            {"valid", "invalid", "custom", "earlier", "grain_automatic"},
+            {"valid", "invalid", "custom", "earlier", "grain_automatic", "flat"},
             "manifest.fixtures.presets",
             errors,
         ):
-            for key in ("valid", "invalid", "custom", "earlier", "grain_automatic"):
+            for key in ("valid", "invalid", "custom", "earlier", "grain_automatic", "flat"):
                 if not isinstance(presets[key], dict):
                     errors.append(f"manifest.fixtures.presets.{key}: expected an object")
         grain_sizes = fixtures["preset_grain_sizes"]

@@ -170,8 +170,14 @@ map) or a flat config. JSON text is parsed by the caller (``json.loads``) first.
 """
 
 
+class _VoicePresetDocument(str):
+    """CLI-only raw JSON validated for duplicate keys before C parsing."""
+
+
 def _voice_config_to_json(config: object) -> bytes:
     """A preset id is checked against the built-in ids; a mapping is a document."""
+    if isinstance(config, _VoicePresetDocument):
+        return _utf8_arg(str(config), "config")
     if isinstance(config, str):
         _token_ordinal(config, _VOICE_PRESET_IDS, "config")
         return _utf8_arg(config, "config")
@@ -191,6 +197,11 @@ def _voice_config_to_pod(lib: ctypes.CDLL, config: object) -> SonareRealtimeVoic
         )
     )
     return pod
+
+
+def _validate_voice_config_for_cli(config: object) -> None:
+    """Run the same C config reader before a CLI command consumes its input."""
+    _voice_config_to_pod(_get_lib(), config)
 
 
 class RealtimeVoiceChanger:

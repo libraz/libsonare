@@ -15,6 +15,7 @@ from ._cli_common import (
     _cli_key_refusal,
     _cli_key_subject,
     _cli_key_subjects,
+    _cli_load_json_document,
     _cli_unknown_key,
     _load_channels_or_downmix,
     _measured_pairs,
@@ -878,7 +879,11 @@ def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
         return []
     try:
         try:
-            document = json.loads(text, parse_constant=_refuse_json_constant)
+            document = (
+                _cli_load_json_document(text, parse_constant=_refuse_json_constant)
+                if subject == "--platforms-file"
+                else json.loads(text, parse_constant=_refuse_json_constant)
+            )
         except ValueError:
             document = None
         if not isinstance(document, list) or not all(isinstance(e, dict) for e in document):

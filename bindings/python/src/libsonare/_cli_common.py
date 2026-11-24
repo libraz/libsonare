@@ -9,7 +9,7 @@ import math
 import os
 import re
 import sys
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import Any, cast, get_args
 
 import numpy as np
@@ -431,7 +431,7 @@ def _error_message(exc: BaseException) -> str:
     """
     if isinstance(exc, KeyboardInterrupt):
         return "cancelled"
-    message = str(exc)
+    message = str(getattr(exc, "_cli_error_message", str(exc)))
     if isinstance(exc, SonareValueError):
         message = _LIBROSA_RATE_WORD.sub("sample_rate", message)
     return message
@@ -914,9 +914,84 @@ def _parse_kv_params(value: str, *, names: bool = False) -> dict[str, Any]:
     return params
 
 
+class _JsonObjectPairs:
+    """Retain ordered object members until duplicate-key paths have been checked."""
+
+    def __init__(self, pairs: list[tuple[str, Any]]) -> None:
+        self.pairs = pairs
+
+
+class _DuplicateJsonKeyError(SonareError):
+    """A duplicate document key with the native JSON path and requested error code."""
+
+    def __init__(self, path: str, code: int) -> None:
+        self.text = f"duplicate key {path}"
+        self._cli_error_message = self.text
+        super().__init__(code, self.text)
+
+
+def _json_key_path(path: tuple[tuple[bool, str], ...], key: str) -> str:
+    rendered = ""
+    for is_index, segment in path:
+        if is_index:
+            rendered += f"[{segment}]"
+        else:
+            if rendered:
+                rendered += "."
+            rendered += _escape_json_key(segment)
+    if rendered:
+        rendered += "."
+    return rendered + _escape_json_key(key)
+
+
+def _escape_json_key(value: str) -> str:
+    return "".join(
+        f"\\x{ord(char):02x}" if ord(char) < 0x20 or ord(char) == 0x7F else char
+        for char in value
+    )
+
+
+def _materialize_json_pairs(
+    value: object,
+    path: tuple[tuple[bool, str], ...] = (),
+    *,
+    code: int = SONARE_ERROR_INVALID_FORMAT,
+) -> Any:
+    if isinstance(value, _JsonObjectPairs):
+        result: dict[str, Any] = {}
+        seen: set[str] = set()
+        for key, child in value.pairs:
+            if key in seen:
+                raise _DuplicateJsonKeyError(_json_key_path(path, key), code)
+            seen.add(key)
+            result[key] = _materialize_json_pairs(child, (*path, (False, key)), code=code)
+        return result
+    if isinstance(value, list):
+        return [
+            _materialize_json_pairs(child, (*path, (True, str(index))), code=code)
+            for index, child in enumerate(value)
+        ]
+    return value
+
+
+def _cli_load_json_document(
+    text: str,
+    *,
+    code: int = SONARE_ERROR_INVALID_FORMAT,
+    parse_constant: Callable[[str], Any] | None = None,
+) -> Any:
+    """Parse a CLI JSON document without discarding duplicate members."""
+    value = json.loads(
+        text,
+        object_pairs_hook=_JsonObjectPairs,
+        parse_constant=parse_constant,
+    )
+    return _materialize_json_pairs(value, code=code)
+
+
 def _load_json_object(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
-        loaded = json.load(fh)
+        loaded = _cli_load_json_document(fh.read())
     if not isinstance(loaded, dict):
         raise ValueError("JSON config must be an object")
     return loaded
@@ -978,7 +1053,7 @@ def _library_token(flag: str, value: str, library_tokens: Sequence[str]) -> str:
 
 def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
-        pack = json.load(fh)
+        pack = _cli_load_json_document(fh.read())
     presets = pack.get("presets")
     if not isinstance(presets, list):
         raise ValueError("preset pack must contain a presets array")
@@ -993,24 +1068,173 @@ def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:
 
 
 def _parse_voice_set_value(raw: str) -> object:
+    def finite_float(text: str) -> float:
+        value = float(text)
+        if not math.isfinite(value):
+            raise ValueError("number must be finite")
+        return value
+
+    def finite_int(text: str) -> int:
+        value = int(text)
+        try:
+            finite = math.isfinite(float(value))
+        except OverflowError:
+            finite = False
+        if not finite:
+            raise ValueError("number must be finite")
+        return value
+
+    def refuse_non_json_constant(token: str) -> None:
+        raise ValueError(token)
+
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
+        return json.loads(
+            raw,
+            parse_constant=refuse_non_json_constant,
+            parse_float=finite_float,
+            parse_int=finite_int,
+        )
+    except (json.JSONDecodeError, ValueError):
         return raw
 
 
-def _set_nested_value(root: dict[str, Any], path: str, value: object) -> None:
+_VoiceSetWrite = tuple[tuple[str, ...], tuple[str, ...], str, int]
+
+
+def _voice_path_prefix(parent: tuple[str, ...], child: tuple[str, ...]) -> bool:
+    if len(parent) > len(child):
+        return False
+    for parent_part, child_part in zip(parent, child, strict=False):
+        if child_part == parent_part:
+            continue
+        if child_part.startswith(parent_part + "[") and child_part.endswith("]"):
+            continue
+        return False
+    return True
+
+
+def _voice_path_suffix(parent: tuple[str, ...], child: tuple[str, ...]) -> str:
+    suffix = ""
+    for index, parent_part in enumerate(parent):
+        child_part = child[index]
+        if child_part == parent_part:
+            continue
+        if child_part.startswith(parent_part + "[") and child_part.endswith("]"):
+            suffix += child_part[len(parent_part) :]
+            continue
+        raise ValueError("voice subject is not under its provenance path")
+    if len(child) > len(parent):
+        if suffix:
+            suffix += "."
+        suffix += ".".join(child[len(parent) :])
+    return suffix
+
+
+def _set_nested_value(
+    root: dict[str, Any],
+    path: str,
+    value: object,
+    *,
+    provenance: list[_VoiceSetWrite] | None = None,
+    order: int = 0,
+) -> None:
     parts = [part for part in path.split(".") if part]
     if not parts:
         raise ValueError("empty --set path")
     cursor = root
+    prefix: list[str] = []
+
+    def record(target: tuple[str, ...], assigned: tuple[str, ...]) -> None:
+        if provenance is None:
+            return
+        # A later write replaces this subtree, so earlier ownership beneath it
+        # no longer describes the effective overlay.
+        provenance[:] = [
+            item for item in provenance if not _voice_path_prefix(target, item[0])
+        ]
+        provenance.append((target, assigned, path, order))
+
     for part in parts[:-1]:
+        prefix.append(part)
         child = cursor.get(part)
         if not isinstance(child, dict):
-            child = {}
-            cursor[part] = child
+            cursor[part] = {}
+            record(tuple(prefix), tuple(parts))
+            child = cursor[part]
         cursor = child
+    prefix.append(parts[-1])
     cursor[parts[-1]] = value
+    record(tuple(prefix), tuple(parts))
+
+
+class _VoiceSetSubjectMapper:
+    """Map a structured config path to the effective --set assignment that wrote it."""
+
+    def __init__(self, writes: list[_VoiceSetWrite], config: dict[str, Any]) -> None:
+        self._writes = writes
+        self._path_counts: dict[str, int] = {}
+        self._count_document_paths(config)
+        self.matched = False
+
+    def _count_document_paths(self, value: object, prefix: tuple[str, ...] = ()) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                path = (*prefix, key)
+                rendered = ".".join(path)
+                self._path_counts[rendered] = self._path_counts.get(rendered, 0) + 1
+                self._count_document_paths(child, path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                indexed = (
+                    (*prefix[:-1], prefix[-1] + f"[{index}]")
+                    if prefix
+                    else (f"[{index}]",)
+                )
+                self._count_document_paths(child, indexed)
+
+    def __call__(self, subject: str) -> str | None:
+        parts = tuple(part for part in subject.split(".") if part)
+        if not parts:
+            return None
+        rendered = ".".join(parts)
+        # The C refusal path is flattened with dots. If the JSON contains both a
+        # dotted literal key and the equivalent nested object, the subject alone
+        # cannot identify which one failed, so preserve the document's own text.
+        if self._path_counts.get(rendered, 0) > 1:
+            return None
+
+        owned: list[tuple[int, int, str]] = []
+        for target, assigned, spelling, order in self._writes:
+            if not _voice_path_prefix(target, parts):
+                continue
+            suffix = _voice_path_suffix(target, parts)
+            if len(target) < len(assigned) and _voice_path_prefix(target, assigned):
+                # The recorded target is an intermediate container created on the
+                # way to this assignment. Keep the full concrete assignment spelling.
+                subject_path = spelling
+            elif suffix:
+                # A supplied object owns missing or invalid descendants. The core's
+                # camelCase subject supplies the child path after the assigned object.
+                subject_path = spelling + ("." if not suffix.startswith("[") else "") + suffix
+            else:
+                subject_path = spelling
+            owned.append((len(target), order, subject_path))
+        if not owned:
+            return None
+        _, _, spelling = max(owned, key=lambda owner: (owner[0], owner[1]))
+        self.matched = True
+        return _cli_key_subject("--set", spelling)
+
+
+@contextlib.contextmanager
+def _cli_voice_set_subjects(
+    writes: list[_VoiceSetWrite],
+    config: dict[str, Any],
+) -> Iterator[_VoiceSetSubjectMapper]:
+    """Respell only paths the effective --set overlay supplied."""
+    mapper = _VoiceSetSubjectMapper(writes, config)
+    with _cli_refusal_subjects(mapper):
+        yield mapper
 
 
 def _voice_set_refusal(assignments: Iterable[str] | None) -> str | None:
@@ -1027,26 +1251,33 @@ def _voice_set_refusal(assignments: Iterable[str] | None) -> str | None:
 
 
 def _apply_voice_sets(
-    preset: str | dict[str, Any], assignments: list[str] | None
+    preset: str | dict[str, Any],
+    assignments: list[str] | None,
+    *,
+    provenance: list[_VoiceSetWrite] | None = None,
 ) -> str | dict[str, Any]:
     if not assignments:
         return preset
-    root = cast(
-        dict[str, Any],
-        json.loads(preset) if isinstance(preset, str) else json.loads(json.dumps(preset)),
+    parsed: object = (
+        _cli_load_json_document(preset)
+        if isinstance(preset, str)
+        else json.loads(json.dumps(preset))
     )
+    root = parsed if isinstance(parsed, dict) else None
     # One --set occurrence is one PATH=VALUE assignment. The value reaches the
     # JSON parser byte for byte, so an object, an array, or a string that
     # carries its own commas survives; splitting the occurrences on any
     # separator would tear those apart with no escape available to the caller.
-    for assignment in assignments:
+    for order, assignment in enumerate(assignments):
         if not assignment:
             continue
         # The command validator (_voice_set_refusal) has already refused a malformed one.
         path, raw = assignment.split("=", 1)
         value = _parse_voice_set_value(raw)
-        _set_nested_value(root, path, value)
-    return root
+        if root is None:
+            root = {}
+        _set_nested_value(root, path, value, provenance=provenance, order=order)
+    return cast(str | dict[str, Any], parsed if root is None else root)
 
 
 def _format_time(seconds: float) -> str:

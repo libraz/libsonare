@@ -168,10 +168,18 @@ rule = "loudness-names"
 [[entry]]
 kind = "flag"
 old = "mastering-streaming --platforms"
-changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported before the input is read, with a refused field named --platforms [INDEX].KEY, while a --platforms-file document is still refused after it (exit 3)"
+changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported before the input is read, with a refused field named --platforms [INDEX].KEY, while non-duplicate --platforms-file refusals remain runtime invalid parameters (exit 3)"
 domain = "mastering"
 rule = "loudness-names"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering-streaming takes one platform record spelling"
+
+[[entry]]
+kind = "flag"
+old = "mastering-streaming --platforms-file"
+changed = "duplicate object keys are refused as InvalidFormat (exit 5), with the duplicate JSON path"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/conformance/cli_contract_v2.json::platforms_file_duplicate_key_refused"
 
 [[entry]]
 kind = "command"
@@ -844,7 +852,7 @@ test = "tests/cli/cli_effects_test.cpp::CLI mix-strip --pan-mode takes the kebab
 [[entry]]
 kind = "flag"
 old = "voice-change --preset-json"
-changed = "a preset document the library refuses (an unknown field, an earlier schemaVersion) exits 5 as an invalid format on the native CLI too, rather than 3"
+changed = "a preset document the library refuses (an unknown field, an earlier schemaVersion) exits 5 as an invalid format on the native CLI too, rather than 3; a duplicate key also exits 5 at its document path, including when --set would otherwise overwrite it"
 domain = "effects"
 rule = "error-class-by-cause"
 test = "tests/cli/cli_effects_test.cpp::CLI voice-change rejects a realtime preset document with an unknown field"
@@ -2386,8 +2394,24 @@ test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are
 
 [[entry]]
 kind = "flag"
+old = "voice-change --set"
+changed = "an invalid override of a built-in preset is refused before the audio is read as a usage error (exit 2). An invalid override of a preset loaded from a file exits 3 instead of 5 after the preset is read. The refusal names the supplied key as --set KEY"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/conformance/cli_contract_v2.json::builtin_set_domain_refused_before_read"
+
+[[entry]]
+kind = "flag"
+old = "playback --config"
+changed = "a duplicate key is refused as an invalid document (exit 5) at its document path before flags are overlaid"
+domain = "engine"
+rule = "cli-front-end-parity"
+test = "tests/conformance/cli_contract_v2.json::config_duplicate_key_refused"
+
+[[entry]]
+kind = "flag"
 old = "voice-preset-validate --set"
-changed = "a malformed assignment is refused as a usage error (exit 2) with one text on both front-ends"
+changed = "a malformed assignment is refused as a usage error (exit 2) with one text on both front-ends. A validation error in an override names the supplied key as --set KEY in the result and still exits 3"
 domain = "effects"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
