@@ -768,10 +768,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_project_assist_sidecar.restype = None
     lib.sonare_free_project_assist_sidecar.argtypes = [ctypes.POINTER(SonareProjectAssistSidecar)]
 
-    # Heap byte-buffer free helper (SMF export).
-    lib.sonare_free_bytes.restype = None
-    lib.sonare_free_bytes.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
-
     _configure_midi_naming_signatures(lib)
     _configure_midi_scaling_signatures(lib)
     _configure_sample_bank_signatures(lib)

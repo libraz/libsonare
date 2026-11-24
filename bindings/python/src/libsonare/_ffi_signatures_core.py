@@ -752,6 +752,10 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_floats.restype = None
     lib.sonare_free_floats.argtypes = [ctypes.POINTER(ctypes.c_float)]
 
+    # sonare_free_bytes
+    lib.sonare_free_bytes.restype = None
+    lib.sonare_free_bytes.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
+
     lib.sonare_free_bpm_analysis_result.restype = None
     lib.sonare_free_bpm_analysis_result.argtypes = [ctypes.POINTER(SonareBpmAnalysisResult)]
 

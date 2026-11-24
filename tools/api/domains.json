@@ -693,7 +693,7 @@
 "free_acoustic_result": {"domain": "effects", "surfaces": ["c"]},
 "free_boundary_result": {"domain": "analysis", "surfaces": ["c"]},
 "free_bpm_analysis_result": {"domain": "analysis", "surfaces": ["c"]},
-"free_bytes": {"domain": "project", "surfaces": ["c"]},
+"free_bytes": {"domain": "core", "surfaces": ["c"]},
 "free_chord_analysis_result": {"domain": "analysis", "surfaces": ["c"]},
 "free_chroma_result": {"domain": "analysis", "surfaces": ["c"]},
 "free_clipping_result": {"domain": "mastering", "surfaces": ["c"]},
