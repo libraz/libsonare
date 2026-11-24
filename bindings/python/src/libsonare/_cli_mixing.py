@@ -20,7 +20,6 @@ import numpy as np
 
 from ._cli_common import (
     _CLI_HOST_CHUNK_FRAMES,
-    _MAX_ANALYSIS_WINDOW,
     _atomic_wav_writer,
     _atomic_write_bytes,
     _audio_array,
@@ -50,11 +49,9 @@ from ._cli_options import (
     _tempo_bpm,
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
+from ._errors import ErrorCode
 from ._result_records import _result_to_json_dict
-from ._runtime import _C_INT_MAX
-
-_MIN_ASSISTANT_TEMPO_BPM = 20
-_MAX_ASSISTANT_TEMPO_BPM = 400
+from ._runtime import _get_lib, _to_c_size_t
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -80,19 +77,36 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
 
 
 def _mix_assistant_value_refusal(key: str, value: float) -> str | None:
-    if key == "tempoBpm":
-        tempo = ctypes.c_float(value).value
-        if tempo != 0.0 and not _MIN_ASSISTANT_TEMPO_BPM <= tempo <= _MAX_ASSISTANT_TEMPO_BPM:
-            return (
-                f"{key} must be 0 or a tempo between "
-                f"{_MIN_ASSISTANT_TEMPO_BPM} and {_MAX_ASSISTANT_TEMPO_BPM} BPM"
-            )
-    elif key == "nFft":
-        if not 2 <= value <= _MAX_ANALYSIS_WINDOW or value % 2 != 0.0:
-            return f"{key} must be an even integer in [2, {_MAX_ANALYSIS_WINDOW}]"
-    elif key == "hopLength" and (not 1 <= value <= _C_INT_MAX or not value.is_integer()):
-        return f"{key} must be an integer in [1, {_C_INT_MAX}]"
-    return None
+    """The library's refusal of one ``suggest-mix --params`` entry, or None.
+
+    The assistant's own parameter reader decides, reached through a call with no
+    tracks, so the command line restates no domain and refuses in the native
+    command's words.
+    """
+    from ._mastering_offline import _mastering_params
+
+    lib = _get_lib()
+    params, param_count = _mastering_params({key: value})
+    result = ctypes.c_char_p()
+    # No tracks: the call stops after the parameter reader, at no particular rate.
+    rc = lib.sonare_mixing_assistant_suggest(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        0,
+        _MIN_GENERATOR_SAMPLE_RATE,
+        params,
+        _to_c_size_t(param_count, "param_count"),
+        ctypes.byref(result),
+    )
+    if result.value is not None:
+        lib.sonare_free_string(result)
+    if rc != ErrorCode.INVALID_PARAMETER:
+        return None
+    return (lib.sonare_last_error_message() or b"").decode("utf-8")
 
 
 def mix_input_refusal(entries: list[str]) -> str | None:

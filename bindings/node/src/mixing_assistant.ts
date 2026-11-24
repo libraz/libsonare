@@ -4,7 +4,7 @@ import { parseRecordJson } from './internal/record_json.js';
 import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
-import { assertClosedToken, assertPositiveInteger, requestOnly } from './validation.js';
+import { assertClosedToken, requestOnly } from './validation.js';
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional; an omitted field keeps the
@@ -193,9 +193,6 @@ function assertTempo(value: unknown): void {
   }
 }
 
-/** The two analysis-geometry keys, which reach the core as a truncating cast. */
-const INTEGER_OPTION_KEYS = ['nFft', 'hopLength'] as const;
-
 function normalizeOptions(
   request: MixingAssistantSuggestRequest,
 ): Record<string, number | boolean> {
@@ -208,11 +205,11 @@ function normalizeOptions(
       params[key] = value;
     }
   }
-  // Positivity is the STFT geometry's own rule; the size ceiling stays the core's, which names it.
-  for (const key of INTEGER_OPTION_KEYS) {
+  // The STFT sizes are numbers; their domain is the core reader's, which names it.
+  for (const key of ['nFft', 'hopLength'] as const) {
     const value = request[key];
-    if (!isAbsent(value)) {
-      assertPositiveInteger(value, key);
+    if (!isAbsent(value) && typeof value !== 'number') {
+      throw refuseType(`${key} must be a number`);
     }
   }
   return params;

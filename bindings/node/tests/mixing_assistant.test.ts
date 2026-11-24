@@ -331,6 +331,31 @@ describe('mixing assistant option keys reach the core', () => {
   });
 });
 
+describe('mixing assistant STFT sizes', () => {
+  const suggest = (options: Record<string, unknown>) =>
+    mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR, ...options } as never);
+
+  it.each([1023, 0, 3.5, -4, 2 ** 20])('refuses nFft %p with the core reader text', (nFft) => {
+    expect(() => suggest({ nFft })).toThrow(
+      new RangeError('mixingAssistantSuggest: nFft must be an even integer in [2, 524288]'),
+    );
+  });
+
+  it.each([0, 2.5, 2 ** 31])('refuses hopLength %p with the core reader text', (hopLength) => {
+    expect(() => suggest({ hopLength })).toThrow(
+      new RangeError('mixingAssistantSuggest: hopLength must be an integer in [1, 2147483647]'),
+    );
+  });
+
+  it.each(['nFft', 'hopLength'])('refuses a %s that is not a number', (key) => {
+    for (const value of [true, '1024']) {
+      expect(() => suggest({ [key]: value })).toThrow(
+        new TypeError(`mixingAssistantSuggest: ${key} must be a number`),
+      );
+    }
+  });
+});
+
 describe('mixingAssistantSuggest scene', () => {
   it('is a scene the Mixer can instantiate', () => {
     const json = JSON.stringify(

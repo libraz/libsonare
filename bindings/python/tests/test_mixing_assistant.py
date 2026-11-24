@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 
 import numpy as np
 import pytest
@@ -539,3 +540,51 @@ def test_a_track_profile_reports_absent_facts_as_none():
     assert silence.name == "pad"
     assert silence.integrated_lufs == -math.inf
     assert silence.exclusion_reason == "track is silent"
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "text"),
+    [
+        ({"n_fft": 1023}, "n_fft must be an even integer in [2, 524288]"),
+        ({"n_fft": 3.5}, "n_fft must be an even integer in [2, 524288]"),
+        ({"n_fft": 2**40}, "n_fft must be an even integer in [2, 524288]"),
+        ({"hop_length": 0}, "hop_length must be an integer in [1, 2147483647]"),
+        ({"hop_length": 2.5}, "hop_length must be an integer in [1, 2147483647]"),
+        ({"hop_length": 2**40}, "hop_length must be an integer in [1, 2147483647]"),
+    ],
+)
+def test_the_stft_sizes_are_refused_by_the_core_reader_under_the_keyword(kwargs, text):
+    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+
+    with pytest.raises(SonareValueError, match=rf"^mixing_assistant_suggest: {re.escape(text)}$"):
+        mixing_assistant_suggest(
+            [MixAssistantTrack("bass", [_tone(110.0)])], sample_rate=SAMPLE_RATE, **kwargs
+        )
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("n_fft", "n_fft rescaled to sample_rate must fit the largest FFT size"),
+        ("hop_length", "hop_length rescaled to sample_rate must fit the largest hop length"),
+    ],
+)
+def test_a_rescaling_relation_names_the_keyword(name, text):
+    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+
+    value = 524288 if name == "n_fft" else 2**31 - 1
+    with pytest.raises(SonareValueError, match=rf"^mixing_assistant_suggest: {re.escape(text)}$"):
+        mixing_assistant_suggest(
+            [MixAssistantTrack("bass", [np.zeros(9600, np.float32)], sample_rate=96000)],
+            sample_rate=96000,
+            **{name: value},
+        )
+
+
+def test_a_bool_stft_size_is_a_type_error():
+    from libsonare import MixAssistantTrack, mixing_assistant_suggest
+
+    with pytest.raises(TypeError, match="^n_fft must be an integer$"):
+        mixing_assistant_suggest(
+            [MixAssistantTrack("bass", [_tone(110.0)])], sample_rate=SAMPLE_RATE, n_fft=True
+        )

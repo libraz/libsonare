@@ -21,7 +21,7 @@ import numpy as np
 
 from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._mastering_offline import _mastering_params
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _Respelling
 from ._result_records import _fields, _fill_null_ends
 from ._runtime import (
     _C_INT_MAX,
@@ -35,7 +35,6 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _utf8_arg,
-    _validate_c_int_field,
 )
 from ._types_mixing_assistant import (
     MixAssistantMixProfile,
@@ -71,6 +70,8 @@ _PARAM_KEYS = {
 # this surface not narrowed before the call, and a fraction would reach the core
 # to be refused there under the camelCase key rather than the one a caller typed.
 _INTEGER_PARAMS = frozenset({"n_fft", "hop_length"})
+# The core names the STFT sizes by their wire keys; a refusal names the keyword the caller wrote.
+_STFT_RESPELLED = {"nFft": _Respelling("n_fft"), "hopLength": _Respelling("hop_length")}
 
 
 class MixAssistantTrack(NamedTuple):
@@ -227,10 +228,9 @@ def _assistant_params(options: dict[str, float | int | bool | None]) -> tuple[An
     for name, value in options.items():
         if value is None:
             continue
-        if name in _INTEGER_PARAMS:
-            # Ahead of the bool branch, so `True` is refused rather than read as 1.
-            params[_PARAM_KEYS[name]] = _validate_c_int_field(value, name)
-            continue
+        if name in _INTEGER_PARAMS and isinstance(value, bool):
+            # A bool is no size; every other value's size domain is the core reader's.
+            raise TypeError(f"{name} must be an integer")
         if isinstance(value, bool):
             params[_PARAM_KEYS[name]] = value
             continue
@@ -271,7 +271,7 @@ def _suggest(
         _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
-    _check(rc)
+    _check(rc, respelled=_STFT_RESPELLED)
     try:
         return json.loads(ctypes.string_at(json_ptr).decode("utf-8")) if json_ptr.value else {}
     finally:

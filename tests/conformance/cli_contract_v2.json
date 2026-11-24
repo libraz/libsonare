@@ -23438,6 +23438,78 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "n_fft_odd_refused",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--params",
+            "nFft=1023"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "nFft must be an even integer in [2, 524288]"
+          ]
+        },
+        {
+          "id": "n_fft_fractional_refused",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--params",
+            "nFft=3.5"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "nFft must be an even integer in [2, 524288]"
+          ]
+        },
+        {
+          "id": "hop_length_zero_refused",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--params",
+            "hopLength=0"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "hopLength must be an integer in [1, 2147483647]"
+          ]
+        },
+        {
+          "id": "hop_length_fractional_refused",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--params",
+            "hopLength=2.5"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "hopLength must be an integer in [1, 2147483647]"
+          ]
         }
       ],
       "artifacts": {}
