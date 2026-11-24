@@ -257,7 +257,8 @@ export interface DownmixOptions {
  * ```ts
  * declare const bytes: Uint8Array; // an encoded audio file
  * const { sampleRate, channels } = decodeChannels(bytes);
- * const stereo = channels.length > 2 ? downmix(channels, 'stereo') : channels;
+ * const outputChannels =
+ *   channels.length === 6 || channels.length === 8 ? downmix(channels, 'stereo') : channels;
  * ```
  */
 export function decodeChannels(data: Uint8Array): DecodedChannels {

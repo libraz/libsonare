@@ -31,7 +31,7 @@ import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './val
  *   tempoBpm: 120,
  *   fixedVelocity: 100,
  * });
- * const clipId = 0; // a MIDI clip of `project`
+ * const { clipId } = project.addMidiClip(0, 16);
  * project.setMidiEvents(clipId, events);
  * ```
  *

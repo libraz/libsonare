@@ -390,9 +390,9 @@ export function splitSilenceCommon(...args: unknown[]): Int32Array {
  * const signals = channels; // takes of one part, sample-aligned
  * const { intervals, report } = splitSilenceCommonWithReport({ signals, topDb });
  * const ceiling = report.silenceCeilingDb;
- * if (intervals.length === 2 && ceiling !== undefined && ceiling < topDb) {
- *   // The takes do have a shared dip; this threshold was too loose to see it.
- *   splitSilenceCommonWithReport({ signals, topDb: ceiling - 5 });
+ * if (intervals.length === 1 && ceiling !== undefined && ceiling > 0 && ceiling < topDb) {
+ *   // Try a lower threshold to check whether the dips overlap.
+ *   splitSilenceCommonWithReport({ signals, topDb: ceiling / 2 });
  * }
  * ```
  */

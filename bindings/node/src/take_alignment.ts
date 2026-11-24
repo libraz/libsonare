@@ -34,18 +34,21 @@ import { assertAudioInput, assertSampleRate, requestOnly } from './validation.js
  *
  * @example
  * ```ts
- * const guide = new Float32Array(48000 * 8); // the reference performance, decoded
- * const comp = new Float32Array(48000 * 8); // the take to align
+ * declare const guide: Float32Array; // decoded reference audio at 48 kHz
+ * declare const comp: Float32Array; // decoded take audio at 48 kHz
  * const { anchors, alignment } = alignTakeToReference({
  *   reference: guide,
  *   take: comp,
  *   sampleRate: 48000,
  * });
  * console.log(alignment.meanResidualFrames);
+ * const project = new Project();
+ * project.setSampleRate(48000);
  * project.setWarpMap({ id: 1, name: 'comp', anchors });
  * const trackId = project.addTrack({ kind: 'audio' });
  * const takeClipId = project.addClip({ trackId, lengthPpq: 64, channels: [comp], sampleRate: 48000 });
  * project.setClipWarpRef(takeClipId, 1);
+ * project.setClipWarpMode(takeClipId, 'timeStretch');
  * ```
  *
  * @throws `RangeError` when either buffer is empty or carries a non-finite

@@ -294,10 +294,10 @@ export class StreamingMasteringChain {
    * @example
    * ```ts
    * declare const chain: StreamingMasteringChain;
+   * const before = chain.nonFiniteDiscardCount;
    * const out = chain.processMono(block);
-   * if (chain.nonFiniteDiscardCount > 0) {
-   *   // a stage's own state was reset this call; the substitution count
-   *   // alone would not have shown that
+   * if (chain.nonFiniteDiscardCount > before) {
+   *   // A stage discarded its state during this call.
    * }
    * ```
    */
@@ -1054,9 +1054,10 @@ export class StreamingEqualizer {
    * @example
    * ```ts
    * declare const eq: StreamingEqualizer;
+   * const before = eq.nonFiniteDiscardCount;
    * eq.processStereo(left, right);
-   * if (eq.nonFiniteDiscardCount > 0) {
-   *   // the audio just produced is not a function of `left`/`right`
+   * if (eq.nonFiniteDiscardCount > before) {
+   *   // The equalizer discarded state while processing this block.
    * }
    * ```
    */

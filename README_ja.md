@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net/ja/)
 
-**libsonare は、音を「データ」に、データを「音」に変換します。** 曲を読み込んで BPM・キー・コード・構成を取り出し、放送品質のラウドネスへ整え、MIDI を内蔵インストゥルメントで鳴らし、その上に DAW まで組めます——C++・Python・Node.js・ブラウザで同じエンジンが動きます。C++ コアはランタイム依存ゼロで、Python パッケージは NumPy に依存します。GPL/AGPL のコードもモデル重みもありません。
+**libsonare は、音を「データ」に、データを「音」に変換します。** 曲を読み込んで BPM・キー・コード・構成を取り出し、放送品質のラウドネスへ整え、MIDI を内蔵インストゥルメントで鳴らし、その上に DAW まで組めます——C++・Python・Node.js・ブラウザで同じエンジンが動きます。オプションのコーデック機能を有効にすると、C++ コアに追加のランタイム依存関係が生じる場合があります。Python パッケージは NumPy に依存します。GPL/AGPL のコードもモデル重みもありません。
 
 📖 **[ドキュメント](https://libsonare.libraz.net/ja/)** &nbsp;·&nbsp; 🎧 **[ブラウザ完結デモ](https://libsonare.libraz.net/ja/demos)** &nbsp;·&nbsp; **[はじめに](https://libsonare.libraz.net/ja/docs/getting-started)**
 
@@ -21,7 +21,7 @@
 
 - **解析** — BPM、キー、コード、ビート、セクション（同じ素材を繰り返すセクションの判別を含む）、ピッチ、チューニング、ラウドネス（EBU R128）、音響特性。librosa と重なる範囲ではデフォルト値を揃え、CI で librosa のリファレンス値と照合しています。[解析](https://libsonare.libraz.net/ja/docs/analysis)
 - **ステム分離と採譜** — `decomposeStems` でミックスをステムに分け、`transcribe` で音声を MIDI にします。歌声向けの `singing` モデルは、ビブラートや音程の揺れを 1 つのノートの中に収めます。[音源分離](https://libsonare.libraz.net/ja/docs/analysis#音源分離) · [音を MIDI ノートに変換する](https://libsonare.libraz.net/ja/docs/audio-to-notes) · [CLI `transcribe`](https://libsonare.libraz.net/ja/docs/cli-examples)
-- **マスタリング** — 95 個の名前付き DSP プロセッサ（EQ、ダイナミクス、マルチバンド、ステレオ、サチュレーション、リペア、マキシマイザー、リファレンスマッチング）。`BUILD_FX=OFF` ではクリエイティブ系ストリーミングエフェクトが外れて 76 個になります。リストア用に 5 つのプリセット（ビニール、テープヒス、フィールド録音、ボイスメモ、シェラック 78）があります。リペアはチャンネル数を問わず使えます。[マスタリングプロセッサ](https://libsonare.libraz.net/ja/docs/mastering-processors) · [マスタリングアシスタント](https://libsonare.libraz.net/ja/docs/mastering-assistant) · [オーディオリペア](https://libsonare.libraz.net/ja/docs/audio-repair)
+- **マスタリング** — 名前付き DSP プロセッサ（EQ、ダイナミクス、マルチバンド、ステレオ、サチュレーション、リペア、マキシマイザー、リファレンスマッチング）と、修復用のプリセット（ビニール、テープヒス、フィールド録音、ボイスメモ、シェラック 78）を備えています。リペアはチャンネル数を問わず使えます。[マスタリングプロセッサ](https://libsonare.libraz.net/ja/docs/mastering-processors) · [マスタリングアシスタント](https://libsonare.libraz.net/ja/docs/mastering-assistant) · [オーディオリペア](https://libsonare.libraz.net/ja/docs/audio-repair)
 - **ミキシング／ルーティング** — チャンネルストリップ、バス、センド、バス間ルーティング、トラックまたはバスをキーにしたサイドチェイン、シーンプリセット、ミキサーシーンを提案する任意のアシスタント。[ミキシング](https://libsonare.libraz.net/ja/docs/mixing) · [リアルタイムエンジン](https://libsonare.libraz.net/ja/docs/realtime-engine) · [ミキシングアシスタント](https://libsonare.libraz.net/ja/docs/mixing-assistant)
 - **編集 & クリエイティブ FX** — タイムストレッチ、ピッチシフト、ピッチ補正（検出したキーへのオートチューンを含む）、ボイスチェンジ、リバーブ、モジュレーション、ディレイ、アンプシミュ。[編集 DSP](https://libsonare.libraz.net/ja/docs/editing-dsp) · [スペクトル編集](https://libsonare.libraz.net/ja/docs/spectral-editing)
 - **ノート編集とテイク** — モノフォニック／ポリフォニックのテイクをノート単位で編集、テイクをリファレンスへ揃え（`alignTakeToReference`）、MIDI のメロディへチューニング（`tune-to-midi`）、ボーカルテイクを undo/redo 付きでオフライン編集（`createVocalEditSession`）。[MIDI 編集](https://libsonare.libraz.net/ja/docs/project-editing-midi) · [テイク](https://libsonare.libraz.net/ja/docs/recording-and-takes)
@@ -31,7 +31,7 @@
 - **ヘッドレス DAW ランタイム** — オーディオ／MIDI トラック、テイク、ワープ、MIDI 1.0/2.0 シーケンス、SMF 入出力、オフラインバウンス、リアルタイムエンジンで再生するタイムラインへのコンパイル（`compile({ withTimeline: true })`）。[プロジェクト編集](https://libsonare.libraz.net/ja/docs/project-editing)
 - **リアルタイムエンジン** — アロケーションフリーの再生、ストリーミング、ライブ MIDI 1.0/2.0 入力、ロックフリーのオートメーション、レコーディング、ボイスチェンジャー（低遅延ピッチシフト、オートピッチとロボット、スケールハーモニー、MIDI ノート入力、内部または外部キャリアのチャンネルボコーダー、メガホン・ラジオ・コーラス・ストロボのキャラクター、エコーとテンポディレイ）。インサートとしても使えます。AudioWorklet 経由でブラウザでも動きます。[リアルタイムエンジン](https://libsonare.libraz.net/ja/docs/realtime-engine) · [MIDI 入力](https://libsonare.libraz.net/ja/docs/midi-input)
 - **プレイバックレンダラー** — チャンネル変換、ラウドネス整合、低音管理、ヘッドホンとスピーカー向けの HRTF バイノーラル化。[プレイバック](https://libsonare.libraz.net/ja/docs/playback)
-- **パラメータ記述子** — すべてのプロセッサとシンセエンジンが、自分のパラメータの範囲、デフォルト、単位、表示スケール、範囲や有効・無効を左右するほかのパラメータを返します。ホストは手書きの表を持たずに、`capabilityCatalog()` と `synthEngineParamInfo` から操作画面を組み立てられます。[パラメータ記述子からコントロールを組み立てる](https://libsonare.libraz.net/ja/docs/use-cases/parameter-controls)
+- **パラメータ記述子** — `capabilityCatalog()`、`synthEngineParamInfo`、`synthPatchParamInfo` は、デフォルト値と、該当する場合は範囲、単位、表示スケール、適用条件を返します。パッチの列挙型パラメータには、使用できるトークンとデフォルト値が含まれます。[パラメータ記述子からコントロールを組み立てる](https://libsonare.libraz.net/ja/docs/use-cases/parameter-controls)
 - **C++ パッケージ** — C++ ライブラリは CMake パッケージとしてインストールできます（`find_package(sonare)`）。[C++ API](https://libsonare.libraz.net/ja/docs/cpp-api)
 
 ## インストール

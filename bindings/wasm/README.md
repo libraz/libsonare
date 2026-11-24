@@ -8,7 +8,7 @@
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-**Turn audio into data and back — entirely in the browser.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments, all client-side via WebAssembly — the same C++ engine that runs natively, with zero dependencies and no model weights. 95 named mastering DSP processors implemented against published references; analysis defaults match librosa where the two overlap.
+**Turn audio into data and back — entirely in the browser.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments, all client-side via WebAssembly — the same C++ engine that runs natively, with zero dependencies and no model weights. Named mastering DSP processors implemented against published references; analysis defaults match librosa where the two overlap.
 
 **Guides and the full API reference: [libsonare.libraz.net](https://libsonare.libraz.net)**. Try it without installing anything: the [live demos](https://libsonare.libraz.net/demos), or [sonare studio](https://sonare-studio.libraz.net), a browser DAW whose audio runs on this engine.
 
@@ -75,7 +75,7 @@ import wasmUrl from '@libraz/libsonare/wasm?url';
 import processorUrl from './processor.ts?worker&url';
 
 const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
-const engine = await SonareRealtimeEngineNode.create(audioContext, { moduleUrl: processorUrl, wasmBinary });
+const engine = await SonareRealtimeEngineNode.create(audioContext, { moduleUrl: processorUrl, wasmBinary, numChannels: 2 });
 ```
 
 Code that calls `init()` itself inside the worklet passes the same two values: `init({ moduleFactory, wasmBinary })`.
@@ -88,7 +88,7 @@ An AudioWorklet entry of your own that constructs `SonareRealtimeEngineWorkletPr
 
 - **Analysis** — BPM, key, chords, downbeats, sections grouped by repeated material, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/wasm)
 - **Stem decomposition and transcription** — `decomposeStems` splits a mix into stems, and `transcribe` turns audio into MIDI events, with a `singing` model (`monophonicModel: 'singing'`) for vocals. → [Analysis](https://libsonare.libraz.net/docs/js-api-analysis), [Audio to notes](https://libsonare.libraz.net/docs/audio-to-notes)
-- **Mastering** — 95 named DSP processors, a configurable chain and 30 named presets through `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — Named DSP processors, a configurable chain and named presets through `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Restoration** — five repair-only presets, `vinyl`, `tapeHiss`, `fieldRecording`, `voiceMemo` and `shellac78`, plus repair of any channel count in one call (`masteringRepairAnalyze` / `masteringRepairApply`). → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo`, the block-based `Mixer` with scene presets, and `mixingAssistantSuggest`, which suggests a mixer scene with a written explanation without applying it; `sampleRate` is **required** and must be an integer within `[8000, 384000]`. → [Mixing](https://libsonare.libraz.net/docs/mixing), [Mixing assistant](https://libsonare.libraz.net/docs/mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, `autoTune`, HPSS, phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
@@ -98,7 +98,7 @@ An AudioWorklet entry of your own that constructs `SonareRealtimeEngineWorkletPr
 - **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gsEfxRealization`), with a selectable rig per part (`setPartRig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 2.0.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
 - **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribeToClip` writes a transcription into a clip, and `compile({ withTimeline: true })` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
-- **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` describe every parameter's range, default, unit, display scale and the other parameters that bound or switch it, so a host builds its controls without a hand-written table. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
+- **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` provide defaults and applicable ranges, units, display scales and conditions. Patch enum descriptors list accepted tokens and their default. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
 
 ## Advanced
 

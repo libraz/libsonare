@@ -262,9 +262,10 @@ export class RealtimeVoiceChanger {
    *
    * @example
    * ```ts
+   * const before = changer.nonFiniteDiscardCount;
    * changer.processPlanar([left, right]);
-   * if (changer.nonFiniteDiscardCount > 0) {
-   *   // the audio just produced is not a function of the input
+   * if (changer.nonFiniteDiscardCount > before) {
+   *   // The chain discarded state while processing this block.
    * }
    * ```
    */

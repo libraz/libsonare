@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 
-**Turn audio into data and back, from Python.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments — a fast C++ core whose only Python dependency is NumPy 2.0.2 or later. Mastering ships 95 named DSP processors implemented against published references; analysis defaults match librosa where the two overlap. Apache-2.0, no model weights.
+**Turn audio into data and back, from Python.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments — a fast C++ core whose only Python dependency is NumPy 2.0.2 or later. Mastering includes named DSP processors implemented against published references; analysis defaults match librosa where the two overlap. Apache-2.0, no model weights.
 
 **Guides, API reference and CLI docs: [libsonare.libraz.net](https://libsonare.libraz.net)**
 
@@ -49,13 +49,13 @@ with libsonare.Project() as project:
     audio = rendered.channels  # (channels, frames)
 ```
 
-Analysis functions take mono float32 samples (downmix stereo first); the defaults follow librosa (22050 Hz, `n_fft` 2048, `hop_length` 512). See [librosa compatibility](https://libsonare.libraz.net/docs/librosa-compatibility).
+For music analysis, pass mono float32 samples and their sample rate. `stft` defaults to `sr=22050`, `n_fft=2048` and `hop_length=512`. See [librosa compatibility](https://libsonare.libraz.net/docs/librosa-compatibility).
 
 ## Capabilities
 
 - **Analysis** — BPM, key, chords, downbeats, sections grouped by repeated material, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/python-api-analysis)
 - **Stem decomposition and transcription** — `decompose_stems` splits a mix into stems, and `transcribe` turns audio into MIDI events, with a `singing` model (`monophonic_model="singing"`) for vocals. → [Analysis](https://libsonare.libraz.net/docs/python-api-analysis), [Audio to notes](https://libsonare.libraz.net/docs/audio-to-notes), [CLI examples](https://libsonare.libraz.net/docs/cli-examples)
-- **Mastering** — 95 named DSP processors, a configurable chain and 30 named presets through `master_audio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — Named DSP processors, a configurable chain and named presets through `master_audio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Restoration** — five repair-only presets, `vinyl`, `tapeHiss`, `fieldRecording`, `voiceMemo` and `shellac78`, plus repair of any channel count in one call (`mastering_repair_analyze` / `mastering_repair_apply`). → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mix_stereo`, the block-based `Mixer` with scene presets, and `mixing_assistant_suggest`, which suggests a mixer scene with a written explanation without applying it. → [Mixing](https://libsonare.libraz.net/docs/mixing), [Mixing assistant](https://libsonare.libraz.net/docs/mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, `auto_tune`, HPSS, phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
@@ -65,7 +65,7 @@ Analysis functions take mono float32 samples (downmix stereo first); the default
 - **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gs_efx_realization`), with a selectable rig per part (`set_part_rig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 2.0.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
 - **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribe_to_clip` writes a transcription into a clip, and `compile(with_timeline=True)` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
-- **Parameter descriptors** — `capability_catalog`, `mastering_insert_param_info`, `synth_engine_param_info` and `synth_patch_param_info` describe every parameter's range, default, unit, display scale and the other parameters that bound or switch it, so a host builds its controls without a hand-written table. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
+- **Parameter descriptors** — `capability_catalog`, `mastering_insert_param_info`, `synth_engine_param_info` and `synth_patch_param_info` provide defaults and applicable ranges, units, display scales and conditions. Patch enum descriptors list accepted tokens and their default. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
 
 The whole surface is listed in the [Python API reference](https://libsonare.libraz.net/docs/python-api).
 

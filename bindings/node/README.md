@@ -6,7 +6,7 @@
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-**Turn audio into data and back, natively in Node.js.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments — a native N-API addon on the libsonare C++ core. Mastering ships 95 named DSP processors implemented against published references; analysis defaults match librosa where the two overlap. Apache-2.0, no model weights.
+**Turn audio into data and back, natively in Node.js.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments — a native N-API addon on the libsonare C++ core. Mastering includes named DSP processors implemented against published references; analysis defaults match librosa where the two overlap. Apache-2.0, no model weights.
 
 Unlike the WebAssembly package (`@libraz/libsonare`), this binding decodes audio files directly from disk or memory (WAV / MP3 out of the box, plus M4A / AAC / FLAC / OGG / Opus when built with FFmpeg).
 
@@ -62,7 +62,7 @@ project.destroy();
 
 - **Analysis** — BPM, key, chords, downbeats, sections grouped by repeated material, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/node-api-analysis)
 - **Stem decomposition and transcription** — `decomposeStems` splits a mix into stems, and `transcribe` turns audio into MIDI events, with a `singing` model (`monophonicModel: 'singing'`) for vocals. → [Analysis](https://libsonare.libraz.net/docs/node-api-analysis), [Audio to notes](https://libsonare.libraz.net/docs/audio-to-notes)
-- **Mastering** — 95 named DSP processors, a configurable chain and 30 named presets through `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — Named DSP processors, a configurable chain and named presets through `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Restoration** — five repair-only presets, `vinyl`, `tapeHiss`, `fieldRecording`, `voiceMemo` and `shellac78`, plus repair of any channel count in one call (`masteringRepairAnalyze` / `masteringRepairApply`). → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo`, the block-based `Mixer` with scene presets, and `mixingAssistantSuggest`, which suggests a mixer scene with a written explanation without applying it; `sampleRate` is **required** and must be an integer within `[8000, 384000]`. → [Mixing](https://libsonare.libraz.net/docs/mixing), [Mixing assistant](https://libsonare.libraz.net/docs/mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, `autoTune`, HPSS, phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
@@ -72,17 +72,17 @@ project.destroy();
 - **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gsEfxRealization`), with a selectable rig per part (`setPartRig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 2.0.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
 - **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribeToClip` writes a transcription into a clip, and `compile({ withTimeline: true })` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
-- **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` describe every parameter's range, default, unit, display scale and the other parameters that bound or switch it, so a host builds its controls without a hand-written table. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
+- **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` provide defaults and applicable ranges, units, display scales and conditions. Patch enum descriptors list accepted tokens and their default. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
 
 The whole surface is listed in the [Node.js API reference](https://libsonare.libraz.net/docs/node-api).
 
 ## Supported audio formats
 
-| Format                                     | Default build | With FFmpeg support |
-| ------------------------------------------ | ------------- | ------------------- |
-| WAV (PCM 16/24/32, float32)                | yes           | yes                 |
-| MP3                                        | yes           | yes                 |
-| M4A / AAC / FLAC / OGG / Opus / WMA / ...  | no            | yes                 |
+| Format                                     | Without FFmpeg support | With FFmpeg support |
+| ------------------------------------------ | ---------------------- | ------------------- |
+| WAV (PCM 16/24/32, float32)                | yes                    | yes                 |
+| MP3                                        | yes                    | yes                 |
+| M4A / AAC / FLAC / OGG / Opus / WMA / ...  | no                     | yes                 |
 
 `capabilities().features.ffmpeg` reports whether the loaded binding was built with FFmpeg.
 

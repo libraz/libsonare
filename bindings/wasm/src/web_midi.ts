@@ -679,12 +679,15 @@ function eventContextTime(
  * @example
  * ```ts
  * import type { SonareEngine } from '@libraz/libsonare/worklet';
+ * declare const context: AudioContext;
  * declare const input: MIDIInput;
  * declare const live: SonareEngine;
  * input.onmidimessage = (event) => {
- *   if (!event.data) return;
+ *   const [status, note, velocity] = event.data ?? [];
+ *   if (status === undefined || note === undefined || velocity === undefined) return;
+ *   if ((status & 0xf0) !== 0x90 || velocity === 0) return;
  *   const contextTimeSec = webMidiEventContextTime(context, event.timeStamp);
- *   live.pushMidiInputNoteOn(0, 0, event.data[1], event.data[2], undefined, { contextTimeSec });
+ *   live.pushMidiInputNoteOn(0, status & 0x0f, note, velocity, undefined, { contextTimeSec });
  * };
  * ```
  */

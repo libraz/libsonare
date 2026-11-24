@@ -496,7 +496,7 @@ export function extractNotes(...args: unknown[]): NoteObject[] {
  *   sampleRate,
  *   notes: flattened,
  *   f0Hz,
- *   frameRate: sampleRate / 512,
+ *   frameRate,
  * });
  * ```
  */

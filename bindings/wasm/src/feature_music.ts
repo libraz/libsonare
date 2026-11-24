@@ -506,8 +506,8 @@ export function analyzeSections(...args: unknown[]): SectionAnalysis {
  *   sampleRate: 44100,
  *   absoluteThreshold: 0.01,
  * });
- * // `noveltyCurve` is scaled by its own maximum; recover the raw response with
- * // `noveltyCurve[i] * noveltyPeak`.
+ * // If noveltyPeak > 0, noveltyCurve[i] * noveltyPeak recovers the nonnegative
+ * // raw response. If noveltyPeak === 0, the curve is unnormalized.
  * ```
  */
 export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult;
