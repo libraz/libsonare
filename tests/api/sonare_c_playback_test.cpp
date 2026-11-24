@@ -658,7 +658,14 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   CHECK(json == nullptr);
   CHECK(sonare_playback_renderer_set_head_orientation(nullptr, 10.0f, 0.0f, 0.0f) ==
         SONARE_ERROR_NOT_SUPPORTED);
+  int output_channels = -1;
+  CHECK(sonare_playback_config_num_output_channels(nullptr, &output_channels) ==
+        SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(output_channels == 0);
   int value = -1;
+  CHECK(sonare_playback_renderer_max_input_channels(nullptr, &value) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(value == 0);
+  value = -1;
   CHECK(sonare_playback_renderer_num_input_channels(nullptr, &value) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(value == 0);
   value = -1;
@@ -702,6 +709,10 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   CHECK(sonare_playback_loudness_meter_create(2, 48000, &meter) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(meter == nullptr);
   CHECK(sonare_playback_loudness_meter_push_interleaved(nullptr, plane.data(), 8) ==
+        SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(sonare_playback_loudness_meter_push_interleaved(nullptr, nullptr, 0) ==
+        SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(sonare_playback_loudness_meter_push_interleaved(nullptr, nullptr, 8) ==
         SONARE_ERROR_NOT_SUPPORTED);
   float lufs = 1.0f;
   CHECK(sonare_playback_loudness_meter_integrated_lufs(nullptr, &lufs) ==
