@@ -382,9 +382,10 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
         }
         // A sample position or length past 2^53 - 1 was never an exact JS number.
         for (const inexact of [1.5, 2 ** 53]) {
+          const subject = field === 'loopLengthSamples' ? 'clips[0].loopLengthSamples' : field;
           expect(() => engine.setMidiClips([looping({ [field]: inexact })] as never)).toThrow(
             new RangeError(
-              `RealtimeEngine.setMidiClips: ${field} must be an integer in [-9007199254740991, 9007199254740991]`,
+              `RealtimeEngine.setMidiClips: ${subject} must be an integer in [-9007199254740991, 9007199254740991]`,
             ),
           );
         }
@@ -403,6 +404,21 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
       engine.setMidiClips([
         clip({ lengthSamples: 100, loop: true, loopLengthSamples: 50 }),
       ] as never);
+      expect(() =>
+        engine.setMidiClips([clip({ loop: false, loopLengthSamples: 0 })] as never),
+      ).toThrow(
+        new RangeError(
+          'RealtimeEngine.setMidiClips: clips[0].loopLengthSamples must be an integer of at least 1',
+        ),
+      );
+      for (const options of [{ loop: false, loopLengthSamples: 50 }, { loopLengthSamples: 50 }]) {
+        expect(() => engine.setMidiClips([clip(options)] as never)).toThrow(
+          new RangeError(
+            'RealtimeEngine.setMidiClips: clips[0].loopLengthSamples must be 0 unless clips[0].loop is enabled',
+          ),
+        );
+      }
+      engine.setMidiClips([clip({ loop: false })] as never);
     });
   });
 });

@@ -19,6 +19,7 @@ from libsonare import (
     EngineClip,
     EngineMetronomeConfig,
     EngineMidiClipSchedule,
+    ErrorCode,
     Project,
     RealtimeEngine,
     SonareValueError,
@@ -88,7 +89,6 @@ def test_midi_schedule_refuses_zero_where_none_is_absence(field: str) -> None:
         ({"length_samples": 0}, "length_samples"),
         # -1 is the C ABI's open-ended spelling, so a given one is refused rather than read as it.
         ({"length_samples": -1}, "length_samples"),
-        ({"loop": True, "loop_length_samples": 0}, "loop_length_samples"),
         ({"loop": True, "loop_length_samples": -1}, "loop_length_samples"),
     ],
 )
@@ -106,9 +106,28 @@ def test_midi_schedule_refuses_a_non_positive_given_length(
         engine.set_midi_clips([EngineMidiClipSchedule(events=[], **given)])
 
 
-def test_midi_schedule_ignores_the_loop_period_of_a_one_shot_clip() -> None:
+def test_midi_schedule_uses_absence_and_core_loop_relation() -> None:
     with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
-        engine.set_midi_clips([EngineMidiClipSchedule(events=[], loop_length_samples=0)])
+        with pytest.raises(
+            SonareValueError,
+            match=(
+                r"^RealtimeEngine\.set_midi_clips: "
+                r"clips\[0\]\.loop_length_samples must be an integer of at least 1$"
+            ),
+        ):
+            engine.set_midi_clips([EngineMidiClipSchedule(events=[], loop_length_samples=0)])
+
+        # The wide length is still a valid int64; only its combination with loop is refused.
+        for loop_options in ({}, {"loop": False}):
+            with pytest.raises(SonareValueError) as caught:
+                engine.set_midi_clips(
+                    [EngineMidiClipSchedule(events=[], loop_length_samples=2**31, **loop_options)]
+                )
+            assert caught.value.code == ErrorCode.INVALID_PARAMETER
+            assert str(caught.value) == (
+                "RealtimeEngine.set_midi_clips: "
+                "clips[0].loop_length_samples must be 0 unless clips[0].loop is enabled"
+            )
 
 
 def test_midi_schedule_omitted_fields_are_accepted() -> None:

@@ -13078,10 +13078,10 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_
 [[entry]]
 kind = "field"
 old = "EngineMidiClipSchedule.loop_length_samples"
-changed = "int | None, default None: None is no loop length; a given length is read only with loop=True, where 0 or a negative length raises SonareValueError"
+changed = "int | None, default None: None is no loop length; a given length must be at least 1, so 0 or a negative length raises SonareValueError, and a positive period on a clip without loop=True is refused instead of ignored"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_a_non_positive_given_length"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_uses_absence_and_core_loop_relation"
 
 [[entry]]
 kind = "field"

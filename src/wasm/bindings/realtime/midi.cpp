@@ -19,6 +19,7 @@
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -112,15 +113,26 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
         boolProperty(clip_val, "loop", clip.loop_mode == sonare::midi::MidiLoopMode::kLoop)
             ? sonare::midi::MidiLoopMode::kLoop
             : sonare::midi::MidiLoopMode::kOneShot;
-    clip.loop_length_samples =
-        int64Property(clip_val, "loopLengthSamples", clip.loop_length_samples);
-    // As in the C ABI, a looping clip names its loop length.
+    const std::string loop_subject = path + ".loopLengthSamples";
+    const val loop_length_value = objectProperty(clip_val, "loopLengthSamples");
+    const bool loop_length_given = !loop_length_value.isUndefined() && !loop_length_value.isNull();
+    if (loop_length_given) {
+      clip.loop_length_samples = checkedInt64FromVal(loop_length_value, loop_subject.c_str());
+    }
+    // A one-shot clip cannot carry an inactive loop length.
     if (clip.loop_mode == sonare::midi::MidiLoopMode::kLoop ||
-        hasProperty(clip_val, "loopLengthSamples")) {
-      const std::string loop_subject = path + ".loopLengthSamples";
+        (loop_length_given && clip.loop_length_samples == 0)) {
       sonare::util::check::integer_within(clip.loop_length_samples,
                                           sonare_c_detail::kEngineMidiClipLoopLengthDomain,
                                           loop_subject.c_str());
+    } else if (clip.loop_length_samples != 0) {
+      try {
+        sonare::util::check::refuse_relation(
+            {path + ".loop_length_samples", path + ".loop"},
+            sonare::util::refusal::kMidiClipLoopLengthUnlessLoopEnabledRelation);
+      } catch (const sonare::SonareParameterRefusal& refusal) {
+        throw sonare_field_spelling::wasm::Spelled(refusal, "engine_set_midi_clips");
+      }
     }
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
     val events_val = clip_val["events"];

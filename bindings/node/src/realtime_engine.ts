@@ -1916,7 +1916,8 @@ export class RealtimeEngine {
 
   /**
    * Replace the realtime MIDI clip snapshot. Events are absolute render-frame
-   * UMP events compiled for the engine timeline.
+   * UMP events compiled for the engine timeline. A looping clip needs a positive
+   * `loopLengthSamples`; omit that field for a one-shot clip.
    */
   setMidiClips(clips: ReadonlyArray<EngineMidiClipSchedule>): void {
     if (Array.isArray(clips)) {

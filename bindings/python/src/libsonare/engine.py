@@ -902,7 +902,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     @_entry("RealtimeEngine.set_midi_clips")
     def set_midi_clips(self, clips: Sequence[EngineMidiClipSchedule]) -> None:
-        """Replace the realtime MIDI clip snapshot with compiled schedules."""
+        """Replace the realtime MIDI clip snapshot with compiled schedules.
+
+        ``None`` leaves the loop period absent; an explicit zero is refused because
+        the C field uses zero as its absence sentinel. A positive period on a
+        one-shot clip reaches the C relation check and is refused there.
+        """
         lib = _get_lib()
         event_arrays: list[ctypes.Array[_ffi_project.SonareEngineMidiEvent]] = []
         raw_clips = (_ffi_project.SonareEngineMidiClipSchedule * len(clips))()
@@ -949,8 +954,15 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 )
             event_arrays.append(raw_events)
             track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
-            # An omitted length keeps the init's OPEN_ENDED and an omitted loop period its 0;
-            # a given 0 length is the C refusal's.
+            # The C ABI uses zero as the absent loop-period sentinel. Keep None
+            # distinct so an explicitly given zero is refused here.
+            loop_length_name = f"clips[{index}].loop_length_samples"
+            loop_length_samples = _given_positive(
+                clip.loop_length_samples, loop_length_name, _POSITIVE_COUNT
+            )
+            if loop_length_samples == 0:
+                raise _refuse(f"{loop_length_name} must be an integer of at least 1")
+            # An omitted length keeps the init's OPEN_ENDED sentinel.
             raw_clips[index] = _ffi_project.SonareEngineMidiClipSchedule._given(
                 id=_optional_positive_int(clip.id, "clip.id", _UINT32_MAX),
                 track_id=track_id,
@@ -960,7 +972,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     clip.length_samples, f"clips[{index}].length_samples", _POSITIVE_COUNT
                 ),
                 loop=1 if clip.loop else 0,
-                loop_length_samples=clip.loop_length_samples,
+                loop_length_samples=loop_length_samples,
                 destination_id=track_id if clip.destination_id is None else clip.destination_id,
                 events=raw_events,
                 event_count=len(clip.events),

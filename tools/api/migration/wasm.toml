@@ -30526,10 +30526,10 @@ test = "bindings/wasm/tests/public-input-conformance.test.ts::an engine field wh
 [[entry]]
 kind = "field"
 old = "EngineMidiClipSchedule.loopLengthSamples"
-changed = "an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1'"
+changed = "an integer of at least 1, required on a looping clip; an explicit 0 is refused and a nonzero period on a one-shot clip is refused instead of ignored"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
+test = "bindings/wasm/tests/absence-contract.test.ts::a MIDI clip length is absent for open-ended or a positive whole number"
 
 [[entry]]
 kind = "field"
@@ -36548,10 +36548,10 @@ test = "bindings/wasm/tests/list-element-readers.test.ts::an absent target"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiClips"
-changed = "a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number)"
+changed = "a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number); a supplied nonzero loop period on a one-shot clip is refused instead of ignored"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
+test = "bindings/wasm/tests/absence-contract.test.ts::a MIDI clip length is absent for open-ended or a positive whole number"
 
 [[entry]]
 kind = "method"

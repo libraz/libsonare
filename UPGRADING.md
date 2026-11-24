@@ -3360,7 +3360,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `EngineMetronomeConfig.click_samples` | int \| None, default None: None derives the length from click_sec, an explicit 0 raises SonareValueError, and metronome() reads an unset length back as None |
 | `EngineMidiClipSchedule.id` | int \| None, default None: None leaves the clip unidentified and an explicit 0 raises SonareValueError |
 | `EngineMidiClipSchedule.length_samples` | int \| None, default None: None is open-ended, and 0 or a negative length raises SonareValueError instead of reading as open-ended |
-| `EngineMidiClipSchedule.loop_length_samples` | int \| None, default None: None is no loop length; a given length is read only with loop=True, where 0 or a negative length raises SonareValueError |
+| `EngineMidiClipSchedule.loop_length_samples` | int \| None, default None: None is no loop length; a given length must be at least 1, so 0 or a negative length raises SonareValueError, and a positive period on a clip without loop=True is refused instead of ignored |
 | `EngineMidiClipSchedule.track_id` | int \| None, default None: None is no track and an explicit 0 raises SonareValueError; an omitted destination_id still falls back to it |
 | `ExternalMidiEvent.destination_id` | None for a clock/transport byte meant for every external port (was 0xFFFFFFFF) |
 | `Mixer.add_strip(true_peak_oversample)` | absent is None (the library default 4x); an explicit 0 raises SonareValueError |
@@ -6836,7 +6836,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineGraphNode.numPorts` | omit it for the spec's channel count; an explicit 0 is a RangeError reading 'spec.nodes[i].numPorts must be an integer in [1, 2147483647]' (0 used to select the channel count) |
 | `EngineMetronomeConfig.clickSamples` | clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError |
 | `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
-| `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
+| `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; on a one-shot clip omit it (explicit 0 is refused and a positive inactive period is refused by the core) |
 | `EngineTrackLane.outputBusId` | absent is the master mix; an explicit 0 is a RangeError |
 | `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError. A typed scene is a call argument. Structured refusals name scene.<path> and use TypeError for shape or RangeError for values. Mixer.fromJson retains InvalidFormat at document paths. |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
@@ -6861,7 +6861,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineBounceOptions.targetLufs` | absent is -14 LUFS; any finite value, 0 included, is a literal target; a non-finite value is a RangeError |
 | `RealtimeEngine.pushMidiInputUmp` | a fractional word in words is refused with a RangeError instead of truncated |
 | `RealtimeEngine.pushMidiUmp` | a fractional word in words is refused with a RangeError instead of truncated |
-| `RealtimeEngine.setMidiClips` | a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number) |
+| `RealtimeEngine.setMidiClips` | a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core |
 
 #### String values are lowerCamelCase tokens
 
@@ -12149,7 +12149,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineGraphSpec.parameterBindings` | every binding field is required: an absent paramId or nodeId is refused with TypeError naming parameterBindings[i].<field> (1.x read them as 0 and the empty string), and a binding that is not an object is a TypeError 'parameterBindings[i] must be an object' |
 | `EngineMetronomeConfig.clickSamples` | clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError |
 | `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
-| `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
+| `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is refused and a nonzero period on a one-shot clip is refused instead of ignored |
 | `EngineTempoSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `EngineTimeSignatureSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `EngineTrackLane.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
@@ -12161,7 +12161,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.popClipPageRequest` | returns undefined (was null) when no request is queued |
 | `RealtimeEngine.primeOfflineParameters` | blockSize is optional: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.setAutomationLane` | a point that is not an object is refused with TypeError 'points[i] must be an object' (1.x read it as a point with every field absent) |
-| `RealtimeEngine.setMidiClips` | a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number) |
+| `RealtimeEngine.setMidiClips` | a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number); a supplied nonzero loop period on a one-shot clip is refused instead of ignored |
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null): null routes to the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |

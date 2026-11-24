@@ -562,7 +562,11 @@ class EngineMidiClipSchedule:
     loop: bool = False
     """Whether the clip loops."""
     loop_length_samples: int | None = None
-    """Loop length in samples, read only when :attr:`loop` is set; None is no loop length."""
+    """Positive loop period in samples; ``None`` leaves the C field absent.
+
+    Zero is the C absence sentinel, so a supplied value must be positive.
+    The C entry refuses a positive period unless :attr:`loop` is true.
+    """
     # Linear gain applied to the destination instrument's rendered audio while
     # this clip is the most recently started active clip on it.
     gain: float = 1.0

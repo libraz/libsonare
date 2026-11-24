@@ -8110,7 +8110,7 @@ test = "bindings/node/tests/runtime-refusal-parity.test.ts::refuses a fractional
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiClips"
-changed = "a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number)"
+changed = "a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core"
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/node/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
@@ -16939,7 +16939,7 @@ test = "bindings/node/tests/public-input-conformance.test.ts::an engine field wh
 [[entry]]
 kind = "field"
 old = "EngineMidiClipSchedule.loopLengthSamples"
-changed = "an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1'"
+changed = "an integer of at least 1, required on a looping clip; on a one-shot clip omit it (explicit 0 is refused and a positive inactive period is refused by the core)"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"

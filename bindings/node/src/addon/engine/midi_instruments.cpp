@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "c_api/engine_config_domains.h"
 #include "core/audio.h"
 #include "engine/common.h"
 #include "engine/realtime_engine.h"
@@ -106,7 +107,19 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     clip.length_samples =
         Int64Property(obj, "lengthSamples", AbsentIsSentinel<int64_t>{clip.length_samples});
     clip.loop = BoolProperty(obj, "loop", clip.loop != 0) ? 1 : 0;
-    clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", clip.loop_length_samples);
+    if (env.IsExceptionPending()) return env.Undefined();
+    const Napi::Value loop_length_value = obj.Get("loopLengthSamples");
+    const bool has_loop_length = !loop_length_value.IsUndefined() && !loop_length_value.IsNull();
+    const std::string loop_subject = "clips[" + std::to_string(i) + "].loopLengthSamples";
+    if (has_loop_length &&
+        !sonare_node::RequiredInt64Value(env, loop_length_value, loop_subject.c_str(),
+                                         &clip.loop_length_samples)) {
+      return env.Undefined();
+    }
+    if (!clip.loop && has_loop_length && clip.loop_length_samples == 0) {
+      sonare::util::check::refuse_outside(sonare_c_detail::kEngineMidiClipLoopLengthDomain,
+                                          loop_subject.c_str());
+    }
     clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
     clip.gain = FloatProperty(obj, "gain", clip.gain);
     clip.fade_in_samples = Int64Property(obj, "fadeInSamples", clip.fade_in_samples);

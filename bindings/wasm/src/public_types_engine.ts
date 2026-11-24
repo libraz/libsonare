@@ -692,7 +692,7 @@ export interface EngineMidiClipSchedule {
   lengthSamples?: number;
   /** Whether the clip repeats. Omitted: `false`. */
   loop?: boolean;
-  /** Length of one loop repeat in samples, a positive whole number; required when `loop` is set and ignored otherwise. */
+  /** Positive loop period in samples, required when `loop` is true. Omit for a one-shot clip; a supplied 0 or nonzero inactive period is refused. */
   loopLengthSamples?: number;
   /** Events with absolute render frames. */
   events: EngineMidiEvent[];
