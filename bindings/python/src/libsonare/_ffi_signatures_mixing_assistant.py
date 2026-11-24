@@ -27,6 +27,12 @@ _SUGGEST_ARGTYPES: list[Any] = [
 
 
 def configure_mixing_assistant_signatures(lib: ctypes.CDLL) -> None:
+    lib.sonare_validate_mixing_assistant_config.restype = ctypes.c_int32
+    lib.sonare_validate_mixing_assistant_config.argtypes = [
+        ctypes.c_int,
+        ctypes.POINTER(SonareMasteringParam),
+        ctypes.c_size_t,
+    ]
     lib.sonare_mixing_assistant_suggest.restype = ctypes.c_int32
     lib.sonare_mixing_assistant_suggest.argtypes = list(_SUGGEST_ARGTYPES)
     lib.sonare_mixing_assistant_source_class_names.restype = ctypes.c_char_p

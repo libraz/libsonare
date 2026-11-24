@@ -8,10 +8,6 @@
 
 #include "sonare_cli.h"
 
-#ifdef SONARE_WITH_MIXING_ASSISTANT
-#include "mastering/assistant/audio_profile.h"
-#endif
-
 #ifdef SONARE_WITH_MIXING
 mixing::PanMode parse_pan_mode_option(const std::string& value) {
   // The scene JSON's pan mode tokens; --pan-mode spells each in kebab-case.
@@ -521,25 +517,6 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
 
   const auto params = parse_mastering_params(args.get_string("params"));
   auto config = mixing::assistant::mix_assistant_config_from_params(params.data(), params.size());
-  // The mixer rate is known before auto tempo or track decoding reads input.
-  if (args.has("sample-rate") && is_supported_sample_rate(sample_rate)) {
-    mastering::assistant::AudioProfileConfig profile;
-    profile.n_fft = config.n_fft;
-    profile.hop_length = config.hop_length;
-    try {
-      (void)with_cli_bag_refusals("--params", params, [&] {
-        return mastering::assistant::profile_stft_config(profile, sample_rate);
-      });
-    } catch (const SonareParameterRefusal& refusal) {
-      const auto shown = refusal.respelled(
-          refusal.code(),
-          [](const std::string& subject) {
-            return subject == "sample_rate" ? cli_bag_subject("--sample-rate", "") : subject;
-          },
-          true);
-      throw CliUsageError(shown.what());
-    }
-  }
   std::optional<AssistantTrack> first_track;
   if (args.has("tempo-bpm")) {
     const std::string tempo_text = args.get_string("tempo-bpm");

@@ -673,6 +673,19 @@ SonareError sonare_mastering_analyze_pair_stereo(
   SONARE_C_CATCH
 }
 
+SonareError sonare_validate_mastering_stereo_analysis_params(const char* analysis,
+                                                             const SonareMasteringParam* params,
+                                                             size_t param_count) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_REQUIRE_NONNULL(analysis);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_TRY
+  const auto cpp_params = to_params(params, param_count);
+  sonare::mastering::api::validate_named_stereo_analysis_params(analysis, cpp_params);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,
@@ -685,8 +698,9 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* l
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY
-  auto json = sonare::mastering::api::analyze_named_stereo(
-      analysis, left, right, length, sample_rate, to_params(params, param_count));
+  const auto cpp_params = to_params(params, param_count);
+  const auto json = sonare::mastering::api::analyze_named_stereo(analysis, left, right, length,
+                                                                 sample_rate, cpp_params);
   *json_out = copy_string(json);
   return SONARE_OK;
   SONARE_C_CATCH

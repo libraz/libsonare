@@ -228,3 +228,48 @@ def test_streaming_rejected_structural_update_preserves_processing_state() -> No
     finally:
         chain.close()
         control.close()
+
+
+def test_stereo_log_band_params_name_the_caller_keys_and_keep_their_defaults() -> None:
+    import libsonare
+
+    sample_rate = 48000
+    left = sine(220.0, 0.5, sr=sample_rate, amp=0.2)
+    right = sine(440.0, 0.5, sr=sample_rate, amp=0.35)
+    analysis = "stereo.monoCompatCheckLogBands"
+
+    defaults = libsonare.mastering_analyze_stereo(analysis, left, right, sample_rate)
+    spelled_defaults = libsonare.mastering_analyze_stereo(
+        analysis,
+        left,
+        right,
+        sample_rate,
+        {"bandsPerOctave": 3, "lowHz": 20.0, "highHz": 20000.0},
+    )
+    assert len(defaults.bands) == len(spelled_defaults.bands)
+    for actual, expected in zip(defaults.bands, spelled_defaults.bands, strict=True):
+        assert actual.low_hz == pytest.approx(expected.low_hz)
+        assert actual.high_hz == pytest.approx(expected.high_hz)
+        assert actual.side_rms == pytest.approx(expected.side_rms)
+        if actual.correlation is None:
+            assert expected.correlation is None
+        else:
+            assert actual.correlation == pytest.approx(expected.correlation)
+
+    near_boundary = libsonare.mastering_analyze_stereo(
+        analysis,
+        left,
+        right,
+        sample_rate,
+        {"bandsPerOctave": 1, "lowHz": 1.0, "highHz": sample_rate / 2},
+    )
+    assert near_boundary.bands
+
+    with raises_coded(match=r"params\.bandsPerOctave"):
+        libsonare.mastering_analyze_stereo(
+            analysis, left, right, sample_rate, {"bandsPerOctave": 0}
+        )
+    with raises_coded(match=r"params\.lowHz"):
+        libsonare.mastering_analyze_stereo(analysis, left, right, sample_rate, {"lowHz": 0.0})
+    with raises_coded(match=r"params\.highHz"):
+        libsonare.mastering_analyze_stereo(analysis, left, right, sample_rate, {"highHz": 0.0})

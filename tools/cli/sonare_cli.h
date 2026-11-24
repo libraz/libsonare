@@ -151,6 +151,10 @@ sonare::util::json::Value parse_cli_json_document(const std::string& text);
 ///        dropped from the front of each refusal subject.
 [[noreturn]] void throw_c_failure(SonareError err, const char* root,
                                   const char* bag_flag = nullptr);
+/// Renders a structured C refusal under the supplied CLI argument names.
+std::string c_failure_message(const char* root, const char* bag_flag, const char* rate_option);
+/// Returns the stereo analysis bag's argv refusal, or an empty string.
+std::string stereo_analysis_params_refusal(const CliArgs& args);
 /// Runs one library call and respells only structured subjects matching fields supplied in the
 /// named CLI bag; unrelated subjects retain their library spelling.
 template <typename Parameters, typename Function>

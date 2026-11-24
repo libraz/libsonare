@@ -51,7 +51,7 @@ from ._cli_repair import (
 from ._cli_repair import (
     register_repair_parsers,
 )
-from ._errors import SonareError, _malformed_output
+from ._errors import ErrorCode, SonareError, _malformed_output
 from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
 from ._narrowing import _FLOAT32_MAX
 from ._result_records import _result_to_json_dict
@@ -835,6 +835,29 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
         if output:
             print(f"    Wrote: {output}")
     return 0
+
+
+def _stereo_analysis_params_refusal(args: argparse.Namespace) -> str | None:
+    from ._mastering_offline import _mastering_params
+    from ._runtime import _check, _get_lib, _render_as_given, _to_c_size_t, _utf8_arg
+
+    raw = args.params or ""
+    params, param_count = _mastering_params(_parse_kv_params(raw))
+    lib = _get_lib()
+    with _cli_key_subjects("--params", _params_keys(raw)):
+        rc = lib.sonare_validate_mastering_stereo_analysis_params(
+            _utf8_arg(args.analysis, "analysis"),
+            params,
+            _to_c_size_t(param_count, "param_count"),
+        )
+        if rc == ErrorCode.OK:
+            return None
+        if rc != ErrorCode.INVALID_PARAMETER:
+            _check(rc, flattened="params")
+        rendered = _render_as_given(lib, "params", None)
+    if rendered is not None:
+        return rendered[0]
+    return (lib.sonare_last_error_message() or b"").decode("utf-8")
 
 
 def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:

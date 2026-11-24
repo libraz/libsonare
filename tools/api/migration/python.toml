@@ -15204,3 +15204,12 @@ changed = "a refused nFft or hopLength raises SonareValueError naming the key un
 domain = "mastering"
 rule = "individual"
 test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_both_audio_profile_entries_refuse_an_odd_n_fft"
+
+[[entry]]
+kind = "option"
+old = "mastering_stereo_analyze(params)"
+to = "mastering_analyze_stereo(params)"
+changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text"
+domain = "mastering"
+rule = "individual"
+test = "bindings/python/tests/test_mastering_stereo_surface.py::test_stereo_log_band_params_name_the_caller_keys_and_keep_their_defaults"

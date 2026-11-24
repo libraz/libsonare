@@ -195,6 +195,10 @@ std::string analyze_named_pair(const std::string& name, const float* source_left
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
                                  std::size_t length, int sample_rate,
                                  const std::vector<Param>& params = {});
+/// Validates only the stereo-analysis parameters decidable without the audio/sample rate.
+/// Rate-dependent values remain for @ref analyze_named_stereo after the input is decoded.
+void validate_named_stereo_analysis_params(const std::string& name,
+                                           const std::vector<Param>& params);
 
 /// @brief Every dotted field path the named analysis' JSON emits, one list per
 ///        result shape because the shape depends on the analysis name.

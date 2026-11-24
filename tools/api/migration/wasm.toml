@@ -25850,10 +25850,10 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringStereoAnalyze"
 to = "masteringAnalyzeStereo"
-changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object)"
+changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text"
 domain = "mastering"
 rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+test = "bindings/wasm/tests/mastering-pair-stereo-analysis.test.ts::names stereo log-band params from the caller and keeps their defaults"
 
 [[entry]]
 kind = "method"

@@ -690,6 +690,13 @@ SonareError sonare_mastering_analyze_pair_stereo(
     const float* reference_left, const float* reference_right, size_t reference_length,
     int reference_sample_rate, int sample_rate, const SonareMasteringParam* params,
     size_t param_count, char** json_out);
+/// @brief Validates stereo-analysis parameters that do not depend on decoded audio.
+/// @details For @c stereo.monoCompatCheckLogBands, @c params.bandsPerOctave must be an integer
+///          of at least 1. The lowHz and highHz bounds remain with the analysis call because they
+///          depend on its sample rate. This entry reads no audio and allocates no result.
+SonareError sonare_validate_mastering_stereo_analysis_params(const char* analysis,
+                                                             const SonareMasteringParam* params,
+                                                             size_t param_count);
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,

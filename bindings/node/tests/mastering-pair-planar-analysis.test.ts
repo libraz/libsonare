@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { masteringAnalyzePair } from '../src/index.js';
+import { masteringAnalyzePair, masteringAnalyzeStereo } from '../src/index.js';
 
 const SAMPLE_RATE = 22050;
 const DUPLICATE_LOUDNESS_DB = 10 * Math.log10(2);
 
-function signal(frequency: number, amplitude: number): Float32Array {
-  const samples = new Float32Array(SAMPLE_RATE);
+function signal(frequency: number, amplitude: number, sampleRate = SAMPLE_RATE): Float32Array {
+  const samples = new Float32Array(sampleRate);
   for (let index = 0; index < samples.length; index++) {
-    samples[index] = amplitude * Math.sin((2 * Math.PI * frequency * index) / SAMPLE_RATE);
+    samples[index] = amplitude * Math.sin((2 * Math.PI * frequency * index) / sampleRate);
   }
   return samples;
 }
@@ -229,6 +229,70 @@ describe('planar mastering pair analysis', () => {
         } as never),
       TypeError,
       'source[1]',
+    );
+  });
+
+  it('names stereo log-band params from the caller and keeps their defaults', () => {
+    const sampleRate = 48000;
+    const left = signal(220, 0.2, sampleRate);
+    const right = signal(440, 0.35, sampleRate);
+    const request = {
+      analysis: 'stereo.monoCompatCheckLogBands' as const,
+      left,
+      right,
+      sampleRate,
+    };
+
+    const defaults = masteringAnalyzeStereo(request);
+    const spelledDefaults = masteringAnalyzeStereo({
+      ...request,
+      params: { bandsPerOctave: 3, lowHz: 20, highHz: 20000 },
+    });
+    expect(defaults.bands).toHaveLength(spelledDefaults.bands.length);
+    defaults.bands.forEach((band, index) => {
+      const spelledBand = spelledDefaults.bands[index];
+      expect(spelledBand).toBeDefined();
+      if (!spelledBand) {
+        return;
+      }
+      expectClose(band.lowHz, spelledBand.lowHz);
+      expectClose(band.highHz, spelledBand.highHz);
+      expectOptionalClose(band.correlation, spelledBand.correlation);
+      expectClose(band.sideRms, spelledBand.sideRms);
+    });
+
+    const nearBoundary = masteringAnalyzeStereo({
+      ...request,
+      params: { bandsPerOctave: 1, lowHz: 1, highHz: sampleRate / 2 },
+    });
+    expect(nearBoundary.bands.length).toBeGreaterThan(0);
+
+    expectNamedError(
+      () =>
+        masteringAnalyzeStereo({
+          ...request,
+          params: { bandsPerOctave: 0 },
+        }),
+      RangeError,
+      'params.bandsPerOctave',
+    );
+    expectNamedError(
+      () =>
+        masteringAnalyzeStereo({
+          ...request,
+          params: { lowHz: 0 },
+        }),
+      RangeError,
+      'params.lowHz',
+    );
+    expectNamedError(
+      () =>
+        masteringAnalyzeStereo({
+          ...request,
+          params: { highHz: 0 },
+        }),
+      RangeError,
+      'params.highHz',
     );
   });
 });

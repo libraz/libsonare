@@ -21131,6 +21131,50 @@
       },
       "cases": [
         {
+          "id": "log_bands_count_before_read",
+          "argv": [
+            "mastering-stereo-analyze",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--reference",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--analysis",
+            "stereo.monoCompatCheckLogBands",
+            "--params",
+            "bandsPerOctave=0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--params bandsPerOctave must be an integer in [1, 2147483647]"
+          ]
+        },
+        {
+          "id": "log_bands_count_in_domain",
+          "argv": [
+            "mastering-stereo-analyze",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--reference",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--analysis",
+            "stereo.monoCompatCheckLogBands",
+            "--params",
+            "bandsPerOctave=1",
+            "--json"
+          ],
+          "exit": 4,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "/nonexistent/sonare-conformance/preinput-geometry.wav"
+          ]
+        },
+        {
           "id": "mono_compat_check",
           "argv": [
             "mastering-stereo-analyze",
@@ -23678,6 +23722,92 @@
         }
       },
       "cases": [
+        {
+          "id": "explicit_rate_fft_geometry_before_read",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--sample-rate",
+            "96000",
+            "--params",
+            "nFft=524288",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--params nFft rescaled to --sample-rate must fit the largest FFT size"
+          ]
+        },
+        {
+          "id": "explicit_rate_hop_geometry_before_auto_tempo",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--sample-rate",
+            "96000",
+            "--tempo-bpm",
+            "auto",
+            "--params",
+            "hopLength=1073741824",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--params hopLength rescaled to --sample-rate must fit the largest hop length"
+          ]
+        },
+        {
+          "id": "explicit_rate_first_geometry_before_read",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--sample-rate",
+            "96000",
+            "--params",
+            "hopLength=1073741824,nFft=524288",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--params nFft rescaled to --sample-rate must fit the largest FFT size"
+          ]
+        },
+        {
+          "id": "explicit_rate_geometry_in_domain",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "/nonexistent/sonare-conformance/preinput-geometry.wav",
+            "--sample-rate",
+            "48000",
+            "--params",
+            "hopLength=1073741824,nFft=524288",
+            "--json"
+          ],
+          "exit": 4,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "/nonexistent/sonare-conformance/preinput-geometry.wav"
+          ]
+        },
         {
           "id": "success",
           "argv": [

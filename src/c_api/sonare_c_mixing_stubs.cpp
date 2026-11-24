@@ -341,6 +341,13 @@ SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json
 
 void sonare_mixer_destroy(SonareMixer* mixer) { (void)mixer; }
 
+SonareError sonare_validate_mixing_assistant_config(int sample_rate,
+                                                    const SonareMasteringParam* params,
+                                                    size_t param_count) {
+  SONARE_C_API_ENTRY;
+  return refuse_not_compiled_in(Feature::kMixing, sample_rate, params, param_count);
+}
+
 SonareError sonare_mixing_assistant_suggest(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
     const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,

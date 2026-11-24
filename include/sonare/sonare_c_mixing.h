@@ -550,6 +550,16 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // array rather than one shared count; truncating every track to the shortest
 // would delete a part that only enters late in the song.
 
+/// Validates the analysis rate in Hz and the same flat configuration accepted by
+/// sonare_mixing_assistant_suggest() for a nonempty track set, without reading audio.
+/// Pass NULL and zero for the default parameters. Invalid values, including
+/// geometry that cannot be rescaled to the requested rate, return
+/// @c SONARE_ERROR_INVALID_PARAMETER. Returns @c SONARE_ERROR_NOT_SUPPORTED if
+/// the mixing assistant is compiled out.
+SonareError sonare_validate_mixing_assistant_config(int sample_rate,
+                                                    const SonareMasteringParam* params,
+                                                    size_t param_count);
+
 /// Analyses @c input_count tracks and writes a suggested scene, the measurements
 /// behind it and a human-readable explanation as a JSON object.
 ///

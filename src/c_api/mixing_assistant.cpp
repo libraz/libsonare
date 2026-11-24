@@ -17,6 +17,7 @@
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
 #include "c_api/mixing_input_domains.h"
+#include "mastering/assistant/audio_profile.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
@@ -32,12 +33,9 @@ namespace {
 
 namespace assistant = sonare::mixing::assistant;
 
-// Shared argument checking for the two suggest entry points. Kept as one
-// function so the two cannot drift into accepting different inputs.
 SonareError check_track_arrays(const float* const* input_left, const char* const* track_ids,
                                const size_t* track_lengths, const int* track_sample_rates,
-                               size_t input_count, int sample_rate,
-                               const SonareMasteringParam* params, size_t param_count) {
+                               size_t input_count) {
   if (input_count != 0) {
     SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(input_left, input_count);
     SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(track_ids, input_count);
@@ -60,6 +58,13 @@ SonareError check_track_arrays(const float* const* input_left, const char* const
         }
       }
     }
+  }
+  return SONARE_OK;
+}
+
+SonareError check_assistant_args(int sample_rate, const SonareMasteringParam* params,
+                                 size_t param_count, bool has_rate) {
+  if (has_rate) {
     if (const SonareError err = run_validation([&] {
           sonare::util::check::integer_within(sample_rate, kMixingAssistantSampleRateDomain,
                                               "sample_rate");
@@ -70,6 +75,27 @@ SonareError check_track_arrays(const float* const* input_left, const char* const
   }
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   return SONARE_OK;
+}
+
+constexpr std::array<CName, 2> kProfileParamNames{
+    {{"n_fft", "params.nFft"}, {"hop_length", "params.hopLength"}}};
+
+assistant::MixAssistantConfig admit_assistant_config(int sample_rate,
+                                                     const SonareMasteringParam* params,
+                                                     size_t param_count, bool has_rate) {
+  const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
+  const auto config = sonare::util::check::under_member("params", [&] {
+    return assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
+  });
+  if (has_rate) {
+    sonare::mastering::assistant::AudioProfileConfig profile;
+    profile.n_fft = config.n_fft;
+    profile.hop_length = config.hop_length;
+    with_c_names(kProfileParamNames, [&] {
+      return sonare::mastering::assistant::profile_stft_config(profile, sample_rate);
+    });
+  }
+  return config;
 }
 
 std::vector<assistant::TrackInput> build_tracks(
@@ -97,6 +123,24 @@ std::vector<assistant::TrackInput> build_tracks(
 
 }  // namespace
 
+SonareError sonare_validate_mixing_assistant_config(int sample_rate,
+                                                    const SonareMasteringParam* params,
+                                                    size_t param_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+  if (const SonareError err = check_assistant_args(sample_rate, params, param_count, true);
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_TRY
+  admit_assistant_config(sample_rate, params, param_count, true);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return refuse_not_compiled_in(Feature::kMixingAssistant, sample_rate, params, param_count);
+#endif
+}
+
 SonareError sonare_mixing_assistant_suggest(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
     const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
@@ -106,23 +150,22 @@ SonareError sonare_mixing_assistant_suggest(
   SONARE_C_ZERO_OUTS(json_out);
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   if (const SonareError err =
-          check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,
-                             sample_rate, params, param_count);
+          check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err =
+          check_assistant_args(sample_rate, params, param_count, input_count != 0);
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
-  const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
-  const auto config = sonare::util::check::under_member("params", [&] {
-    return assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
-  });
+  const auto config = admit_assistant_config(sample_rate, params, param_count, input_count != 0);
   std::vector<std::vector<float>> resampled;
   const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
                                    track_sample_rates, input_count, sample_rate, resampled);
-  constexpr std::array<CName, 2> kProfileParamNames{
-      {{"n_fft", "params.nFft"}, {"hop_length", "params.hopLength"}}};
   const auto result =
       with_c_names(kProfileParamNames, [&] { return assistant::suggest_scene(tracks, config); });
   *json_out = copy_string(assistant::mix_assistant_result_to_json(result));

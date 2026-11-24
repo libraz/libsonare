@@ -308,6 +308,7 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"transcribe", "config.segmentation_threshold_cents", kTranscribeSegmentationCentsDomain,
      nullptr},
     {"transcribe", "config.velocity_floor_db", kTranscribeVelocityFloorDbDomain, nullptr},
+    {"validate_mixing_assistant_config", "sample_rate", kMixingAssistantSampleRateDomain, nullptr},
     {"vocal_session_create", "options.frame_length_samples", kVocalCreateFrameLengthDomain,
      nullptr},
     {"vocal_session_create", "options.hop_length_samples", kVocalCreateHopLengthDomain, nullptr},

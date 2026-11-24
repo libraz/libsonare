@@ -1246,6 +1246,31 @@ std::string analyze_named_pair(const std::string& name, const float* source_left
   return analyze_pair(name, left, reference_l, &right, &reference_r, map);
 }
 
+namespace {
+
+std::optional<int> admit_stereo_analysis(const std::string& name, const ParamMap& params) {
+  if (name == "stereo.monoCompatCheck") return std::nullopt;
+  if (name != "stereo.monoCompatCheckLogBands") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown mastering stereo analysis: " + name);
+  }
+  return sonare::util::check::under_member("params", [&] {
+    return detail::with_caller_keys(params, "", [&] {
+      const int count = i(params, "bandsPerOctave", 3);
+      ::sonare::mastering::stereo::check_mono_compat_bands_per_octave(count, "bands_per_octave");
+      return count;
+    });
+  });
+}
+
+}  // namespace
+
+void validate_named_stereo_analysis_params(const std::string& name,
+                                           const std::vector<Param>& params) {
+  const ParamMap map = make_map(params);
+  (void)admit_stereo_analysis(name, map);
+}
+
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
                                  std::size_t length, int sample_rate,
                                  const std::vector<Param>& params) {
@@ -1253,12 +1278,13 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
   validate_offline_audio_input("left", left, length, sample_rate);
   validate_offline_audio_input("right", right, length, sample_rate);
   auto map = make_map(params);
+  const auto bands_per_octave = admit_stereo_analysis(name, map);
   // See analyze_named_pair(): mono_compat_check reports +inf width for a fully
   // out-of-phase pair (zero mid energy), so the serializer has to be the one in
   // util/json.h, which turns that into `null` instead of an unparseable "inf".
   namespace json_ns = sonare::util::json;
   json_ns::Object root;
-  if (name == "stereo.monoCompatCheck") {
+  if (!bands_per_octave) {
     auto result = ::sonare::mastering::stereo::mono_compat_check(
         left, right, length, f(map, "correlationThreshold", 0.0f));
     put_level(root, "correlation", result.correlation);
@@ -1266,12 +1292,16 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
     util::json::put(root, "monoPeak", result.mono_peak);
     util::json::put(root, "sideRms", result.side_rms);
     util::json::put(root, "likelyMonoCompatible", result.likely_mono_compatible);
-  } else if (name == "stereo.monoCompatCheckLogBands") {
-    // An absent highHz is resolved by the band layout, which lowers it to Nyquist.
-    const float high_hz = f(map, "highHz", 20000.0f);
-    auto bands = ::sonare::mastering::stereo::mono_compat_check_log_bands(
-        left, right, length, sample_rate, i(map, "bandsPerOctave", 3), f(map, "lowHz", 20.0f),
-        map.has("highHz") ? std::optional<float>(high_hz) : std::nullopt);
+  } else {
+    auto bands = sonare::util::check::under_member("params", [&] {
+      return detail::with_caller_keys(map, "", [&] {
+        // An absent highHz is resolved by the band layout, which lowers it to Nyquist.
+        const float high_hz = f(map, "highHz", 20000.0f);
+        return ::sonare::mastering::stereo::mono_compat_check_log_bands(
+            left, right, length, sample_rate, *bands_per_octave, f(map, "lowHz", 20.0f),
+            map.has("highHz") ? std::optional<float>(high_hz) : std::nullopt);
+      });
+    });
     json_ns::Array band_values;
     band_values.reserve(bands.size());
     for (const auto& band : bands) {
@@ -1283,9 +1313,6 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
       band_values.emplace_back(json_ns::Value(std::move(entry)));
     }
     util::json::put(root, "bands", std::move(band_values));
-  } else {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "unknown mastering stereo analysis: " + name);
   }
   detail::refuse_unread_params(map);
   return json_ns::dump(json_ns::Value(std::move(root)));

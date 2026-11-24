@@ -392,6 +392,11 @@ CliValidationError validate_numeric_params(const CliArgs& args) {
   return {};
 }
 
+CliValidationError validate_stereo_analysis_params(const CliArgs& args) {
+  if (CliValidationError error = validate_numeric_params(args); !error.empty()) return error;
+  return {stereo_analysis_params_refusal(args)};
+}
+
 CliValidationError validate_mastering_arguments(const CliArgs& args) {
   if (CliValidationError error = validate_mastering_selection(args); !error.empty()) return error;
   if (CliValidationError error = validate_params_grammar(args); !error.empty()) return error;
@@ -1460,7 +1465,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {with_domain(required_string("analysis"),
                              choices_of(mastering::api::stereo_analysis_names())),
                  required_path("reference"), string_value("params")},
-                {}, validate_numeric_params);
+                {}, validate_stereo_analysis_params);
     // `--config-out` writes the suggested chain in the core's own chain-config
     // form, which is what `mastering --chain-config` reads back -- the same
     // role `suggest-mix --scene-out` plays for a mix scene.

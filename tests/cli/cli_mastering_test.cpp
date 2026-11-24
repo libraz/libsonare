@@ -2098,7 +2098,7 @@ TEST_CASE("CLI suggest-mix checks STFT rescaling against the selected rate befor
     INFO(refused.err << refused.out);
     CHECK(refused.exit_code == 2);
     CHECK(refused.out.empty());
-    CHECK(refused.err == "\nError: " + row.message + "\n");
+    CHECK(refused.err == "Error: " + row.message + "\nTry 'sonare-cli --help'.\n");
     CHECK_FALSE(std::ifstream(row.scene).good());
   }
 

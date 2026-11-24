@@ -754,6 +754,17 @@ def _validate_params_grammar(args: argparse.Namespace, parser: argparse.Argument
         parser.error(refusal)
 
 
+def _validate_stereo_analysis_params(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    from ._cli_mastering import _stereo_analysis_params_refusal
+
+    _validate_params_grammar(args, parser)
+    refusal = _stereo_analysis_params_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
 def _validate_processor_params(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     from ._cli_mastering import _processor_params_refusal
 
@@ -922,7 +933,7 @@ _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentPa
     "mastering-profile": _validate_params_grammar,
     "mastering-pair-processor": _validate_params_grammar,
     "mastering-pair-analyze": _validate_params_grammar,
-    "mastering-stereo-analyze": _validate_params_grammar,
+    "mastering-stereo-analyze": _validate_stereo_analysis_params,
     "mastering-streaming": _validate_streaming_platforms,
     "project.bounce": _validate_project_bounce,
     "project.align-takes": _validate_project_align_takes,

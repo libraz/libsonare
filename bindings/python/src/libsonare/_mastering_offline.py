@@ -178,7 +178,10 @@ def _insert_params(
 
 
 def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
-    items = list((params or {}).items())
+    return _mastering_param_items(list((params or {}).items()))
+
+
+def _mastering_param_items(items: list[tuple[str, float | int | bool]]) -> tuple[Any, int]:
     array_type = SonareMasteringParam * len(items)
     key_buffers = [_utf8_arg(str(key), "key") for key, _ in items]
     array = array_type(

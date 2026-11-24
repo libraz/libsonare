@@ -6571,7 +6571,7 @@ test = "tests/api/sonare_c_mastering_test.cpp::mastering profile refuses an odd 
 [[entry]]
 kind = "option"
 old = "sonare_mixing_assistant_suggest(params)"
-changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.hopLength rescaled to sample_rate must fit the largest hop length')"
+changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.hopLength rescaled to sample_rate must fit the largest hop length'); with at least one track, invalid rescaled geometry is refused before analysis, including when all tracks would be excluded"
 domain = "mastering"
 rule = "individual"
 test = "tests/mixing/assistant/track_profile_test.cpp::the mixing-assistant C entry roots a params refusal at params"
@@ -6591,3 +6591,11 @@ changed = "fmin_hz and fmax_hz must be finite; a linear sweep refuses a negative
 domain = "analysis"
 rule = "individual"
 test = "tests/api/sonare_c_mixing_features_test.cpp::C chirp refuses frequencies outside the selected sweep's domain"
+
+[[entry]]
+kind = "option"
+old = "sonare_mastering_analyze_stereo(params)"
+changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering stereo analysis parameter admission"

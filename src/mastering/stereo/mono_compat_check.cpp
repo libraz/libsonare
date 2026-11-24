@@ -68,6 +68,10 @@ std::pair<size_t, size_t> band_bin_span(double low_hz, double high_hz, size_t n_
 
 }  // namespace
 
+void check_mono_compat_bands_per_octave(int bands_per_octave, const char* subject) {
+  check::integer_at_least(bands_per_octave, 1, subject);
+}
+
 MonoCompatResult mono_compat_check(const float* left, const float* right, size_t length,
                                    float correlation_threshold) {
   if (length == 0 || left == nullptr || right == nullptr) {
@@ -102,7 +106,7 @@ std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left,
                           "mono compatibility buffers must not be empty or null");
   }
   check::greater_than(sample_rate, 0.0, "sample_rate");
-  check::integer_at_least(bands_per_octave, 1, "bands_per_octave");
+  check_mono_compat_bands_per_octave(bands_per_octave, "bands_per_octave");
   const double nyquist = sample_rate * 0.5;
   const double upper_limit =
       high_hz_given ? nyquist : std::min(static_cast<double>(kDefaultHighHz), nyquist);

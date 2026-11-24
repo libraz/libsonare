@@ -118,6 +118,11 @@ void check_c_assistant_geometry_at_rates(const char* key, double value,
                                            &sample_rate, 1, sample_rate, params, 1, out);
   };
 
+  CHECK(sonare_validate_mixing_assistant_config(2 * kSampleRate, params, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == expected_message);
+  CHECK(sonare_validate_mixing_assistant_config(kSampleRate, params, 1) == SONARE_OK);
+
   char output_sentinel[] = "must be cleared";
   char* json_out = output_sentinel;
   CHECK(suggest(2 * kSampleRate, &json_out) == SONARE_ERROR_INVALID_PARAMETER);

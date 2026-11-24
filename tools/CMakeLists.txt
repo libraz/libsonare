@@ -31,6 +31,9 @@ if(BUILD_MASTERING)
   # unit is in no static lib the CLI links, and it returns through the
   # sonare_free_* helpers, so both are compiled in here.
   target_sources(sonare PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_apply.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_chain.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_preset.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_streaming.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_memory.cpp
   )

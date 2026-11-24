@@ -1,24 +1,24 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masteringAnalyzePair } from '../dist/index.js';
+import { init, masteringAnalyzePair, masteringAnalyzeStereo } from '../dist/index.js';
 
 beforeAll(async () => {
   await init();
 });
 
 const SAMPLE_RATE = 22050;
-const SAMPLE_COUNT = SAMPLE_RATE;
 const LOUDNESS_PAIR_OFFSET_DB = 10 * Math.log10(2);
 
-function makePair(): { source: Float32Array; reference: Float32Array } {
-  const source = new Float32Array(SAMPLE_COUNT);
-  const reference = new Float32Array(SAMPLE_COUNT);
-  for (let i = 0; i < SAMPLE_COUNT; i++) {
+function makePair(sampleRate = SAMPLE_RATE): { source: Float32Array; reference: Float32Array } {
+  const sampleCount = sampleRate;
+  const source = new Float32Array(sampleCount);
+  const reference = new Float32Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) {
     source[i] =
-      0.2 * Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE) +
-      0.11 * Math.sin((2 * Math.PI * 733 * i) / SAMPLE_RATE) +
-      0.04 * Math.sin((2 * Math.PI * 3011 * i) / SAMPLE_RATE);
+      0.2 * Math.sin((2 * Math.PI * 220 * i) / sampleRate) +
+      0.11 * Math.sin((2 * Math.PI * 733 * i) / sampleRate) +
+      0.04 * Math.sin((2 * Math.PI * 3011 * i) / sampleRate);
   }
-  for (let i = 19; i < SAMPLE_COUNT; i++) {
+  for (let i = 19; i < sampleCount; i++) {
     reference[i] = 0.5 * source[i - 19];
   }
   return { source, reference };
@@ -60,6 +60,17 @@ function expectEveryMeasuredFieldClose(actual: unknown, expected: unknown, path 
     return;
   }
   expect(actual, path).toEqual(expected);
+}
+
+function expectNamedRangeError(run: () => unknown, subject: string): void {
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(RangeError);
+  expect((caught as Error).message).toContain(subject);
 }
 
 describe('masteringAnalyzePair planar stereo analysis', () => {
@@ -191,5 +202,54 @@ describe('masteringAnalyzePair planar stereo analysis', () => {
         sampleRate: SAMPLE_RATE,
       }),
     ).toThrowError(new TypeError('masteringAnalyzePair: source[1] must be a Float32Array'));
+  });
+
+  it('names stereo log-band params from the caller and keeps their defaults', () => {
+    const sampleRate = 48000;
+    const { source, reference } = makePair(sampleRate);
+    const request = {
+      analysis: 'stereo.monoCompatCheckLogBands' as const,
+      left: source,
+      right: reference,
+      sampleRate,
+    };
+
+    const defaults = masteringAnalyzeStereo(request);
+    const spelledDefaults = masteringAnalyzeStereo({
+      ...request,
+      params: { bandsPerOctave: 3, lowHz: 20, highHz: 20000 },
+    });
+    expectEveryMeasuredFieldClose(defaults, spelledDefaults);
+
+    const nearBoundary = masteringAnalyzeStereo({
+      ...request,
+      params: { bandsPerOctave: 1, lowHz: 1, highHz: sampleRate / 2 },
+    });
+    expect(nearBoundary.bands.length).toBeGreaterThan(0);
+
+    expectNamedRangeError(
+      () =>
+        masteringAnalyzeStereo({
+          ...request,
+          params: { bandsPerOctave: 0 },
+        }),
+      'params.bandsPerOctave',
+    );
+    expectNamedRangeError(
+      () =>
+        masteringAnalyzeStereo({
+          ...request,
+          params: { lowHz: 0 },
+        }),
+      'params.lowHz',
+    );
+    expectNamedRangeError(
+      () =>
+        masteringAnalyzeStereo({
+          ...request,
+          params: { highHz: 0 },
+        }),
+      'params.highHz',
+    );
   });
 });

@@ -215,6 +215,13 @@ SonareError sonare_mastering_analyze_pair_stereo(
                                 reference_sample_rate, sample_rate, params, param_count);
 }
 
+SonareError sonare_validate_mastering_stereo_analysis_params(const char* analysis,
+                                                             const SonareMasteringParam* params,
+                                                             size_t param_count) {
+  SONARE_C_API_ENTRY;
+  return refuse_not_compiled_in(Feature::kMastering, analysis, params, param_count);
+}
+
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,

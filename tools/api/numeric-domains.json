@@ -8647,6 +8647,17 @@
       "sentinel": null
     },
     {
+      "entry": "validate_mixing_assistant_config",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "vocal_session_create",
       "param": "options.frame_length_samples",
       "kind": "integer",

@@ -51,6 +51,47 @@ SonareError create_chain_with_gain(const char* config, float static_gain_db, flo
 
 }  // namespace
 
+TEST_CASE("sonare_mastering stereo analysis parameter admission", "[c_api][mastering][stereo]") {
+  constexpr const char* log_bands = "stereo.monoCompatCheckLogBands";
+  constexpr const char* bands_refusal =
+      "params.bandsPerOctave must be an integer in [1, 2147483647]";
+  const SonareMasteringParam bad_count[] = {{"bandsPerOctave", 0.0}};
+  CHECK(sonare_validate_mastering_stereo_analysis_params(nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("analysis") != std::string::npos);
+  CHECK(sonare_validate_mastering_stereo_analysis_params("unknown", nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "unknown mastering stereo analysis: unknown");
+  CHECK(sonare_validate_mastering_stereo_analysis_params(log_bands, nullptr, 0) == SONARE_OK);
+  CHECK(sonare_validate_mastering_stereo_analysis_params("stereo.monoCompatCheck", bad_count, 1) ==
+        SONARE_OK);
+  CHECK(sonare_validate_mastering_stereo_analysis_params(log_bands, bad_count, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == bands_refusal);
+
+  constexpr int sample_rate = 48000;
+  const std::vector<float> samples(512, 0.25f);
+  char sentinel[] = "cleared on refusal";
+  char* out = sentinel;
+  CHECK(sonare_mastering_analyze_stereo(log_bands, samples.data(), samples.data(), samples.size(),
+                                        sample_rate, bad_count, 1,
+                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  CHECK(std::string(sonare_last_error_message()) == bands_refusal);
+  if (out != sentinel) sonare_free_string(out);
+
+  for (const char* key : {"lowHz", "highHz"}) {
+    const SonareMasteringParam bad_frequency[] = {{key, 0.0}};
+    out = sentinel;
+    CHECK(sonare_mastering_analyze_stereo(log_bands, samples.data(), samples.data(), samples.size(),
+                                          sample_rate, bad_frequency, 1,
+                                          &out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+    CHECK(std::string(sonare_last_error_message()).find(std::string("params.") + key) == 0);
+    if (out != sentinel) sonare_free_string(out);
+  }
+}
+
 TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   SECTION("streaming EQ handle processes JSON bands and exposes spectrum") {
     SonareEq* eq = nullptr;

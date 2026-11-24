@@ -33,6 +33,38 @@ std::string lowercase_cli_value(std::string value) {
   return value;
 }
 
+std::string c_failure_message(const char* root, const char* bag_flag, const char* rate_option) {
+  std::string message = sonare_last_error_message();
+  const size_t count = sonare_last_refusal_subject_count();
+  if (root != nullptr && count > 0) {
+    const std::string prefix = std::string(root) + ".";
+    const std::string indexed_prefix = std::string(root) + "[";
+    std::vector<std::string> subjects;
+    std::vector<const char*> pointers;
+    subjects.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      std::string subject = sonare_last_refusal_subject(i);
+      if (rate_option != nullptr && subject == "sample_rate") {
+        subject = rate_option;
+      } else if (bag_flag != nullptr &&
+                 (subject.rfind(prefix, 0) == 0 || subject.rfind(indexed_prefix, 0) == 0)) {
+        subject = cli_bag_subject(bag_flag, subject, root);
+      } else if (subject.rfind(prefix, 0) == 0) {
+        subject.erase(0, prefix.size());
+      }
+      subjects.push_back(std::move(subject));
+    }
+    for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
+    char* rendered = nullptr;
+    if (sonare_last_refusal_render(pointers.data(), nullptr, count, SONARE_PRESENCE_SPELLING_C,
+                                   &rendered) == SONARE_OK) {
+      message = rendered;
+      sonare_free_string(rendered);
+    }
+  }
+  return message;
+}
+
 std::vector<std::string> split_string(const std::string& text, char delimiter) {
   std::vector<std::string> values;
   std::stringstream stream(text);
@@ -211,6 +243,8 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
   std::stringstream stream(params);
   std::string item;
   bool tempo_in_params = false;
+  const bool explicit_rate = args.has("sample-rate");
+  std::vector<mastering::api::Param> explicit_params;
   std::string value_refusal;
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
@@ -245,14 +279,50 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
       return refusal.what();
     }
     if (key == "tempoBpm") tempo_in_params = true;
-    if (value_refusal.empty()) value_refusal = mix_assistant_value_refusal(key, value);
+    if (explicit_rate) {
+      explicit_params.push_back({key, value});
+    } else if (value_refusal.empty()) {
+      value_refusal = mix_assistant_value_refusal(key, value);
+    }
   }
   // Naming it twice is a contradiction rather than a precedence question.
   if (args.has("tempo-bpm") && tempo_in_params) {
     return std::string("--tempo-bpm and ") + cli_bag_subject("--params", "tempoBpm") +
            "= set the same value";
   }
+  if (explicit_rate) {
+    std::vector<SonareMasteringParam> params;
+    params.reserve(explicit_params.size());
+    for (const auto& param : explicit_params) params.push_back({param.key.c_str(), param.value});
+    const auto err = sonare_validate_mixing_assistant_config(args.get_int("sample-rate", 0),
+                                                             params.data(), params.size());
+    if (err != SONARE_OK) {
+      const auto message = c_failure_message("params", "--params", "--sample-rate");
+      if (err != SONARE_ERROR_INVALID_PARAMETER) {
+        throw SonareException(static_cast<ErrorCode>(err), message);
+      }
+      return message;
+    }
+  }
   return value_refusal;
+}
+#endif
+
+#ifdef SONARE_WITH_MASTERING
+std::string stereo_analysis_params_refusal(const CliArgs& args) {
+  const auto parsed = parse_mastering_params(args.get_string("params"));
+  std::vector<SonareMasteringParam> params;
+  params.reserve(parsed.size());
+  for (const auto& param : parsed) params.push_back({param.key.c_str(), param.value});
+  const auto analysis = args.get_string("analysis");
+  const auto err = sonare_validate_mastering_stereo_analysis_params(analysis.c_str(), params.data(),
+                                                                    params.size());
+  if (err == SONARE_OK) return {};
+  const auto message = c_failure_message("params", "--params", nullptr);
+  if (err != SONARE_ERROR_INVALID_PARAMETER) {
+    throw SonareException(static_cast<ErrorCode>(err), message);
+  }
+  return message;
 }
 #endif
 

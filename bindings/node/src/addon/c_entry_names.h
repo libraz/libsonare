@@ -1043,6 +1043,8 @@ inline constexpr std::string_view kTokens[] = {
     "trim_silence",
     "trim_silence_config_init",
     "tuning_to_reference_hz",
+    "validate_mastering_stereo_analysis_params",
+    "validate_mixing_assistant_config",
     "validate_transcribe_config",
     "vector_normalize",
     "version",

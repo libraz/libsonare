@@ -56,7 +56,7 @@ from ._cli_options import (
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._errors import ErrorCode
 from ._result_records import _result_to_json_dict
-from ._runtime import _get_lib, _render_as_given, _to_c_size_t
+from ._runtime import _check, _get_lib, _render_as_given, _to_c_int, _to_c_size_t
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -118,6 +118,29 @@ def _mix_assistant_value_refusal(key: str, value: float) -> str | None:
     return (lib.sonare_last_error_message() or b"").decode("utf-8")
 
 
+def _mix_assistant_config_refusal(
+    sample_rate: int, entries: list[tuple[str, float | int | bool]]
+) -> str | None:
+    from ._mastering_offline import _mastering_param_items
+
+    lib = _get_lib()
+    params, param_count = _mastering_param_items(entries)
+    with _cli_key_subjects(
+        "--params", (key for key, _ in entries), extra={"sample_rate": "--sample-rate"}
+    ):
+        rc = lib.sonare_validate_mixing_assistant_config(
+            _to_c_int(sample_rate, "sample_rate"), params, _to_c_size_t(param_count, "param_count")
+        )
+        if rc == ErrorCode.OK:
+            return None
+        if rc != ErrorCode.INVALID_PARAMETER:
+            _check(rc, flattened="params")
+        rendered = _render_as_given(lib, "params", None)
+    if rendered is not None:
+        return rendered[0]
+    return (lib.sonare_last_error_message() or b"").decode("utf-8")
+
+
 def mix_input_refusal(entries: list[str]) -> str | None:
     """The first malformed ``mix --input [ID=]WAV`` entry, or None; decided from argv alone."""
     for entry in entries:
@@ -153,6 +176,8 @@ def suggest_mix_refusal(args: argparse.Namespace) -> str | None:
     items = args.params.split(",")
     if items[-1] == "":
         items.pop()
+    explicit_rate = _option_supplied(args, "sample_rate")
+    explicit_params: list[tuple[str, float | int | bool]] = []
     value_refusal = None
     for item in items:
         key, separator, text = item.partition("=")
@@ -164,12 +189,16 @@ def suggest_mix_refusal(args: argparse.Namespace) -> str | None:
             return _cli_key_refusal("--params", key, "must be a finite number")
         if key not in known:
             return _cli_unknown_key("--params", key, known)
-        if value_refusal is None:
+        if explicit_rate:
+            explicit_params.append((key, value))
+        elif value_refusal is None:
             value_refusal = _mix_assistant_value_refusal(key, value)
     # The dedicated option and `--params tempoBpm=` reach one field, so naming both
     # is a contradiction rather than a precedence question.
     if args.tempo_bpm is not None and any(item.partition("=")[0] == "tempoBpm" for item in items):
         return "--tempo-bpm and --params tempoBpm= set the same value"
+    if explicit_rate:
+        return _mix_assistant_config_refusal(args.sample_rate, explicit_params)
     return value_refusal
 
 
