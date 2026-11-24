@@ -849,13 +849,6 @@ Napi::Value SonareWrap::EncodeAudio(const Napi::CallbackInfo& info) {
 
   const Napi::Value quality_value = options_object.Get("quality");
   if (!quality_value.IsUndefined() && !quality_value.IsNull()) {
-    const double quality =
-        sonare_node::DomainDoubleValue(env, quality_value, "quality", options.quality);
-    if (!std::isfinite(quality) || quality < 0.0 || quality > 1.0) {
-      Napi::RangeError::New(env, "quality must be finite and in [0, 1]")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
     options.quality = sonare_node::FloatProperty(options_object, "quality", options.quality);
   }
 

@@ -185,6 +185,39 @@ describe('audio tags and in-memory encoding', () => {
     );
   });
 
+  it('uses the encoder format and lowered float32 quality domain in both call forms', () => {
+    const supported = capabilities().encode.ffmpeg.includes('mp3');
+    for (const encode of [
+      (format: 'wav' | 'flac' | 'mp3', quality: number) =>
+        encodeAudio({ channels, sampleRate: sampleRate, format, quality }),
+      (format: 'wav' | 'flac' | 'mp3', quality: number) =>
+        encodeAudio(channels, sampleRate, { format, quality }),
+    ]) {
+      for (const format of ['wav', 'flac'] as const) {
+        expect(() => encode(format, 1.1)).toThrow(
+          new RangeError('encodeAudio: quality is not supported by this format'),
+        );
+      }
+      expect(() => encode('mp3', 1.01)).toThrow(
+        new RangeError('encodeAudio: quality must be finite and in [0, 1]'),
+      );
+      const rounded = 1 + Number.EPSILON;
+      expect(Math.fround(rounded)).toBe(1);
+      if (supported) {
+        const encoded = encode('mp3', rounded);
+        expect(encoded.length).toBeGreaterThan(0);
+        expect(encoded).toEqual(encode('mp3', 1));
+        expect(encode('mp3', -Number.MIN_VALUE)).toEqual(encode('mp3', 0));
+      } else {
+        for (const quality of [rounded, -Number.MIN_VALUE]) {
+          const error = thrownBy(() => encode('mp3', quality));
+          expect(error).toBeInstanceOf(SonareError);
+          expect(error).toMatchObject({ codeName: 'NotSupported', reason: 'notCompiledIn' });
+        }
+      }
+    }
+  });
+
   it('reports the named format, bit-depth, quality, sample-rate, and tag refusals', () => {
     expect(() => encodeAudio({ channels, sampleRate, format: 'WAV' as never })).toThrow(/format/);
     expect(() => encodeAudio({ channels, sampleRate, format: 'wav', bitDepth: 8 })).toThrow(
@@ -199,12 +232,6 @@ describe('audio tags and in-memory encoding', () => {
     expect(() => encodeAudio({ channels, sampleRate, format: 'wav', quality: Number.NaN })).toThrow(
       /quality/,
     );
-    expect(() =>
-      encodeAudio({ channels, sampleRate, format: 'mp3', quality: 1 + Number.EPSILON }),
-    ).toThrow(/quality/);
-    expect(() =>
-      encodeAudio({ channels, sampleRate, format: 'mp3', quality: -Number.MIN_VALUE }),
-    ).toThrow(/quality/);
     expect(() => encodeAudio({ channels, sampleRate: 400000, format: 'wav' })).toThrow(
       /sampleRate/,
     );

@@ -154,9 +154,6 @@ function normalizeEncodeAudio(args: readonly unknown[]): EncodeAudioRequest {
   }
   if (request.quality !== undefined && request.quality !== null) {
     assertFloatValue(request.quality, 'quality');
-    if (request.quality < 0 || request.quality > 1) {
-      throw refuse('quality must be finite and in [0, 1]');
-    }
   }
   return request;
 }

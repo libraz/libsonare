@@ -677,11 +677,7 @@ val js_encode_audio(val channels, const val& sample_rate_val, const val& options
 
   const val quality_value = options["quality"];
   if (!quality_value.isUndefined() && !quality_value.isNull()) {
-    const double quality = checkedDoubleFromVal(quality_value, "quality");
-    if (quality < 0 || quality > 1) {
-      throw WasmRangeError("quality must be finite and in [0, 1]");
-    }
-    encode_options.quality = static_cast<float>(quality);
+    encode_options.quality = checkedFloatFromVal(quality_value, "quality");
   }
 
   std::vector<std::string> tag_keys;
