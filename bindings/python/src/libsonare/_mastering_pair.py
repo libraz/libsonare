@@ -81,7 +81,8 @@ def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[A
 def _looks_like_channel_buffer(value: object) -> bool:
     """Whether a value can be one row of planar audio."""
     if isinstance(value, np.ndarray):
-        return value.ndim > 0
+        ndim: int = value.ndim
+        return ndim > 0
     return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
 
 

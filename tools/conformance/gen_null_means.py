@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate schemas/result-null-means.json from the core's per-result null lists.
 
 A JSON result writes a NaN member as an absent key and an infinite one as null, so

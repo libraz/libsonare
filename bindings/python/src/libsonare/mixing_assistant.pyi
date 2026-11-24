@@ -12,6 +12,7 @@ _FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 # attribute error under --strict while the module answers at runtime.
 _PARAM_KEYS: dict[str, str]
 _INTEGER_PARAMS: frozenset[str]
+_MIXING_ASSISTANT_BAG: str
 
 class MixAssistantTrack(NamedTuple):
     id: str

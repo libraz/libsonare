@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Literal, overload
 
@@ -62,6 +63,7 @@ from .types import (
 MAX_TRACK_LANES: int
 
 class RealtimeEngine:
+    def _require_handle(self) -> ctypes.c_void_p: ...
     def __init__(
         self,
         sample_rate: int,

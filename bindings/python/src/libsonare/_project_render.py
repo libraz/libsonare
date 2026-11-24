@@ -59,7 +59,7 @@ from ._types_engine import EngineMetronomeConfig
 _Row = TypeVar("_Row")
 
 
-def _binding_destination(binding: ProjectInstrumentBinding[object]) -> int:
+def _binding_destination(binding: ProjectInstrumentBinding[_Row]) -> int:
     """The destination a binding renders; an omitted id is destination 0."""
     return 0 if binding.destination_id is None else binding.destination_id
 
@@ -103,9 +103,9 @@ def _bounce_bindings(
     controller_profiles: Sequence[ProjectControllerProfileBinding],
     articulations: Sequence[ProjectArticulationBinding],
 ) -> tuple[
-    ctypes.Array | None,
+    ctypes.Array[SonareProjectControllerProfileBinding] | None,
     list[bytes],
-    ctypes.Array | None,
+    ctypes.Array[SonareProjectArticulationBinding] | None,
 ]:
     """Convert typed instrument-control bindings and keep their strings alive."""
     profile_names: list[bytes] = []
@@ -126,14 +126,16 @@ def _bounce_bindings(
         c_profiles[index].preset_name = encoded_name
 
     c_articulations = (SonareProjectArticulationBinding * len(articulations))()
-    for index, row in enumerate(articulations):
+    for index, articulation_row in enumerate(articulations):
         path = f"articulations[{index}]"
         c_articulations[index].destination_id = _to_c_uint32(
-            row.destination_id, f"{path}.destination_id"
+            articulation_row.destination_id, f"{path}.destination_id"
         )
-        c_articulations[index].channel = _narrow_int(row.channel, f"{path}.channel", 0, 15)
+        c_articulations[index].channel = _narrow_int(
+            articulation_row.channel, f"{path}.channel", 0, 15
+        )
         c_articulations[index].articulation = _articulation_value(
-            row.articulation, f"{path}.articulation"
+            articulation_row.articulation, f"{path}.articulation"
         )
     return (
         c_profiles if controller_profiles else None,
@@ -223,13 +225,13 @@ def _preflight_bounce_shapes(
             raise _refuse_type(f"{path}.preset_name must be a str")
 
     articulation_rows = _sequence_rows(articulations, "articulations")
-    for index, row in enumerate(articulation_rows):
+    for index, articulation_row in enumerate(articulation_rows):
         path = f"articulations[{index}]"
-        if not isinstance(row, ProjectArticulationBinding):
+        if not isinstance(articulation_row, ProjectArticulationBinding):
             raise _refuse_type(f"{path} must be a ProjectArticulationBinding")
-        _require_integer_shape(row.destination_id, f"{path}.destination_id")
-        _require_integer_shape(row.channel, f"{path}.channel")
-        if not isinstance(row.articulation, str):
+        _require_integer_shape(articulation_row.destination_id, f"{path}.destination_id")
+        _require_integer_shape(articulation_row.channel, f"{path}.channel")
+        if not isinstance(articulation_row.articulation, str):
             raise _refuse_type(f"{path}.articulation must be a str")
 
     return (
@@ -306,6 +308,9 @@ class _ProjectRenderMixin:
     if TYPE_CHECKING:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
+
+        @property
+        def sample_rate(self) -> float: ...
 
         def last_bounce_compile_result(self) -> ProjectCompileResult | None: ...
 
@@ -456,10 +461,11 @@ class _ProjectRenderMixin:
             options.instrument_count = _to_c_size_t(len(external_bindings), "count")
         if builtin_bindings:
             c_builtin = (SonareBuiltinInstrumentBinding * len(builtin_bindings))()
-            for i, binding in enumerate(builtin_bindings):
-                config = binding.instrument
+            for i, builtin_binding in enumerate(builtin_bindings):
+                config = builtin_binding.instrument
                 c_builtin[i].destination_id = _to_c_uint32(
-                    _binding_destination(binding), f"builtin_instruments[{i}].destination_id"
+                    _binding_destination(builtin_binding),
+                    f"builtin_instruments[{i}].destination_id",
                 )
                 c_builtin[i].config = config._to_c()
             options.builtin_instruments = c_builtin
@@ -469,10 +475,10 @@ class _ProjectRenderMixin:
         c_patches = []
         if synth_bindings:
             c_synth = (SonareSynthInstrumentBinding * len(synth_bindings))()
-            for i, binding in enumerate(synth_bindings):
-                synth_patch = binding.instrument
+            for i, synth_binding in enumerate(synth_bindings):
+                synth_patch = synth_binding.instrument
                 c_synth[i].destination_id = _to_c_uint32(
-                    _binding_destination(binding), f"synth_instruments[{i}].destination_id"
+                    _binding_destination(synth_binding), f"synth_instruments[{i}].destination_id"
                 )
                 c_patch = synth_patch._to_c()
                 c_patches.append(c_patch)
@@ -486,14 +492,14 @@ class _ProjectRenderMixin:
         sf2_uri_storage: list[bytes] = []
         if sf2_bindings:
             c_sf2 = (SonareSf2InstrumentBinding * len(sf2_bindings))()
-            for i, binding in enumerate(sf2_bindings):
-                sf2_config = binding.instrument
+            for i, sf2_binding in enumerate(sf2_bindings):
+                sf2_config = sf2_binding.instrument
                 c_sf2[i].destination_id = _to_c_uint32(
-                    _binding_destination(binding), f"sf2_instruments[{i}].destination_id"
+                    _binding_destination(sf2_binding), f"sf2_instruments[{i}].destination_id"
                 )
                 c_sf2[i].config = sf2_config._to_c()
                 encoded_uri = _sound_font_uri(
-                    binding.sound_font_uri, f"sf2_instruments[{i}].sound_font_uri"
+                    sf2_binding.sound_font_uri, f"sf2_instruments[{i}].sound_font_uri"
                 )
                 if encoded_uri is not None:
                     c_sf2[i].sound_font_uri = encoded_uri

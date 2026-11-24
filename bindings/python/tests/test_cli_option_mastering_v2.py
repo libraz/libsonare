@@ -874,7 +874,8 @@ def test_mastering_suggest_refuses_an_unknown_params_key_from_argv(
 
 
 _SUGGEST_PRESETS = (
-    "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
+    "--params preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, "
+    "streaming, youtube, "
     "broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, "
     "techno, metal, trap, rnb, jazz, kpop, trance, gameOst"
 )

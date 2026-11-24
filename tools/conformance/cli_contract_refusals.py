@@ -558,8 +558,11 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str | re.Pattern[str]], ...] = (
             "--params",
             "nosuchkey=1",
         ],
-        "unknown key --params nosuchkey (expected attackMs, autoMakeup, detector, kneeDb, "
-        "makeupGainDb, pdrReleaseScale, pdrTimeMs, ratio, releaseMs, sidechainHighPassHz, thresholdDb)",
+        (
+            "unknown key --params nosuchkey (expected attackMs, autoMakeup, detector, kneeDb, "
+            "makeupGainDb, pdrReleaseScale, pdrTimeMs, ratio, releaseMs, sidechainHighPassHz, "
+            "thresholdDb)"
+        ),
     ),
     (
         ["mastering-processor", "{input}", "--processor", "dynamics.compressor", "--params", "x"],

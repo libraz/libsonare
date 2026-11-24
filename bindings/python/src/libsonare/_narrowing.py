@@ -421,7 +421,7 @@ def _optional_nonzero(value: object, name: str, absent: str = "the library value
     return number
 
 
-def _utf8_arg(value: str, name: str) -> bytes:
+def _utf8_arg(value: object, name: str) -> bytes:
     """Encode ``value`` for a NUL-terminated ``char *``, refusing an embedded NUL.
 
     The C side reads up to the first NUL, so a string containing one would arrive

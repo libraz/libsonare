@@ -82,7 +82,6 @@ def test_bounce_returns_the_requested_frames_at_every_width(width: int) -> None:
         project.close()
 
 
-
 @pytest.mark.parametrize(
     ("layout", "width"), [(None, 2), ("mono", 1), ("stereo", 2), ("5.1", 6), ("7.1", 8)]
 )
@@ -100,6 +99,7 @@ def test_bounce_takes_the_scene_master_width_when_num_channels_is_omitted(
         assert project.bounce(total_frames=128).channels.shape == (width, 128)
     finally:
         project.close()
+
 
 def _build_midi_only_project() -> Project:
     """A MIDI-only arrangement: one MIDI track + clip with a sustained note."""
