@@ -1096,7 +1096,7 @@ def nnls_chroma(
 
 
 def _resample_float32(
-    samples: Sequence[float] | np.ndarray, src_sr: int, target_sr: int
+    samples: Sequence[float] | np.ndarray, sample_rate: int, target_sample_rate: int
 ) -> np.ndarray:
     """Resample to a float32 ndarray."""
     lib = _get_lib()
@@ -1105,8 +1105,8 @@ def _resample_float32(
         rc = lib.sonare_resample(
             c_array,
             _to_c_size_t(length, "length"),
-            _to_c_int(src_sr, "src_sr"),
-            _to_c_int(target_sr, "target_sr"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(target_sample_rate, "target_sample_rate"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )

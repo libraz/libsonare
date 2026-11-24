@@ -44,6 +44,7 @@ _REQUIRED: dict[str, Any] = {
     "time_sec": 0.1,
     "intervals": np.array([[0, 100]]),
     "sample_rate": _SR,
+    "target_sample_rate": _SR,
     "sr": _SR,
     "n_fft": 2048,
     "channels": [_TONE, _TONE],
