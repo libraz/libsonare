@@ -23,11 +23,10 @@ SonareError sonare_tone(float frequency_hz, int sample_rate, float duration_sec,
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
-  return with_c_names(
-      std::array<CName, 2>{{{"sr", "sample_rate"}, {"duration", "duration_sec"}}}, [&] {
-        return fill_audio_samples(tone(frequency_hz, sample_rate, duration_sec, phase, amplitude),
-                                  out, out_length);
-      });
+  return with_c_names(std::array<CName, 1>{{{"duration", "duration_sec"}}}, [&] {
+    return fill_audio_samples(tone(frequency_hz, sample_rate, duration_sec, phase, amplitude), out,
+                              out_length);
+  });
   SONARE_C_CATCH
 }
 
@@ -43,15 +42,13 @@ SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float du
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
-  return with_c_names(std::array<CName, 4>{{{"fmin", "fmin_hz"},
-                                            {"fmax", "fmax_hz"},
-                                            {"sr", "sample_rate"},
-                                            {"duration", "duration_sec"}}},
-                      [&] {
-                        return fill_audio_samples(
-                            chirp(fmin_hz, fmax_hz, sample_rate, duration_sec, linear != 0), out,
-                            out_length);
-                      });
+  return with_c_names(
+      std::array<CName, 3>{
+          {{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}, {"duration", "duration_sec"}}},
+      [&] {
+        return fill_audio_samples(chirp(fmin_hz, fmax_hz, sample_rate, duration_sec, linear != 0),
+                                  out, out_length);
+      });
   SONARE_C_CATCH
 }
 
@@ -66,8 +63,7 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
   SONARE_C_TRY
   std::vector<float> values;
   if (time_count) values.assign(times, times + time_count);
-  return with_c_names(std::array<CName, 3>{{{"sr", "sample_rate"},
-                                            {"frequency", "frequency_hz"},
+  return with_c_names(std::array<CName, 2>{{{"frequency", "frequency_hz"},
                                             {"click_duration", "click_duration_sec"}}},
                       [&] {
                         return fill_audio_samples(clicks(values, sample_rate, core_length(length),
@@ -268,10 +264,9 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
         config.n_fft = n_fft;
         config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
-        std::vector<float> result =
-            with_c_names(std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}}, [&] {
-              return spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
-            });
+        std::vector<float> result = with_c_names(std::array<CName, 1>{{{"fmin", "fmin_hz"}}}, [&] {
+          return spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
+        });
         if (const SonareError err = copy_vector(result, out, out_length); err != SONARE_OK) {
           return err;
         }
@@ -593,10 +588,9 @@ SonareError run_pitch_track(const char* name, const float* samples, size_t lengt
         config.fmax = fmax;
         config.threshold = threshold;
         config.fill_na = fill_na != 0;
-        PitchResult result = with_c_names(
-            std::array<CName, 3>{
-                {{"fmin", "f0_min_hz"}, {"fmax", "f0_max_hz"}, {"sr", "sample_rate"}}},
-            [&] { return pitch(audio, config); });
+        PitchResult result =
+            with_c_names(std::array<CName, 2>{{{"fmin", "f0_min_hz"}, {"fmax", "f0_max_hz"}}},
+                         [&] { return pitch(audio, config); });
         return fill_pitch_result(result, out);
       });
 }

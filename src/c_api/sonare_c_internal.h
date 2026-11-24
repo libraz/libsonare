@@ -136,8 +136,8 @@ inline int core_length(size_t value) noexcept {
   return value > static_cast<size_t>(std::numeric_limits<int>::max()) ? -1
                                                                       : static_cast<int>(value);
 }
-/// @brief A core refusal subject path and the C parameter path that spells it ("sr" ->
-///        "sample_rate", "air.humidity_percent" -> "config.air_humidity_percent").
+/// @brief A core refusal subject path and the C parameter path that spells it ("fmin" ->
+///        "fmin_hz", "air.humidity_percent" -> "config.air_humidity_percent").
 using CName = std::pair<const char*, const char*>;
 /// @brief Runs @p call, rethrowing a refusal whose subject begins with a path @p names lists
 ///        (up to a '.' or '[' boundary) under that C spelling, so a core keeping its

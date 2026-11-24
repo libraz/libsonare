@@ -4,7 +4,7 @@
 namespace {
 
 // The core's names for the lowest frequency and the rate, as every CQT-family entry spells them.
-const std::array<CName, 2> kCqtNames{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}};
+const std::array<CName, 1> kCqtNames{{{"fmin", "fmin_hz"}}};
 
 // Shared body of the CQT-family entry points; @p transform maps (Audio, CqtConfig) to a CqtResult.
 template <typename Transform>

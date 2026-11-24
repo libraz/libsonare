@@ -15,14 +15,11 @@
 namespace {
 
 // The core's names for the inverse transforms' inputs, as the C entries spell them.
-const std::array<CName, 5> kInverseNames{{{"sr", "sample_rate"},
-                                          {"M", "mel"},
-                                          {"mfcc", "coefficients"},
-                                          {"fmin", "fmin_hz"},
-                                          {"fmax", "fmax_hz"}}};
+const std::array<CName, 4> kInverseNames{
+    {{"M", "mel"}, {"mfcc", "coefficients"}, {"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
 
 // The CQT-family core names, as the CQT and VQT inverse entries spell them.
-const std::array<CName, 2> kCqtInverseNames{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}};
+const std::array<CName, 1> kCqtInverseNames{{{"fmin", "fmin_hz"}}};
 
 namespace check = sonare::util::check;
 
@@ -148,7 +145,7 @@ SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
   const Audio audio = with_c_names(kCqtInverseNames, [&] {
-    return sonare::detail::with_fixed_filter_scale({"fmin", "bins_per_octave"}, "sr", [&] {
+    return sonare::detail::with_fixed_filter_scale({"fmin", "bins_per_octave"}, "sample_rate", [&] {
       return griffinlim_cqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter);
     });
   });
@@ -177,9 +174,9 @@ SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int
   config.bins_per_octave = bins_per_octave;
   config.gamma = gamma;
   const Audio audio = with_c_names(kCqtInverseNames, [&] {
-    return sonare::detail::with_fixed_filter_scale({"fmin", "bins_per_octave", "gamma"}, "sr", [&] {
-      return griffinlim_vqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter);
-    });
+    return sonare::detail::with_fixed_filter_scale(
+        {"fmin", "bins_per_octave", "gamma"}, "sample_rate",
+        [&] { return griffinlim_vqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter); });
   });
   return fill_audio_samples(audio, out, out_length);
   SONARE_C_CATCH
