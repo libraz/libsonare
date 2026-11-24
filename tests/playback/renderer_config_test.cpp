@@ -468,54 +468,47 @@ TEST_CASE("an unset value is an absent key: null is refused and never written",
   CHECK(serialize_renderer_config(parse_renderer_config(given)) == given);
 }
 
-TEST_CASE("an earlier key spelling is refused by name", "[playback][config]") {
-  const auto earlier = [](const std::string& json, const std::string& path,
-                          const std::string& replacement) {
+TEST_CASE("a snake_case key is refused as an unknown key", "[playback][config]") {
+  const auto refused = [](const std::string& json, const std::string& path,
+                          const std::string& accepted) {
     CAPTURE(json);
-    CHECK(mentions(refusal(json), path + " is an earlier spelling; write " + replacement));
+    const std::string message = refusal(json);
+    CHECK(mentions(message, "unknown key " + path + " (expected "));
+    CHECK(mentions(message, accepted));
+    CHECK_FALSE(mentions(message, "earlier spelling"));
   };
-  earlier(R"({"lfe_mix_db": 0})", "lfe_mix_db", "lfeMixDb");
-  earlier(R"({"night_mode": {"amount": 0.5}})", "night_mode", "nightMode");
-  earlier(R"({"output_limiter": {"enabled": true}})", "output_limiter", "outputLimiter");
-  earlier(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db",
-          "outputLimiter.ceilingDb");
-  earlier(R"({"upmix": {"center_width": 0.3}})", "upmix.center_width", "upmix.centerWidth");
-  earlier(R"({"input": {"layout": "stereo", "channel_map": null}})", "input.channel_map",
-          "input.channelMap");
-  earlier(R"({"target": {"bass_management": {}}})", "target.bass_management",
-          "target.bassManagement");
-  earlier(R"({"target": {"bassManagement": {"crossover_hz": 80}}})",
-          "target.bassManagement.crossover_hz", "target.bassManagement.crossoverHz");
-  earlier(R"({"target": {"kind": "speakers", "layout": "5.1",
+  refused(R"({"lfe_mix_db": 0})", "lfe_mix_db", "lfeMixDb");
+  refused(R"({"night_mode": {"amount": 0.5}})", "night_mode", "nightMode");
+  refused(R"({"output_limiter": {"enabled": true}})", "output_limiter", "outputLimiter");
+  refused(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db", "ceilingDb");
+  refused(R"({"upmix": {"center_width": 0.3}})", "upmix.center_width", "centerWidth");
+  refused(R"({"input": {"layout": "stereo", "channel_map": null}})", "input.channel_map",
+          "channelMap");
+  refused(R"({"target": {"bass_management": {}}})", "target.bass_management", "bassManagement");
+  refused(R"({"target": {"bassManagement": {"crossover_hz": 80}}})",
+          "target.bassManagement.crossover_hz", "crossoverHz");
+  refused(R"({"target": {"kind": "speakers", "layout": "5.1",
                          "speakers": {"left": {"trim_db": 1}}}})",
-          "target.speakers.left.trim_db", "target.speakers.left.trimDb");
-  earlier(R"({"target": {"kind": "speakers", "layout": "5.1",
+          "target.speakers.left.trim_db", "trimDb");
+  refused(R"({"target": {"kind": "speakers", "layout": "5.1",
                          "speakers": {"left": {"distance_m": 1}}}})",
-          "target.speakers.left.distance_m", "target.speakers.left.distanceM");
+          "target.speakers.left.distance_m", "distanceM");
 }
 
-TEST_CASE("an earlier speaker role token is refused by name", "[playback][config]") {
-  const std::pair<const char*, const char*> rows[] = {
-      {"L", "left"},
-      {"R", "right"},
-      {"C", "center"},
-      {"LFE", "lfe"},
-      {"Ls", "leftSurround"},
-      {"Rs", "rightSurround"},
-      {"Lss", "leftSideSurround"},
-      {"Rss", "rightSideSurround"},
-  };
-  for (const auto& [old_name, new_name] : rows) {
+TEST_CASE("an abbreviated speaker role token is refused with the accepted roles",
+          "[playback][config]") {
+  for (const char* old_name : {"L", "R", "C", "LFE", "Ls", "Rs", "Lss", "Rss"}) {
     CAPTURE(old_name);
     CHECK(
         mentions(refusal(std::string(R"({"input": {"layout": "5.1", "channelMap": [")") + old_name +
                          R"(", "right", "center", "lfe", "leftSurround", "rightSurround"]}})"),
-                 std::string("input.channelMap[0] is an earlier spelling; write ") + new_name));
+                 "input.channelMap[0] must be a speaker role"));
     CHECK(mentions(refusal(std::string(R"({"target": {"kind": "speakers", "layout": "7.1",
                                   "speakers": {")") +
                            old_name + R"(": {}}}})"),
-                   std::string("target.speakers.") + old_name +
-                       " is an earlier spelling; write target.speakers." + new_name));
+                   std::string("unknown key target.speakers.") + old_name +
+                       " (expected center, left, leftSideSurround, leftSurround, right, "
+                       "rightSideSurround, rightSurround)"));
   }
 }
 

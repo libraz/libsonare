@@ -1277,14 +1277,14 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing]"
         "unknown key xnote (expected buses, connections, strips, vcaGroups, version)");
 }
 
-TEST_CASE("Scene load reports an earlier spelling as such, not as an unknown key",
-          "[mixing][routing]") {
+TEST_CASE("Scene load refuses a snake_case spelling as an unknown key", "[mixing][routing]") {
   const auto message = scene_refusal(R"({"version":2,"strips":[{"id":"a","fader_db":-1}]})");
-  CHECK(message.find("is an earlier spelling; write strips[0].faderDb") != std::string::npos);
-  CHECK(message.find("unknown key") == std::string::npos);
+  CHECK(message.rfind("unknown key strips[0].fader_db (expected ", 0) == 0);
+  CHECK(message.find("faderDb") != std::string::npos);
+  CHECK(message.find("earlier spelling") == std::string::npos);
 }
 
-TEST_CASE("Scene load refuses every earlier snake_case spelling, naming the current one",
+TEST_CASE("Scene load refuses every snake_case spelling, listing the accepted key",
           "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   struct Case {
@@ -1335,7 +1335,8 @@ TEST_CASE("Scene load refuses every earlier snake_case spelling, naming the curr
   for (const Case& c : cases) {
     CAPTURE(c.document);
     REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(c.document),
-                        ContainsSubstring(c.path) && ContainsSubstring(c.current));
+                        ContainsSubstring(std::string("unknown key ") + c.path + " (expected ") &&
+                            ContainsSubstring(c.current));
   }
 }
 

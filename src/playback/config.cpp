@@ -45,62 +45,6 @@ std::string speaker_path(SpeakerRole role) {
                             speaker_role_name(role));
 }
 
-struct EarlierKey {
-  const char* old_key;
-  const char* new_key;
-};
-
-constexpr EarlierKey kEarlierKeys[] = {
-    {"channel_map", "channelMap"},
-    {"bass_management", "bassManagement"},
-    {"crossover_hz", "crossoverHz"},
-    {"lfe_gain_db", "lfeGainDb"},
-    {"distance_m", "distanceM"},
-    {"trim_db", "trimDb"},
-    {"lfe_mix_db", "lfeMixDb"},
-    {"dialogue_level_db", "dialogueLevelDb"},
-    {"center_width", "centerWidth"},
-    {"front_ambience", "frontAmbience"},
-    {"lfe_from_upmix", "lfeFromUpmix"},
-    {"program_lufs", "programLufs"},
-    {"target_lufs", "targetLufs"},
-    {"night_mode", "nightMode"},
-    {"mix_db", "mixDb"},
-    {"head_tracking", "headTracking"},
-    {"output_limiter", "outputLimiter"},
-    {"ceiling_db", "ceilingDb"},
-};
-
-struct EarlierRole {
-  const char* old_name;
-  const char* new_name;
-};
-
-constexpr EarlierRole kEarlierRoles[] = {
-    {"L", "left"},
-    {"R", "right"},
-    {"C", "center"},
-    {"LFE", "lfe"},
-    {"Ls", "leftSurround"},
-    {"Rs", "rightSurround"},
-    {"Lss", "leftSideSurround"},
-    {"Rss", "rightSideSurround"},
-};
-
-/// Refuses an earlier role token, naming the full replacement path for a key.
-void refuse_earlier_role(const std::string& token, const std::string& path,
-                         const std::string* parent) {
-  for (const EarlierRole& earlier : kEarlierRoles) {
-    if (token != earlier.old_name) continue;
-    if (parent == nullptr) {
-      refuse_at(path, std::string("is an earlier spelling; write ") + earlier.new_name);
-    }
-    throw Refusal::relation(kDocumentError, {path, schema::child_path(*parent, earlier.new_name)},
-                            "{0} is an earlier spelling; write {1}")
-        .as_caller_spelled();
-  }
-}
-
 void check_keys(const Value& object, const std::string& path,
                 std::initializer_list<const char*> keys) {
   if (!object.is_object()) refuse_kind(path, schema::Kind::Object);
@@ -109,13 +53,6 @@ void check_keys(const Value& object, const std::string& path,
     for (const char* key : keys) known = known || entry.first == key;
     if (known) continue;
     const std::string at = schema::child_path(path, entry.first);
-    for (const EarlierKey& earlier : kEarlierKeys) {
-      if (entry.first == earlier.old_key) {
-        throw Refusal::relation(kDocumentError, {at, schema::child_path(path, earlier.new_key)},
-                                "{0} is an earlier spelling; write {1}")
-            .as_caller_spelled();
-      }
-    }
     refuse_unknown(at, schema::expected_keys(std::vector<std::string>(keys.begin(), keys.end())));
   }
 }
@@ -222,7 +159,6 @@ void parse_input(const Value& input, PrepareConfig& prepare) {
     const std::string key = schema::index_path(map_path, static_cast<size_t>(i));
     SpeakerRole role = SpeakerRole::L;
     const std::string token = read_string(items[static_cast<size_t>(i)], key);
-    refuse_earlier_role(token, key, nullptr);
     if (!parse_speaker_role(token, &role)) refuse_at(key, "must be a speaker role");
     prepare.channel_map[static_cast<size_t>(i)] = role;
   }
@@ -291,7 +227,6 @@ void parse_target(const Value& target, RendererConfig& config) {
     for (const auto& entry : speakers->as_object()) {
       SpeakerRole role = SpeakerRole::L;
       const std::string entry_path = schema::child_path(speakers_path, entry.first);
-      refuse_earlier_role(entry.first, entry_path, &speakers_path);
       if (!parse_speaker_role(entry.first, &role) || role == SpeakerRole::LFE) {
         std::vector<std::string> roles;
         for (SpeakerRole named : {SpeakerRole::L, SpeakerRole::R, SpeakerRole::C, SpeakerRole::Ls,

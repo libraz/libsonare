@@ -974,16 +974,15 @@ TEST_CASE("scene insert and bus JSON carry one key per struct field", "[serializ
                                  "soloSafe", "soloed", "vcaOffsetDb", "width"});
 }
 
-TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serialize]") {
+TEST_CASE("project scene deserializer refuses snake_case scene keys and non-token values",
+          "[serialize]") {
   struct Case {
     const char* strip;
     const char* expected;
   };
   const Case cases[] = {
-      {R"({"id":"a","input_trim_db":1.5})",
-       "scene.strips[0].input_trim_db is an earlier spelling; write scene.strips[0].inputTrimDb"},
-      {R"({"id":"a","pan_mode":"balance"})",
-       "scene.strips[0].pan_mode is an earlier spelling; write scene.strips[0].panMode"},
+      {R"({"id":"a","input_trim_db":1.5})", "unknown key scene.strips[0].input_trim_db (expected "},
+      {R"({"id":"a","pan_mode":"balance"})", "unknown key scene.strips[0].pan_mode (expected "},
       {R"({"id":"a","panMode":2})",
        "scene.strips[0].panMode must be one of balance, stereoPan, dualPan"},
       {R"({"id":"a","panLaw":3})",
@@ -991,19 +990,15 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
       {R"({"id":"a","sends":[{"id":"s","timing":"pre"}]})",
        "scene.strips[0].sends[0].timing must be one of preFader, postFader"},
       {R"({"id":"a","sends":[{"id":"s","destination_bus_id":"bus"}]})",
-       "scene.strips[0].sends[0].destination_bus_id is an earlier spelling; write "
-       "scene.strips[0].sends[0].destinationBusId"},
+       "unknown key scene.strips[0].sends[0].destination_bus_id (expected "},
       {R"({"id":"a","inserts":[{"processor_name":"gain"}]})",
-       "scene.strips[0].inserts[0].processor_name is an earlier spelling; write "
-       "scene.strips[0].inserts[0].processor"},
+       "unknown key scene.strips[0].inserts[0].processor_name (expected "},
       {R"({"id":"a","inserts":[{"processor":"gain","params_json":"{}"}]})",
-       "scene.strips[0].inserts[0].params_json is an earlier spelling; write "
-       "scene.strips[0].inserts[0].params"},
+       "unknown key scene.strips[0].inserts[0].params_json (expected "},
       {R"({"id":"a","inserts":[{"processor":"gain","params":"{}"}]})",
        "scene.strips[0].inserts[0].params must be an object"},
       {R"({"id":"a","inserts":[{"processor":"gain","sidechain_key":"k"}]})",
-       "scene.strips[0].inserts[0].sidechain_key is an earlier spelling; write "
-       "scene.strips[0].inserts[0].sidechainKey"},
+       "unknown key scene.strips[0].inserts[0].sidechain_key (expected "},
   };
   for (const Case& c : cases) {
     INFO(c.strip);
@@ -1013,14 +1008,19 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
     REQUIRE_FALSE(result.ok());
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.back().code == "invalid_format");
-    CHECK(result.diagnostics.back().message == c.expected);
+    const std::string& message = result.diagnostics.back().message;
+    if (std::string(c.expected).rfind("unknown key ", 0) == 0) {
+      CHECK(message.rfind(c.expected, 0) == 0);
+    } else {
+      CHECK(message == c.expected);
+    }
   }
 
   const auto top_level =
       project_from_json(R"({"version":7,"scene":{"version":2,"vca_groups":[{"id":"v"}]}})");
   REQUIRE_FALSE(top_level.ok());
   CHECK(top_level.diagnostics.back().message ==
-        "scene.vca_groups is an earlier spelling; write scene.vcaGroups");
+        "unknown key scene.vca_groups (expected buses, connections, strips, vcaGroups, version)");
 }
 
 TEST_CASE("project deserialize preserves next id counters without gaps", "[serialize]") {

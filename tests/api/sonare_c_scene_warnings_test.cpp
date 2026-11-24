@@ -139,7 +139,7 @@ TEST_CASE("engine strip setters refuse an unknown key by name", "[c_api][engine]
   CHECK(last_error().find("\\x0a") != std::string::npos);
 }
 
-TEST_CASE("engine strip setters accept annotation keys and refuse earlier spellings",
+TEST_CASE("engine strip setters accept annotation keys and refuse snake_case keys",
           "[c_api][engine]") {
   StripEngine f;
   const char* annotated = R"({"$schema":"s","x-note":1,"id":"s","faderDb":-3,"x-tag":[1]})";
@@ -149,11 +149,13 @@ TEST_CASE("engine strip setters accept annotation keys and refuse earlier spelli
   const char* earlier = R"({"id":"s","fader_db":-1})";
   CHECK(sonare_engine_set_track_strip_json(f.engine, 10, earlier) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()).find("faderDb") != std::string::npos);
+  CHECK(last_error().rfind("unknown key ", 0) == 0);
+  CHECK(last_error().find("faderDb") != std::string::npos);
   const char* earlier_bus = R"({"id":"1","pan_mode":"stereoPan"})";
   CHECK(sonare_engine_set_bus_strip_json(f.engine, 1, earlier_bus) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()).find("panMode") != std::string::npos);
+  CHECK(last_error().rfind("unknown key ", 0) == 0);
+  CHECK(last_error().find("panMode") != std::string::npos);
 }
 
 TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engine]") {
