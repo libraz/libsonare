@@ -605,7 +605,7 @@ def test_suggest_mix_names_an_unknown_param() -> None:
             ["suggest-mix", "--input", track, "--sample-rate", str(SR), "--params", "loudness=-9"]
         )
     assert result.returncode == 2
-    assert "unknown key loudness" in result.stderr
+    assert "unknown key --params loudness (expected " in result.stderr
     assert result.stdout == ""
 
 
