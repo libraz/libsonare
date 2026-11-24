@@ -243,6 +243,20 @@
       "reason": "total // num_channels over the caller's array length; 64-bit"
     },
     {
+      "file": "_mastering_pair.py",
+      "function": "mastering_analyze_pair",
+      "label": "reference_length",
+      "state": "bounded",
+      "reason": "the element count _to_c_float_array reports for a plane this call already allocated"
+    },
+    {
+      "file": "_mastering_pair.py",
+      "function": "mastering_analyze_pair",
+      "label": "source_length",
+      "state": "bounded",
+      "reason": "the element count _to_c_float_array reports for a plane this call already allocated"
+    },
+    {
       "file": "_mastering_streaming.py",
       "function": "flush_mono",
       "label": "capacity",
@@ -313,18 +327,11 @@
       "reason": "the handle's own output channel count"
     },
     {
-      "file": "_project_edit.py",
-      "function": "edit_automation_lane",
-      "label": "target_id",
+      "file": "_project.py",
+      "function": "set_destination_instrument",
+      "label": "index",
       "state": "bounded",
-      "reason": "already narrowed under the caller's `target_param_id` by _automation_target_param_id_value"
-    },
-    {
-      "file": "_project_edit.py",
-      "function": "remove_automation_lane",
-      "label": "target_id",
-      "state": "bounded",
-      "reason": "already narrowed under the caller's `target_param_id` by _automation_target_param_id_value"
+      "reason": "a loop index below sonare_last_refusal_subject_count()"
     },
     {
       "file": "_project_edit.py",
@@ -362,6 +369,27 @@
       "reason": "the id field of a record the library returned"
     },
     {
+      "file": "_project_instruments.py",
+      "function": "_to_c",
+      "label": "instrument.bank_lsb",
+      "state": "caller",
+      "reason": "Project.set_destination_instrument, the one caller, names the argument instrument"
+    },
+    {
+      "file": "_project_instruments.py",
+      "function": "_to_c",
+      "label": "instrument.bank_msb",
+      "state": "caller",
+      "reason": "Project.set_destination_instrument, the one caller, names the argument instrument"
+    },
+    {
+      "file": "_project_instruments.py",
+      "function": "_to_c",
+      "label": "instrument.program",
+      "state": "caller",
+      "reason": "Project.set_destination_instrument, the one caller, names the argument instrument"
+    },
+    {
       "file": "_project_midi.py",
       "function": "bake_midi_fx",
       "label": "expected",
@@ -381,6 +409,34 @@
       "label": "target_param_id",
       "state": "caller",
       "reason": "both callers (edit/remove_automation_lane) name the argument target_param_id"
+    },
+    {
+      "file": "_project_render.py",
+      "function": "_bounce_metronome",
+      "label": "metronome.accent_gain",
+      "state": "caller",
+      "reason": "bounce, the one caller, names the argument metronome"
+    },
+    {
+      "file": "_project_render.py",
+      "function": "_bounce_metronome",
+      "label": "metronome.beat_gain",
+      "state": "caller",
+      "reason": "bounce, the one caller, names the argument metronome"
+    },
+    {
+      "file": "_project_render.py",
+      "function": "_bounce_metronome",
+      "label": "metronome.click_samples",
+      "state": "caller",
+      "reason": "bounce, the one caller, names the argument metronome"
+    },
+    {
+      "file": "_project_render.py",
+      "function": "_bounce_metronome",
+      "label": "metronome.click_sec",
+      "state": "caller",
+      "reason": "bounce, the one caller, names the argument metronome"
     },
     {
       "file": "_project_render.py",
@@ -416,6 +472,13 @@
       "label": "index",
       "state": "bounded",
       "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "audio.py",
+      "function": "encode_audio",
+      "label": "num_channels",
+      "state": "bounded",
+      "reason": "len(planes) of the channel list this call already built"
     },
     {
       "file": "engine.py",

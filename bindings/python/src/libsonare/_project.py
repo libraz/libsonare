@@ -80,6 +80,7 @@ from ._runtime import (
     _coded_error,
     _get_lib,
     _Respelling,
+    _to_c_size_t,
     _to_c_uint32,
     _utf8_arg,
 )
@@ -435,7 +436,9 @@ class Project(
         if rc != SONARE_OK:
             respelled: dict[str, _Respelling] = {}
             for index in range(lib.sonare_last_refusal_subject_count()):
-                subject = (lib.sonare_last_refusal_subject(index) or b"").decode("utf-8")
+                subject = (
+                    lib.sonare_last_refusal_subject(_to_c_size_t(index, "index")) or b""
+                ).decode("utf-8")
                 root, _, rest = subject.partition(".")
                 kind, dot, suffix = rest.partition(".")
                 if root == "instrument" and kind in ("synth", "builtin", "sf2"):
