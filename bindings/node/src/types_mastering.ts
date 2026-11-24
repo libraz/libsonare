@@ -13327,7 +13327,7 @@ export interface MasteringAudioProfile {
   spectral: MasteringAudioProfileSpectral;
   /** Dynamics group of the profile. */
   dynamics: MasteringAudioProfileDynamics;
-  /** What the repair detectors measured; absent when `detectDefects` is false. */
+  /** What the repair detectors measured; present only when `detectDefects` is true. */
   defects?: MasteringAudioProfileDefects;
 }
 

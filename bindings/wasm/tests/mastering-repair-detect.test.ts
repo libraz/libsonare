@@ -737,14 +737,14 @@ describe('the profile and the detectors measure one take alike', () => {
 
   it('carries the noise floor detection unchanged', () => {
     const take = humTake();
-    const profile = masteringAudioProfile(take, SR_EQ);
+    const profile = masteringAudioProfile(take, SR_EQ, { detectDefects: true });
     expect(profile.defects?.noise).toStrictEqual(masteringRepairDetectNoiseFloor(take, SR_EQ));
     expect(profile.defects?.noise.bandFloorBand).toBeInstanceOf(Int32Array);
   });
 
   it('carries the hum detection unchanged at the mains frequency it settled on', () => {
     const take = humTake();
-    const profile = masteringAudioProfile(take, SR_EQ);
+    const profile = masteringAudioProfile(take, SR_EQ, { detectDefects: true });
     // The profile searches 50 and 60 Hz and keeps the more prominent; this take hums at 60.
     expect(profile.defects?.hum.fundamentalHz).toBe(60);
     expect(profile.defects?.hum).toStrictEqual(

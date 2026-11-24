@@ -344,7 +344,9 @@ def mastering_insert_param_info(
 
 @_entry("mastering_insert_timing")
 def mastering_insert_timing(
-    insert: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
+    insert: str,
+    params: Mapping[str, float | bool | str | Sequence[float]] | None = None,
+    sample_rate: int | None = None,
 ) -> MasteringInsertTiming:
     """Return the latency and tail of one insert built from ``params`` at ``sample_rate``.
 
@@ -355,6 +357,9 @@ def mastering_insert_timing(
     is the one that instance will report. :func:`capability_catalog`'s
     ``latency_samples`` and ``tail_samples`` are this query at default
     parameters and 48 kHz.
+
+    ``sample_rate`` is required. Omit ``params`` or pass ``None`` to use the
+    insert's default parameters.
 
     ``params`` is keyed as in :func:`mastering_insert_param_info` and shaped as
     the document a scene or strip insert is built from; each value matches its
@@ -368,8 +373,10 @@ def mastering_insert_timing(
             argument, including an undeclared parameter key.
     """
     lib = _get_lib()
-    payload = _insert_params(insert, params)
-    params_json = _utf8_arg(json.dumps(payload, allow_nan=False), "params")
+    params_json = None
+    if params is not None:
+        payload = _insert_params(insert, params)
+        params_json = _utf8_arg(json.dumps(payload, allow_nan=False), "params")
     out_latency = ctypes.c_int(0)
     out_tail = ctypes.c_int(0)
     rc = lib.sonare_mastering_insert_timing(

@@ -762,8 +762,10 @@ describe('results: unit-named fields and objects', () => {
     expectTypeOf(result).toEqualTypeOf<MasteringAssistantResult>();
   });
 
-  it('the audio profile is grouped and its defects are absent when detection is off', () => {
-    const profile = sonare.masteringAudioProfile(longLeft, sampleRate);
+  it('the audio profile is grouped and includes defects when requested', () => {
+    const profile = sonare.masteringAudioProfile(longLeft, sampleRate, {
+      detectDefects: true,
+    });
     expect(profile.loudness).toEqual(
       expect.objectContaining({
         integratedLufs: expect.any(Number),
@@ -785,11 +787,49 @@ describe('results: unit-named fields and objects', () => {
     expect(defects.noise.bandFloorDbfs).toBeInstanceOf(Float32Array);
     expect(defects.hum.harmonicDbfs).toBeInstanceOf(Float32Array);
     expect('latePredictability' in defects.reverb).toBe(false);
-    const off = sonare.masteringAudioProfile({ samples: left, sampleRate, detectDefects: false });
-    expect(off.defects).toBeUndefined();
-    const stereo = sonare.masteringAudioProfileStereo({ left, right, sampleRate });
+    const stereo = sonare.masteringAudioProfileStereo({
+      left,
+      right,
+      sampleRate,
+      detectDefects: true,
+    });
     expect(stereo.defects).toBeDefined();
     expectTypeOf(profile).toEqualTypeOf<MasteringAudioProfile>();
+  });
+
+  it('omits profile defects by default in both request and positional calls', () => {
+    const mono = { samples: left, sampleRate };
+    const stereo = { left, right, sampleRate };
+    const monoOff = sonare.masteringAudioProfile({ ...mono, detectDefects: false });
+    const stereoOff = sonare.masteringAudioProfileStereo({ ...stereo, detectDefects: false });
+    expect(monoOff).not.toHaveProperty('defects');
+    expect(stereoOff).not.toHaveProperty('defects');
+
+    const readings = ({ loudness, spectral, dynamics, ...summary }: MasteringAudioProfile) =>
+      ({ ...summary, ...loudness, ...spectral, ...dynamics }) as Record<string, unknown>;
+    const expectProfile = (actual: MasteringAudioProfile, expected: MasteringAudioProfile) => {
+      expect(actual).not.toHaveProperty('defects');
+      const got = readings(actual);
+      const want = readings(expected);
+      expect(Object.keys(got).sort()).toEqual(Object.keys(want).sort());
+      for (const [field, value] of Object.entries(want)) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          expect(typeof got[field], field).toBe('number');
+          const tolerance = 1e-6 * Math.max(1, Math.abs(value));
+          expect(Math.abs((got[field] as number) - value), field).toBeLessThanOrEqual(tolerance);
+        } else {
+          expect(got[field], field).toBe(value);
+        }
+      }
+    };
+
+    for (const result of [
+      sonare.masteringAudioProfile(mono),
+      sonare.masteringAudioProfile(left, sampleRate),
+    ]) {
+      expectProfile(result, monoOff);
+    }
+    expectProfile(sonare.masteringAudioProfileStereo(stereo), stereoOff);
   });
 
   it.each([

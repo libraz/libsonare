@@ -38,7 +38,7 @@ export interface MasteringAudioProfileRequest {
   hopLength?: number;
   /** True-peak oversampling factor; a positive integer. */
   truePeakOversample?: number;
-  /** Measure the repair defects. Default true; false leaves `defects` absent. */
+  /** Measure the repair defects. Default `false`, which leaves `defects` absent. */
   detectDefects?: boolean;
 }
 
@@ -56,7 +56,7 @@ export interface MasteringAudioProfileStereoRequest {
   hopLength?: number;
   /** True-peak oversampling factor; a positive integer. */
   truePeakOversample?: number;
-  /** Measure the repair defects. Default `true`; `false` leaves `defects` absent. */
+  /** Measure the repair defects. Default `false`, which leaves `defects` absent. */
   detectDefects?: boolean;
 }
 
@@ -186,7 +186,7 @@ function profileFromNative(json: string): MasteringAudioProfile {
   return profile;
 }
 
-/** Native params of an audio-profile request; the profile always runs the defect detectors unless told not to. */
+/** Forward only settings supplied in the audio-profile request. */
 function profileParams(
   r: Pick<
     MasteringAudioProfileRequest,
@@ -200,7 +200,9 @@ function profileParams(
       params[key] = value;
     }
   }
-  params.detectDefects = r.detectDefects ?? true;
+  if (!isAbsent(r.detectDefects)) {
+    params.detectDefects = r.detectDefects;
+  }
   return params;
 }
 
@@ -266,7 +268,7 @@ export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistan
 
 /**
  * Measure the mastering profile of mono audio: loudness, spectral and dynamics
- * groups, and — unless `detectDefects` is false — the repair detectors' readings
+ * groups. Set `detectDefects` to true to include the repair detectors' readings
  * under `defects`.
  *
  * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
@@ -351,8 +353,8 @@ export function masteringAssistantSuggestStereo(
  * loudness range come from the channel-summed program and the true peak is the
  * larger of the two. The spectral, dynamics and tempo fields describe shape and
  * timing rather than absolute level and are measured on the downmix, which keeps
- * them comparable with {@link masteringAudioProfile}. Defect detectors run on
- * each channel and their results are aggregated.
+ * them comparable with {@link masteringAudioProfile}. With `detectDefects: true`,
+ * defect detectors run on each channel and their results are aggregated.
  */
 export function masteringAudioProfileStereo(
   request: MasteringAudioProfileStereoRequest,

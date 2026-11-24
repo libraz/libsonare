@@ -109,6 +109,28 @@ def test_insert_timing_at_defaults_matches_the_capability_catalog() -> None:
     assert timing.tail_samples == entry.tail_samples
 
 
+def test_insert_timing_accepts_omitted_params() -> None:
+    import libsonare
+
+    insert = "saturation.softClipper"
+    explicit = libsonare.mastering_insert_timing(insert, {}, 48000)
+    assert libsonare.mastering_insert_timing(insert, sample_rate=48000) == explicit
+    assert libsonare.mastering_insert_timing(insert, None, 48000) == explicit
+
+
+def test_insert_timing_requires_a_sample_rate() -> None:
+    import libsonare
+
+    with pytest.raises(TypeError, match="sample_rate"):
+        libsonare.mastering_insert_timing("saturation.softClipper")  # type: ignore[call-overload]
+    with pytest.raises(TypeError, match="sample_rate"):
+        libsonare.mastering_insert_timing(
+            "saturation.softClipper",
+            {},
+            None,  # type: ignore[arg-type]
+        )
+
+
 def test_insert_timing_rejects_an_unknown_key() -> None:
     """A key the insert does not read is refused rather than silently ignored."""
     import libsonare

@@ -117,7 +117,10 @@ describe('every result family reads without a null on silence and on a tone', ()
     const records: Array<[string, unknown]> = [
       ['analyze', analyze({ samples: a(), sampleRate: SR })],
       ['masteringAssistantSuggest', masteringAssistantSuggest({ samples: a(), sampleRate: SR })],
-      ['masteringAudioProfile', masteringAudioProfile({ samples: a(), sampleRate: SR })],
+      [
+        'masteringAudioProfile',
+        masteringAudioProfile({ samples: a(), sampleRate: SR, detectDefects: true }),
+      ],
       ['masteringStreamingPreview', masteringStreamingPreview({ samples: a(), sampleRate: SR })],
       [
         'match.referenceLoudness',
