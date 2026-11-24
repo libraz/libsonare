@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/engine_automation_resolver.h"
 #include "c_api/engine_config_domains.h"
 #include "core/channel_layout.h"
 #include "engine/realtime_engine.h"
@@ -99,15 +100,6 @@ SonareError refuse_out_of_memory(const std::string& text) {
   return SONARE_ERROR_OUT_OF_MEMORY;
 }
 
-SonareError refuse_automation_table_full() {
-  return run_validation([] { refuse_insert_automation_table_full(); });
-}
-
-bool track_has_lane(engine::RealtimeEngine& engine, uint32_t track_id) {
-  uint32_t position = 0;
-  return engine.track_mixer().track_lane_position(track_id, &position);
-}
-
 SonareError refuse_track_without_strip(engine::RealtimeEngine& engine, uint32_t track_id) {
   return run_validation([&] { throw_track_without_strip(engine, track_id); });
 }
@@ -117,65 +109,32 @@ SonareError refuse_bus_not_pannable(engine::RealtimeEngine& engine, uint32_t bus
   return refuse_with("bus_id", "must be the id of a bus with at most two channels");
 }
 
-bool has_settable_param(const rt::ProcessorBase* processor, const char* param_name) {
-  for (const rt::ParamDescriptor& descriptor : processor->parameter_descriptors()) {
-    if (descriptor.key == param_name) return processor->parameter_is_realtime_safe(descriptor.id);
-  }
-  return false;
-}
-
-constexpr const char* kParamNamePredicate =
-    "must be the name of a parameter of the insert that can be set while running";
-
-// The insert resolved by name but the engine minted no automation id for it.
-SonareError refuse_no_automation_id(unsigned int insert_index) {
-  if (insert_index > engine::kInsertIndexMask) {
-    return run_validation([&] {
-      util::check::integer_within(insert_index, kEngineInsertIndexDomain, "insert_index");
-    });
-  }
-  return refuse_automation_table_full();
-}
-
-// SONARE_OK when the track insert and, if given, its parameter name resolve.
 SonareError diagnose_track_insert(engine::RealtimeEngine& engine, uint32_t track_id,
                                   unsigned int insert_index, const char* param_name) {
-  if (!track_has_lane(engine, track_id)) return refuse_track_id();
-  const rt::ProcessorBase* processor =
-      engine.track_mixer().track_insert_processor(track_id, insert_index);
-  if (processor == nullptr) {
-    return refuse_with("insert_index", "must be less than the number of inserts on the track");
-  }
-  if (param_name != nullptr && !has_settable_param(processor, param_name)) {
-    return refuse_with("param_name", kParamNamePredicate);
-  }
-  return SONARE_OK;
+  return run_validation(
+      [&] { engine_automation::require_track_insert(engine, track_id, insert_index, param_name); });
 }
 
 SonareError diagnose_bus_insert(engine::RealtimeEngine& engine, uint32_t bus_id,
                                 unsigned int insert_index, const char* param_name) {
-  if (!engine.track_mixer().configured_bus(bus_id)) return refuse_bus_id();
-  const rt::ProcessorBase* processor =
-      engine.track_mixer().bus_insert_processor(bus_id, insert_index);
-  if (processor == nullptr) {
-    return refuse_with("insert_index", "must be less than the number of inserts on the bus");
-  }
-  if (param_name != nullptr && !has_settable_param(processor, param_name)) {
-    return refuse_with("param_name", kParamNamePredicate);
-  }
-  return SONARE_OK;
+  return run_validation(
+      [&] { engine_automation::require_bus_insert(engine, bus_id, insert_index, param_name); });
 }
 
 SonareError track_insert_target_error(engine::RealtimeEngine& engine, uint32_t track_id,
                                       unsigned int insert_index, const char* param_name) {
-  const SonareError err = diagnose_track_insert(engine, track_id, insert_index, param_name);
-  return err != SONARE_OK ? err : refuse_no_automation_id(insert_index);
+  return run_validation([&] {
+    engine_automation::require_track_insert(engine, track_id, insert_index, param_name);
+    engine_automation::refuse_no_automation_id(insert_index);
+  });
 }
 
 SonareError bus_insert_target_error(engine::RealtimeEngine& engine, uint32_t bus_id,
                                     unsigned int insert_index, const char* param_name) {
-  const SonareError err = diagnose_bus_insert(engine, bus_id, insert_index, param_name);
-  return err != SONARE_OK ? err : refuse_no_automation_id(insert_index);
+  return run_validation([&] {
+    engine_automation::require_bus_insert(engine, bus_id, insert_index, param_name);
+    engine_automation::refuse_no_automation_id(insert_index);
+  });
 }
 
 // After a restore failed with its target resolved, only the processor's refusal of the value is
@@ -185,27 +144,18 @@ SonareError refuse_restore_value(const char* param_name) {
                                   "\" of that insert");
 }
 
-// SONARE_OK when master insert @p insert_index and, if given, its parameter name resolve.
 SonareError diagnose_master_insert(const engine::RealtimeEngine& engine, unsigned int insert_index,
                                    const char* param_name) {
-  if (insert_index >= engine.master_insert_count()) {
-    return refuse_with("insert_index",
-                       "must be less than the number of inserts on the master strip");
-  }
-  if (param_name != nullptr) {
-    const int param_id = engine.master_insert_parameter_id(insert_index, param_name);
-    if (param_id < 0 || !engine.master_insert_processor(insert_index)
-                             ->parameter_is_realtime_safe(static_cast<unsigned int>(param_id))) {
-      return refuse_with("param_name", kParamNamePredicate);
-    }
-  }
-  return SONARE_OK;
+  return run_validation(
+      [&] { engine_automation::require_master_insert(engine, insert_index, param_name); });
 }
 
 SonareError master_insert_target_error(const engine::RealtimeEngine& engine,
                                        unsigned int insert_index, const char* param_name) {
-  const SonareError err = diagnose_master_insert(engine, insert_index, param_name);
-  return err != SONARE_OK ? err : refuse_no_automation_id(insert_index);
+  return run_validation([&] {
+    engine_automation::require_master_insert(engine, insert_index, param_name);
+    engine_automation::refuse_no_automation_id(insert_index);
+  });
 }
 
 // A bypass the engine refused for a resolved insert: only the processor's own answer is left.
@@ -446,7 +396,7 @@ SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t trac
   return sidechain_refusal_to_error(
       engine->engine,
       engine->engine.can_set_lane_sidechain(track_id, insert_index, source_track_id), wording,
-      track_has_lane(engine->engine, track_id), SONARE_SIDECHAIN_SOURCE_TRACK);
+      engine_automation::track_has_lane(engine->engine, track_id), SONARE_SIDECHAIN_SOURCE_TRACK);
 #endif
   SONARE_C_CATCH
 }
@@ -1036,10 +986,8 @@ SonareError sonare_engine_resolve_track_insert_automation_id(SonareEngine* engin
   return refuse_not_compiled_in(Feature::kMixing, track_id, insert_index);
 #else
   SONARE_C_TRY
-  const int64_t id =
-      engine->engine.resolve_track_insert_automation_id(track_id, insert_index, param_name);
-  if (id < 0) return track_insert_target_error(engine->engine, track_id, insert_index, param_name);
-  *out_id = static_cast<uint32_t>(id);
+  *out_id =
+      engine_automation::resolve_track_insert(engine->engine, track_id, insert_index, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
@@ -1058,9 +1006,7 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engi
   return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
-  const int64_t id = engine->engine.resolve_master_insert_automation_id(insert_index, param_name);
-  if (id < 0) return master_insert_target_error(engine->engine, insert_index, param_name);
-  *out_id = static_cast<uint32_t>(id);
+  *out_id = engine_automation::resolve_master_insert(engine->engine, insert_index, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
@@ -1077,12 +1023,7 @@ SonareError sonare_engine_resolve_master_automation_id(SonareEngine* engine, con
   return refuse_not_compiled_in(Feature::kMixing);
 #else
   SONARE_C_TRY
-  const int64_t id = engine->engine.resolve_master_automation_id(param_name);
-  if (id < 0) {
-    return refuse_with("param_name",
-                       "must be the name of a master strip parameter: faderDb, pan or width");
-  }
-  *out_id = static_cast<uint32_t>(id);
+  *out_id = engine_automation::resolve_master(engine->engine, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
@@ -1102,10 +1043,7 @@ SonareError sonare_engine_resolve_bus_insert_automation_id(SonareEngine* engine,
   return refuse_not_compiled_in(Feature::kMixing, bus_id, insert_index);
 #else
   SONARE_C_TRY
-  const int64_t id =
-      engine->engine.resolve_bus_insert_automation_id(bus_id, insert_index, param_name);
-  if (id < 0) return bus_insert_target_error(engine->engine, bus_id, insert_index, param_name);
-  *out_id = static_cast<uint32_t>(id);
+  *out_id = engine_automation::resolve_bus_insert(engine->engine, bus_id, insert_index, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
@@ -1124,17 +1062,7 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareEngine* engine,
   return refuse_not_compiled_in(Feature::kMixing, track_id);
 #else
   SONARE_C_TRY
-  const int64_t id = engine->engine.resolve_track_lane_automation_id(track_id, param_name);
-  if (id < 0) {
-    const std::string key = param_name;
-    if (key != "faderDb" && key != "pan") {
-      return refuse_with("param_name",
-                         "must be the name of a track strip parameter: faderDb or pan");
-    }
-    if (!track_has_lane(engine->engine, track_id)) return refuse_track_id();
-    return refuse_no_automation_id(0);
-  }
-  *out_id = static_cast<uint32_t>(id);
+  *out_id = engine_automation::resolve_track_lane(engine->engine, track_id, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
@@ -1152,15 +1080,7 @@ SonareError sonare_engine_resolve_bus_automation_id(SonareEngine* engine, uint32
   return refuse_not_compiled_in(Feature::kMixing, bus_id);
 #else
   SONARE_C_TRY
-  const int64_t id = engine->engine.resolve_bus_automation_id(bus_id, param_name);
-  if (id < 0) {
-    if (std::string(param_name) != "faderDb") {
-      return refuse_with("param_name", "must be the name of a bus strip parameter: faderDb");
-    }
-    if (!engine->engine.track_mixer().configured_bus(bus_id)) return refuse_bus_id();
-    return refuse_no_automation_id(0);
-  }
-  *out_id = static_cast<uint32_t>(id);
+  *out_id = engine_automation::resolve_bus(engine->engine, bus_id, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif

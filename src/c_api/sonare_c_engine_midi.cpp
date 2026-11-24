@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "c_api/engine_automation_resolver.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/midi_cc_binding_check.h"
@@ -114,10 +115,7 @@ SonareError bind_engine_instrument(SonareEngine* engine, uint32_t destination_id
 
 // Refuses a destination_id that no bound MIDI instrument answers to.
 SonareError refuse_unknown_instrument_destination() noexcept {
-  return run_validation([&] {
-    util::check::refuse_unknown_id("destination_id", "a destination with a MIDI instrument",
-                                   "engine");
-  });
+  return run_validation([] { engine_automation::refuse_instrument_destination(); });
 }
 
 // Maps an engine instrument-control outcome to the articulation entries' C status.
@@ -416,18 +414,7 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
   return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
-  const int64_t id = engine->engine.resolve_instrument_automation_id(destination_id, param_name);
-  if (id < 0) {
-    if (engine->engine.midi_instrument(destination_id) == nullptr) {
-      return refuse_unknown_instrument_destination();
-    }
-    return run_validation([&] {
-      util::check::refuse_relation({"param_name", "destination_id"},
-                                   "{0} must be the name of a parameter of the instrument bound "
-                                   "to {1}");
-    });
-  }
-  *out_id = static_cast<uint32_t>(id);
+  *out_id = engine_automation::resolve_instrument(engine->engine, destination_id, param_name);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
