@@ -185,16 +185,14 @@ TEST_CASE("project bounce refuses send automation with a missing send identity",
   CHECK(frames == 0);
   CHECK(channels == 0);
 
+  CHECK(last_error().find("missing-send") != std::string::npos);
+
   SonareProjectCompileResult result{};
   REQUIRE(sonare_project_last_bounce_compile_result(project.handle, &result) == SONARE_OK);
   CHECK(result.has_timeline == 0);
-  REQUIRE(result.messages != nullptr);
-  CHECK(std::string(result.messages).find("missing-send") != std::string::npos);
-  REQUIRE(result.diagnostic_count > 0);
-  REQUIRE(result.diagnostics != nullptr);
-  CHECK(std::any_of(
-      result.diagnostics, result.diagnostics + result.diagnostic_count,
-      [](const SonareProjectDiagnostic& diagnostic) { return diagnostic.severity == 0; }));
+  CHECK(result.messages == nullptr);
+  CHECK(result.diagnostic_count == 0);
+  CHECK(result.diagnostics == nullptr);
   sonare_free_project_compile_result(&result);
 }
 #endif

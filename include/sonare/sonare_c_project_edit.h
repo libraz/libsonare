@@ -105,9 +105,10 @@ static_assert(sizeof(SonareProjectClipDesc) ==
 /// length @p loop_length_ppq is added to @p track_id. The last take is made
 /// active, except that a partial last take (the capture does not fill the last
 /// loop) is kept but NOT made active when an earlier complete take exists; the
-/// previous take stays active. A capture shorter than one loop has only the
-/// partial take, which stays active. A remainder of at most one frame creates no
-/// take, and a last take within one frame of the loop length counts as complete.
+/// previous take stays active. A capture shorter than one loop keeps its only
+/// take active if retained. After a full take, a remainder of at most
+/// one frame creates no take. A last take within one frame of the loop length
+/// counts as complete.
 /// @p flags selects the partial-tail policy: 0 keeps the partial take (default),
 /// @ref SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL does not create it.
 /// Unknown flag bits are rejected.
@@ -540,24 +541,22 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 ///   @p reference_sample_rate.
 /// @param reference The reference timeline -- the guide take, or the backing
 ///   track the takes were sung against.
-/// @param reference_sample_rate Sample rate of @p reference; must be > 0.
+/// @param reference_sample_rate Sample rate of @p reference in Hz, in [8000, 384000].
 /// @param take The signal to be placed under it.
-/// @param take_sample_rate Sample rate of @p take; must be > 0.
+/// @param take_sample_rate Sample rate of @p take in Hz, in [8000, 384000].
 /// @param config Optional; NULL selects the @ref sonare_take_align_config_init values.
 /// @param out_anchors Receives a heap-owned array of @p out_count anchors,
-///   released with @ref sonare_free_project_warp_anchors. Written on success only.
+///   released with @ref sonare_free_project_warp_anchors.
+/// @param out_count Receives the number of anchors.
 /// @param out_alignment Optional; receives how well the alignment was
-///   conditioned, in hop frames at @p reference_sample_rate. Zeroed on entry, so
-///   a caller may read it after any return code.
-/// @return ::SONARE_ERROR_INVALID_PARAMETER when a buffer is empty, a rate is
-///   not positive, a config field is outside its domain, the take resampled to
+///   conditioned, in hop frames at @p reference_sample_rate.
+/// @details All supplied outputs are cleared on entry and published together on success.
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when a buffer is empty, a rate or
+///   config field is outside its domain, the take resampled to
 ///   @p reference_sample_rate would exceed the buffer size limit (checked before
 ///   anything is copied), or the two signals produce no pair of distinct anchors
 ///   -- the last of which is what an unalignable pair looks like, and is reported
 ///   rather than answered with a map a caller cannot use.
-/// @note The chroma grid does not shrink with the sample rate, so rates under
-///   roughly 8 kHz cannot carry it and are refused by the measurement rather than
-///   by a bound stated here.
 SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
                                            int reference_sample_rate, const float* take,
                                            size_t take_len, int take_sample_rate,
@@ -569,9 +568,10 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 void sonare_free_project_warp_anchors(SonareProjectWarpAnchor* anchors);
 
 /// @brief Adds or replaces a first-class project warp map via an undoable edit.
-///        @p desc->id must be non-zero and @p anchors must contain at least two
-///        finite, strictly increasing anchor pairs, both axes in samples at the
-///        project's sample rate (see @ref SonareProjectWarpAnchor).
+///        @c desc.id must be in [1, UINT32_MAX]. @c desc.anchor_count
+///        is in [2, 500000000]. In @c desc.anchors, both coordinates must be finite
+///        and nonnegative and each axis must be strictly increasing. Coordinates
+///        are in samples at the project's sample rate (see @ref SonareProjectWarpAnchor).
 SonareError sonare_project_set_warp_map(SonareProject* project,
                                         const SonareProjectWarpMapDesc* desc);
 
@@ -739,7 +739,9 @@ SonareError sonare_project_automation_lanes(const SonareProject* project,
 void sonare_free_project_automation_lane_list(SonareProjectAutomationLaneList* list);
 
 /// @brief Newline-separated automation target tokens in ordinal order.
-/// @return A string in static storage, or NULL when arrangement support is unavailable.
+/// @return A borrowed string valid until the next call on this thread or until the
+///         thread exits. Do not free it. Returns NULL on failure, including when
+///         arrangement support is unavailable.
 const char* sonare_automation_target_kind_names(void);
 
 /// @brief Undoes the most recent edit. Returns SONARE_ERROR_INVALID_STATE when

@@ -148,28 +148,26 @@ SonareMidiEventPod pod_from_ump(double ppq, const sonare::midi::Ump& ump) {
 void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& diagnostics,
                                           bool has_timeline, SonareProjectCompileResult* out) {
   if (out == nullptr) return;
-  *out = {};
-  out->has_timeline = has_timeline ? 1 : 0;
-  if (diagnostics.empty()) return;
-
-  // Staged until the joined message is copied too, so a throw publishes nothing.
-  std::unique_ptr<SonareProjectDiagnostic[]> rows(new SonareProjectDiagnostic[diagnostics.size()]);
-  std::string joined;
-  for (size_t i = 0; i < diagnostics.size(); ++i) {
-    const arr::Diagnostic& d = diagnostics[i];
-    rows[i].code = static_cast<uint32_t>(d.code);
-    rows[i].severity = static_cast<uint32_t>(d.severity);
-    rows[i].target_id = d.target_id;
-    if (i > 0) joined += '\n';
-    std::string message = d.message;
-    std::replace(message.begin(), message.end(), '\n', ' ');
-    std::replace(message.begin(), message.end(), '\r', ' ');
-    joined += message;
+  StagedOutput<SonareProjectCompileResult, sonare_free_project_compile_result> staged;
+  staged->has_timeline = has_timeline ? 1 : 0;
+  if (!diagnostics.empty()) {
+    const size_t count = diagnostics.size();
+    staged->diagnostics = new SonareProjectDiagnostic[count];
+    std::string joined;
+    for (size_t i = 0; i < count; ++i) {
+      const arr::Diagnostic& diagnostic = diagnostics[i];
+      staged->diagnostics[i] = {static_cast<uint32_t>(diagnostic.code),
+                                static_cast<uint32_t>(diagnostic.severity), diagnostic.target_id};
+      if (i > 0) joined += '\n';
+      std::string message = diagnostic.message;
+      std::replace(message.begin(), message.end(), '\n', ' ');
+      std::replace(message.begin(), message.end(), '\r', ' ');
+      joined += message;
+    }
+    staged->messages = copy_string(joined);
+    staged->diagnostic_count = count;
   }
-  std::unique_ptr<char[]> messages(copy_string(joined));
-  out->diagnostics = rows.release();
-  out->messages = messages.release();
-  out->diagnostic_count = diagnostics.size();
+  staged.publish(out);
 }
 
 bool valid_midi_event_pod(const SonareMidiEventPod& event) noexcept {

@@ -129,7 +129,7 @@ typedef struct {
 /// @brief Fills @p config with sizeof and the library defaults: a sine patch with gain 0.2,
 ///        attack 5 ms, decay 60 ms, sustain 0.7, release 120 ms and 16 voices. A NULL @p config
 ///        is ignored.
-/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+/// @details Allocates nothing. Initializes the same defaults even without arrangement support.
 void sonare_builtin_synth_config_init(SonareBuiltinSynthConfig* config);
 
 /// @brief Binds a built-in synth patch to a MIDI destination id (the value set
@@ -422,7 +422,7 @@ typedef struct {
 /// @brief Fills @p config with sizeof and the library defaults: gain 0.5, 48 voices, models not
 ///        preferred, the bank's rig kept and the modern GS insertion effects. A NULL @p config is
 ///        ignored.
-/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+/// @details Allocates nothing. Initializes the same defaults even without arrangement support.
 void sonare_sf2_instrument_config_init(SonareSf2InstrumentConfig* config);
 
 /// @brief Binds an SF2 player patch to a MIDI destination id (the value set by
@@ -466,7 +466,9 @@ typedef struct {
 void sonare_project_instrument_init(SonareProjectInstrument* instrument);
 
 /// @brief Sets a destination's persistent instrument as one undoable edit.
-/// @details A NULL instrument clears the binding. A destination must be referenced by a track.
+/// @details Setting a non-NULL instrument requires a track referencing the destination.
+///          Passing NULL clears the binding even if no track references it. Clearing an
+///          absent binding succeeds without an edit.
 SonareError sonare_project_set_destination_instrument(SonareProject* project,
                                                       uint32_t destination_id,
                                                       const SonareProjectInstrument* instrument);

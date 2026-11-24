@@ -165,10 +165,9 @@ bool try_project_to_json(const arrangement::Project& project,
                          const resource::ProjectImportResourceLimits& limits =
                              resource::kDefaultProjectImportResourceLimits);
 
-/// @brief Deserializes a project JSON produced by @ref project_to_json. Unknown
-///        fields are ignored; AssistSidecars are preserved verbatim. Malformed /
-///        truncated / garbage input never throws or reads OOB: it returns a
-///        DeserializeResult with diagnostics and an empty Project.
+/// @brief Deserializes a project JSON produced by @ref project_to_json.
+/// @details Preserves AssistSidecars verbatim. Malformed input returns
+///          diagnostics and no project. Allocation failure throws std::bad_alloc.
 DeserializeResult project_from_json(const std::string& json);
 
 }  // namespace sonare::serialize

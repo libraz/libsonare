@@ -1,15 +1,16 @@
 #include <algorithm>
 #include <cctype>
 
+#include "analysis/music_analyzer.h"
 #include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
+#include "mir/tempo_estimator_bridge.h"
 #include "util/parameter_checks.h"
 
 namespace check = sonare::util::check;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-#include "analysis/music_analyzer.h"
 #include "arrangement/harmonic_limits.h"
 #include "core/resample.h"
 #include "feature/cqt.h"
@@ -24,20 +25,14 @@ void sonare_project_tempo_options_init(SonareProjectTempoOptions* out) {
   if (out == nullptr) return;
   SonareProjectTempoOptions options = {};
   options.struct_size = sizeof(SonareProjectTempoOptions);
-#if defined(SONARE_WITH_ARRANGEMENT)
-  // Seeded from the two core configs the bridge runs on, so the defaults cannot
-  // drift away from what the fixed-signature entry points do.
+  // Seed from the core configs so defaults remain the same with or without the
+  // arrangement entry points in the build.
   const sonare::BeatConfig beat_config;
   const sonare::mir::TempoEstimatorConfig bridge_config;
   options.adaptive_tempo = beat_config.adaptive_tempo ? 1 : 0;
   options.tempo_update_interval_beats = beat_config.tempo_update_interval_beats;
   options.ramp_threshold = bridge_config.ramp_threshold;
   options.include_octave_candidates = bridge_config.include_octave_candidates ? 1 : 0;
-#endif
-  // Without arrangement the bridge these options configure is not in the build
-  // and every entry point that would read them reports NOT_SUPPORTED, so the
-  // zeroed struct is the honest answer rather than a hand-copied set of values
-  // with nothing to keep them in step with the core.
   *out = options;
 }
 
@@ -194,9 +189,16 @@ SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq
                                         const SonareProjectSnapToGridOptions* options,
                                         double* out_ppq) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_ppq);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_ppq) *out_ppq = ppq;
   SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = run_validation([&] {
+        check::within(ppq, sonare_c_detail::kPublicPpqDomain, "ppq");
+        check::in_range(strength, 0.0, 1.0, "strength");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   int division = 1;
   if (options != nullptr) {
     if (const SonareError err = run_validation([&] {
@@ -209,11 +211,8 @@ SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq
     }
     division = options->division;
   }
-  if (const SonareError err = run_validation([&] {
-        check::within(ppq, sonare_c_detail::kPublicPpqDomain, "ppq");
-        check::in_range(strength, 0.0, 1.0, "strength");
-        check::integer_within(division, kSnapDivisionDomain, "division");
-      });
+  if (const SonareError err = run_validation(
+          [&] { check::integer_within(division, kSnapDivisionDomain, "options.division"); });
       err != SONARE_OK) {
     return err;
   }
@@ -232,7 +231,6 @@ SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_ppq) *out_ppq = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  ppq, strength, options, out_ppq);
 #endif
@@ -738,13 +736,12 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 
   const std::vector<sonare::mir::WarpAnchor> anchors =
       sonare::mir::strictly_increasing_anchors(aligned.anchors);
-  if (out_alignment != nullptr) {
-    out_alignment->mean_residual_frames = aligned.mean_residual_frames;
-    // Named for the arguments this entry point took, not for the ones it passed
-    // on, so the two counts describe the signals the caller handed over.
-    out_alignment->reference_frames = aligned.target_frames;
-    out_alignment->take_frames = aligned.reference_frames;
-  }
+  SonareTakeAlignment staged_alignment{};
+  staged_alignment.mean_residual_frames = aligned.mean_residual_frames;
+  // Name counts for the arguments this entry point took, not for those it passed
+  // to the core, so they describe the signals the caller handed over.
+  staged_alignment.reference_frames = aligned.target_frames;
+  staged_alignment.take_frames = aligned.reference_frames;
   // The reduction hands back its input when it cannot produce two distinct
   // anchors, so the count is checked here rather than assumed from the alignment
   // having succeeded.
@@ -762,6 +759,7 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
     rows[i].warp_sample = anchors[i].warp_sample;
     rows[i].source_sample = anchors[i].source_sample;
   }
+  if (out_alignment != nullptr) *out_alignment = staged_alignment;
   *out_count = anchors.size();
   *out_anchors = rows.release();
   return SONARE_OK;

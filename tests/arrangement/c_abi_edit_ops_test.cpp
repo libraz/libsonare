@@ -1008,6 +1008,15 @@ TEST_CASE("C-ABI loop recording keeps a partial last take inactive", "[project][
 
 TEST_CASE("C-ABI loop recording treats a one-frame remainder as rounding",
           "[project][c-abi-edit]") {
+  const auto one_frame = add_loop_capture(1, 0);
+  REQUIRE(one_frame.error == SONARE_OK);
+  CHECK(one_frame.take_count == 1);
+  CHECK(one_frame.partial_takes() == 1);
+
+  const auto dropped = add_loop_capture(1, SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL);
+  CHECK(dropped.error == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(dropped.take_count == 0);
+
   const auto extra_frame = add_loop_capture(48001, 0);
   REQUIRE(extra_frame.error == SONARE_OK);
   REQUIRE(extra_frame.take_count == 2);

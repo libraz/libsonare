@@ -1,6 +1,9 @@
 /// @file binding_project_editing_test.cpp
 /// @brief Project editing and compile parity tests.
 
+#include <memory>
+#include <thread>
+
 #include "binding_project_parity_test_helpers.h"
 #include "util/resource_limits.h"
 
@@ -385,7 +388,7 @@ TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
   snap_options.division = 2000;
   REQUIRE(sonare_project_snap_to_grid(project, 1.0, 0.5, &snap_options, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "division must be an integer in [0, 1024]");
+  CHECK(message() == "options.division must be an integer in [0, 1024]");
   REQUIRE(sonare_project_snap_to_grid(project, 1.0, 0.5, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_ppq must not be NULL");
@@ -464,4 +467,43 @@ TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
 
   sonare_project_destroy(project);
 #endif
+}
+
+TEST_CASE("automation target tokens are borrowed independently on each thread", "[project]") {
+  const char* names = sonare_automation_target_kind_names();
+  REQUIRE(names != nullptr);
+  const std::string expected(names);
+  std::string other;
+  bool independent = false;
+  std::thread worker([&] {
+    if (const char* peer = sonare_automation_target_kind_names()) {
+      independent = peer != names;
+      other = peer;
+    }
+  });
+  worker.join();
+  CHECK(independent);
+  REQUIRE(other == expected);
+  CHECK(std::string(names) == expected);
+}
+
+TEST_CASE("warp-map coordinates have independent nonnegative increasing axes", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> owned(
+      project, sonare_project_destroy);
+  SonareProjectWarpAnchor anchors[]{{0.0, 0.0}, {4.0, 5.0}};
+  SonareProjectWarpMapDesc desc{};
+  desc.id = 1;
+  desc.anchor_count = 2;
+  desc.anchors = anchors;
+  REQUIRE(sonare_project_set_warp_map(project, &desc) == SONARE_OK);
+
+  anchors[0].warp_sample = -1.0;
+  REQUIRE(sonare_project_set_warp_map(project, &desc) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("desc.anchors[0].warp_sample") == 0);
+  anchors[0].warp_sample = 0.0;
+  anchors[1].source_sample = 0.0;
+  REQUIRE(sonare_project_set_warp_map(project, &desc) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("desc.anchors[1].source_sample") == 0);
 }

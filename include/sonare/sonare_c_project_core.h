@@ -200,22 +200,20 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
                                      size_t* out_len);
 
 /// @brief Deserializes project JSON into a NEW project handle.
+/// @details Unknown document keys, except those prefixed with `$` or `x-`, are refused as
+///          @c SONARE_ERROR_INVALID_FORMAT with their document path. Duplicate explicit
+///          automation lane IDs are also refused. In builds with mastering, embedded mixer
+///          insert parameters are validated and refusals name the indexed insert path.
 /// @param document Project JSON as @ref sonare_project_serialize writes it (need not be
 ///        NUL-terminated; @p len bytes are read).
 /// @param len  Byte length of @p document.
-/// @param out  Receives the new handle on success.
-/// @param out_diag Optional; receives a heap C string with the joined diagnostic
-///        messages, or NULL when the load produced none. A SUCCESSFUL load can
-///        set it: a document with a dropped warp map, a duplicate automation
-///        lane or an unparsable MIDI content key loads with warnings, and those
-///        warnings are what this reports. So a non-NULL string does NOT mean
-///        failure -- the return code alone does -- and the caller owns the string
-///        on every return code and must release it with @ref sonare_free_string.
-///        A key no record of the document reads (other than `$`- and `x-`-prefixed ones)
-///        fails the load as `invalid_format`, naming its path: `unknown key clips[3].bogus`, or
-///        `unknown key scene.strips[2].faderDB` inside the embedded mixer scene. Insert `params`
-///        bags and the MIDI content map's keys are data and are not checked. Pass NULL to ignore
-///        the diagnostics entirely. Malformed input returns an error WITHOUT crashing.
+/// @param out Receives the new handle on success. Cleared on entry.
+/// @param out_diag Optional; receives a heap C string with the joined diagnostics, or NULL when
+///        there are none. Cleared on entry. A successful load can report warnings for a dropped
+///        warp map, a duplicate automation target or an unparsable MIDI content key. A malformed
+///        document may report diagnostics with @c SONARE_ERROR_INVALID_FORMAT and no project.
+///        On allocation failure both outputs stay NULL. Free the string with
+///        @ref sonare_free_string. Pass NULL to skip it.
 SonareError sonare_project_deserialize(const char* document, size_t len, SonareProject** out,
                                        char** out_diag);
 
@@ -518,12 +516,16 @@ SonareError sonare_project_get_overlap_policy(const SonareProject* project,
                                               uint32_t* out_overlap_policy);
 
 /// @brief Counts tracks without requiring JSON serialization.
+/// @param out_count Receives the count. Cleared on entry.
 SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count);
 /// @brief Counts clips without requiring JSON serialization.
+/// @param out_count Receives the count. Cleared on entry.
 SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count);
 /// @brief Counts sources (audio and MIDI) without requiring JSON serialization.
+/// @param out_count Receives the count. Cleared on entry.
 SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count);
 /// @brief Counts markers without requiring JSON serialization.
+/// @param out_count Receives the count. Cleared on entry.
 SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count);
 /// @brief Reads the project's stored tempo segments in stored order.
 /// @details This returns only stored segments, without inserting a default. An empty list has
@@ -555,7 +557,8 @@ typedef struct SonareProjectTimeline SonareProjectTimeline;
 ///          non-NULL and compilation produced a timeline (@c out->has_timeline non-zero),
 ///          @p *out_timeline receives a new handle; otherwise it is NULL and the call still
 ///          returns @c SONARE_OK, with the error diagnostics in @p out. A NULL @p out_timeline
-///          compiles for diagnostics only. Both outputs are zeroed on entry. CONTROL thread.
+///          compiles for diagnostics only. Both outputs are zeroed on entry and stay cleared
+///          if an allocation fails. CONTROL thread.
 /// @param out Zero-initialized result; free with
 ///        @ref sonare_free_project_compile_result.
 /// @param out_timeline Receives the new timeline handle, or NULL; may itself be NULL.
@@ -573,19 +576,13 @@ const char* sonare_project_diagnostic_code_name(int code);
 ///        free.
 const char* sonare_project_diagnostic_severity_name(int severity);
 
-/// @brief Returns compile diagnostics produced by the most recent
+/// @brief Returns the compile result of the most recent successful
 ///        @ref sonare_project_bounce on this project.
-/// @details This surfaces non-fatal warnings from the bounce's internal compile
-///          step, such as MIDI clips rendering silently without a bound
-///          instrument. On a project no bounce has ever run on, the result is
-///          empty in full: `has_timeline` is zero and `diagnostic_count` is
-///          zero. That state is distinguishable from a failed bounce, because a
-///          bounce only loses its timeline through an error diagnostic and so
-///          always reports at least one diagnostic when it fails. A bounce
-///          rejected for invalid arguments before it compiles clears the
-///          recorded result back to that same empty state; that call reports
-///          its own error to the caller directly. Free with
-///          @ref sonare_free_project_compile_result.
+/// @details Includes non-fatal compile warnings, such as MIDI clips rendering silently
+///          without a bound instrument. The result is empty until a bounce succeeds.
+///          A failed bounce leaves the previous result in place and reports its own error.
+///          The output is cleared on entry and stays cleared if an allocation fails.
+///          Release it with @ref sonare_free_project_compile_result.
 SonareError sonare_project_last_bounce_compile_result(const SonareProject* project,
                                                       SonareProjectCompileResult* out);
 

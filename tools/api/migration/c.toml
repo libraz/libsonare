@@ -1077,10 +1077,10 @@ test = "tests/api/sonare_c_assist_test.cpp::sonare_assist_module_ids names both 
 [[entry]]
 kind = "function"
 old = "sonare_project_deserialize"
-changed = "reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys."
+changed = "reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. Allocation failure while reading the document or formatting diagnostics returns SONARE_ERROR_OUT_OF_MEMORY with both outputs cleared."
 domain = "project"
 rule = "token-case"
-test = "tests/serialize/project_serializer_roundtrip_test.cpp::a built-in assist module id in its earlier spelling is refused naming the current one"
+test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
 
 [[entry]]
 kind = "type"
@@ -2577,10 +2577,10 @@ test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine MIDI clip
 [[entry]]
 kind = "type"
 old = "SonareBuiltinSynthConfig"
-changed = "leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default"
+changed = "leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default. The initializer writes the library defaults even with arrangement support compiled out."
 domain = "project"
 rule = "absent-not-sentinel"
-test = "tests/bindings/binding_project_bounce_test.cpp::project bounce refuses each built-in synth field by name"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project instrument config initializers provide library defaults"
 
 [[entry]]
 kind = "type"
@@ -2593,10 +2593,10 @@ test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine built-in 
 [[entry]]
 kind = "type"
 old = "SonareSf2InstrumentConfig"
-changed = "leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default"
+changed = "leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default. The initializer writes the library defaults even with arrangement support compiled out."
 domain = "project"
 rule = "absent-not-sentinel"
-test = "tests/bindings/binding_project_bounce_test.cpp::project bounce refuses each SF2 player field by name"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project instrument config initializers provide library defaults"
 
 [[entry]]
 kind = "field"
@@ -2638,10 +2638,10 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "type"
 old = "SonareProjectTempoOptions"
-changed = "leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused"
+changed = "leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused. The initializer writes the library defaults even with arrangement support compiled out."
 domain = "project"
 rule = "absent-not-sentinel"
-test = "tests/bindings/binding_project_editing_test.cpp::project C surface MIR refusals name the parameter"
+test = "tests/api/sonare_c_project_timeline_test.cpp::tempo bridge defaults are stable across feature builds"
 
 [[entry]]
 kind = "type"
@@ -4718,15 +4718,15 @@ rule = "individual"
 [[entry]]
 kind = "function"
 old = "sonare_align_take_to_reference"
-changed = "takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice"
+changed = "takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice. A refused call clears every provided output, including the anchors, count and alignment diagnostics."
 domain = "project"
 rule = "options-struct"
-test = "tests/arrangement/c_abi_edit_ops_test.cpp::C ABI take alignment produces anchors the project warp map accepts"
+test = "tests/api/project_tempo_test.cpp::take alignment leaves diagnostics empty when output allocation fails"
 
 [[entry]]
 kind = "function"
 old = "sonare_align_take_to_reference_ex"
-removed = "call sonare_align_take_to_reference, which now takes the reference and take sample rates"
+removed = "call sonare_align_take_to_reference, which now takes the reference and take sample rates. A refused call clears every provided output, including the anchors, count and alignment diagnostics."
 domain = "project"
 rule = "options-struct"
 
@@ -4852,7 +4852,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_bake_midi_fx"
-changed = "takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)')"
+changed = "takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones' followed by the accepted keys). Every failure clears a provided out_count and leaves the provenance buffer alone."
 domain = "project"
 rule = "options-struct"
 test = "tests/bindings/binding_project_midi_test.cpp::project C surface MIDI-FX bake reports per-event provenance"
@@ -4860,7 +4860,7 @@ test = "tests/bindings/binding_project_midi_test.cpp::project C surface MIDI-FX 
 [[entry]]
 kind = "function"
 old = "sonare_project_bake_midi_fx_ex"
-removed = "call sonare_project_bake_midi_fx, which takes the provenance outputs"
+removed = "call sonare_project_bake_midi_fx, which takes the provenance outputs. Every failure clears a provided out_count and leaves the provenance buffer alone."
 domain = "project"
 rule = "options-struct"
 
@@ -5010,15 +5010,15 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_snap_to_grid"
-changed = "takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init"
+changed = "takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init. The call checks ppq and strength before options, names an invalid division as options.division, and clears out_ppq on refusal."
 domain = "project"
 rule = "options-struct"
-test = "tests/bindings/binding_project_editing_test.cpp::snap_to_grid snaps a near-beat coordinate to the beat line"
+test = "tests/api/project_tempo_test.cpp::project snap-to-grid clears failure output and validates by argument order"
 
 [[entry]]
 kind = "function"
 old = "sonare_project_snap_to_grid_ex"
-removed = "call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division"
+removed = "call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division. The call checks ppq and strength before options, names an invalid division as options.division, and clears out_ppq on refusal."
 domain = "project"
 rule = "options-struct"
 
@@ -5075,16 +5075,88 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
+old = "sonare_project_track_count"
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+domain = "project"
+rule = "c-error-path"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_clip_count"
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+domain = "project"
+rule = "c-error-path"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_source_count"
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+domain = "project"
+rule = "c-error-path"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_marker_count"
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+domain = "project"
+rule = "c-error-path"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_export_smf"
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0."
+domain = "project"
+rule = "c-error-path"
+test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_export_clip_file"
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0."
+domain = "project"
+rule = "c-error-path"
+test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_validate_midi_notes"
+changed = "When validation fails after it starts, ok and both note counts stay cleared."
+domain = "project"
+rule = "c-error-path"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface validates MIDI note pairing"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_apply_project_timeline"
+changed = "An empty timeline is refused under timeline before the live-driver state is checked."
+domain = "project"
+rule = "c-error-path"
+test = "tests/api/sonare_c_project_timeline_test.cpp::timeline apply validates an empty handle before the live owner"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_last_bounce_compile_result"
+changed = "Reports the last successful bounce. A refused bounce leaves that snapshot intact. The timeline flag, diagnostic rows and messages are published together, and allocation failure leaves the outputs cleared."
+domain = "project"
+rule = "c-error-path"
+test = "tests/bindings/binding_project_bounce_test.cpp::failed bounces preserve the last successful compile result"
+
+[[entry]]
+kind = "function"
 old = "sonare_project_compile"
-changed = "takes SonareProjectTimeline** out_timeline after out: NULL compiles for diagnostics only as before, non-NULL also receives the compiled timeline"
+changed = "takes SonareProjectTimeline** out_timeline after out: NULL compiles for diagnostics only as before, non-NULL also receives the compiled timeline. The timeline flag, diagnostic rows and messages are published together. Allocation failure leaves the result and the optional timeline output cleared."
 domain = "project"
 rule = "one-entry-per-operation"
-test = "tests/api/sonare_c_project_timeline_test.cpp::compile returns no timeline handle and the diagnostics when compile fails"
+test = "tests/api/sonare_c_project_timeline_test.cpp::project compile stages the timeline flag until diagnostics can be published"
 
 [[entry]]
 kind = "function"
 old = "sonare_project_compile_timeline"
-removed = "call sonare_project_compile with a non-NULL out_timeline"
+removed = "call sonare_project_compile with a non-NULL out_timeline. An allocation failure leaves the timeline and compile result outputs cleared."
 domain = "project"
 rule = "one-entry-per-operation"
 
@@ -5548,10 +5620,10 @@ test = "tests/conformance/core_validation_refusals_test.cpp::a MIDI-FX config is
 [[entry]]
 kind = "function"
 old = "sonare_project_preview_midi_fx_count"
-changed = "refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)')"
+changed = "refuses malformed config_json, an unknown key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones' followed by the accepted keys). Every failure clears a provided out_count."
 domain = "project"
 rule = "error-class-by-cause"
-test = "tests/conformance/core_validation_refusals_test.cpp::a MIDI-FX config is a call's argument on every entry that takes one"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface MIDI-FX bake reports per-event provenance"
 
 [[entry]]
 kind = "function"

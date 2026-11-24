@@ -774,3 +774,12 @@ TEST_CASE("project section annotations preserve overlaps and own their labels",
   CHECK(snapshot.list.items == nullptr);
   CHECK(snapshot.list.count == 0);
 }
+
+TEST_CASE("project count readers clear the output on refusal", "[c_api][project][readers]") {
+  for (const auto read : {sonare_project_track_count, sonare_project_clip_count,
+                          sonare_project_source_count, sonare_project_marker_count}) {
+    size_t count = 123;
+    REQUIRE(read(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(count == 0);
+  }
+}

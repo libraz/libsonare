@@ -8,6 +8,7 @@
 
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
+#include "c_api/synth_patch_common.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
 
@@ -25,7 +26,6 @@
 #include "c_api/instrument_config_domains.h"
 #include "c_api/project_bounce_internal.h"
 #include "c_api/sample_bank_internal.h"
-#include "c_api/synth_patch_common.h"
 #include "core/channel_layout.h"
 #include "engine/realtime_engine.h"
 #include "engine/track_mixer.h"
@@ -51,6 +51,12 @@ namespace {
 // The refusal for a render length the release tail pushes past a 64-bit count.
 constexpr const char* kTailOverflow =
     "the arrangement's end plus the instruments' release tail must fit in a 64-bit sample count";
+
+struct BounceCompileSnapshot {
+  std::vector<arr::Diagnostic> diagnostics;
+  bool has_timeline = false;
+};
+
 double bounce_sample_rate(const arr::Project& project) {
   namespace check = sonare::util::check;
   const double rate = project.sample_rate();
@@ -112,6 +118,16 @@ sonare::engine::MetronomeConfig bounce_metronome(const SonareEngineMetronomeConf
 SonareError refuse_state(const char* message) {
   sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, message);
   return SONARE_ERROR_INVALID_STATE;
+}
+
+SonareError refuse_state_with_diagnostic(const char* message,
+                                         const std::vector<arr::Diagnostic>& diagnostics) {
+  const auto error = std::find_if(diagnostics.begin(), diagnostics.end(), [](const auto& d) {
+    return d.severity == arr::Diagnostic::Severity::kError;
+  });
+  if (error == diagnostics.end() || error->message.empty()) return refuse_state(message);
+  const std::string detail = std::string(message) + ": " + error->message;
+  return refuse_state(detail.c_str());
 }
 
 // The subject naming one hosted instrument as the caller's array spells it.
@@ -231,18 +247,6 @@ int master_output_channels(const sonare::mixing::api::Scene* scene) noexcept {
   return master == nullptr ? 2 : sonare::channel_count(master->layout);
 }
 
-// Resets the recorded compile result to the empty state a project starts in.
-// Every bounce entry point runs this before it can return, because the recorded
-// result describes the LAST bounce: a call rejected for invalid arguments before
-// it compiles has no result of its own, and leaving the previous one in place
-// makes a query after the rejection report diagnostics from a bounce the caller
-// never issued (sonare_c_project_core.h documents the empty state explicitly).
-void clear_last_bounce_result(SonareProject* project) noexcept {
-  if (project == nullptr) return;
-  project->last_bounce_diagnostics.clear();
-  project->last_bounce_has_timeline = false;
-}
-
 // Shared bounce core: validates options, compiles, registers any hosted
 // instruments per destination, renders offline, and writes the interleaved
 // result. `instruments` may be empty for a silent MIDI bounce. When opts.total_frames is
@@ -256,14 +260,12 @@ void clear_last_bounce_result(SonareProject* project) noexcept {
 // Returns through the SONARE_C_TRY/CATCH guard of the caller.
 SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                               const std::vector<HostedInstrument>& instruments,
-                              int64_t count_in_frames, float** out_interleaved, size_t* out_len,
-                              int* out_num_channels) {
-  if (out_interleaved) *out_interleaved = nullptr;
+                              int64_t count_in_frames, std::unique_ptr<float[]>* out_interleaved,
+                              size_t* out_len, int* out_num_channels,
+                              BounceCompileSnapshot* out_snapshot) {
+  if (out_interleaved) out_interleaved->reset();
   if (out_len) *out_len = 0;
   if (out_num_channels) *out_num_channels = 0;
-  // Every entry has already refused a NULL pointer; the recorded result is cleared here as well
-  // so a call rejected for its options leaves no previous bounce's diagnostics queryable.
-  clear_last_bounce_result(project);
 
   namespace check = sonare::util::check;
   SonareProjectBounceOptions opts;
@@ -319,10 +321,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   config.instrument_latency_samples = opts.instrument_latency_samples;
   arr::CompileResult compiled = arr::compile(
       project->history.project(), project->history.midi_content(), project->audio, config);
-  project->last_bounce_diagnostics = compiled.diagnostics;
-  project->last_bounce_has_timeline = compiled.timeline.has_value();
-  if (!compiled.timeline || compiled.has_errors()) {
-    return refuse_state("the project does not compile; its bounce diagnostics name the cause");
+  const bool compile_has_errors = compiled.has_errors();
+  BounceCompileSnapshot snapshot;
+  snapshot.diagnostics = std::move(compiled.diagnostics);
+  snapshot.has_timeline = compiled.timeline.has_value();
+  if (!compiled.timeline || compile_has_errors) {
+    return refuse_state_with_diagnostic("the project does not compile", snapshot.diagnostics);
   }
 
 #if defined(SONARE_WITH_MIXING)
@@ -409,13 +413,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 #if defined(SONARE_WITH_MIXING)
     if (frames > 0 && mixer_required) {
       MixerPtr* reusable = mixer_route_direct ? nullptr : &reusable_mixer;
-      const MixerLatencyTail mixer_delay =
-          mixer_latency_tail_for_timeline(*compiled.timeline, routing, sample_rate, block_size,
-                                          reusable, &project->last_bounce_diagnostics);
+      const MixerLatencyTail mixer_delay = mixer_latency_tail_for_timeline(
+          *compiled.timeline, routing, sample_rate, block_size, reusable, &snapshot.diagnostics);
       // This mixer already scheduled the automation lanes, so an over-capacity
       // lane is known before the render window is even fixed.
-      if (has_error_diagnostic(project->last_bounce_diagnostics)) {
-        return refuse_state("the mix does not schedule; its bounce diagnostics name the cause");
+      if (has_error_diagnostic(snapshot.diagnostics)) {
+        return refuse_state_with_diagnostic("the mix does not schedule", snapshot.diagnostics);
       }
       if (!mixer_delay.valid ||
           !checked_nonnegative_add(frames, static_cast<int64_t>(mixer_delay.tail_samples),
@@ -463,30 +466,40 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
           return binding.lane.target_kind() ==
                  sonare::automation::AutomationTargetKind::kTrackSendDb;
         })) {
-      const MixerLatencyTail mixer_delay =
-          mixer_latency_tail_for_timeline(*compiled.timeline, routing, sample_rate, block_size,
-                                          nullptr, &project->last_bounce_diagnostics);
-      if (!mixer_delay.valid || has_error_diagnostic(project->last_bounce_diagnostics)) {
-        return refuse_state("the mix does not schedule; its bounce diagnostics name the cause");
+      const MixerLatencyTail mixer_delay = mixer_latency_tail_for_timeline(
+          *compiled.timeline, routing, sample_rate, block_size, nullptr, &snapshot.diagnostics);
+      if (!mixer_delay.valid || has_error_diagnostic(snapshot.diagnostics)) {
+        return refuse_state_with_diagnostic("the mix does not schedule", snapshot.diagnostics);
       }
     }
 #endif
     // Empty arrangement (or zero-length request): a valid empty render.
-    *out_interleaved = new float[1];
+    *out_interleaved = std::make_unique<float[]>(1);
     *out_len = 0;
     *out_num_channels = num_channels;
+    *out_snapshot = std::move(snapshot);
     return SONARE_OK;
   }
 
 #if defined(SONARE_WITH_MIXING)
   // Per-track channel-strip bounce when the project binds tracks to scene strips.
   if (mixer_required) {
+    float* mixed_audio = nullptr;
     const SonareError mixed =
         bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
-                             num_channels, frames, pdc, mixer_input_frames, out_interleaved,
-                             out_len, reusable_mixer.release(), &project->last_bounce_diagnostics);
-    if (mixed == SONARE_OK) *out_num_channels = num_channels;
-    return mixed;
+                             num_channels, frames, pdc, mixer_input_frames, &mixed_audio, out_len,
+                             reusable_mixer.release(), &snapshot.diagnostics);
+    std::unique_ptr<float[]> owned_audio(mixed_audio);
+    if (mixed != SONARE_OK) {
+      if (mixed == SONARE_ERROR_INVALID_STATE && has_error_diagnostic(snapshot.diagnostics)) {
+        return refuse_state_with_diagnostic("the mix does not schedule", snapshot.diagnostics);
+      }
+      return mixed;
+    }
+    *out_interleaved = std::move(owned_audio);
+    *out_num_channels = num_channels;
+    *out_snapshot = std::move(snapshot);
+    return SONARE_OK;
   }
 #endif
 
@@ -527,9 +540,10 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       interleaved[static_cast<size_t>(frame) * num_channels + ch] = v;
     }
   }
-  *out_interleaved = interleaved.release();
+  *out_interleaved = std::move(interleaved);
   *out_len = total;
   *out_num_channels = num_channels;
+  *out_snapshot = std::move(snapshot);
   return SONARE_OK;
 }
 
@@ -941,13 +955,11 @@ SonareError apply_bounce_instrument_controls(const SonareProjectBounceOptions& o
 }
 
 // Prepend a silent count-in and add the click after all music has passed through the master.
-SonareError add_bounce_count_in(float** out, size_t* samples, int channels, int64_t prefix,
-                                int block_size, double rate,
+SonareError add_bounce_count_in(std::unique_ptr<float[]>* out, size_t* samples, int channels,
+                                int64_t prefix, int block_size, double rate,
                                 const sonare::transport::TempoMap& click_map,
                                 sonare::engine::MetronomeConfig config) {
   if (prefix == 0 && !config.enabled) return SONARE_OK;
-  std::unique_ptr<float[]> audio(*out);
-  *out = nullptr;
   const int64_t music_frames = static_cast<int64_t>(*samples / static_cast<size_t>(channels));
   int64_t frames = 0;
   size_t total = 0;
@@ -958,8 +970,8 @@ SonareError add_bounce_count_in(float** out, size_t* samples, int channels, int6
   }
   if (prefix > 0) {
     auto with_prefix = std::make_unique<float[]>(total);
-    std::copy_n(audio.get(), *samples, with_prefix.get() + total - *samples);
-    audio = std::move(with_prefix);
+    std::copy_n(out->get(), *samples, with_prefix.get() + total - *samples);
+    *out = std::move(with_prefix);
   }
   if (config.enabled && frames > 0) {
     sonare::engine::Metronome metronome;
@@ -978,12 +990,11 @@ SonareError add_bounce_count_in(float** out, size_t* samples, int channels, int6
       }
       for (int i = 0; i < n; ++i) {
         const size_t offset = static_cast<size_t>(first + i) * channels;
-        for (int channel = 0; channel < channels; ++channel) audio[offset + channel] += click[i];
+        for (int channel = 0; channel < channels; ++channel) (*out)[offset + channel] += click[i];
       }
       first += n;
     }
   }
-  *out = audio.release();
   *samples = total;
   return SONARE_OK;
 }
@@ -1042,8 +1053,6 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
     sonare::util::check::non_null(out_frames, "out_frames");
     sonare::util::check::non_null(out_channels, "out_channels");
   });
-  // An argument refusal leaves the last bounce's compile result empty.
-  clear_last_bounce_result(project);
   if (validation != SONARE_OK) return validation;
   SONARE_C_TRY
   sonare::engine::MetronomeConfig click;
@@ -1088,9 +1097,10 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
 #endif
   size_t samples = 0;
   int channels = 0;
-  float* audio = nullptr;
+  std::unique_ptr<float[]> audio;
+  BounceCompileSnapshot snapshot;
   const SonareError err = do_project_bounce(project, options, instruments.hosted, count_in_frames,
-                                            &audio, &samples, &channels);
+                                            &audio, &samples, &channels, &snapshot);
   if (err != SONARE_OK) return err;
   const int64_t prefix =
       options != nullptr && options->total_frames != SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT
@@ -1100,7 +1110,9 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
       add_bounce_count_in(&audio, &samples, channels, prefix, options ? options->block_size : 0,
                           rate, click_map, click);
   if (click_err != SONARE_OK) return click_err;
-  *out = audio;
+  project->last_bounce_diagnostics = std::move(snapshot.diagnostics);
+  project->last_bounce_has_timeline = snapshot.has_timeline;
+  *out = audio.release();
   *out_channels = channels;
   *out_frames = samples / static_cast<size_t>(channels);
   return SONARE_OK;
@@ -1113,20 +1125,10 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
 
 void sonare_builtin_synth_config_init(SonareBuiltinSynthConfig* config) {
   if (config == nullptr) return;
-#if defined(SONARE_WITH_ARRANGEMENT)
   sonare_c_detail::builtin_synth_config_init(config);
-#else
-  *config = SonareBuiltinSynthConfig{};
-  config->struct_size = sizeof(SonareBuiltinSynthConfig);
-#endif
 }
 
 void sonare_sf2_instrument_config_init(SonareSf2InstrumentConfig* config) {
   if (config == nullptr) return;
-#if defined(SONARE_WITH_ARRANGEMENT)
   sonare_c_detail::sf2_instrument_config_init(config);
-#else
-  *config = SonareSf2InstrumentConfig{};
-  config->struct_size = sizeof(SonareSf2InstrumentConfig);
-#endif
 }

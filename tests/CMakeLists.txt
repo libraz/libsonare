@@ -216,6 +216,7 @@ add_executable(sonare_tests
   api/surface_mastering_test.cpp
   api/surface_engine_test.cpp
   api/surface_project_test.cpp
+  api/sonare_c_project_timeline_test.cpp
   api/sonare_c_music_test.cpp
   api/sonare_c_mastering_test.cpp
   api/metadata_and_midi_loss_test.cpp
@@ -974,7 +975,6 @@ if(BUILD_ARRANGEMENT)
     engine/midi_clip_engine_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
-    api/sonare_c_project_timeline_test.cpp
     api/sonare_c_project_tempo_test.cpp
     api/sonare_c_project_midi_meter_test.cpp
     api/sonare_c_midi_scaling_test.cpp

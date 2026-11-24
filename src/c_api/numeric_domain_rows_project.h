@@ -254,7 +254,7 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"project_set_time_signatures", "segments[].numerator", kTimeSignatureNumeratorDomain, nullptr},
     {"project_set_time_signatures", "segments[].start_ppq", kPublicPpqDomain, nullptr},
     {"project_set_warp_map", "desc.id", kWarpMapIdDomain, nullptr},
-    {"project_snap_to_grid", "division", kSnapDivisionDomain, nullptr},
+    {"project_snap_to_grid", "options.division", kSnapDivisionDomain, nullptr},
     {"project_snap_to_grid", "ppq", kPublicPpqDomain, nullptr},
     {"project_split_clip", "split_ppq", kPublicPpqDomain, nullptr},
     {"project_transcribe_to_clip", "config.channel", kMidiChannelDomain, nullptr},

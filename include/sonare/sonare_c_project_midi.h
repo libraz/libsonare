@@ -176,11 +176,13 @@ typedef struct {
 // ============================================================================
 
 /// @brief Replaces a MIDI clip's entire event list in the content store. Pass
-///        @p count == 0 to clear. Events are stored opaquely (see
-///        @ref SonareMidiEventPod). Export keeps the events inside the clip's
-///        half-open window [0, length_ppq) (after the source offset); a note
-///        still sounding at the clip end, including one whose note-off sits at or
-///        past length_ppq, is closed with a note-off at the clip end.
+///        @p count == 0 to clear. The call validates each event's PPQ, UMP
+///        message type, and SysEx representation, then retains accepted UMP
+///        words literally (see @ref SonareMidiEventPod). Export keeps the events
+///        inside the clip's half-open window [0, length_ppq) (after the source
+///        offset); a note still sounding at the clip end, including one whose
+///        note-off sits at or past length_ppq, is closed with a note-off at the
+///        clip end.
 /// @details Copies SysEx payloads from the caller. The payload does not include an internal handle.
 SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip_id,
                                            const SonareMidiEventPod* events, size_t count);
@@ -496,9 +498,9 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
 ///          control-change, SONARE_MIDI_CC_CONTROL_CHANGE_14 a MIDI 2.0
 ///          control-change carrying the full 14-bit value, and
 ///          SONARE_MIDI_CC_RPN / SONARE_MIDI_CC_NRPN a MIDI 2.0 Registered /
-///          Assignable Controller carrying the selector and the value in one
-///          word. The binding a preceding sonare_midi_cc_learn produced can
-///          therefore always be written back.
+///          Assignable Controller packet carrying the selector and value in its
+///          two 32-bit UMP words. The binding a preceding sonare_midi_cc_learn
+///          produced can therefore always be written back.
 /// @return SONARE_ERROR_INVALID_STATE only when no binding in @p bindings
 ///         targets @p param_id. A supported binding never fails, so this code
 ///         means "not bound" and nothing else.
@@ -541,14 +543,18 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
 ///        Time Signature events are the project's meter map as it stands; an
 ///        empty map writes none, and a first signature starting after ppq 0 is
 ///        also written at tick 0, since the project reads it from 0.
-/// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
-/// @param out_len   Receives the byte length.
-/// @note Valid MIDI 1.0/2.0 channel-voice UMP words stored via
-///       @ref sonare_project_set_midi_events are emitted. MIDI 2.0-only events
-///       that cannot be represented in SMF/MIDI 1.0 are dropped by the MIDI
-///       exporter, matching @ref sonare::midi::export_smf.
-/// @return SONARE_ERROR_INVALID_STATE when a stored clip expands past the
-///         export's loop or event limits.
+/// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes);
+///                  NULL on failure.
+/// @param out_len   Receives the byte length; zero on failure.
+/// @note Both outputs are cleared before validation and remain cleared on failure,
+///       including an allocation failure. Valid MIDI 1.0/2.0 channel-voice UMP
+///       words stored via @ref sonare_project_set_midi_events are emitted. MIDI
+///       2.0-only events that cannot be represented in SMF/MIDI 1.0 are dropped
+///       by the MIDI exporter, matching @ref sonare::midi::export_smf.
+/// @return SONARE_ERROR_INVALID_FORMAT for unrepresentable stored MIDI event
+///         positions; SONARE_ERROR_INVALID_STATE when a stored clip expands
+///         past the export's loop or event limits; SONARE_ERROR_OUT_OF_MEMORY
+///         when the output buffer cannot be allocated.
 SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** out_bytes,
                                       size_t* out_len);
 
@@ -574,10 +580,15 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
 ///        sonare_project_export_smf when MIDI 2.0 fidelity matters. An empty
 ///        meter map writes no Time Signature, and a first signature starting
 ///        after ppq 0 is also written at tick 0.
-/// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
-/// @param out_len   Receives the byte length.
-/// @return SONARE_ERROR_INVALID_STATE when a stored clip expands past the
-///         export's loop or event limits.
+/// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes);
+///                  NULL on failure.
+/// @param out_len   Receives the byte length; zero on failure.
+/// @note Both outputs are cleared before validation and remain cleared on failure,
+///       including an allocation failure.
+/// @return SONARE_ERROR_INVALID_FORMAT for unrepresentable stored MIDI event
+///         positions; SONARE_ERROR_INVALID_STATE when a stored clip expands
+///         past the export's loop or event limits; SONARE_ERROR_OUT_OF_MEMORY
+///         when the output buffer cannot be allocated.
 SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_t** out_bytes,
                                             size_t* out_len);
 
@@ -608,8 +619,11 @@ SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id,
 /// not a live RT insert chain. Clips larger than the realtime MIDI-FX buffer are
 /// drained in bounded chunks; either every transformed event is committed in
 /// canonical timestamp order or the original clip remains unchanged. @p config_json is a
-/// per-call argument, so malformed JSON, an unknown key and an invalid value all return
-/// SONARE_ERROR_INVALID_PARAMETER, refused under the root @c config.
+/// per-call argument. Malformed JSON, unknown keys, wrong types, and invalid values
+/// return SONARE_ERROR_INVALID_PARAMETER under the root @c config; a NULL
+/// @p config_json or a stored chain the events cannot pass through is refused as
+/// @c config_json. The structured refusal for an argument keeps the caller's
+/// field spelling.
 /// @brief Bakes the MIDI-FX chain into the clip, optionally reporting per-event
 ///        provenance so a host can carry a selection or an editorial annotation
 ///        across the bake.
@@ -623,15 +637,14 @@ SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id,
 ///        consecutive-or-not outputs share one source index; a host that treats
 ///        the first output per index as "the same event" and the rest as newly
 ///        generated recovers the editing identity. At most @p out_capacity
-///        entries are written.
+///        entries are written; the buffer is untouched on failure.
 /// @param out_capacity Number of entries @p out_source_index can hold.
 /// @param out_count Optional. Receives the full transformed event count even
 ///        when it exceeds @p out_capacity, so a short buffer is detectable.
-///        Written only on success and untouched on failure, so a caller may
-///        keep its own value across a rejected call.
+///        Cleared to zero on failure.
 ///
-/// Both output parameters are written only after the edit commits. Sizing the
-/// buffer without a destructive trial run is what
+/// Provenance is written only after the edit commits. Sizing the buffer without
+/// a destructive trial run is what
 /// @ref sonare_project_preview_midi_fx_count is for: the transform is
 /// deterministic, so the count it reports is the count this call produces for
 /// the same clip and configuration.
@@ -642,8 +655,7 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
 /// @brief Reports how many events @ref sonare_project_bake_midi_fx would
 ///        produce for @p clip_id under @p config_json, without mutating the
 ///        project. Intended for sizing the provenance buffer.
-/// @param out_count Written only on success and untouched on failure, matching
-///        @ref sonare_project_bake_midi_fx.
+/// @param out_count Written only on success; zero on failure.
 SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
                                                  const char* config_json, size_t* out_count);
 
@@ -653,9 +665,10 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
 /// used by SMF export and reports whether every note-on is matched by a note-off
 /// (FIFO per group+channel+note). A note still sounding at the clip end (or at a
 /// loop boundary) is closed there by export, so it validates as paired. Useful before bouncing to
-/// catch a stuck note that would otherwise sustain. Does not mutate the project. Returns
-/// SONARE_ERROR_INVALID_PARAMETER if @p project / @p out is null or @p clip_id
-/// is not a MIDI clip.
+/// catch a stuck note that would otherwise sustain. Does not mutate the project.
+/// @param[out] out Receives the validation result and is zeroed on failure.
+/// @return SONARE_ERROR_INVALID_PARAMETER if @p project / @p out is null or @p clip_id
+///         is not a MIDI clip.
 SonareError sonare_project_validate_midi_notes(const SonareProject* project, uint32_t clip_id,
                                                SonareNotePairValidation* out);
 

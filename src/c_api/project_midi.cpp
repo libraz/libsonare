@@ -1,4 +1,5 @@
 #include <array>
+#include <memory>
 
 #include "c_api/midi_cc_binding_check.h"
 #include "c_api/midi_input_domains.h"
@@ -1494,9 +1495,12 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
     return SONARE_ERROR_INVALID_STATE;
   }
 
+  std::unique_ptr<uint8_t[]> staged_bytes(new uint8_t[result.bytes.size()]);
+  if (!result.bytes.empty()) {
+    std::memcpy(staged_bytes.get(), result.bytes.data(), result.bytes.size());
+  }
+  *out_bytes = staged_bytes.release();
   *out_len = result.bytes.size();
-  *out_bytes = new uint8_t[result.bytes.size()];
-  std::memcpy(*out_bytes, result.bytes.data(), result.bytes.size());
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -1566,9 +1570,12 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
     return SONARE_ERROR_INVALID_STATE;
   }
 
+  std::unique_ptr<uint8_t[]> staged_bytes(new uint8_t[result.bytes.size()]);
+  if (!result.bytes.empty()) {
+    std::memcpy(staged_bytes.get(), result.bytes.data(), result.bytes.size());
+  }
+  *out_bytes = staged_bytes.release();
   *out_len = result.bytes.size();
-  *out_bytes = new uint8_t[result.bytes.size()];
-  std::memcpy(*out_bytes, result.bytes.data(), result.bytes.size());
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -1636,8 +1643,8 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
   const arr::EditClip* edit_clip = find_midi_clip(project, clip_id);
   if (edit_clip == nullptr) return refuse_unknown_midi_clip();
   SONARE_C_REQUIRE_NONNULL(out);
-  out->ok = 1;
   SONARE_C_TRY
+  SonareNotePairValidation staged{};
   sonare::midi::MidiClip clip;
   const auto it = project->history.midi_content().events.find(clip_id);
   if (it != project->history.midi_content().events.end()) {
@@ -1653,9 +1660,10 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
   }
   clip.sort_stable();
   const sonare::midi::NotePairValidation v = clip.validate_note_pairs();
-  out->ok = v.ok ? 1 : 0;
-  out->unmatched_note_ons = v.unmatched_note_ons;
-  out->unmatched_note_offs = v.unmatched_note_offs;
+  staged.ok = v.ok ? 1 : 0;
+  staged.unmatched_note_ons = v.unmatched_note_ons;
+  staged.unmatched_note_offs = v.unmatched_note_offs;
+  *out = staged;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -1668,6 +1676,7 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
                                         const char* config_json, int32_t* out_source_index,
                                         size_t out_capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
@@ -1700,7 +1709,6 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_count) *out_count = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  clip_id, config_json, out_source_index,
                                                  out_capacity, out_count);
@@ -1710,6 +1718,7 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
 SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
                                                  const char* config_json, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
@@ -1730,7 +1739,6 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_count) *out_count = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  clip_id, config_json, out_count);
 #endif

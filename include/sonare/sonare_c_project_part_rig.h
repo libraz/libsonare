@@ -31,8 +31,7 @@ typedef enum {
 ///        default, for a MIDI destination. Undoable.
 ///
 /// The destination need not be referenced by a track; the entry is kept and
-/// serialized regardless. The project serializes at schema version 5 while at
-/// least one entry exists.
+/// serialized at @c SONARE_PROJECT_SCHEMA_VERSION by @ref sonare_project_serialize.
 ///
 /// @param destination_id MIDI destination id (see
 ///        @ref sonare_project_set_track_midi_destination).
@@ -43,12 +42,9 @@ typedef enum {
 ///        (@c params defaults to an empty object). Every processor
 ///        must be a known insert, accept its params, and report at most 256
 ///        samples of latency at 48 kHz.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a part out of range, an unknown
-///         mode, inserts that do not match the mode, @p inserts_json that does
-///         not parse or is not an array of objects with a string @c processor and
-///         an object @c params, or an invalid chain (stage count, unknown
-///         processor, bad params, excess latency), each refused under the root
-///         @c inserts;
+/// @return SONARE_ERROR_INVALID_PARAMETER for an out-of-range @p part, an unknown
+///         @p mode, or @p inserts_json given or missing in conflict with @p mode.
+///         Malformed JSON and invalid chain content are refused under @c inserts.
 ///         SONARE_ERROR_NOT_SUPPORTED for a chain in a build without mastering.
 SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destination_id,
                                         uint8_t part, int mode, const char* inserts_json);

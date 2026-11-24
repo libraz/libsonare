@@ -1189,11 +1189,11 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default |
+| `SonareBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default. The initializer writes the library defaults even with arrangement support compiled out. |
 | `SonareExternalStemImportRequest` | leads with uint32_t struct_size in place of struct_version; prepare it with sonare_external_stem_import_request_init, after which every field is read literally: sample_rate must equal the project's (default 0, so it is always set), stems non-NULL and stem_count at least 1; a struct whose struct_size was not set is refused |
 | `SonareMidiRouteConfig` | leads with uint32_t struct_size; prepare it with sonare_midi_route_config_init, after which every field is read literally: filter_group and filter_channel SONARE_MIDI_ROUTE_ANY (-1) accept any group or channel and remap_channel SONARE_MIDI_ROUTE_NO_REMAP (-1) leaves the channel unchanged; a NULL config still means those defaults |
-| `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused |
-| `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
+| `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused. The initializer writes the library defaults even with arrangement support compiled out. |
+| `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default. The initializer writes the library defaults even with arrangement support compiled out. |
 | `SonareTakeAlignConfig` | leads with uint32_t struct_size; prepare it with sonare_take_align_config_init, after which every field is read literally: hop_length in [1, 65536] (default 512) and bins_per_octave a positive multiple of 12 (default 12); a 0 is no longer the library value, and a NULL config still means those defaults |
 | `sonare_project_annotate_chords` | omit a Roman numeral with NULL. A non-NULL empty string is refused under chords[i].roman_numeral. |
 | `sonare_project_set_track_route` | use NULL to clear either route field. A non-NULL empty channel_strip_ref or output_target is refused by name. |
@@ -1203,7 +1203,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. |
+| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. Allocation failure while reading the document or formatting diagnostics returns SONARE_ERROR_OUT_OF_MEMORY with both outputs cleared. |
 | `sonare_project_fade_curve_from_name` | accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER and the message 'name must be one of linear, equalPower, exponential, logarithmic' |
 
 #### Results are typed values, not JSON strings
@@ -1247,8 +1247,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareVocalRestoreOptions.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareVocalStateBytes.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareVocalTransition.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
-| `sonare_align_take_to_reference_ex` | removed: call sonare_align_take_to_reference, which now takes the reference and take sample rates |
-| `sonare_align_take_to_reference` | takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice |
+| `sonare_align_take_to_reference_ex` | removed: call sonare_align_take_to_reference, which now takes the reference and take sample rates. A refused call clears every provided output, including the anchors, count and alignment diagnostics. |
+| `sonare_align_take_to_reference` | takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice. A refused call clears every provided output, including the anchors, count and alignment diagnostics. |
 | `sonare_project_add_automation_lane(out_target_param_id)` | `sonare_project_add_automation_lane(out_lane_id)` |
 | `sonare_project_add_automation_lane_ex` | removed: call sonare_project_add_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
 | `sonare_project_add_automation_lane` | returns the project-allocated lane ID through out_lane_id. Initialize desc with sonare_automation_lane_desc_init and describe the lane target in desc |
@@ -1257,8 +1257,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_auto_tempo_ex` | removed: call sonare_project_auto_tempo with NULL options, candidate_index and apply_time_signatures |
 | `sonare_project_auto_tempo_with_options` | removed: call sonare_project_auto_tempo, which takes the options |
 | `sonare_project_auto_tempo` | takes options (NULL for defaults), candidate_index and apply_time_signatures, followed by required SonareProjectAutoTempoResult* out. apply_time_signatures is int32_t: zero leaves the stored meter alone and a nonzero value installs the detected signatures in the same undoable edit as tempo. Read out.bpm for the selected tempo, out.bpm_confidence for its score and out.time_signature for the detected meter. |
-| `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
-| `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
+| `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs. Every failure clears a provided out_count and leaves the provenance buffer alone. |
+| `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones' followed by the accepted keys). Every failure clears a provided out_count and leaves the provenance buffer alone. |
 | `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused; out_interleaved is out; out_len, which counted interleaved samples (frames * channels), is size_t* out_frames, which counts sample frames per channel, so a caller sizing the buffer multiplies it by out_channels; out_num_channels is out_channels |
 | `sonare_project_edit_automation_lane(target_param_id)` | `sonare_project_edit_automation_lane(lane_id)` |
 | `sonare_project_edit_automation_lane_ex` | removed: call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
@@ -1267,8 +1267,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_remove_automation_lane` | takes the lane_id returned by add or the lane reader |
 | `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
 | `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id |
-| `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division |
-| `sonare_project_snap_to_grid` | takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init |
+| `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division. The call checks ppq and strength before options, names an invalid division as options.division, and clears out_ppq on refusal. |
+| `sonare_project_snap_to_grid` | takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init. The call checks ppq and strength before options, names an invalid division as options.division, and clears out_ppq on refusal. |
 
 #### C constructors return SonareError and an out pointer
 
@@ -1325,6 +1325,20 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_rehydrate_vocal_edits(original_count)` | the count is a size_t instead of a uint64_t |
 | `sonare_project_set_sample_rate(sample_rate)` | the sample rate is an int instead of a double |
 
+#### Every C failure sets the error message
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_engine_apply_project_timeline` | An empty timeline is refused under timeline before the live-driver state is checked. |
+| `sonare_project_clip_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
+| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0. |
+| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0. |
+| `sonare_project_last_bounce_compile_result` | Reports the last successful bounce. A refused bounce leaves that snapshot intact. The timeline flag, diagnostic rows and messages are published together, and allocation failure leaves the outputs cleared. |
+| `sonare_project_marker_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
+| `sonare_project_source_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
+| `sonare_project_track_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
+| `sonare_project_validate_midi_notes` | When validation fails after it starts, ok and both note counts stay cleared. |
+
 #### Errors are coded by cause on every surface
 
 | 1.x | 2.0.0 |
@@ -1338,7 +1352,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_midi_gm_instrument_name` | a program outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming program (1.x: NULL with no error); NULL with SONARE_OK now means only an unnamed slot or a build without arrangement support |
 | `sonare_midi_per_note_controller_name` | the index domain is [0, 255] (1.x: [0, 127]); an index outside it returns NULL with SONARE_ERROR_INVALID_PARAMETER naming index (1.x: NULL with no error) |
 | `sonare_project_apply_vocal_edit` | refuses a malformed SVE1 payload with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, before anything is published to the project |
-| `sonare_project_preview_midi_fx_count` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
+| `sonare_project_preview_midi_fx_count` | refuses malformed config_json, an unknown key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones' followed by the accepted keys). Every failure clears a provided out_count. |
 | `sonare_project_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
 | `sonare_vocal_session_restore` | refuses a malformed SVE1 state (bad magic, truncated or inconsistent content) with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, keeping the vocal error detail; a source that is not positive mono names frames, then channels, where 1.x named source, keeping the message and the vocal reason; an options header refusal names options.struct_size, where 1.x named restore options header |
 
@@ -1351,8 +1365,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_bounce_with_instruments` | removed: call sonare_project_bounce with the instruments list of SonareProjectBounceOptions set |
 | `sonare_project_bounce_with_sf2_instruments` | removed: call sonare_project_bounce with the sf2_instruments list of SonareProjectBounceOptions set |
 | `sonare_project_bounce_with_synth_instruments` | removed: call sonare_project_bounce with the synth_instruments list of SonareProjectBounceOptions set |
-| `sonare_project_compile_timeline` | removed: call sonare_project_compile with a non-NULL out_timeline |
-| `sonare_project_compile` | takes SonareProjectTimeline** out_timeline after out: NULL compiles for diagnostics only as before, non-NULL also receives the compiled timeline |
+| `sonare_project_compile_timeline` | removed: call sonare_project_compile with a non-NULL out_timeline. An allocation failure leaves the timeline and compile result outputs cleared. |
+| `sonare_project_compile` | takes SonareProjectTimeline** out_timeline after out: NULL compiles for diagnostics only as before, non-NULL also receives the compiled timeline. The timeline flag, diagnostic rows and messages are published together. Allocation failure leaves the result and the optional timeline output cleared. |
 | `sonare_project_set_marker_ex_name` | removed: call sonare_project_set_marker, which takes the name |
 | `sonare_project_set_program_on_channel` | removed: call sonare_project_set_program, which takes group and channel |
 | `sonare_project_set_program` | takes uint8_t group and uint8_t channel after clip_id (0 and 0 is the former call); the former sonare_project_set_program_on_channel contract |

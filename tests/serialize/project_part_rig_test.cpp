@@ -138,18 +138,23 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
 
   CHECK(sonare_project_set_part_rig(nullptr, 1, 0, SONARE_PART_RIG_NONE, nullptr) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 16, SONARE_PART_RIG_NONE, nullptr) == bad);
+  CHECK(std::string(sonare_last_error_message()).find("part ") == 0);
   CHECK(sonare_project_set_part_rig(h.p, 1, 254, SONARE_PART_RIG_NONE, nullptr) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, 3, nullptr) == bad);
+  CHECK(std::string(sonare_last_error_message()).find("mode ") == 0);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, -1, nullptr) == bad);
   // Inserts belong to chain only, and chain needs at least one.
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_NONE, kChainJson) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_BANK, kChainJson) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nullptr) == bad);
+  CHECK(std::string(sonare_last_error_message()).find("inserts_json ") == 0);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[]") == bad);
   // Malformed inserts.
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "not json") == bad);
+  CHECK(std::string(sonare_last_error_message()).find("inserts ") == 0);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "{}") == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"params":{}}])") == bad);
+  CHECK(std::string(sonare_last_error_message()).find("inserts[0].processor ") == 0);
   CHECK(sonare_project_set_part_rig(
             h.p, 1, 0, SONARE_PART_RIG_CHAIN,
             R"([{"processor":"saturation.softClipper","params":"{\"drive\":0.5}"}])") == bad);

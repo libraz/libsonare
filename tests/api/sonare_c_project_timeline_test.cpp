@@ -12,12 +12,21 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "support/alloc_guard.h"
 #include "support/project_bounce.h"
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/project_timeline_internal.h"
+#include "c_api/sonare_c_internal.h"
+#endif
 #include "util/constants.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 // Bounces with one kind of hosted-instrument list set on a copy of the options.
@@ -253,7 +262,45 @@ size_t clip_count(SonareEngine* engine) {
 }
 
 }  // namespace
+#endif
 
+TEST_CASE("project instrument config initializers provide library defaults",
+          "[c_api][project][instrument-init]") {
+  SonareBuiltinSynthConfig builtin;
+  std::memset(&builtin, 0xA5, sizeof(builtin));
+  sonare_builtin_synth_config_init(&builtin);
+  CHECK(builtin.struct_size == sizeof(SonareBuiltinSynthConfig));
+  CHECK(builtin.waveform == SONARE_SYNTH_WAVEFORM_SINE);
+  CHECK(builtin.gain == 0.2f);
+  CHECK(builtin.attack_ms == 5.0f);
+  CHECK(builtin.decay_ms == 60.0f);
+  CHECK(builtin.sustain == 0.7f);
+  CHECK(builtin.release_ms == 120.0f);
+  CHECK(builtin.polyphony == 16);
+
+  SonareSf2InstrumentConfig sf2;
+  std::memset(&sf2, 0xA5, sizeof(sf2));
+  sonare_sf2_instrument_config_init(&sf2);
+  CHECK(sf2.struct_size == sizeof(SonareSf2InstrumentConfig));
+  CHECK(sf2.gain == 0.5f);
+  CHECK(sf2.polyphony == 48);
+  CHECK(sf2.prefer_model_for_modeled_families == 0);
+  CHECK(sf2.clear_bank_rig == 0);
+  CHECK(sf2.gs_efx_realization == 0);
+}
+
+TEST_CASE("tempo bridge defaults are stable across feature builds", "[c_api][project][tempo]") {
+  SonareProjectTempoOptions options{};
+  sonare_project_tempo_options_init(&options);
+
+  CHECK(options.struct_size == sizeof(SonareProjectTempoOptions));
+  CHECK(options.adaptive_tempo == 0);
+  CHECK(options.tempo_update_interval_beats == 8);
+  CHECK(options.ramp_threshold == 0.02f);
+  CHECK(options.include_octave_candidates == 1);
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("applied timeline renders bit-identically to project bounce across edits",
           "[timeline-apply][c_api]") {
   const std::vector<float> tone = stereo_tone(kSampleRate);
@@ -599,7 +646,6 @@ TEST_CASE("project diagnostic codes and severities are named by their facade tok
   CHECK(sonare_project_diagnostic_severity_name(-1) == nullptr);
 }
 
-#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("compile refuses a NULL pointer by its header name", "[project][timeline]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -635,4 +681,117 @@ TEST_CASE("project annotation readers report a compiled-out arrangement",
   check_not_compiled_in(chords, sonare_project_chord_annotations);
   check_not_compiled_in(sections, sonare_project_section_annotations);
 }
+
+TEST_CASE("project count readers clear outputs when arrangement is unavailable",
+          "[c_api][project][readers][counts][feature-off]") {
+  const auto check_not_compiled_in = [](auto read) {
+    size_t count = 42;
+    REQUIRE(read(nullptr, &count) == SONARE_ERROR_NOT_SUPPORTED);
+    CHECK(count == 0);
+  };
+  check_not_compiled_in(sonare_project_track_count);
+  check_not_compiled_in(sonare_project_clip_count);
+  check_not_compiled_in(sonare_project_source_count);
+  check_not_compiled_in(sonare_project_marker_count);
+}
+
+TEST_CASE("project snap-to-grid clears output when arrangement is unavailable",
+          "[c_api][project][tempo]") {
+  double out_ppq = 42.0;
+  CHECK(sonare_project_snap_to_grid(nullptr, 1.0, 0.5, nullptr, &out_ppq) ==
+        SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(out_ppq == 0.0);
+}
+#endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("timeline apply validates an empty handle before the live owner",
+          "[timeline-apply][c_api]") {
+  class Driver final : public sonare::engine::LiveDriver {
+   public:
+    explicit Driver(sonare::engine::RealtimeEngine& engine) : engine_(engine) {}
+    void stop() noexcept override { engine_.detach_live_driver(this); }
+
+   private:
+    sonare::engine::RealtimeEngine& engine_;
+  };
+
+  const std::unique_ptr<SonareEngine, decltype(&sonare_engine_destroy)> engine(
+      prepared_engine(), sonare_engine_destroy);
+  Driver driver(engine->engine);
+  const std::unique_ptr<Driver, void (*)(Driver*)> attachment(&driver,
+                                                              [](Driver* value) { value->stop(); });
+  REQUIRE(engine->engine.try_attach_live_driver(&driver));
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> owned(
+      project, sonare_project_destroy);
+  const std::unique_ptr<SonareProjectTimeline, decltype(&sonare_project_timeline_destroy)> timeline(
+      compile_timeline(project), sonare_project_timeline_destroy);
+  REQUIRE(sonare_engine_apply_project_timeline(engine.get(), timeline.get()) ==
+          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_last_error_reason() != nullptr);
+  CHECK(std::string(sonare_last_error_reason()) == "engineDeviceDriven");
+
+  const SonareProjectTimeline empty{};
+  REQUIRE(sonare_engine_apply_project_timeline(engine.get(), &empty) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "timeline must not be NULL");
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("project compile stages the timeline flag until diagnostics can be published",
+          "[timeline-apply][c_api][compile-outputs]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> owned(
+      project, sonare_project_destroy);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  const SonareMidiEventPod note{0.25, 0x20903C60u, 0u};
+  REQUIRE(sonare_project_set_midi_events(project, clip, &note, 1) == SONARE_OK);
+
+  SonareProjectCompileResult result{};
+  SonareProjectTimeline* timeline = nullptr;
+  SonareError status;
+  size_t allocations;
+  {
+    const sonare::test::AllocationFailureAtGuard count(std::numeric_limits<size_t>::max());
+    status = sonare_project_compile(project, &result, &timeline);
+    allocations = sonare::test::g_allocation_attempts.load();
+  }
+  REQUIRE(status == SONARE_OK);
+  REQUIRE(result.has_timeline == 1);
+  REQUIRE(result.diagnostic_count > 0);
+  REQUIRE(timeline != nullptr);
+  sonare_free_project_compile_result(&result);
+  sonare_project_timeline_destroy(timeline);
+
+  // Two timeline allocations, diagnostic rows, two long strings, and their C copy.
+  constexpr size_t kMinimumTailAllocations = 6;
+  REQUIRE(allocations >= kMinimumTailAllocations);
+  for (size_t back = 0; back < kMinimumTailAllocations; ++back) {
+    CAPTURE(back);
+    SonareProjectDiagnostic diagnostic{};
+    char message = 'x';
+    result.has_timeline = 7;
+    result.diagnostic_count = 1;
+    result.diagnostics = &diagnostic;
+    result.messages = &message;
+    timeline = reinterpret_cast<SonareProjectTimeline*>(&result);
+    {
+      const sonare::test::AllocationFailureAtGuard fail(allocations - back);
+      status = sonare_project_compile(project, &result, &timeline);
+    }
+    REQUIRE(status == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(timeline == nullptr);
+    CHECK(result.has_timeline == 0);
+    CHECK(result.diagnostic_count == 0);
+    CHECK(result.diagnostics == nullptr);
+    CHECK(result.messages == nullptr);
+  }
+}
+#endif
 #endif

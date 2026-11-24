@@ -138,9 +138,8 @@ void copy_utf8_prefix(char (&out)[N], const std::string& value) {
 SonareError sonare_project_deserialize(const char* document, size_t len, SonareProject** out,
                                        char** out_diag) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_diag);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (out) *out = nullptr;
-  if (out_diag) *out_diag = nullptr;
   SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_REQUIRE_NONNULL(out);
   if (len > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
@@ -151,11 +150,13 @@ SonareError sonare_project_deserialize(const char* document, size_t len, SonareP
   sonare::serialize::DeserializeResult result =
       sonare::serialize::project_from_json(std::string(document, len));
   if (!result.ok()) {
+    std::unique_ptr<char[]> diagnostics;
     if (out_diag) {
-      *out_diag = copy_string(serialize_deserialize_diagnostics(result.diagnostics));
+      diagnostics.reset(copy_string(serialize_deserialize_diagnostics(result.diagnostics)));
     }
     const std::string message = serialize_deserialize_diagnostics(result.diagnostics, false);
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str(), result.reason);
+    if (out_diag) *out_diag = diagnostics.release();
     return SONARE_ERROR_INVALID_FORMAT;
   }
 #if defined(SONARE_WITH_MASTERING)
@@ -181,8 +182,6 @@ SonareError sonare_project_deserialize(const char* document, size_t len, SonareP
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
-  if (out_diag) *out_diag = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, document,
                                                  len, out, out_diag);
 #endif
@@ -342,7 +341,6 @@ namespace {
 #if defined(SONARE_WITH_ARRANGEMENT)
 template <typename CountFn>
 SonareError project_count(const SonareProject* project, size_t* out_count, CountFn count_fn) {
-  if (out_count) *out_count = 0;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = count_fn(project->history.project());
@@ -354,6 +352,7 @@ SonareError project_count(const SonareProject* project, size_t* out_count, Count
 
 SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.tracks().size(); });
@@ -366,6 +365,7 @@ SonareError sonare_project_track_count(const SonareProject* project, size_t* out
 
 SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.clips().size(); });
@@ -378,6 +378,7 @@ SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_
 
 SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
@@ -391,6 +392,7 @@ SonareError sonare_project_source_count(const SonareProject* project, size_t* ou
 
 SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,

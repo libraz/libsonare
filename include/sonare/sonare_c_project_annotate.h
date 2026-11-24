@@ -216,18 +216,20 @@ static_assert(sizeof(SonareProjectAutoTempoResult) ==
 #define SONARE_PROJECT_MAX_TEMPO_CANDIDATES 3u
 
 /// Scoring options for the beat-analysis -> tempo bridge. Start from
-/// @ref sonare_project_tempo_options_init; every field is then read literally and checked
-/// against the range given beside it.
+/// @ref sonare_project_tempo_options_init; fields are validated as documented
+/// before analysis begins.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareProjectTempoOptions); set by the init function.
-  /// Whether beat tracking may follow a tempo that changes during the take.
-  /// Default 0, which keeps the one-tempo-per-take behaviour,
-  /// which is the right answer for material recorded to a click. Turn it on for a
-  /// performance that accelerates, slows or breathes: with it off the tracker locks
-  /// near the take's average and every tempo segment sits near that same average.
+  /// Whether beat tracking may follow a tempo that changes during the take. Zero
+  /// disables adaptation; any non-zero value enables it. Default 0 keeps the
+  /// one-tempo-per-take behaviour, which is the right answer for material recorded
+  /// to a click. Turn it on for a performance that accelerates, slows or breathes:
+  /// with it off the tracker locks near the take's average and every tempo segment
+  /// sits near that same average.
   int adaptive_tempo;
   /// Beats of context the local tempo estimate is read over. Used only when
-  /// adaptive_tempo is 1. Must be positive. Default 8.
+  /// adaptive_tempo is non-zero, but must be positive even when adaptation is off.
+  /// Default 8.
   int tempo_update_interval_beats;
   /// Relative tempo change (as a fraction) at which the bridge closes one tempo
   /// segment and opens the next. Smaller follows the performance more closely
@@ -235,7 +237,8 @@ typedef struct {
   /// Must be non-negative and finite. Default 0.02.
   float ramp_threshold;
   /// Whether to emit the half-tempo and double-tempo alternatives alongside the
-  /// primary candidate. Default 1; 0 emits the primary only.
+  /// primary candidate. Any non-zero value enables them. Default 1; 0 emits the
+  /// primary only.
   int include_octave_candidates;
 } SonareProjectTempoOptions;
 
@@ -282,9 +285,9 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
 /// @ref sonare_project_snap_to_grid_options_init.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareProjectSnapToGridOptions); set by the init function.
-  /// Target grid: 0 snaps to bar lines, 1 to beat lines, and values >= 2 to
-  /// that many equal subdivisions per beat (for example, 4 is a sixteenth-note
-  /// grid in 4/4). Default 1.
+  /// Target grid: 0 snaps to bar lines, 1 to beat lines, and values from 2 to
+  /// 1024 to that many equal subdivisions per beat (for example, 4 is a
+  /// sixteenth-note grid in 4/4). Default 1.
   int division;
 } SonareProjectSnapToGridOptions;
 
@@ -294,8 +297,9 @@ void sonare_project_snap_to_grid_options_init(SonareProjectSnapToGridOptions* op
 
 /// @brief Snaps a PPQ coordinate to a bar, beat, or beat subdivision of the
 ///        project's grid at that position.
-/// @details @p strength is in [0,1] (0 = no snap, 1 = exact line). A NULL
-///          @p options snaps to the beat grid.
+/// @details @p ppq must be finite and in [0, 1e12]. @p strength is in [0,1]
+///          (0 = no snap, 1 = exact line). A NULL @p options snaps to the beat
+///          grid. @p out_ppq is zeroed on entry and written only on success.
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
                                         const SonareProjectSnapToGridOptions* options,
                                         double* out_ppq);

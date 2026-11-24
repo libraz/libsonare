@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -548,8 +549,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
     result.reason = ErrorReason::MalformedJson;
     result.diagnostics.push_back({DiagnosticSeverity::kError, "malformed_json", e.what()});
     return result;
+  } catch (const std::bad_alloc&) {
+    throw;
   } catch (...) {
-    // Defensive: parse() only throws JsonError, but never let anything escape.
     result.reason = ErrorReason::MalformedJson;
     result.diagnostics.push_back(
         {DiagnosticSeverity::kError, "malformed_json", "unknown parse failure"});
@@ -1113,6 +1115,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
         {DiagnosticSeverity::kError,
          e.code() == ErrorCode::InvalidFormat ? "invalid_format" : "deserialize_failed", e.what()});
     return result;
+  } catch (const std::bad_alloc&) {
+    throw;
   } catch (const std::exception& e) {
     // Any structural surprise (bad get<>, etc.) becomes a diagnostic, never a
     // crash. `result.project` stays empty.

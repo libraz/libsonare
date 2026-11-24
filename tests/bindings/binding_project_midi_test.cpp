@@ -8,6 +8,7 @@
 #include "c_api/project_internal.h"
 #include "midi/midi_clip.h"
 #include "midi/ump.h"
+#include "support/alloc_guard.h"
 #include "support/project_bounce.h"
 #include "util/resource_limits.h"
 
@@ -352,6 +353,64 @@ TEST_CASE("project C surface exports MIDI events to SMF", "[project]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project MIDI exports clear outputs on output-allocation failure",
+          "[project][midi][allocation]") {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+
+  const auto fail_output_copy = [project](auto export_fn) {
+    uint8_t* bytes = nullptr;
+    size_t length = 0;
+    size_t max_allocations = 0;
+    SonareError success = SONARE_ERROR_UNKNOWN;
+    {
+      sonare::test::AllocationGuard guard;
+      success = export_fn(project, &bytes, &length);
+      max_allocations = guard.count();
+    }
+    REQUIRE(success == SONARE_OK);
+    REQUIRE(max_allocations > 0);
+    REQUIRE(bytes != nullptr);
+    REQUIRE(length > 0);
+    const size_t expected_length = length;
+    const std::vector<uint8_t> expected_bytes(bytes, bytes + length);
+    sonare_free_bytes(bytes);
+
+    bytes = reinterpret_cast<uint8_t*>(static_cast<std::uintptr_t>(1));
+    length = 7;
+    SonareError error = SONARE_OK;
+    size_t attempts = 0;
+    {
+      // The successful call's final allocation is the C-owned output buffer.
+      sonare::test::AllocationFailureAtGuard fail(max_allocations);
+      error = export_fn(project, &bytes, &length);
+      attempts = sonare::test::g_allocation_attempts.load(std::memory_order_relaxed);
+    }
+    CHECK(attempts >= max_allocations);
+    CHECK(error == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(bytes == nullptr);
+    CHECK(length == 0);
+
+    REQUIRE(export_fn(project, &bytes, &length) == SONARE_OK);
+    CHECK(length == expected_length);
+    CHECK(std::memcmp(bytes, expected_bytes.data(), expected_length) == 0);
+    sonare_free_bytes(bytes);
+  };
+
+  fail_output_copy(sonare_project_export_smf);
+  fail_output_copy(sonare_project_export_clip_file);
+  sonare_project_destroy(project);
+#endif
+}
+
 TEST_CASE("project MIDI loop export is bounded and requires representable progress",
           "[project][midi][validation]") {
   SECTION("ordinary loops expand deterministically in both export formats") {
@@ -627,12 +686,13 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   rpn_binding.min_value = 0.0f;
   rpn_binding.max_value = 1.0f;
   // The binding sonare_midi_cc_learn just produced above writes back: an RPN
-  // gesture is four MIDI 1.0 messages, so it is emitted as the one-word MIDI 2.0
-  // Registered Controller that carries the selector and the value together.
+  // gesture is four MIDI 1.0 messages, so it is emitted as one MIDI 2.0 Registered
+  // Controller packet whose two UMP words carry the selector and value.
   // Refusing it here used to return the same code as "nothing is bound to this
   // parameter", so a caller could not tell a learned binding from a missing one.
   REQUIRE(sonare_midi_param_to_cc(&rpn_binding, 1, 78, 0.5f, 0, 4.0, &back_cc) == SONARE_OK);
   REQUIRE(back_cc.ppq == 4.0);
+  CHECK(back_cc.word1 != 0u);
   sonare::midi::Ump rpn_ump{};
   rpn_ump.words[0] = back_cc.word0;
   rpn_ump.words[1] = back_cc.word1;
@@ -643,6 +703,23 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   float rpn_norm = 0.0f;
   REQUIRE(sonare::midi::cc_normalized_value(rpn_ump, &rpn_norm));
   REQUIRE(rpn_norm == Catch::Approx(0.5f).margin(1.0e-4));
+
+  SonareMidiCcBinding nrpn_binding = rpn_binding;
+  nrpn_binding.kind = SONARE_MIDI_CC_NRPN;
+  nrpn_binding.selector_msb = 1;
+  nrpn_binding.selector_lsb = 2;
+  SonareMidiEventPod nrpn_event{};
+  REQUIRE(sonare_midi_param_to_cc(&nrpn_binding, 1, 78, 0.5f, 0, 4.5, &nrpn_event) == SONARE_OK);
+  CHECK(nrpn_event.word1 != 0u);
+  sonare::midi::Ump nrpn_ump{};
+  nrpn_ump.words[0] = nrpn_event.word0;
+  nrpn_ump.words[1] = nrpn_event.word1;
+  nrpn_ump.word_count = 2;
+  CHECK(nrpn_ump.status_nibble() ==
+        static_cast<uint8_t>(sonare::midi::UmpStatus::kAssignableController));
+  float nrpn_norm = 0.0f;
+  REQUIRE(sonare::midi::cc_normalized_value(nrpn_ump, &nrpn_norm));
+  CHECK(nrpn_norm == Catch::Approx(0.5f).margin(1.0e-4));
 
   // SONARE_ERROR_INVALID_STATE now means exactly one thing: no binding targets
   // the requested parameter.
@@ -1520,13 +1597,16 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
 
   SECTION("invalid input is rejected before anything is written") {
     size_t written = 12345;
-    REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json", nullptr, 0, &written) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(written == 12345);
+    std::array<int32_t, 1> provenance{77};
+    REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json", provenance.data(),
+                                        provenance.size(),
+                                        &written) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(written == 0);
+    CHECK(provenance[0] == 77);
     size_t count = 999;
     REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{bad json", &count) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(count == 999);
+    REQUIRE(count == 0);
     REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{}", nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_project_preview_midi_fx_count(project, 0, "{}", &count) ==
@@ -1756,6 +1836,55 @@ TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
   REQUIRE(report.unmatched_note_ons == 0);
   REQUIRE(report.unmatched_note_offs == 0);
 
+#if defined(SONARE_WITH_MIXING)
+  // The call above warms the validator before measuring its allocation path.
+  SonareNotePairValidation counted_report{};
+  SonareError count_result = SONARE_ERROR_UNKNOWN;
+  size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard count;
+    count_result = sonare_project_validate_midi_notes(project, clip, &counted_report);
+    allocations = count.count();
+  }
+  REQUIRE(count_result == SONARE_OK);
+  REQUIRE(counted_report.ok == 1);
+  REQUIRE(counted_report.unmatched_note_ons == 0);
+  REQUIRE(counted_report.unmatched_note_offs == 0);
+  REQUIRE(allocations > 0);
+
+  size_t out_of_memory = 0;
+  size_t stable_sort_fallbacks = 0;
+  for (size_t fail_at = 1; fail_at <= allocations; ++fail_at) {
+    report = {1, 8, 9};
+    SonareError allocation_error = SONARE_OK;
+    size_t attempts = 0;
+    {
+      sonare::test::AllocationFailureAtGuard fail(fail_at);
+      allocation_error = sonare_project_validate_midi_notes(project, clip, &report);
+      attempts = sonare::test::g_allocation_attempts.load(std::memory_order_relaxed);
+    }
+    INFO("injected allocation " << fail_at << " of " << allocations);
+    CHECK(attempts >= fail_at);
+    if (allocation_error == SONARE_ERROR_OUT_OF_MEMORY) {
+      ++out_of_memory;
+      CHECK(report.ok == 0);
+      CHECK(report.unmatched_note_ons == 0);
+      CHECK(report.unmatched_note_offs == 0);
+    } else if (allocation_error == SONARE_OK) {
+      // MidiClip::sort_stable uses std::stable_sort, which may complete with its
+      // documented in-place fallback when its temporary buffer allocation fails.
+      ++stable_sort_fallbacks;
+      CHECK(report.ok == 1);
+      CHECK(report.unmatched_note_ons == 0);
+      CHECK(report.unmatched_note_offs == 0);
+    } else {
+      FAIL("unexpected error code " << static_cast<int>(allocation_error));
+    }
+  }
+  REQUIRE(out_of_memory > 0);
+  CHECK(stable_sort_fallbacks <= 2);
+#endif
+
   // A hanging note-on (no matching note-off) is reported.
   SonareMidiEventPod hanging[1]{};
   REQUIRE(sonare_midi_note_on(0.0, 0, 0, 64, 100, &hanging[0]) == SONARE_OK);
@@ -1775,6 +1904,15 @@ TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
   REQUIRE(report.ok == 0);
   REQUIRE(report.unmatched_note_ons == 1);
   REQUIRE(report.unmatched_note_offs == 1);
+
+  report.ok = 1;
+  report.unmatched_note_ons = 8;
+  report.unmatched_note_offs = 9;
+  REQUIRE(sonare_project_validate_midi_notes(project, clip + 100, &report) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(report.ok == 0);
+  CHECK(report.unmatched_note_ons == 0);
+  CHECK(report.unmatched_note_offs == 0);
 
   sonare_project_destroy(project);
 }
@@ -2359,6 +2497,11 @@ TEST_CASE("project C surface MIDI refusals name the parameter", "[project][midi]
   REQUIRE(sonare_project_validate_midi_notes(project, clip + 100, &validation) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "clip_id must be the id of a MIDI clip in this project");
+  size_t failed_count = 123;
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{\"quantizePpq\":0}", nullptr, 0,
+                                      &failed_count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "config.quantizePpq must be a positive PPQ length in range");
+  CHECK(failed_count == 0);
   REQUIRE(sonare_project_bake_midi_fx(project, clip, nullptr, nullptr, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "config_json must not be NULL");

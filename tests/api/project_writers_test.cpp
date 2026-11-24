@@ -825,3 +825,41 @@ TEST_CASE("project automation compile refuses unresolved send and insert targets
 #endif
 #endif
 }
+
+TEST_CASE("clearing a destination instrument does not require a referencing track",
+          "[c_api][project][writers][instruments]") {
+  ProjectHandle project;
+  SonareBuiltinSynthConfig builtin{};
+  sonare_builtin_synth_config_init(&builtin);
+  SonareProjectInstrument instrument{};
+  sonare_project_instrument_init(&instrument);
+  instrument.kind = SONARE_PROJECT_INSTRUMENT_BUILTIN;
+  instrument.builtin = &builtin;
+  constexpr uint32_t destination = 7;
+
+  REQUIRE(sonare_project_set_destination_instrument(project.value, destination, nullptr) ==
+          SONARE_OK);
+  CHECK(sonare_project_undo(project.value) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_project_set_destination_instrument(project.value, destination, &instrument) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("destination_id") == 0);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project.value, 0, 1, &track, &clip) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project.value, track, destination) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_destination_instrument(project.value, destination, &instrument) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_remove_track(project.value, track) == SONARE_OK);
+
+  SonareProjectInstrumentList instruments{};
+  REQUIRE(sonare_project_destination_instruments(project.value, &instruments) == SONARE_OK);
+  REQUIRE(instruments.count == 1);
+  sonare_free_project_instrument_list(&instruments);
+  REQUIRE(sonare_project_set_destination_instrument(project.value, destination, nullptr) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_destination_instruments(project.value, &instruments) == SONARE_OK);
+  CHECK(instruments.count == 0);
+  sonare_free_project_instrument_list(&instruments);
+}

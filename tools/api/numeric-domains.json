@@ -7152,7 +7152,7 @@
     },
     {
       "entry": "project_snap_to_grid",
-      "param": "division",
+      "param": "options.division",
       "kind": "integer",
       "lo": 0,
       "hi": 1024,

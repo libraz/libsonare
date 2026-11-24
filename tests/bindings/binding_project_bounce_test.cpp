@@ -6,9 +6,12 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
+#include <memory>
 
 #include "arrangement/edit_compiler.h"
 #include "binding_project_parity_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "support/project_bounce.h"
 
 namespace {
@@ -704,12 +707,11 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
   SKIP("channel-strip bounce requires the mixing build");
 #else
   // Builds a project whose single strip-bound track carries one opaque fader
-  // lane with `point_count` breakpoints, bounces it, and returns the resulting
-  // status plus the diagnostics the bounce recorded.
+  // lane with `point_count` breakpoints and captures the bounce status and its
+  // thread-local refusal detail. Failed attempts do not replace the last-success snapshot.
   struct BounceOutcome {
     SonareError status = SONARE_OK;
-    std::vector<SonareProjectDiagnostic> diagnostics;
-    uint32_t track_id = 0;
+    std::string error;
   };
   const auto bounce_with_breakpoints = [](size_t point_count, int64_t total_frames) {
     SonareProject* project = nullptr;
@@ -758,33 +760,28 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
     binding.config.polyphony = 8;
 
     BounceOutcome outcome;
-    outcome.track_id = track;
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels9 = 0;
     outcome.status = bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
                                                      &bounce_channels9);
+    outcome.error = sonare_last_error_message();
     sonare_free_floats(out);
 
     SonareProjectCompileResult compiled{};
     REQUIRE(sonare_project_last_bounce_compile_result(project, &compiled) == SONARE_OK);
-    outcome.diagnostics.assign(compiled.diagnostics,
-                               compiled.diagnostics + compiled.diagnostic_count);
+    if (compiled.diagnostic_count != 0) {
+      outcome.error += " | snapshot: ";
+      if (compiled.messages != nullptr) outcome.error += compiled.messages;
+    }
     sonare_free_project_compile_result(&compiled);
     sonare_project_destroy(project);
     return outcome;
   };
 
   const auto capacity_error = [](const BounceOutcome& outcome) {
-    return std::any_of(
-        outcome.diagnostics.begin(), outcome.diagnostics.end(),
-        [&](const SonareProjectDiagnostic& d) {
-          return d.code == static_cast<uint32_t>(
-                               sonare::arrangement::Diagnostic::Code::kAutomationLaneCapacity) &&
-                 d.severity ==
-                     static_cast<uint32_t>(sonare::arrangement::Diagnostic::Severity::kError) &&
-                 d.target_id == outcome.track_id;
-        });
+    return outcome.error.find(
+               "the mix does not schedule: the fader automation lane on channel strip ") == 0;
   };
 
   // A lane the strip can hold bounces unchanged, with no capacity diagnostic:
@@ -793,9 +790,8 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
   REQUIRE(fits.status == SONARE_OK);
   REQUIRE_FALSE(capacity_error(fits));
 
-  // Past the strip lane's capacity the bounce used to render the curve frozen at
-  // the last accepted breakpoint and still return success. Both the explicit and
-  // the auto-derived render length must now name the lane instead.
+  // Past the strip lane's capacity the bounce refuses with the lane detail in
+  // the thread-local error. The last-success snapshot remains a separate result.
   for (const int64_t total_frames :
        {static_cast<int64_t>(48000),
         static_cast<int64_t>(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT)}) {
@@ -1362,8 +1358,8 @@ TEST_CASE("mono project bounce downmixes stereo audio clips instead of dropping 
   sonare_project_destroy(project);
 }
 
-TEST_CASE("deserialize success returns warnings and failed bounce records missing timeline",
-          "[project]") {
+TEST_CASE("a failed compile keeps the last successful bounce result empty",
+          "[project][bounce][last-result]") {
   const std::string json =
       R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":"audio",)"
       R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
@@ -1386,29 +1382,32 @@ TEST_CASE("deserialize success returns warnings and failed bounce records missin
   options.total_frames = 128;
   options.num_channels = 2;
 
-  float* out = nullptr;
-  size_t out_len = 0;
-  int bounce_channels27 = 0;
+  float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(1));
+  size_t out_len = 123;
+  int bounce_channels27 = 7;
   REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels27) ==
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
+  REQUIRE(bounce_channels27 == 0);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "the project does not compile: clip references a source id that is not registered");
 
   SonareProjectCompileResult result{};
   REQUIRE(sonare_project_last_bounce_compile_result(project, &result) == SONARE_OK);
-  REQUIRE(result.has_timeline == 0);
-  REQUIRE(result.diagnostic_count > 0);
+  CHECK(result.has_timeline == 0);
+  CHECK(result.diagnostic_count == 0);
+  CHECK(result.diagnostics == nullptr);
+  CHECK(result.messages == nullptr);
   sonare_free_project_compile_result(&result);
   sonare_project_destroy(project);
 }
 
 TEST_CASE("a never-bounced project reports a fully empty last-bounce compile result", "[project]") {
   // Both a freshly created project and one just loaded from JSON have no
-  // recorded bounce, so both read as empty in full: no timeline AND no
-  // diagnostics. That pair is what lets a host tell "never rendered" from a
-  // failed render, since a bounce only loses its timeline through an error
-  // diagnostic and therefore always leaves at least one behind (the case
-  // asserted directly above).
+  // recorded successful bounce, so both read as empty in full: no timeline AND
+  // no diagnostics. Failed attempts leave this snapshot untouched, and expose
+  // their own refusal through the thread-local last error instead.
   SonareProject* created = nullptr;
   REQUIRE(sonare_project_create(&created) == SONARE_OK);
   SonareProjectCompileResult fresh{};
@@ -1433,93 +1432,115 @@ TEST_CASE("a never-bounced project reports a fully empty last-bounce compile res
   sonare_project_destroy(loaded);
 }
 
-TEST_CASE("a bounce rejected for bad arguments clears the recorded compile result", "[project]") {
-  // The recorded result describes the last bounce. An argument rejection happens
-  // before anything compiles, so it has no result of its own -- and the header
-  // says the query then reads as the empty state. Reporting the previous
-  // bounce's diagnostics instead would show a host errors for a render that
-  // never ran, on a call it already knows failed.
-  const std::string json =
-      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":"audio",)"
-      R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
-      R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
-      R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
-      R"("fadeIn":{"lengthPpq":0,"curve":"linear"},"fadeOut":{"lengthPpq":0,"curve":"linear"},)"
-      R"("loopMode":"off","loopLengthPpq":0,"warpRefId":0}]})";
-  SonareProject* project = nullptr;
-  REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, nullptr) == SONARE_OK);
+TEST_CASE("failed bounces preserve the last successful compile result",
+          "[project][bounce][last-result]") {
+#if !defined(SONARE_WITH_MIXING)
+  SKIP("the post-compile lane refusal requires the mixing build");
+#else
+  const BuiltProject built = build_project(make_stereo_sine(4800));
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> project(
+      built.project, sonare_project_destroy);
+  const char* scene =
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"lead"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.get(), scene) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project.get(), built.audio_track, "lead", nullptr) ==
+          SONARE_OK);
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
-  options.total_frames = 128;
+  options.total_frames = 48000;
+  options.block_size = 128;
   options.num_channels = 2;
-
   float* out = nullptr;
   size_t out_len = 0;
-  // A dangling clip source makes this bounce fail with diagnostics recorded.
-  int bounce_channels28 = 0;
-  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels28) ==
-          SONARE_ERROR_INVALID_STATE);
-  SonareProjectCompileResult recorded{};
-  REQUIRE(sonare_project_last_bounce_compile_result(project, &recorded) == SONARE_OK);
-  REQUIRE(recorded.diagnostic_count > 0);
-  sonare_free_project_compile_result(&recorded);
+  int channels = 0;
+  REQUIRE(sonare_test::bounce_interleaved(project.get(), &options, &out, &out_len, &channels) ==
+          SONARE_OK);
+  sonare_free_floats(out);
 
-  // Each of these is rejected on its arguments before the project is compiled.
-  SonareInstrumentBinding callback_binding{};
-  callback_binding.destination_id = 1u;
-  callback_binding.callbacks.render = nullptr;  // required
-  int bounce_channels29 = 0;
-  REQUIRE(bounce_with_instruments(project, &options, &callback_binding, 1, &out, &out_len,
-                                  &bounce_channels29) == SONARE_ERROR_INVALID_PARAMETER);
-  SonareProjectCompileResult after_callback{};
-  REQUIRE(sonare_project_last_bounce_compile_result(project, &after_callback) == SONARE_OK);
-  CHECK(after_callback.diagnostic_count == 0);
-  CHECK(after_callback.has_timeline == 0);
-  sonare_free_project_compile_result(&after_callback);
+  SonareProjectCompileResult previous{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project.get(), &previous) == SONARE_OK);
+  REQUIRE(previous.has_timeline != 0);
+  REQUIRE(previous.diagnostic_count > 0);
+  REQUIRE(previous.messages != nullptr);
+  const int previous_has_timeline = previous.has_timeline;
+  const std::vector<SonareProjectDiagnostic> previous_diagnostics(
+      previous.diagnostics, previous.diagnostics + previous.diagnostic_count);
+  const std::string previous_messages(previous.messages);
+  const auto check_previous = [&] {
+    SonareProjectCompileResult current{};
+    REQUIRE(sonare_project_last_bounce_compile_result(project.get(), &current) == SONARE_OK);
+    CHECK(current.has_timeline == previous_has_timeline);
+    CHECK(current.diagnostic_count == previous_diagnostics.size());
+    CHECK(current.messages != nullptr);
+    if (current.messages != nullptr) CHECK(std::string(current.messages) == previous_messages);
+    if (current.diagnostic_count == previous_diagnostics.size()) {
+      for (size_t i = 0; i < previous_diagnostics.size(); ++i) {
+        CHECK(current.diagnostics[i].code == previous_diagnostics[i].code);
+        CHECK(current.diagnostics[i].severity == previous_diagnostics[i].severity);
+        CHECK(current.diagnostics[i].target_id == previous_diagnostics[i].target_id);
+      }
+    }
+    sonare_free_project_compile_result(&current);
+  };
+  sonare_free_project_compile_result(&previous);
 
-  // The plain entry point routes straight into the shared bounce core with no
-  // clear of its own, so it is the one that used to leave the previous result
-  // readable. Re-seed the diagnostics first: without that the assertion below
-  // would pass on an already-empty result and prove nothing.
-  int bounce_channels30 = 0;
-  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels30) ==
-          SONARE_ERROR_INVALID_STATE);
-  SonareProjectCompileResult seeded{};
-  REQUIRE(sonare_project_last_bounce_compile_result(project, &seeded) == SONARE_OK);
-  REQUIRE(seeded.diagnostic_count > 0);
-  sonare_free_project_compile_result(&seeded);
+  SonareProjectBounceOptions malformed = options;
+  malformed.struct_size = sizeof(malformed.struct_size);
+  float* rejected = reinterpret_cast<float*>(static_cast<uintptr_t>(1));
+  size_t rejected_frames = 42;
+  int rejected_channels = 7;
+  CHECK(sonare_test::bounce_interleaved(project.get(), &malformed, &rejected, &rejected_frames,
+                                        &rejected_channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(rejected == nullptr);
+  CHECK(rejected_frames == 0);
+  CHECK(rejected_channels == 0);
+  check_previous();
 
-  float* rejected_out = reinterpret_cast<float*>(0x1);
-  int bounce_channels31 = 0;
-  REQUIRE(sonare_test::bounce_interleaved(project, &options, &rejected_out, nullptr,
-                                          &bounce_channels31) == SONARE_ERROR_INVALID_PARAMETER);
-  // The error code is the easy half. What the rejection must also leave behind
-  // is an empty result and a cleared output pointer.
-  REQUIRE(rejected_out == nullptr);
-  SonareProjectCompileResult after_null{};
-  REQUIRE(sonare_project_last_bounce_compile_result(project, &after_null) == SONARE_OK);
-  CHECK(after_null.diagnostic_count == 0);
-  CHECK(after_null.has_timeline == 0);
-  sonare_free_project_compile_result(&after_null);
+  std::vector<SonareAutomationPoint> capacity_points(2048);
+  for (size_t i = 0; i < capacity_points.size(); ++i) {
+    capacity_points[i].ppq = 0.01 * static_cast<double>(i + 1);
+    capacity_points[i].value = -6.0f * static_cast<float>(i % 2);
+    capacity_points[i].curve_to_next = SONARE_CURVE_LINEAR;
+  }
+  SonareAutomationLaneDesc capacity_lane;
+  sonare_automation_lane_desc_init(&capacity_lane);
+  capacity_lane.target_param_id = 1;
+  capacity_lane.points = capacity_points.data();
+  capacity_lane.point_count = capacity_points.size();
+  uint32_t lane_id = 0;
+  REQUIRE(sonare_project_add_automation_lane(project.get(), built.audio_track, &capacity_lane,
+                                             &lane_id) == SONARE_OK);
+  rejected = reinterpret_cast<float*>(static_cast<uintptr_t>(1));
+  rejected_frames = 42;
+  rejected_channels = 7;
+  CHECK(sonare_test::bounce_interleaved(project.get(), &options, &rejected, &rejected_frames,
+                                        &rejected_channels) == SONARE_ERROR_INVALID_STATE);
+  CHECK(rejected == nullptr);
+  CHECK(rejected_frames == 0);
+  CHECK(rejected_channels == 0);
+  CHECK(std::string(sonare_last_error_message())
+            .find("the mix does not schedule: the fader automation lane on channel strip 'lead' "
+                  "has ") == 0);
+  check_previous();
+  REQUIRE(sonare_project_remove_automation_lane(project.get(), built.audio_track, lane_id) ==
+          SONARE_OK);
 
-  int bounce_channels32 = 0;
-  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels32) ==
-          SONARE_ERROR_INVALID_STATE);
-  SonareSf2InstrumentBinding sf2_binding{};
-  sonare_sf2_instrument_config_init(&sf2_binding.config);
-  sf2_binding.destination_id = 1u;
-  sf2_binding.config.struct_size = 0;  // not started from its init
-  int bounce_channels33 = 0;
-  REQUIRE(bounce_with_sf2_instruments(project, &options, &sf2_binding, 1, &out, &out_len,
-                                      &bounce_channels33) == SONARE_ERROR_INVALID_PARAMETER);
-  SonareProjectCompileResult after_sf2{};
-  REQUIRE(sonare_project_last_bounce_compile_result(project, &after_sf2) == SONARE_OK);
-  CHECK(after_sf2.diagnostic_count == 0);
-  CHECK(after_sf2.has_timeline == 0);
-  sonare_free_project_compile_result(&after_sf2);
-
-  sonare_project_destroy(project);
+  SonareError allocation_status = SONARE_OK;
+  rejected = reinterpret_cast<float*>(static_cast<uintptr_t>(1));
+  rejected_frames = 42;
+  rejected_channels = 7;
+  {
+    sonare::test::AllocationFailureGuard fail_allocations(1);
+    allocation_status = sonare_test::bounce_interleaved(project.get(), &options, &rejected,
+                                                        &rejected_frames, &rejected_channels);
+  }
+  CHECK(allocation_status == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(rejected == nullptr);
+  CHECK(rejected_frames == 0);
+  CHECK(rejected_channels == 0);
+  check_previous();
+#endif
 }
 
 TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[project]") {

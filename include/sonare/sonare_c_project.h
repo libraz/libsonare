@@ -19,8 +19,10 @@
 /// @ref sonare_free_string (for char*) and @ref sonare_free_floats (for float*).
 ///
 /// Feature gating: the symbols are ALWAYS exported. When libsonare was built
-/// without @c SONARE_WITH_ARRANGEMENT every function returns
-/// @c SONARE_ERROR_NOT_SUPPORTED and @ref sonare_project_abi_version returns 0.
+/// without @c SONARE_WITH_ARRANGEMENT, project operations that report status
+/// return @c SONARE_ERROR_NOT_SUPPORTED. Release functions can still be called;
+/// value queries use their documented fallback, such as 0 for
+/// @ref sonare_project_abi_version or NULL for the diagnostic token queries.
 ///
 /// ABI stability: every flat POD struct below is guarded by a @c static_assert
 /// on its exact size / member offsets (C++ only). Bump

@@ -2,8 +2,10 @@
 /// @brief Project C surface parity tests.
 
 #include <algorithm>
+#include <limits>
 
 #include "binding_project_parity_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "support/project_bounce.h"
 
 namespace {
@@ -903,3 +905,47 @@ TEST_CASE("project track edit entries refuse by the parameter the header spells"
 
   sonare_project_destroy(project);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("malformed project diagnostics are published only after formatting completes",
+          "[project][deserialize-outputs]") {
+  const std::string document = R"({"version":4294967295})";
+  SonareProject* project = nullptr;
+  char* diagnostics = nullptr;
+  const auto load = [&] {
+    return sonare_project_deserialize(document.data(), document.size(), &project, &diagnostics);
+  };
+  REQUIRE(load() == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(project == nullptr);
+  REQUIRE(diagnostics != nullptr);
+  CHECK(std::string(diagnostics).find("unsupported_schema_version") == 0);
+  sonare_free_string(diagnostics);
+
+  SonareError status;
+  size_t allocations;
+  {
+    const sonare::test::AllocationFailureAtGuard count(std::numeric_limits<size_t>::max());
+    status = load();
+    allocations = sonare::test::g_allocation_attempts.load();
+  }
+  REQUIRE(status == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(allocations > 0);
+  sonare_free_string(diagnostics);
+
+  for (size_t attempt = 1; attempt <= allocations; ++attempt) {
+    CAPTURE(attempt);
+    project = reinterpret_cast<SonareProject*>(&allocations);
+    char sentinel = 'x';
+    diagnostics = &sentinel;
+    {
+      const sonare::test::AllocationFailureAtGuard fail(attempt);
+      status = load();
+    }
+    const bool cleared = diagnostics == nullptr;
+    if (!cleared && diagnostics != &sentinel) sonare_free_string(diagnostics);
+    CHECK(status == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(project == nullptr);
+    CHECK(cleared);
+  }
+}
+#endif

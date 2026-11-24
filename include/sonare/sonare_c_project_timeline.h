@@ -11,8 +11,8 @@
 /// reaches back into the project, so later project edits do not change it.
 ///
 /// Feature gating: the symbols are always exported. Without
-/// @c SONARE_WITH_ARRANGEMENT every function returns
-/// @c SONARE_ERROR_NOT_SUPPORTED with its outputs zeroed.
+/// @c SONARE_WITH_ARRANGEMENT, applying a timeline returns
+/// @c SONARE_ERROR_NOT_SUPPORTED and destroying a timeline is a no-op.
 
 #include "sonare_c_project_core.h"
 #include "sonare_c_types.h"
@@ -27,12 +27,11 @@ extern "C" {
 ///          @ref sonare_engine_apply_project_timeline.
 void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 
-/// @brief Installs a compiled timeline into a stopped realtime engine, all or
-///        nothing.
-/// @details CONTROL thread, never concurrent with @ref sonare_engine_process,
-///          and only while the transport is stopped: a playing transport is
-///          refused with @c SONARE_ERROR_INVALID_STATE and the engine is left
-///          unchanged.
+/// @brief Installs a compiled timeline into a stopped realtime engine.
+/// @details CONTROL thread, never concurrent with @ref sonare_engine_process.
+///          Stop the live audio driver and the transport before applying a timeline.
+///          A running driver or a playing transport is refused with
+///          @c SONARE_ERROR_INVALID_STATE, leaving the engine unchanged.
 ///
 ///          The timeline owns these engine domains and replaces them in full:
 ///          tempo and time-signature segments, markers, track lanes, track
@@ -49,9 +48,9 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 ///          @ref sonare_engine_set_builtin_instrument) using each MIDI track's
 ///          destination id from @ref sonare_project_set_track_midi_destination.
 ///
-///          The engine keeps its own reference to the timeline until the next
-///          successful apply or @ref sonare_engine_destroy, so the handle may
-///          be destroyed immediately afterwards; marker names stay valid.
+///          The engine keeps its own reference while the timeline is installed,
+///          so the handle may be destroyed after apply. Marker names stay valid
+///          while the timeline remains installed.
 ///          A later @ref sonare_engine_set_automation_lane keeps the applied
 ///          lanes and replaces only a lane with the same target id.
 ///          The engine's prepared sample rate must equal the project rate used
@@ -77,8 +76,8 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 ///         the timeline's track lanes (a full automation id table or a retained
 ///         clip delay past the lane alignment ceiling);
 ///         @c SONARE_ERROR_OUT_OF_MEMORY when an allocation fails;
-///         @c SONARE_ERROR_NOT_SUPPORTED when one scene strip is routed from
-///         several tracks, because live playback runs one strip per track.
+///         @c SONARE_ERROR_NOT_SUPPORTED when the timeline routes tracks to scene strips
+///         in a build without mixing or when several tracks share one scene strip.
 SonareError sonare_engine_apply_project_timeline(SonareEngine* engine,
                                                  const SonareProjectTimeline* timeline);
 
