@@ -83,12 +83,13 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
         frame_length=_window_length_at_rate(_PYIN_FRAME_LENGTH, sr),
         **hop,
     )
+    target = {} if args.mode == "scale" else {"target_midi": args.target_midi}
     result = pitch_correct_timevarying(
         samples,
         f0_hz=track.f0,
         sample_rate=sr,
         target_mode=args.mode,
-        target_midi=args.target_midi,
+        **target,
         **hop,
         **_given(
             args,
@@ -569,11 +570,11 @@ def register_note_edit_parsers(
         ),
     )
     pitch_tv_p.add_argument("--mode", choices=["midi", "scale"], default="midi")
-    # The scale arguments are checked whichever target mode is selected, and
-    # --target-midi names a note in both, so each declares its range once rather
-    # than on the branch that happens to read it. --reference-midi stays
-    # undeclared: this path validates the anchor for finiteness only, and a
-    # range here would refuse a value the library accepts.
+    # The scale arguments are checked whichever target mode is selected.
+    # --target-midi is used only in MIDI mode, so an explicit scale-mode value
+    # is refused by the command validator before input is read. Its domain stays.
+    # --reference-midi stays undeclared: the scale-grid anchor only requires
+    # finiteness, and a range here would refuse values the library accepts.
     _cli_domain(
         pitch_tv_p.add_argument("--target-midi", type=_finite_float, default=69.0),
         minimum=0,

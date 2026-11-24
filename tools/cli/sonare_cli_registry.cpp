@@ -671,6 +671,13 @@ CliValidationError validate_note_stretch_bounds(const CliArgs& args) {
   return refuse_both_bound_spellings(args, {"onset", "offset"});
 }
 
+CliValidationError validate_pitch_correct_timevarying_target(const CliArgs& args) {
+  if (args.get_string("mode", "midi") == "scale" && args.has("target-midi")) {
+    return {"--target-midi does not apply when --mode is scale"};
+  }
+  return {};
+}
+
 // The tempo search runs between the two bounds, so an inverted pair searches
 // nothing and reports whatever the fallback is rather than failing. Neither the
 // rhythm analyzer nor the beat analyzer behind it looks at these.
@@ -1128,11 +1135,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  with_domain(mode_mask_value("mode-mask", 0xAB5), between(1.0, 4095.0)),
                  with_domain(number_value("reference-midi", 69.0), between(0.0, 127.0))},
                 {}, nullptr, 1);
-    // The scale arguments are checked whichever target mode is selected, and
-    // --target-midi names a note in both, so all three carry their range here
-    // rather than only on the branch that reads them. --reference-midi is
-    // deliberately unnarrowed: this path validates the anchor for finiteness
-    // only, and declaring a range would refuse a value the library accepts.
+    // The scale arguments are checked whichever target mode is selected.
+    // --target-midi is used only in MIDI mode, so the command validator refuses
+    // an explicit value in scale mode. Its numeric domain remains unchanged.
+    // --reference-midi stays deliberately unnarrowed: the scale-grid anchor only
+    // requires finiteness, and a range would refuse values the library accepts.
     // The four retune options carry the ranges the library's correction config
     // refuses outside of.
     add_command(
@@ -1150,7 +1157,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          library_default(with_domain(number_value("retune-speed-ms"), at_least(0.0)), "50.0"),
          library_default(with_domain(number_value("vibrato-threshold-cents"), at_least(0.0)),
                          "20.0"),
-         required_output()});
+         required_output()},
+        {}, validate_pitch_correct_timevarying_target, 1);
     // Each bound is given in samples or in seconds, never both, and an omitted
     // one takes the library's default (0, or the end of the input for an offset),
     // which the handler resolves.

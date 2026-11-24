@@ -1613,10 +1613,10 @@ test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_do
 [[entry]]
 kind = "flag"
 old = "pitch-correct-timevarying --target-midi"
-changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); in scale mode, an explicit target is refused as not applicable before the input is read"
 domain = "effects"
 rule = "cli-front-end-parity"
-test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+test = "bindings/python/tests/test_cli_note_edit.py::test_pitch_correct_timevarying_cli_refuses_unused_target_before_reading_input"
 
 [[entry]]
 kind = "flag"

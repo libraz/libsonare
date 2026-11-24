@@ -592,6 +592,24 @@ def test_pitch_correct_timevarying_cli_refuses_out_of_range_parameters(option) -
         assert result.returncode == 2, result.stderr
 
 
+def test_pitch_correct_timevarying_cli_refuses_unused_target_before_reading_input() -> None:
+    result = _run_cli(
+        [
+            "pitch-correct-timevarying",
+            "missing-input.wav",
+            "-o",
+            "unused-target.wav",
+            "--mode",
+            "scale",
+            "--target-midi",
+            "71",
+        ]
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--target-midi does not apply when --mode is scale" in result.stderr
+
+
 def test_pitch_correct_timevarying_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> None:
     scale = ["--mode", "scale", "--scale-root", "0"]
     # MIDI 63.4: E-flat is in dorian and not in major, so the two scales pull it

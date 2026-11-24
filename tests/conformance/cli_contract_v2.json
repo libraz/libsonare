@@ -21360,6 +21360,28 @@
           "stdout": "json"
         },
         {
+          "id": "scale_mode_target_midi_supplied",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "scale",
+            "--target-midi",
+            "69",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--target-midi does not apply when --mode is scale"
+          ]
+        },
+        {
           "id": "unknown_mode",
           "argv": [
             "pitch-correct-timevarying",

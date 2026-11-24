@@ -1407,6 +1407,17 @@ TEST_CASE("CLI pitch-correct-timevarying exposes the correction parameters",
   std::remove(input.c_str());
 }
 
+TEST_CASE("CLI pitch-correct-timevarying refuses an unused target before reading input",
+          "[cli][pitch-correct-timevarying]") {
+  const std::string input = unique_temp_path("_tv_missing_input.wav");
+  const std::string output = unique_temp_path("_tv_unused_target.wav");
+  const auto [code, text] = exec_command(CLI + " pitch-correct-timevarying " + input + " -o " +
+                                         output + " --mode scale --target-midi 71 --json");
+  CHECK(code == 2);
+  CHECK_THAT(text, ContainsSubstring("--target-midi does not apply when --mode is scale"));
+  CHECK_FALSE(std::ifstream(output).good());
+}
+
 TEST_CASE("CLI pitch-correct-timevarying corrects against the unrefined pYIN track",
           "[cli][pitch-correct-timevarying]") {
   // The Python front-end feeds the public pitch_pyin track to the corrector, so

@@ -829,6 +829,13 @@ def _validate_fade_sides(args: argparse.Namespace, parser: argparse.ArgumentPars
         parser.error("give --fade-in-sec or --fade-out-sec")
 
 
+def _validate_pitch_correct_timevarying_namespace(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    if args.mode == "scale" and _option_supplied(args, "target_midi"):
+        parser.error("--target-midi does not apply when --mode is scale")
+
+
 def _validate_filter_frequencies(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     corner = args.type in ("high-pass", "low-pass")
     types = "high-pass or low-pass" if corner else "band-pass or notch"
@@ -890,6 +897,7 @@ def _refusal_validator(
 # Each refuses as a usage failure: it is decided from the command line alone.
 _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentParser], None]] = {
     "pitch": _validate_pitch_namespace,
+    "pitch-correct-timevarying": _validate_pitch_correct_timevarying_namespace,
     "vocal-notes": _validate_vocal_notes_namespace,
     "rhythm": _validate_rhythm_namespace,
     "key": _validate_key_namespace,
