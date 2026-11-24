@@ -3,6 +3,7 @@
 /// @file numeric_domain_rows_project.h
 /// @brief Numeric-domain rows of the project, editing, MIDI, mixing and vocal-edit C entries.
 
+#include "arrangement/edit_history.h"
 #include "c_api/editing_input_domains.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
@@ -223,6 +224,7 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"project_set_marker", "marker.id", kAssignableEntityIdDomain, nullptr},
     {"project_set_marker", "marker.key_fifths", kMarkerKeyFifthsDomain, nullptr},
     {"project_set_marker", "marker.ppq", kPublicPpqDomain, nullptr},
+    {"project_set_max_undo_depth", "depth", sonare::arrangement::kUndoDepthDomain, nullptr},
     {"project_set_midi_events", "count", kMidiEventCountDomain, nullptr},
     {"project_set_midi_events", "events[].ppq", kPublicPpqDomain, nullptr},
     {"project_set_program", "channel", kMidiChannelDomain, nullptr},

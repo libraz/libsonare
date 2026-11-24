@@ -606,7 +606,8 @@ bool EditHistory::redo() {
 }
 
 void EditHistory::set_max_undo_depth(size_t depth) {
-  max_undo_depth_ = std::max<size_t>(1, depth);
+  sonare::util::check::integer_within(depth, kUndoDepthDomain, "depth");
+  max_undo_depth_ = depth;
   // Evict immediately when shrinking below the current depth so the memory is
   // released now, not deferred to the next push_undo().
   trim_undo_stack();

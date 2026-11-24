@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "core/audio.h"
 #include "feature/cqt.h"
 #include "mir/key_context.h"
 #include "support/project_bounce.h"
@@ -312,7 +313,7 @@ TEST_CASE("C-ABI add_midi_clip creates track source and clip as one transaction"
 }
 
 TEST_CASE("C-ABI clear_history and set_max_undo_depth manage the undo stack",
-          "[project][c-abi-edit]") {
+          "[project][c-abi-edit][undo-depth]") {
   REQUIRE(sonare_project_clear_history(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_set_max_undo_depth(nullptr, 4) == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -326,12 +327,52 @@ TEST_CASE("C-ABI clear_history and set_max_undo_depth manage the undo stack",
     uint32_t clip_id = 0;
     REQUIRE(sonare_project_add_midi_clip(project, i * 4.0, 4.0, &track_id, &clip_id) == SONARE_OK);
   }
-  // Only the last three edits remain undoable; the rest were evicted.
-  int undone = 0;
-  while (sonare_project_undo(project) == SONARE_OK) ++undone;
-  REQUIRE(undone == 3);
+  REQUIRE(project->history.max_undo_depth() == 3);
+  REQUIRE(project->history.undo_depth() == 3);
 
-  // clear_history drops both stacks, so neither undo nor redo has anything left.
+  // Zero is refused without replacing the installed cap or trimming its stack.
+  REQUIRE(sonare_project_set_max_undo_depth(project, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "depth must be an integer in [1, 500000000]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "depth");
+  CHECK(project->history.max_undo_depth() == 3);
+  CHECK(project->history.undo_depth() == 3);
+  for (int i = 0; i < 4; ++i) {
+    uint32_t track_id = 0;
+    uint32_t clip_id = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 100 + i * 4.0, 4.0, &track_id, &clip_id) ==
+            SONARE_OK);
+  }
+  int retained_after_refusal = 0;
+  while (sonare_project_undo(project) == SONARE_OK) ++retained_after_refusal;
+  CHECK(retained_after_refusal == 3);
+
+  REQUIRE(sonare_project_set_max_undo_depth(project, 1) == SONARE_OK);
+  CHECK(project->history.max_undo_depth() == 1);
+  for (int i = 0; i < 3; ++i) {
+    uint32_t track_id = 0;
+    uint32_t clip_id = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 200 + i * 4.0, 4.0, &track_id, &clip_id) ==
+            SONARE_OK);
+  }
+  int retained_at_one = 0;
+  while (sonare_project_undo(project) == SONARE_OK) ++retained_at_one;
+  CHECK(retained_at_one == 1);
+
+  constexpr size_t kMaxUndoDepth = sonare::kMaxAudioBufferSize;
+  REQUIRE(sonare_project_set_max_undo_depth(project, kMaxUndoDepth) == SONARE_OK);
+  CHECK(project->history.max_undo_depth() == kMaxUndoDepth);
+  for (size_t invalid_depth : {kMaxUndoDepth + 1, std::numeric_limits<size_t>::max()}) {
+    CHECK(sonare_project_set_max_undo_depth(project, invalid_depth) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "depth must be an integer in [1, 500000000]");
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "depth");
+    CHECK(project->history.max_undo_depth() == kMaxUndoDepth);
+  }
+
+  // The accepted cap of one retains a redo entry, then clear_history empties both stacks.
+  CHECK(sonare_project_undo(project) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(sonare_project_clear_history(project) == SONARE_OK);
   REQUIRE(sonare_project_undo(project) == SONARE_ERROR_INVALID_STATE);

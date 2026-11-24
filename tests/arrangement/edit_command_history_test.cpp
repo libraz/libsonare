@@ -25,10 +25,12 @@
 #include "arrangement/edit_history.h"
 #include "arrangement/edit_model.h"
 #include "arrangement/edit_source.h"
+#include "core/audio.h"
 #include "engine/clip_player.h"
 #include "serialize/project_serializer.h"
 #include "support/alloc_guard.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 
 using namespace sonare::arrangement;
 
@@ -1903,7 +1905,7 @@ TEST_CASE("EditHistory bounds the undo stack to a maximum depth", "[arrangement]
   REQUIRE(undone == 512);
 }
 
-TEST_CASE("EditHistory honors a configured maximum undo depth", "[arrangement]") {
+TEST_CASE("EditHistory honors a configured maximum undo depth", "[arrangement][undo-depth]") {
   Fixture f;
   EditHistory h{f.project};
   REQUIRE(h.max_undo_depth() == 512);
@@ -1924,10 +1926,45 @@ TEST_CASE("EditHistory honors a configured maximum undo depth", "[arrangement]")
   }
   REQUIRE(h.undo_depth() == 3);
 
-  // A depth of 0 is clamped to 1 (the most recent edit is always retained).
-  h.set_max_undo_depth(0);
+  const auto expect_refused_depth = [&](size_t depth) {
+    bool refused = false;
+    try {
+      h.set_max_undo_depth(depth);
+    } catch (const sonare::SonareException& error) {
+      refused = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == "depth must be an integer in [1, 500000000]");
+    }
+    CHECK(refused);
+  };
+
+  // A refused depth leaves the old cap installed and retains its undo window.
+  expect_refused_depth(0);
+  REQUIRE(h.max_undo_depth() == 3);
+  REQUIRE(h.undo_depth() == 3);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE(h.apply(
+        std::make_unique<RenameTrack>(f.audio_track, "after-refusal-" + std::to_string(i))));
+  }
+  int retained_after_refusal = 0;
+  while (h.can_undo()) {
+    REQUIRE(h.undo());
+    ++retained_after_refusal;
+  }
+  CHECK(retained_after_refusal == 3);
+
+  h.set_max_undo_depth(1);
   REQUIRE(h.max_undo_depth() == 1);
-  REQUIRE(h.undo_depth() == 1);
+  REQUIRE(h.apply(std::make_unique<RenameTrack>(f.audio_track, "one-entry")));
+  REQUIRE(h.apply(std::make_unique<RenameTrack>(f.audio_track, "one-entry-again")));
+  CHECK(h.undo_depth() == 1);
+
+  constexpr size_t kMaxUndoDepth = sonare::kMaxAudioBufferSize;
+  h.set_max_undo_depth(kMaxUndoDepth);
+  CHECK(h.max_undo_depth() == kMaxUndoDepth);
+  expect_refused_depth(kMaxUndoDepth + 1);
+  expect_refused_depth(std::numeric_limits<size_t>::max());
+  CHECK(h.max_undo_depth() == kMaxUndoDepth);
 
   // clear_history empties both stacks without touching project state.
   const std::string name_before = h.project().find_track(f.audio_track)->name;

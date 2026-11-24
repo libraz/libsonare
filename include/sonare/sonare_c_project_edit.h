@@ -753,9 +753,10 @@ SonareError sonare_project_redo(SonareProject* project);
 ///        Always succeeds for a valid @p project.
 SonareError sonare_project_clear_history(SonareProject* project);
 
-/// @brief Sets the maximum retained undo depth. @p depth is clamped to at least
-///        1 (the most recent edit is always retained); if the current history is
-///        deeper than @p depth the oldest entries are evicted immediately.
+/// @brief Sets the maximum retained undo depth. @p depth must be an integer in
+///        [1, 500000000]. An invalid depth returns SONARE_ERROR_INVALID_PARAMETER
+///        and preserves the previous cap. Lowering the cap evicts the oldest
+///        entries immediately if the current undo stack exceeds it.
 SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t depth);
 
 /// @brief Sets the combined retained-byte cap for undo and redo history.

@@ -18,8 +18,14 @@
 
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_model.h"
+#include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::arrangement {
+
+/// @brief Accepted undo depth, using the ceiling shared by other project count domains.
+inline constexpr sonare::util::check::NumericDomain kUndoDepthDomain =
+    sonare::util::check::integer_domain(1, static_cast<long long>(sonare::kMaxAudioBufferSize));
 
 /// Optional rollback seam for commands which mutate control-thread state that
 /// is not owned by EditHistory (for example decoded PCM in an AudioContentStore
@@ -104,10 +110,9 @@ class EditHistory {
   /// Dynamically recomputed conservative retained bytes across both stacks.
   size_t retained_history_bytes() const noexcept;
 
-  /// Sets the maximum retained undo depth. A value of 0 is treated as 1 (at
-  /// least the most recent edit is always kept). If the current undo stack is
-  /// deeper than the new bound, the oldest entries are evicted immediately so
-  /// resident memory drops right away rather than only on the next edit.
+  /// Sets the maximum retained undo depth, which must be within kUndoDepthDomain.
+  /// If the current undo stack is deeper than the new bound, the oldest entries
+  /// are evicted immediately so resident memory drops right away.
   void set_max_undo_depth(size_t depth);
 
   /// Clears both stacks (does not touch the project state).
