@@ -4,6 +4,7 @@
 # when open above, stricter is 'power_of_two', 'even', 'odd' or None.
 DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {
     ("Audio.from_file", "channel_index"): (0, 2147483647, None),
+    ("Audio.resample", "target_sample_rate"): (8000, 384000, None),
     ("Audio.silence_ratio", "frame_length"): (1, 2147483647, None),
     ("Audio.silence_ratio", "hop_length"): (1, 2147483647, None),
     ("Audio.spectrum", "n_fft"): (2, 4194304, "power_of_two"),
@@ -477,6 +478,8 @@ DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {
     ("render_percussive_events", "hpss_kernel_percussive"): (1, 2147483647, None),
     ("render_percussive_events", "n_fft"): (4, 524288, "even"),
     ("render_playback", "num_channels"): (1, 2147483647, None),
+    ("resample", "sample_rate"): (8000, 384000, None),
+    ("resample", "target_sample_rate"): (8000, 384000, None),
     ("rms_energy", "frame_length"): (1, 2147483647, None),
     ("rms_energy", "hop_length"): (1, 2147483647, None),
     ("room_morph", "ism_order"): (0, 2147483647, None),

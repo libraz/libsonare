@@ -6463,3 +6463,19 @@ changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, 
 domain = "mastering"
 rule = "individual"
 test = "tests/mixing/assistant/track_profile_test.cpp::the mixing-assistant C entry roots a params refusal at params"
+
+[[entry]]
+kind = "option"
+old = "sonare_room_morph(config)"
+changed = "a config.receiver_spacing_m other than NaN is SONARE_ERROR_INVALID_PARAMETER 'config.receiver_spacing_m must be omitted for a mono layout' with the outputs cleared (1.x ignored it on the mono entry); leave it NaN, as sonare_room_morph_config_default does, a zero-initialised config included"
+domain = "effects"
+rule = "individual"
+test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API zeroes outputs for supplied mono receiver spacing"
+
+[[entry]]
+kind = "function"
+old = "sonare_chirp"
+changed = "fmin_hz and fmax_hz must be finite; a linear sweep refuses a negative fmin_hz and an fmax_hz at or below 0, and an exponential sweep refuses either at or below 0, as SONARE_ERROR_INVALID_PARAMETER '<name> must be finite and greater than 0' (or 'at least 0' for a linear fmin_hz) with the outputs cleared (1.x accepted any linear value that survived the float cast)"
+domain = "analysis"
+rule = "individual"
+test = "tests/api/sonare_c_mixing_features_test.cpp::C chirp refuses frequencies outside the selected sweep's domain"

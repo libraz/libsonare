@@ -9302,7 +9302,7 @@ test = "bindings/node/tests/acoustic.test.ts::refuses an estimate with no measur
 [[entry]]
 kind = "function"
 old = "synthesizeRir"
-changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest). Catch RangeError for an out-of-room source or listener. The coded InvalidParameter and diagnostic ID are gone. Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default."
+changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest). Catch RangeError for an out-of-room source or listener. The coded InvalidParameter and diagnostic ID are gone. Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. An absorption, bandAbsorption or bandScattering value outside [0, 1] is a RangeError 'synthesizeRir: <field> must be finite and in [0, 1]' (1.x: '<field> must be within [0, 1]')."
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/node/tests/acoustic.test.ts::throws a RangeError for invalid geometry"
@@ -9310,7 +9310,7 @@ test = "bindings/node/tests/acoustic.test.ts::throws a RangeError for invalid ge
 [[entry]]
 kind = "function"
 old = "roomMorph"
-changed = "Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default."
+changed = "Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. An absorption or bandAbsorption value outside [0, 1] is a RangeError 'roomMorph: <field> must be finite and in [0, 1]' (1.x: '<field> must be within [0, 1]')."
 domain = "effects"
 rule = "individual"
 test = "bindings/node/tests/acoustic.test.ts::enables air absorption by default in both room morphs"

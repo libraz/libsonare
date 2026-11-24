@@ -328,6 +328,22 @@ def test_room_morph_cli_keeps_a_mono_input_mono(tmp_path) -> None:
     assert json.loads(result.stdout)["stereo"] is False
 
 
+def test_room_morph_cli_refuses_receiver_spacing_on_a_mono_input(tmp_path) -> None:
+    """A mono input has no receiver pair, so a given spacing is refused after loading."""
+    source = tmp_path / "take.wav"
+    output = tmp_path / "morph.wav"
+    _write_test_wav(str(source), _generate_sine(220, 48000, 0.1), 48000)
+
+    result = _run_cli(
+        ["room-morph", str(source), "-o", str(output), *_ROOM_MORPH_ARGS]
+        + ["--receiver-spacing", "0.5"]
+    )
+
+    assert result.returncode == 3
+    assert "--receiver-spacing must be omitted for a mono layout" in result.stderr
+    assert not output.exists()
+
+
 def test_lufs_cli_reports_the_channel_summed_value_mastering_reports(tmp_path) -> None:
     """`lufs` on a stereo file is the BS.1770 channel sum, the input level `mastering` reports."""
     source = tmp_path / "mix.wav"

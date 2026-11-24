@@ -167,6 +167,25 @@ describe('geometric room acoustics', () => {
     expect(() => roomMorph(bad, 48000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
   });
 
+  it.each([
+    [{ absorption: 2 }, 'absorption'],
+    [{ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) }, 'bandAbsorption'],
+    [
+      { bandAbsorption: new Float32Array([0.2, 0.3]), bandScattering: new Float32Array([0, -0.5]) },
+      'bandScattering',
+    ],
+  ])('names the material coefficient outside [0, 1] for %o', (fields, name) => {
+    expect(() => synthesizeRir({ sampleRate: 48000, ...fields })).toThrow(
+      new RangeError(`synthesizeRir: ${name} must be finite and in [0, 1]`),
+    );
+  });
+
+  it('names a room-morph absorption outside [0, 1]', () => {
+    expect(() => roomMorph(new Float32Array(4800).fill(0.1), 48000, { absorption: 1.01 })).toThrow(
+      new RangeError('roomMorph: absorption must be finite and in [0, 1]'),
+    );
+  });
+
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
     expect(() =>

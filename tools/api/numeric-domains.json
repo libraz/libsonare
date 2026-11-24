@@ -442,6 +442,28 @@
     },
     {
       "entry": "chirp",
+      "param": "fmax_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "chirp",
+      "param": "fmin_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "positive_for_exponential_sweep",
+      "sentinel": null
+    },
+    {
+      "entry": "chirp",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 8000,
@@ -6920,6 +6942,28 @@
       "sentinel": null
     },
     {
+      "entry": "resample",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "resample",
+      "param": "target_sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "rms_energy",
       "param": "frame_length",
       "kind": "integer",
@@ -6936,6 +6980,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "room_morph",
+      "param": "config.absorption",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -7036,6 +7091,17 @@
       "lo": 0,
       "hi": 10000,
       "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "room_morph_stereo",
+      "param": "config.absorption",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
       "hi_included": true,
       "stricter": null,
       "sentinel": null
@@ -7970,6 +8036,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 192000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "synthesize_rir",
+      "param": "config.absorption",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

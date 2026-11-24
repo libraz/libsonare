@@ -324,7 +324,7 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
 }
 
 // Options shared by roomMorph and roomMorphStereo. The stereo entry reads `receiverSpacingM` and
-// passes it in; an absent spacing is fitted to the room and placement.
+// passes it in; the mono entry has none, and an absent stereo spacing is fitted to the room.
 sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(
     const Napi::Object& opts, std::optional<float> receiver_spacing_m) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
@@ -334,7 +334,7 @@ sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(
   const sonare::acoustic::ResolvedRoomPlacement resolved =
       sonare::acoustic::resolve_room_placement(cfg.target.dims, request);
   cfg.placement = resolved.placement;
-  cfg.receiver_spacing_m = resolved.receiver_spacing_m;
+  cfg.receiver_spacing_m = receiver_spacing_m;
   cfg.supplied = resolved.supplied;
   cfg.source_tail_suppression =
       DomainFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);

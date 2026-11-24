@@ -267,6 +267,10 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
         )
         channels = [list(result.left), list(result.right)]
     else:
+        # A mono input has no receiver pair, so a given spacing is refused once the file is read.
+        if args.receiver_spacing is not None:
+            print("Error: --receiver-spacing must be omitted for a mono layout", file=sys.stderr)
+            return EXIT_INVALID_PARAMETER
         result = room_morph(planes[0], sr, **geometry, **options)
         channels = [list(result.audio)]
     # The target RIR is synthesized by the code synthesize-rir uses, so the same

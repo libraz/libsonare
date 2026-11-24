@@ -111,6 +111,27 @@ describe('sample-taking functions', () => {
     expectThrows(() => fn({ samples, sampleRate: '22050', ...options }), TypeError);
   });
 
+  // These never read the rate, so only its representation as a C int is checked.
+  it.each(
+    SAMPLE_FUNCTIONS.filter(([name]) =>
+      [
+        'preemphasis',
+        'deemphasis',
+        'trimSilence',
+        'splitSilence',
+        'frameSignal',
+        'zeroCrossings',
+      ].includes(name),
+    ),
+  )('%s checks only that the sample rate is a C int', (name, options) => {
+    const fn = api[name] as (...args: unknown[]) => unknown;
+    expect(() => fn({ samples, sampleRate: 22050.5, ...options })).toThrow(
+      new RangeError(`${name}: sampleRate must be an integer in [-2147483648, 2147483647]`),
+    );
+    expectThrows(() => fn({ samples, sampleRate: 2 ** 31, ...options }), RangeError);
+    expect(() => fn(samples, 0, options)).not.toThrow();
+  });
+
   it.each(SAMPLE_FUNCTIONS)('%s takes samples, sampleRate and an options bag', (name, options) => {
     const fn = api[name] as (...args: unknown[]) => unknown;
     const positional = fn(samples, sampleRate, options);

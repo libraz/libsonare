@@ -17462,6 +17462,22 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "receiver_spacing_mono",
+          "argv": [
+            "room-morph",
+            "{audio}",
+            "-o",
+            "{morph_output}",
+            "--receiver-spacing",
+            "0.5"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

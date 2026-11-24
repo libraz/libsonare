@@ -236,6 +236,12 @@ describe('geometric room acoustics', () => {
     );
   });
 
+  it('names a room-morph absorption outside [0, 1]', () => {
+    expect(() => roomMorph(new Float32Array(4800).fill(0.1), 48000, { absorption: 1.01 })).toThrow(
+      new RangeError('roomMorph: absorption must be finite and in [0, 1]'),
+    );
+  });
+
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
     expectRefusal(
@@ -248,7 +254,7 @@ describe('geometric room acoustics', () => {
     expectRefusal(
       () => synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.2, 1.5, 0.3] }),
       RangeError,
-      /^synthesizeRir: bandAbsorption must be within \[0, 1\]$/,
+      /^synthesizeRir: bandAbsorption must be finite and in \[0, 1\]$/,
     );
     expect(() =>
       synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.1, 0.3, 0.5] }),
@@ -257,13 +263,13 @@ describe('geometric room acoustics', () => {
       () =>
         synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.2, 0.3], bandScattering: [0, -0.5] }),
       RangeError,
-      /^synthesizeRir: bandScattering must be within \[0, 1\]$/,
+      /^synthesizeRir: bandScattering must be finite and in \[0, 1\]$/,
     );
     // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
     expectRefusal(
       () => synthesizeRir({ sampleRate: 48000, absorption: 2 }),
       RangeError,
-      /^synthesizeRir: absorption must be within \[0, 1\]$/,
+      /^synthesizeRir: absorption must be finite and in \[0, 1\]$/,
     );
     // Non-finite geometry and timing.
     expectRefusal(
@@ -488,7 +494,7 @@ describe('geometric room acoustics', () => {
           bandAbsorption: [1.5, 1.5, 1.5, 1.5],
         }),
       RangeError,
-      /^synthesizeRir: bandAbsorption must be within \[0, 1\]$/,
+      /^synthesizeRir: bandAbsorption must be finite and in \[0, 1\]$/,
     );
     expectRefusal(
       () =>
@@ -500,7 +506,7 @@ describe('geometric room acoustics', () => {
           bandAbsorption: [0.1, -0.2, 0.3],
         }),
       RangeError,
-      /^synthesizeRir: bandAbsorption must be within \[0, 1\]$/,
+      /^synthesizeRir: bandAbsorption must be finite and in \[0, 1\]$/,
     );
     expectRefusal(
       () =>

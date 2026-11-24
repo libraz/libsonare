@@ -25,6 +25,17 @@ describe('synthetic audio generation', () => {
     ).toHaveLength(32);
   });
 
+  it.each([
+    [{ fminHz: -1, linear: true }, 'fminHz must be finite and at least 0'],
+    [{ fmaxHz: 0, linear: true }, 'fmaxHz must be finite and greater than 0'],
+    [{ fminHz: 0 }, 'fminHz must be finite and greater than 0'],
+    [{ fmaxHz: 0 }, 'fmaxHz must be finite and greater than 0'],
+  ])('chirp refuses %o outside the sweep domain', (fields, text) => {
+    expect(() => chirp({ sampleRate: 22050, durationSec: 0.01, ...fields })).toThrow(
+      new RangeError(`chirp: ${text}`),
+    );
+  });
+
   /**
    * These three carry no sample-rate domain, because the core imposes none:
    * a generator renders correctly at 100 Hz and at 500 kHz alike. What it does

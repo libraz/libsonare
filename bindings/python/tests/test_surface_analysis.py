@@ -295,6 +295,20 @@ def test_chirp_defaults_to_exponential_sweep() -> None:
     assert np.max(np.abs(default - linear)) > 0.1
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "text"),
+    [
+        ({"fmin": -1.0, "linear": True}, "fmin must be finite and at least 0"),
+        ({"fmax": 0.0, "linear": True}, "fmax must be finite and greater than 0"),
+        ({"fmin": 0.0}, "fmin must be finite and greater than 0"),
+        ({"fmax": 0.0}, "fmax must be finite and greater than 0"),
+    ],
+)
+def test_chirp_refuses_frequencies_outside_the_sweep_domain(kwargs, text) -> None:
+    with pytest.raises(SonareValueError, match=rf"^chirp: {re.escape(text)}$"):
+        libsonare.chirp(sr=SR, duration=0.01, **kwargs)
+
+
 def test_mirror_absent_is_none_not_zero() -> None:
     assert libsonare.frames_to_samples(3, hop_length=512, n_fft=None) == 3 * 512
     assert libsonare.frames_to_samples(3, hop_length=512, n_fft=2048) == 3 * 512 + 1024

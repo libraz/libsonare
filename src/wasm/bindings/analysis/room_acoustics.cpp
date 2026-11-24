@@ -303,8 +303,8 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   return out;
 }
 
-// The stereo entry reads `receiverSpacingM` and passes it in; an absent spacing is fitted to the
-// room and placement.
+// The stereo entry reads `receiverSpacingM` and passes it in; the mono entry has none, and an
+// absent stereo spacing is fitted to the room.
 static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(
     val opts, std::optional<float> receiver_spacing_m) {
   sonare::effects::acoustic::RoomMorphConfig config;
@@ -314,7 +314,7 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(
   const sonare::acoustic::ResolvedRoomPlacement resolved =
       sonare::acoustic::resolve_room_placement(config.target.dims, request);
   config.placement = resolved.placement;
-  config.receiver_spacing_m = resolved.receiver_spacing_m;
+  config.receiver_spacing_m = receiver_spacing_m;
   config.supplied = resolved.supplied;
   config.source_tail_suppression =
       domainFloatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
