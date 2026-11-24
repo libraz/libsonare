@@ -711,7 +711,9 @@ TEST_CASE("vocal edit dependencies refuse a compiled-out arrangement before thei
   result.dependency_count = 99;
   REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &result) ==
           SONARE_ERROR_NOT_SUPPORTED);
-  CHECK(result.dependency_count == 99);
+  CHECK(result.struct_size == sizeof(result));
+  CHECK(result.dependency_count == 0);
+  CHECK(result.dependencies == nullptr);
   const char* reason = sonare_last_error_reason();
   REQUIRE(reason != nullptr);
   CHECK(std::string(reason) == "notCompiledIn");

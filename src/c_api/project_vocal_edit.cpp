@@ -635,12 +635,12 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
   const bool result_ready = initialized(result);
   if (result_ready) {
     *result = {};
     result->struct_size = sizeof(*result);
   }
+#if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(result);
   if (!result_ready) {
