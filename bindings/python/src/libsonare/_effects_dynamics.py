@@ -34,7 +34,7 @@ def _coerce_compressor_detector(value: CompressorDetector, key: str) -> int:
     return _token_ordinal(value, _COMPRESSOR_DETECTORS, key)
 
 
-def _gate_range_db(value: object) -> float | ctypes.c_float:
+def _gate_range_db(value: object, name: str) -> float | ctypes.c_float:
     """Narrow a gate range without turning a finite value into the mute sentinel."""
     if not isinstance(value, bool) and isinstance(value, SupportsFloat):
         try:
@@ -47,8 +47,8 @@ def _gate_range_db(value: object) -> float | ctypes.c_float:
                 or number == math.inf
                 or (number == -math.inf and value == number)
             ):
-                return _domain_float(number, "range_db")
-    return _narrow_float(value, "range_db")
+                return _domain_float(number, name)
+    return _narrow_float(value, name)
 
 
 def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
@@ -194,7 +194,7 @@ def mastering_dynamics_gate(
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         attack_ms=_narrow_double(attack_ms, "attack_ms"),
         release_ms=_narrow_double(release_ms, "release_ms"),
-        range_db=_gate_range_db(range_db),
+        range_db=_gate_range_db(range_db, "range_db"),
         hold_ms=_narrow_double(hold_ms, "hold_ms"),
         close_threshold_db=_narrow_double(close_threshold_db, "close_threshold_db"),
         key_high_pass_hz=0.0
