@@ -5076,7 +5076,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_project_track_count"
-changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
@@ -5084,7 +5084,7 @@ test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clea
 [[entry]]
 kind = "function"
 old = "sonare_project_clip_count"
-changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
@@ -5092,7 +5092,7 @@ test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clea
 [[entry]]
 kind = "function"
 old = "sonare_project_source_count"
-changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
@@ -5100,7 +5100,7 @@ test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clea
 [[entry]]
 kind = "function"
 old = "sonare_project_marker_count"
-changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count."
+changed = "An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clear outputs when arrangement is unavailable"
@@ -5108,7 +5108,7 @@ test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clea
 [[entry]]
 kind = "function"
 old = "sonare_project_export_smf"
-changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0."
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
@@ -5116,7 +5116,7 @@ test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear
 [[entry]]
 kind = "function"
 old = "sonare_project_export_clip_file"
-changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0."
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
@@ -5124,7 +5124,7 @@ test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear
 [[entry]]
 kind = "function"
 old = "sonare_project_validate_midi_notes"
-changed = "When validation fails after it starts, ok and both note counts stay cleared."
+changed = "When validation fails after it starts, ok and both note counts stay cleared (1.x left ok at 1 with both counts 0)."
 domain = "project"
 rule = "c-error-path"
 test = "tests/bindings/binding_project_midi_test.cpp::project C surface validates MIDI note pairing"

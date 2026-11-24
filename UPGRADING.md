@@ -1330,14 +1330,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_engine_apply_project_timeline` | An empty timeline is refused under timeline before the live-driver state is checked. |
-| `sonare_project_clip_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
-| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0. |
-| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0. |
+| `sonare_project_clip_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched). |
+| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). |
+| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). |
 | `sonare_project_last_bounce_compile_result` | Reports the last successful bounce. A refused bounce leaves that snapshot intact. The timeline flag, diagnostic rows and messages are published together, and allocation failure leaves the outputs cleared. |
-| `sonare_project_marker_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
-| `sonare_project_source_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
-| `sonare_project_track_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count. |
-| `sonare_project_validate_midi_notes` | When validation fails after it starts, ok and both note counts stay cleared. |
+| `sonare_project_marker_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched). |
+| `sonare_project_source_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched). |
+| `sonare_project_track_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched). |
+| `sonare_project_validate_midi_notes` | When validation fails after it starts, ok and both note counts stay cleared (1.x left ok at 1 with both counts 0). |
 
 #### Errors are coded by cause on every surface
 
