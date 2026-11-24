@@ -25,6 +25,11 @@ size_t as_size(double value) {
   return value < 0.0 ? std::numeric_limits<size_t>::max() : static_cast<size_t>(value);
 }
 
+// One full analysis frame is enough to exercise the argument checks.
+constexpr size_t kProbeAudioFrames = 2048;
+const float* pcm() { return analysis_samples().data(); }
+size_t pcm_length() { return kProbeAudioFrames; }
+
 SonareError probe_dynamics(const std::string& param, double value) {
   float window_sec = 0.4f;
   size_t hop_length = 512;
@@ -33,9 +38,8 @@ SonareError probe_dynamics(const std::string& param, double value) {
   if (is_param(param, "hop_length")) hop_length = as_size(value);
   if (is_param(param, "compression_threshold")) threshold = static_cast<float>(value);
   SonareDynamicsResult out{};
-  const SonareError err =
-      sonare_analyze_dynamics(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                              window_sec, hop_length, threshold, &out);
+  const SonareError err = sonare_analyze_dynamics(pcm(), pcm_length(), kAnalysisRate, window_sec,
+                                                  hop_length, threshold, &out);
   if (err == SONARE_OK) sonare_free_dynamics_result(&out);
   return err;
 }
@@ -46,8 +50,8 @@ SonareError probe_impulse_response(const std::string& param, double value) {
   sonare_analyze_impulse_response_options_init(&options);
   if (is_param(param, "min_decay_db")) options.min_decay_db = static_cast<float>(value);
   SonareAcousticResult out{};
-  const SonareError err = sonare_analyze_impulse_response(
-      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, bands, &options, &out);
+  const SonareError err =
+      sonare_analyze_impulse_response(pcm(), pcm_length(), kAnalysisRate, bands, &options, &out);
   if (err == SONARE_OK) sonare_free_acoustic_result(&out);
   return err;
 }
@@ -62,9 +66,8 @@ SonareError probe_detect_acoustic(const std::string& param, double value) {
   if (is_param(param, "min_decay_db")) min_decay_db = static_cast<float>(value);
   if (is_param(param, "noise_floor_margin_db")) margin_db = static_cast<float>(value);
   SonareAcousticResult out{};
-  const SonareError err =
-      sonare_detect_acoustic(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                             octave, third, min_decay_db, margin_db, &out);
+  const SonareError err = sonare_detect_acoustic(pcm(), pcm_length(), kAnalysisRate, octave, third,
+                                                 min_decay_db, margin_db, &out);
   if (err == SONARE_OK) sonare_free_acoustic_result(&out);
   return err;
 }
@@ -81,9 +84,8 @@ SonareError probe_timbre(const std::string& param, double value) {
   if (is_param(param, "n_mfcc")) n_mfcc = static_cast<int>(value);
   if (is_param(param, "window_sec")) window_sec = static_cast<float>(value);
   SonareTimbreResult out{};
-  const SonareError err =
-      sonare_analyze_timbre(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                            n_fft, hop_length, n_mels, n_mfcc, window_sec, &out);
+  const SonareError err = sonare_analyze_timbre(pcm(), pcm_length(), kAnalysisRate, n_fft,
+                                                hop_length, n_mels, n_mfcc, window_sec, &out);
   if (err == SONARE_OK) sonare_free_timbre_result(&out);
   return err;
 }
@@ -110,15 +112,12 @@ SonareError probe_melody(const std::string& param, double value) {
   SonareAnalyzeMelodyOptions options{};
   sonare_analyze_melody_options_init(&options);
   SonareMelodyResult out{};
-  const SonareError err = sonare_analyze_melody(
-      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, a.f0_min_hz, a.f0_max_hz,
-      a.frame_length, a.hop_length, a.threshold, &options, &out);
+  const SonareError err =
+      sonare_analyze_melody(pcm(), pcm_length(), kAnalysisRate, a.f0_min_hz, a.f0_max_hz,
+                            a.frame_length, a.hop_length, a.threshold, &options, &out);
   if (err == SONARE_OK) sonare_free_melody_result(&out);
   return err;
 }
-
-const float* pcm() { return analysis_samples().data(); }
-size_t pcm_length() { return analysis_samples().size(); }
 
 /// The framing every STFT-based entry takes, at working defaults.
 struct Frame {

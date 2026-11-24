@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <string>
 #include <vector>
@@ -29,6 +30,21 @@ using sonare_c_detail::NumericDomainTable;
 using Probe = std::function<SonareError(const std::string& param, double value)>;
 /// A value the row's domain accepts and the probe can run on.
 using InsideValue = std::function<double(const NumericDomainRow&)>;
+
+struct ProbeField {
+  const char* name;
+  double value;
+};
+
+/// Applies fixed sibling fields before sweeping the selected field.
+template <typename SetField>
+void set_probe_fields(const std::string& param, double value,
+                      std::initializer_list<ProbeField> siblings, SetField set) {
+  for (const ProbeField& field : siblings) {
+    if (param != field.name) set(field.name, field.value);
+  }
+  set(param, value);
+}
 
 inline constexpr int kAnalysisRate = 22050;
 

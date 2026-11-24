@@ -538,12 +538,23 @@ void set_room_field(RoomConfig& config, const std::string& param, double value) 
   }
 }
 
+// Bound synthesis and rendering even when a swept field asks for a natural tail.
+constexpr std::initializer_list<ProbeField> kRoomProbeFields{{"config.max_sec", 0.0625},
+                                                             {"config.absorption", 0.8}};
+
+template <typename RoomConfig>
+void set_room_probe_fields(RoomConfig& config, const std::string& param, double value) {
+  set_probe_fields(param, value, kRoomProbeFields, [&](const std::string& field, double amount) {
+    set_room_field(config, field, amount);
+  });
+}
+
 SonareError probe_synthesize_rir(const std::string& param, double value) {
   SonareRirSynthConfig config;
   sonare_rir_synth_config_init(&config);
   int sample_rate = 48000;
   if (is_param(param, "sample_rate")) sample_rate = as_int(value);
-  set_room_field(config, param, value);
+  set_room_probe_fields(config, param, value);
   SonareRirSynthResult out{};
   const SonareError err = sonare_synthesize_rir(&config, sample_rate, &out);
   if (err == SONARE_OK) sonare_free_rir_synth_result(&out);
@@ -553,7 +564,7 @@ SonareError probe_synthesize_rir(const std::string& param, double value) {
 SonareRoomMorphConfig morph_config(const std::string& param, double value) {
   SonareRoomMorphConfig config;
   sonare_room_morph_config_init(&config);
-  set_room_field(config, param, value);
+  set_room_probe_fields(config, param, value);
   if (is_param(param, "config.receiver_spacing_m")) {
     config.receiver_spacing_m = static_cast<float>(value);
   }
@@ -1105,6 +1116,15 @@ TEST_CASE("a mastering value inside its row's domain is not refused under the ro
           "[numeric_domains][c_api]") {
   require_inside_accepted(built_table(), probes(), mastering_inside_value);
 }
+
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+TEST_CASE("room morph stereo accepts zero absorption and refuses negative absorption",
+          "[numeric_domains][c_api]") {
+  CHECK(probe_room_morph_stereo("config.absorption", 0.0) == SONARE_OK);
+  CHECK(probe_room_morph_stereo("config.absorption", -0.001) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_subject() == "config.absorption");
+}
+#endif
 
 TEST_CASE("dynamic-range percentile rows keep the sentinel and refuse outside [0, 1]",
           "[numeric_domains][c_api][dynamic-range-domain]") {
