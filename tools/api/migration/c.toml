@@ -1875,49 +1875,49 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_mastering_chain"
-removed = "call sonare_master_audio with preset NULL (the default chain) and the old params as overrides_json"
+removed = "call sonare_master_audio with preset NULL and the old params as overrides_json"
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_mastering_chain_stereo"
-removed = "call sonare_master_audio_stereo with preset NULL (the default chain) and the old params as overrides_json"
+removed = "call sonare_master_audio_stereo with preset NULL and the old params as overrides_json"
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_mastering_chain_with_progress"
-removed = "call sonare_master_audio_with_progress with preset NULL (the default chain) and the old params as overrides_json"
+removed = "call sonare_master_audio with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions"
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_mastering_chain_with_progress_ex"
-removed = "call sonare_master_audio_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json"
+removed = "call sonare_master_audio with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions"
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_mastering_chain_stereo_with_progress"
-removed = "call sonare_master_audio_stereo_with_progress with preset NULL (the default chain) and the old params as overrides_json"
+removed = "call sonare_master_audio_stereo with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions"
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_mastering_chain_stereo_with_progress_ex"
-removed = "call sonare_master_audio_stereo_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json"
+removed = "call sonare_master_audio_stereo with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions"
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_master_audio"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields"
 domain = "mastering"
 rule = "typed-results"
 test = "tests/api/sonare_c_mastering_test.cpp::sonare_master_audio"
@@ -1925,7 +1925,7 @@ test = "tests/api/sonare_c_mastering_test.cpp::sonare_master_audio"
 [[entry]]
 kind = "function"
 old = "sonare_master_audio_stereo"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields"
 domain = "mastering"
 rule = "typed-results"
 test = "tests/api/sonare_c_mastering_test.cpp::sonare_master_audio"

@@ -25,6 +25,7 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
+from ._field_spelling import MASTER_AUDIO_SELECTOR_REFUSAL
 from ._narrowing import _narrow_double, _resolve_zero_default, _Respelling
 from ._runtime import (
     _call_string,
@@ -879,7 +880,7 @@ def master_audio(
     c_array, length = _to_c_float_array(samples)
     audio = (c_array, _to_c_size_t(length, "length"), _to_c_int(sample_rate, "sample_rate"))
     if preset is None and overrides is None:
-        raise _refuse("give preset or overrides")
+        raise _refuse(MASTER_AUDIO_SELECTOR_REFUSAL)
     symbol = "sonare_master_audio"
     head = (None if preset is None else _utf8_arg(preset, "preset"), *audio)
     out = SonareMasteringChainResult()
@@ -924,7 +925,7 @@ def master_audio_stereo(
         _to_c_int(sample_rate, "sample_rate"),
     )
     if preset is None and overrides is None:
-        raise _refuse("give preset or overrides")
+        raise _refuse(MASTER_AUDIO_SELECTOR_REFUSAL)
     symbol = "sonare_master_audio_stereo"
     head = (None if preset is None else _utf8_arg(preset, "preset"), *audio)
     out = SonareMasteringChainStereoResult()

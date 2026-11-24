@@ -821,7 +821,7 @@ describe('zeroCrossings refuses a non-finite sample', () => {
   });
 });
 
-// The facade owns this refusal: a chain with neither a preset nor overrides would return its input.
+// The shared selector rule refuses before a chain with no stages could pass audio through.
 describe('masterAudio refuses a call giving neither a preset nor overrides', () => {
   const { input, accepted, refused } = corpus.master_audio;
   const samples = Float32Array.from(
@@ -839,6 +839,26 @@ describe('masterAudio refuses a call giving neither a preset nor overrides', () 
     expect(stereo.right).toEqual(samples);
     using audio = Audio.fromBuffer(samples, sampleRate);
     expect(audio.masterAudio({ overrides }).samples).toEqual(samples);
+  });
+
+  it('the raw embind calls refuse the same missing selector relation', () => {
+    type RawMasterAudioModule = {
+      masterAudio: (...args: unknown[]) => unknown;
+      masterAudioStereo: (...args: unknown[]) => unknown;
+    };
+    const module = getSonareModule() as unknown as RawMasterAudioModule;
+    const expected = 'masterAudio: give preset or overrides';
+    const monoError = expectRefusalOf(
+      () => module.masterAudio(null, samples, sampleRate, null, undefined, undefined),
+      TypeError,
+    );
+    expect(monoError.message).toBe(expected);
+    const stereoError = expectRefusalOf(
+      () =>
+        module.masterAudioStereo(null, samples, samples, sampleRate, null, undefined, undefined),
+      TypeError,
+    );
+    expect(stereoError.message).toBe('masterAudioStereo: give preset or overrides');
   });
 
   const forms: Array<[string, () => unknown]> = [

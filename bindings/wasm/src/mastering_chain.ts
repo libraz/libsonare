@@ -1,5 +1,6 @@
 import { chainConfigFromJson, chainConfigJson } from './internal/chain_config.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { MASTER_AUDIO_SELECTOR_REFUSAL } from './internal/master_audio_selector_refusal.js';
 import { withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
@@ -200,7 +201,7 @@ function assertMasterAudioShape(
     assertString(request.preset, 'preset');
   }
   if (isAbsent(request.preset) && isAbsent(request.overrides)) {
-    throw refuseType('give preset or overrides');
+    throw refuseType(MASTER_AUDIO_SELECTOR_REFUSAL);
   }
 }
 

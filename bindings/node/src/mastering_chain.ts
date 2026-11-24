@@ -1,5 +1,6 @@
 import { chainConfigJson } from './internal/chain_config.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { MASTER_AUDIO_SELECTOR_REFUSAL } from './internal/master_audio_selector_refusal.js';
 import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
@@ -18,7 +19,7 @@ type NativeResult = Record<string, unknown>;
 /** Throws `TypeError` when neither `preset` nor `overrides` is given. */
 function assertChainSelector(request: Pick<MasterAudioRequest, 'preset' | 'overrides'>): void {
   if (isAbsent(request.preset) && isAbsent(request.overrides)) {
-    throw refuseType('give preset or overrides');
+    throw refuseType(MASTER_AUDIO_SELECTOR_REFUSAL);
   }
 }
 

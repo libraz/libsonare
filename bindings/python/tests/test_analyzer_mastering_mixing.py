@@ -10,6 +10,50 @@ import numpy as np
 from ._analyzer_helpers import *
 
 
+def test_master_audio_selector_refusal_agrees_with_c() -> None:
+    import ctypes
+
+    import libsonare
+    from libsonare._ffi_types_mastering_project import (
+        SonareMasteringChainResult,
+        SonareMasteringChainStereoResult,
+    )
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    samples = [0.25] * 64
+    c_samples = (ctypes.c_float * len(samples))(*samples)
+    for entry, planes, result_type in (
+        ("master_audio", (samples,), SonareMasteringChainResult),
+        ("master_audio_stereo", (samples, samples), SonareMasteringChainStereoResult),
+    ):
+        output = result_type()
+        native = getattr(lib, f"sonare_{entry}")
+        c_planes = (c_samples,) * len(planes)
+        assert (
+            native(None, *c_planes, len(samples), 48000, None, None, ctypes.byref(output))
+            == libsonare.ErrorCode.INVALID_PARAMETER
+        )
+        assert lib.sonare_last_error_message() == b"give preset or overrides_json"
+        assert lib.sonare_last_refusal_subject_count() == 2
+        names = (ctypes.c_char_p * 2)(b"preset", b"overrides")
+        rendered = ctypes.c_char_p()
+        assert (
+            lib.sonare_last_refusal_render(names, None, len(names), 1, ctypes.byref(rendered)) == 0
+        )
+        try:
+            text = ctypes.string_at(rendered).decode()
+        finally:
+            lib.sonare_free_string(rendered)
+        assert text == "give preset or overrides"
+        run = getattr(libsonare, entry)
+        for rate in (48000, 0):
+            with pytest.raises(libsonare.SonareValueError) as exc:
+                run(*planes, sample_rate=rate)
+            assert str(exc.value) == f"{entry}: {text}"
+        assert run(*planes, sample_rate=48000, overrides={}).stages == []
+
+
 def test_mastering_returns_audio_and_loudness_metadata() -> None:
     """mastering is exposed as a standalone function and Audio method."""
     import libsonare

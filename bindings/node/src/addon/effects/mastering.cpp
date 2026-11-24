@@ -10,6 +10,7 @@
 #include "core/audio.h"
 #include "effects/repair_common.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/master_audio_selector.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -107,6 +108,7 @@ mastering_api::MasteringChainConfig StreamingChainConfig(
 // A preset's config with the overrides document applied; no preset reads the document alone.
 mastering_api::MasteringChainConfig PresetChainConfig(const std::optional<std::string>& preset_name,
                                                       const std::optional<std::string>& overrides) {
+  mastering_api::require_master_audio_selector(preset_name.has_value(), overrides.has_value());
   if (!preset_name) return OfflineChainConfig(overrides, "overrides");
   auto config = mastering_api::preset_config(mastering_api::preset_from_string(*preset_name));
   return overrides

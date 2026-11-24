@@ -21,6 +21,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import type { PolyphonicAnalysis } from '../src/index.js';
 import * as sonare from '../src/index.js';
+import { addon } from '../src/native.js';
 import { unknownKeyError } from './_helpers.js';
 
 const SR = 22050;
@@ -2626,6 +2627,10 @@ describe('request-object equivalence', () => {
   });
 
   it('refuses a missing mastering selector before a fractional rate in mono and stereo', async () => {
+    const rawError = await captureRefusal(() => addon.masterAudio(undefined, SIG, SR, undefined));
+    expect(rawError).toBeInstanceOf(TypeError);
+    expect(rawError.message).toBe('masterAudio: give preset or overrides');
+
     const sampleRate = 22050.5;
     const mono = { samples: SIG, sampleRate };
     const stereo = { left: SIG, right: SIG2, sampleRate };

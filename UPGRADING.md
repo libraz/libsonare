@@ -847,8 +847,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_master_audio_stereo` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
-| `sonare_master_audio` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
+| `sonare_master_audio_stereo` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
+| `sonare_master_audio` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
 | `sonare_streaming_loudness_gain_stereo` | takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root "config", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
 | `sonare_streaming_loudness_gain` | takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root "config", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
 
@@ -940,12 +940,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_mastering_apply_pair_processor` | takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate |
 | `sonare_mastering_assistant_suggest_chain_json_stereo` | removed: read the chainConfig block of sonare_mastering_assistant_suggest_stereo's document |
 | `sonare_mastering_assistant_suggest_chain_json` | removed: read the chainConfig block of sonare_mastering_assistant_suggest's document |
-| `sonare_mastering_chain_stereo_with_progress_ex` | removed: call sonare_master_audio_stereo_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json |
-| `sonare_mastering_chain_stereo_with_progress` | removed: call sonare_master_audio_stereo_with_progress with preset NULL (the default chain) and the old params as overrides_json |
-| `sonare_mastering_chain_stereo` | removed: call sonare_master_audio_stereo with preset NULL (the default chain) and the old params as overrides_json |
-| `sonare_mastering_chain_with_progress_ex` | removed: call sonare_master_audio_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json |
-| `sonare_mastering_chain_with_progress` | removed: call sonare_master_audio_with_progress with preset NULL (the default chain) and the old params as overrides_json |
-| `sonare_mastering_chain` | removed: call sonare_master_audio with preset NULL (the default chain) and the old params as overrides_json |
+| `sonare_mastering_chain_stereo_with_progress_ex` | removed: call sonare_master_audio_stereo with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions |
+| `sonare_mastering_chain_stereo_with_progress` | removed: call sonare_master_audio_stereo with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions |
+| `sonare_mastering_chain_stereo` | removed: call sonare_master_audio_stereo with preset NULL and the old params as overrides_json |
+| `sonare_mastering_chain_with_progress_ex` | removed: call sonare_master_audio with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions |
+| `sonare_mastering_chain_with_progress` | removed: call sonare_master_audio with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions |
+| `sonare_mastering_chain` | removed: call sonare_master_audio with preset NULL and the old params as overrides_json |
 | `sonare_mastering_insert_param_info_at_rate` | removed: call sonare_mastering_insert_param_info, which takes the sample rate |
 | `sonare_metering_phase_scope_decimated` | removed: call sonare_metering_phase_scope, which takes max_points |
 | `sonare_metering_phase_scope` | takes size_t max_points before out: 0 (or at least length) for one point per sample, otherwise the point cloud is decimated to at most max_points |
@@ -8467,11 +8467,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ResampleRequest.targetSr` | `ResampleRequest.targetSampleRate` |
 | `framesToTime(sr)` (`./analysis`) | `framesToTime(sampleRate)` |
 | `framesToTime(sr)` | `framesToTime(sampleRate)` |
-| `resample(srcSr)` (`./analysis`) | `resample(sampleRate)` |
 | `resample(srcSr)` | `resample(sampleRate)` |
-| `resample(targetSr)` (`./analysis`) | `resample(targetSampleRate)` |
 | `resample(targetSr)` | `resample(targetSampleRate)` |
-| `resample` (`./analysis`) | one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
 | `resample` | one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
 | `timeToFrames(sr)` (`./analysis`) | `timeToFrames(sampleRate)` |
 | `timeToFrames(sr)` | `timeToFrames(sampleRate)` |
@@ -10647,7 +10644,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingRetune.prepare` | a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through) |
-| `decomposeStemsLinked` (`./analysis`) | an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
 | `decomposeStemsLinked` | an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
 
 #### String values are lowerCamelCase tokens
@@ -10729,21 +10725,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomGeometryFromEstimateOptions` | removed: Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object. |
 | `VoiceChangeRealtimeOptions` | removed: Use RealtimeVoiceChangerRenderRequest; the option fields are part of the request object. |
 | `autoTune` | one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult |
-| `decompose(beta)` (`./analysis`) | removed: pass beta as a field of DecomposeRequest |
 | `decompose(beta)` | removed: pass beta as a field of DecomposeRequest |
-| `decompose(nComponents)` (`./analysis`) | removed: pass nComponents as a field of DecomposeRequest |
 | `decompose(nComponents)` | removed: pass nComponents as a field of DecomposeRequest |
-| `decompose(nFeatures)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
 | `decompose(nFeatures)` | removed: the Matrix2D input carries it as rows / cols |
-| `decompose(nFrames)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
 | `decompose(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
-| `decompose(nIter)` (`./analysis`) | removed: pass nIter as a field of DecomposeRequest |
 | `decompose(nIter)` | removed: pass nIter as a field of DecomposeRequest |
-| `decompose(s)` (`./analysis`) | removed: pass s as a field of DecomposeRequest |
 | `decompose(s)` | removed: pass s as a field of DecomposeRequest |
-| `decomposeStems` (`./analysis`) | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
 | `decomposeStems` | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
-| `decompose` (`./analysis`) | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `decompose` | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `estimateRoom` | one positional form (estimateRoom(samples, sampleRate, options?: RoomEstimateOptions)); request form takes EstimateRoomRequest; returns RoomEstimateResult |
 | `extractNotes` | one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'\|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError. |
@@ -10816,19 +10804,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringRepairTrimSilenceStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairTrimSilenceStereoRequest |
 | `masteringRepairTrimSilenceStereo` | request-only: masteringRepairTrimSilenceStereo(request: MasteringRepairTrimSilenceStereoRequest): MasteringRepairTrimSilenceResult |
 | `mergeNotes` | one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'\|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[]. When frameRate is missing the note entries throw TypeError naming frameRate instead of RangeError. |
-| `nnFilter(aggregate)` (`./analysis`) | removed: pass aggregate as a field of NnFilterRequest |
 | `nnFilter(aggregate)` | removed: pass aggregate as a field of NnFilterRequest |
-| `nnFilter(k)` (`./analysis`) | removed: pass k as a field of NnFilterRequest |
 | `nnFilter(k)` | removed: pass k as a field of NnFilterRequest |
-| `nnFilter(nFeatures)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
 | `nnFilter(nFeatures)` | removed: the Matrix2D input carries it as rows / cols |
-| `nnFilter(nFrames)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
 | `nnFilter(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
-| `nnFilter(s)` (`./analysis`) | removed: pass s as a field of NnFilterRequest |
 | `nnFilter(s)` | removed: pass s as a field of NnFilterRequest |
-| `nnFilter(width)` (`./analysis`) | removed: pass width as a field of NnFilterRequest |
 | `nnFilter(width)` | removed: pass width as a field of NnFilterRequest |
-| `nnFilter` (`./analysis`) | request-only: nnFilter(request: NnFilterRequest): Matrix2D |
 | `nnFilter` | request-only: nnFilter(request: NnFilterRequest): Matrix2D; returns Matrix2D (rows = features, cols = frames) |
 | `normalize(mode)` | removed: pass mode as a field of NormalizeRequest |
 | `normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
@@ -10836,13 +10817,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `noteMove` | one positional form (noteMove(samples, sampleRate, options: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
 | `noteStretch` | one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array |
 | `percussive` | one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array |
-| `phaseVocoder(hopLength)` (`./analysis`) | removed: pass hopLength as a field of PhaseVocoderRequest |
 | `phaseVocoder(hopLength)` | removed: pass hopLength as a field of PhaseVocoderRequest |
-| `phaseVocoder(nFft)` (`./analysis`) | removed: pass nFft as a field of PhaseVocoderRequest |
 | `phaseVocoder(nFft)` | removed: pass nFft as a field of PhaseVocoderRequest |
-| `phaseVocoder(rate)` (`./analysis`) | removed: pass it as speedRatio in PhaseVocoderRequest |
 | `phaseVocoder(rate)` | removed: pass it as speedRatio in PhaseVocoderRequest |
-| `phaseVocoder` (`./analysis`) | one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'\|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array |
 | `phaseVocoder` | one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'\|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array |
 | `pitchCorrectTimevarying(f0Hz)` | removed: pass f0Hz as a field of PitchCorrectOptions |
 | `pitchCorrectTimevarying(hopLength)` | removed: pass hopLength as a field of PitchCorrectOptions |
@@ -10854,17 +10831,11 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `pitchShift(nFft)` | removed: pass nFft as a field of PitchShiftRequest |
 | `pitchShift(semitones)` | removed: pass it as pitchSemitones in PitchShiftRequest |
 | `pitchShift` | one positional form (pitchShift(samples, sampleRate, options: Omit<PitchShiftRequest,'samples'\|'sampleRate'>)); request form takes PitchShiftRequest; returns Float32Array |
-| `remix(alignZeros)` (`./analysis`) | removed: pass alignZeros as a field of RemixRequest |
 | `remix(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
-| `remix(intervals)` (`./analysis`) | removed: pass intervals as a field of RemixRequest |
 | `remix(intervals)` | removed: pass intervals as a field of RemixRequest |
-| `remixAlignedIntervals(alignZeros)` (`./analysis`) | removed: pass alignZeros as a field of RemixRequest |
 | `remixAlignedIntervals(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
-| `remixAlignedIntervals(intervals)` (`./analysis`) | removed: pass intervals as a field of RemixRequest |
 | `remixAlignedIntervals(intervals)` | removed: pass intervals as a field of RemixRequest |
-| `remixAlignedIntervals` (`./analysis`) | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
 | `remixAlignedIntervals` | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
-| `remix` (`./analysis`) | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
@@ -10878,13 +10849,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `timeStretch(nFft)` | removed: pass nFft as a field of TimeStretchRequest |
 | `timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
 | `timeStretch` | one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array |
-| `trim(frameLength)` (`./analysis`) | removed: pass frameLength as a field of TrimRequest |
 | `trim(frameLength)` | removed: pass frameLength as a field of TrimRequest |
-| `trim(hopLength)` (`./analysis`) | removed: pass hopLength as a field of TrimRequest |
 | `trim(hopLength)` | removed: pass hopLength as a field of TrimRequest |
-| `trim(thresholdDb)` (`./analysis`) | removed: pass thresholdDb as a field of TrimRequest |
 | `trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
-| `trim` (`./analysis`) | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
 | `voiceChangeRealtime(preset)` | removed: pass it as config in RealtimeVoiceChangerRenderRequest |
 | `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of RealtimeVoiceChangerRenderRequest |
@@ -10920,9 +10887,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeVoiceChanger.processPreparedMono` | removed: Use createRealtimeMonoBuffer(numSamples): fill its input view and call its process(). |
 | `RealtimeVoiceChanger.processPreparedPlanar` | removed: Use createRealtimePlanarBuffer(numFrames, numChannels): fill its channels and call its process(). |
 | `RealtimeVoiceChanger.setPodConfig` | removed: Call setConfig(config), which takes the same config object. |
-| `decomposeWithInit` (`./analysis`) | removed: Call decompose({ s, nComponents, init: 'nndsvd' }); init is a field of DecomposeRequest. |
 | `decomposeWithInit` | removed: Call decompose({ s, nComponents, init: 'nndsvd' }); init is a field of DecomposeRequest. |
-| `hpssWithResidual` (`./analysis`) | removed: Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual. |
 | `hpssWithResidual` | removed: Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual. |
 | `pitchCorrectToMidiTimevarying` | removed: Call pitchCorrectTimevarying with targetMode: 'midi' and targetMidi, plus samples, sampleRate and f0Hz. |
 

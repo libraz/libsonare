@@ -10,6 +10,7 @@
 #include "core/audio_encode.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/master_audio_selector.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
@@ -226,13 +227,13 @@ val js_mastering_platform_names() {
   return stringVectorToVal(mastering::assistant::platform_names());
 }
 
-// A preset's chain config (absent: the chain defaults) with the overrides document applied.
+// A preset's chain config with the overrides document applied.
 mastering::api::MasteringChainConfig presetConfigWithOverrides(const val& preset,
                                                                const val& overrides) {
   const bool no_preset = preset.isUndefined() || preset.isNull();
   const bool no_overrides = overrides.isUndefined() || overrides.isNull();
+  mastering::api::require_master_audio_selector(!no_preset, !no_overrides);
   if (no_preset) {
-    if (no_overrides) return mastering::api::MasteringChainConfig{};
     return mastering::api::chain_config_from_json(
         stringFromVal(overrides, "overridesJson"),
         mastering::api::chain_params_argument("overrides"));

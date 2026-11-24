@@ -1559,15 +1559,6 @@ test = "bindings/wasm/tests/core-validation-refusals.test.ts::converts an empty 
 
 [[entry]]
 kind = "function"
-old = "resample"
-changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
-domain = "analysis"
-rule = "sample-rate-name"
-entry = "./analysis"
-test = "bindings/wasm/tests/core-validation-refusals.test.ts::converts an empty buffer to an empty one"
-
-[[entry]]
-kind = "function"
 old = "rmsEnergy"
 changed = "one positional form (rmsEnergy(samples, sampleRate, options?: Omit<RmsEnergyRequest,'samples'|'sampleRate'>)); request form takes RmsEnergyRequest"
 domain = "analysis"
@@ -4882,26 +4873,10 @@ rule = "sample-rate-name"
 
 [[entry]]
 kind = "option"
-old = "resample(srcSr)"
-new = "resample(sampleRate)"
-domain = "analysis"
-rule = "sample-rate-name"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
 old = "resample(targetSr)"
 new = "resample(targetSampleRate)"
 domain = "analysis"
 rule = "sample-rate-name"
-
-[[entry]]
-kind = "option"
-old = "resample(targetSr)"
-new = "resample(targetSampleRate)"
-domain = "analysis"
-rule = "sample-rate-name"
-entry = "./analysis"
 
 [[entry]]
 kind = "option"
@@ -17995,15 +17970,6 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::decompose takes a Matri
 
 [[entry]]
 kind = "function"
-old = "decompose"
-changed = "request-only: decompose(request: DecomposeRequest): DecomposeResult"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::decompose takes a Matrix2D"
-
-[[entry]]
-kind = "function"
 old = "decomposeStems"
 changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
 domain = "effects"
@@ -18020,36 +17986,10 @@ test = "bindings/wasm/tests/decompose-stems-linked.test.ts::refuses an nFft no C
 
 [[entry]]
 kind = "function"
-old = "decomposeStems"
-changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "function"
-old = "decomposeStemsLinked"
-changed = "an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
-domain = "effects"
-rule = "finite-or-refused"
-entry = "./analysis"
-test = "bindings/wasm/tests/decompose-stems-linked.test.ts::refuses an nFft no COLA geometry has, on both entry points"
-
-[[entry]]
-kind = "function"
 old = "decomposeWithInit"
 removed = "Call decompose({ s, nComponents, init: 'nndsvd' }); init is a field of DecomposeRequest."
 domain = "effects"
 rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "function"
-old = "decomposeWithInit"
-removed = "Call decompose({ s, nComponents, init: 'nndsvd' }); init is a field of DecomposeRequest."
-domain = "effects"
-rule = "one-entry-per-operation"
-entry = "./analysis"
 
 [[entry]]
 kind = "function"
@@ -18084,27 +18024,10 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
-old = "hpssWithResidual"
-removed = "Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual."
-domain = "effects"
-rule = "one-entry-per-operation"
-entry = "./analysis"
-
-[[entry]]
-kind = "function"
 old = "nnFilter"
 changed = "request-only: nnFilter(request: NnFilterRequest): Matrix2D; returns Matrix2D (rows = features, cols = frames)"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter takes and returns a Matrix2D"
-
-[[entry]]
-kind = "function"
-old = "nnFilter"
-changed = "request-only: nnFilter(request: NnFilterRequest): Matrix2D"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter takes and returns a Matrix2D"
 
 [[entry]]
@@ -18132,15 +18055,6 @@ rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
-kind = "function"
-old = "phaseVocoder"
-changed = "one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
 kind = "field"
 old = "PhaseVocoderRequest.hopLength"
 changed = "an omitted hopLength runs as nFft / 4, rounded down, like the other resynthesizing effects (was a fixed 512); nFft is refused outside the even integers in [4, 2147483646] with 'nFft must be an even integer in [4, 2147483646]' before the core"
@@ -18167,28 +18081,10 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 
 [[entry]]
 kind = "function"
-old = "remix"
-changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "function"
 old = "remixAlignedIntervals"
 changed = "one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Int32Array"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "function"
-old = "remixAlignedIntervals"
-changed = "one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Int32Array"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
@@ -18213,15 +18109,6 @@ old = "trim"
 changed = "one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'|'sampleRate'>)); request form takes TrimRequest; returns Float32Array"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "function"
-old = "trim"
-changed = "one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'|'sampleRate'>)); request form takes TrimRequest; returns Float32Array"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
@@ -30732,30 +30619,6 @@ rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
-old = "phaseVocoder(rate)"
-removed = "pass it as speedRatio in PhaseVocoderRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "phaseVocoder(nFft)"
-removed = "pass nFft as a field of PhaseVocoderRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "phaseVocoder(hopLength)"
-removed = "pass hopLength as a field of PhaseVocoderRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
 old = "pitchCorrectToMidi(currentMidi)"
 removed = "pass currentMidi as a field of PitchCorrectToMidiRequest"
 domain = "effects"
@@ -30798,22 +30661,6 @@ rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
-old = "remix(intervals)"
-removed = "pass intervals as a field of RemixRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "remix(alignZeros)"
-removed = "pass alignZeros as a field of RemixRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
 old = "remixAlignedIntervals(intervals)"
 removed = "pass intervals as a field of RemixRequest"
 domain = "effects"
@@ -30825,22 +30672,6 @@ old = "remixAlignedIntervals(alignZeros)"
 removed = "pass alignZeros as a field of RemixRequest"
 domain = "effects"
 rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "remixAlignedIntervals(intervals)"
-removed = "pass intervals as a field of RemixRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "remixAlignedIntervals(alignZeros)"
-removed = "pass alignZeros as a field of RemixRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
 
 [[entry]]
 kind = "option"
@@ -30862,30 +30693,6 @@ old = "trim(hopLength)"
 removed = "pass hopLength as a field of TrimRequest"
 domain = "effects"
 rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "trim(thresholdDb)"
-removed = "pass thresholdDb as a field of TrimRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "trim(frameLength)"
-removed = "pass frameLength as a field of TrimRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "trim(hopLength)"
-removed = "pass hopLength as a field of TrimRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
 
 [[entry]]
 kind = "option"
@@ -31678,54 +31485,6 @@ rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
-old = "decompose(s)"
-removed = "pass s as a field of DecomposeRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "decompose(nFeatures)"
-removed = "the Matrix2D input carries it as rows / cols"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "decompose(nFrames)"
-removed = "the Matrix2D input carries it as rows / cols"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "decompose(nComponents)"
-removed = "pass nComponents as a field of DecomposeRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "decompose(nIter)"
-removed = "pass nIter as a field of DecomposeRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "decompose(beta)"
-removed = "pass beta as a field of DecomposeRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
 old = "nnFilter(s)"
 removed = "pass s as a field of NnFilterRequest"
 domain = "effects"
@@ -31765,54 +31524,6 @@ old = "nnFilter(width)"
 removed = "pass width as a field of NnFilterRequest"
 domain = "effects"
 rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "nnFilter(s)"
-removed = "pass s as a field of NnFilterRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "nnFilter(nFeatures)"
-removed = "the Matrix2D input carries it as rows / cols"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "nnFilter(nFrames)"
-removed = "the Matrix2D input carries it as rows / cols"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "nnFilter(aggregate)"
-removed = "pass aggregate as a field of NnFilterRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "nnFilter(k)"
-removed = "pass k as a field of NnFilterRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "nnFilter(width)"
-removed = "pass width as a field of NnFilterRequest"
-domain = "effects"
-rule = "one-positional-form"
-entry = "./analysis"
 
 [[entry]]
 kind = "option"

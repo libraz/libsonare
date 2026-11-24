@@ -260,3 +260,6 @@ def surface_spelling(entry: str, subject: str) -> str:
     if length is not None:
         return f"{length} length"
     return OVERRIDES.get((entry, subject), subject)
+
+
+MASTER_AUDIO_SELECTOR_REFUSAL = "give preset or overrides"
