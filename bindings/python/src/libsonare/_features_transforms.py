@@ -295,7 +295,8 @@ def _inverse_audio(
                 ctypes.byref(options),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
-            )
+            ),
+            flattened="options",
         )
         return _from_c_float_array(out, out_length.value)
 
@@ -401,15 +402,19 @@ def mfcc_to_mel(
     Args:
         coefficients: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
         n_mels: Number of Mel bins to reconstruct (default 128).
-        lifter: Cepstral lifter the coefficients were computed with (default 0.0).
+        lifter: Finite, nonnegative lifter used for the coefficients (0.0 = none).
 
     Returns:
         A float32 array of shape ``(n_mels, n_frames)`` with the reconstructed Mel power.
     """
     lib = _get_lib()
-    c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
+    c_array, n_mfcc, n_frames = _to_c_float_matrix(
+        coefficients, arg_name="coefficients", scan=False
+    )
     out = SonareInverseResult()
-    options = SonareMfccToMelOptions._given(lifter=_to_c_float(lifter, "lifter"))
+    options = SonareMfccToMelOptions._given(
+        lifter=_domain_float(lifter, "lifter", preserve_negative=True)
+    )
     rc = lib.sonare_mfcc_to_mel(
         c_array,
         _to_c_size_t(n_mfcc * n_frames, "input_length"),
@@ -453,6 +458,7 @@ def mfcc_to_audio(
             refused; an explicit 0 is not absence.
         n_iter: Griffin-Lim iterations (default 32).
         htk: Use the HTK Mel formula instead of Slaney (default False).
+        lifter: Finite, nonnegative lifter used for the coefficients (0.0 = none).
 
     Returns:
         The reconstructed audio samples as a float32 array.
@@ -463,7 +469,7 @@ def mfcc_to_audio(
     )
     hop_length = _effect_hop(hop_length)
     options = SonareMfccToAudioOptions._given(
-        htk=1 if htk else 0, lifter=_to_c_float(lifter, "lifter")
+        htk=1 if htk else 0, lifter=_domain_float(lifter, "lifter", preserve_negative=True)
     )
     return _inverse_audio(
         lib,

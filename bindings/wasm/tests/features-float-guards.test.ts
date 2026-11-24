@@ -65,9 +65,15 @@ function capture(run: () => unknown): unknown {
 }
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
-function expectRangeRefusal(caught: unknown, entry: string, key: string, context: string): void {
+function expectRangeRefusal(
+  caught: unknown,
+  entry: string,
+  key: string,
+  context: string,
+  predicate = RANGE_MESSAGE,
+): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${entry}: ${key} ${RANGE_MESSAGE}`);
+  expect(error.message, context).toBe(`${entry}: ${key} ${predicate}`);
 }
 
 /** A pure tone or sum of tones, generated without touching the WASM module. */
@@ -157,43 +163,51 @@ interface FloatField {
   key: string;
   /** Tells apart two rows that drive one entry's field through different argument shapes. */
   variant?: string;
+  predicate?: string;
   run: (value: number) => unknown;
 }
 
 const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'melSpectrogram',
+    predicate: 'must be finite and at least 0',
     key: 'fminHz',
     run: (v) => m().melSpectrogram(threePartials, SR, 512, 256, 16, v, 3600, false),
   },
   {
     entry: 'melSpectrogram',
+    predicate: 'must be finite and at least 0',
     key: 'fmaxHz',
     run: (v) => m().melSpectrogram(threePartials, SR, 512, 256, 16, 0, v, false),
   },
   {
     entry: 'mfcc',
+    predicate: 'must be finite and at least 0',
     key: 'fminHz',
     run: (v) => m().mfcc(threePartials, SR, 512, 256, 16, 8, v, 3600, false, 0),
   },
   {
     entry: 'mfcc',
+    predicate: 'must be finite and at least 0',
     key: 'fmaxHz',
     run: (v) => m().mfcc(threePartials, SR, 512, 256, 16, 8, 0, v, false, 0),
   },
   {
     entry: 'mfcc',
     key: 'lifter',
+    predicate: 'must be finite and at least 0',
     run: (v) => m().mfcc(threePartials, SR, 512, 256, 16, 8, 0, 0, false, v),
   },
   {
     entry: 'mfccToMel',
     key: 'lifter',
+    predicate: 'must be finite and at least 0',
     run: (v) => m().mfccToMel(mfccCoeffs(), N_MFCC, N_FRAMES(), 16, v),
   },
   {
     entry: 'mfccToAudio',
     key: 'lifter',
+    predicate: 'must be finite and at least 0',
     run: (v) =>
       m().mfccToAudio(mfccCoeffs(), N_MFCC, N_FRAMES(), 16, SR, 512, 256, 0, 3600, 4, false, v),
   },
@@ -266,13 +280,14 @@ describe('every converted float parameter refuses a value the float type cannot 
 
   it.each(FLOAT_FIELDS)(
     '$entry names $key rather than accepting an infinity',
-    ({ entry, key, run }) => {
+    ({ entry, key, predicate, run }) => {
       for (const value of REFUSED) {
         expectRangeRefusal(
           capture(() => run(value)),
           entry,
           key,
           `${key} = ${value}`,
+          predicate,
         );
       }
     },

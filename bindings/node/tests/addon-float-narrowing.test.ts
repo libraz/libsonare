@@ -337,6 +337,45 @@ function inputMonitorOutput(gain: number): number {
   }
 }
 
+// These routes use the shared MFCC lifter domain.
+const MFCC_DOMAIN_ARGUMENTS: FloatArgument[] = [
+  {
+    name: 'mfccToMel lifter',
+    site: 'features/advanced.cpp MfccToMel lifter',
+    control: [0, 20],
+    call: (v) =>
+      magnitudeSum(native.mfccToMel(MFCC.coefficients, MFCC.nMfcc, MFCC.nFrames, 32, v).power),
+  },
+  {
+    name: 'mfccToAudio lifter',
+    site: 'features/advanced.cpp MfccToAudio lifter',
+    control: [0, 20],
+    call: (v) =>
+      magnitudeSum(
+        native.mfccToAudio(
+          MFCC.coefficients,
+          MFCC.nMfcc,
+          MFCC.nFrames,
+          32,
+          SAMPLE_RATE,
+          512,
+          256,
+          0,
+          0,
+          4,
+          false,
+          v,
+        ),
+      ),
+  },
+  {
+    name: 'mfcc lifter',
+    site: 'sonare_wrap_features.cpp Mfcc lifter',
+    control: [0, 22],
+    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, 0, false, v)),
+  },
+];
+
 /**
  * Every argument routed through `OptionalFloatArg`.
  *
@@ -488,13 +527,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
       ),
   },
   {
-    name: 'mfccToMel lifter',
-    site: 'features/advanced.cpp MfccToMel lifter',
-    control: [0, 20],
-    call: (v) =>
-      magnitudeSum(native.mfccToMel(MFCC.coefficients, MFCC.nMfcc, MFCC.nFrames, 32, v).power),
-  },
-  {
     name: 'mfccToAudio fmin',
     site: 'features/advanced.cpp MfccToAudio fmin',
     control: [0, 300],
@@ -535,28 +567,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
           4,
           false,
           0,
-        ),
-      ),
-  },
-  {
-    name: 'mfccToAudio lifter',
-    site: 'features/advanced.cpp MfccToAudio lifter',
-    control: [0, 20],
-    call: (v) =>
-      magnitudeSum(
-        native.mfccToAudio(
-          MFCC.coefficients,
-          MFCC.nMfcc,
-          MFCC.nFrames,
-          32,
-          SAMPLE_RATE,
-          512,
-          256,
-          0,
-          0,
-          4,
-          false,
-          v,
         ),
       ),
   },
@@ -912,12 +922,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, v)),
   },
   {
-    name: 'mfcc lifter',
-    site: 'sonare_wrap_features.cpp Mfcc lifter',
-    control: [0, 22],
-    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, 0, false, v)),
-  },
-  {
     name: 'piptrack fminHz',
     site: 'sonare_wrap_features.cpp Piptrack fminHz',
     control: [150, 1000],
@@ -1066,20 +1070,21 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
 ];
 
 describe('an optional float argument is refused rather than saturated', () => {
-  it.each(FINITE_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
-    '%s',
-    (_name, argument) => {
-      const [low, high] = argument.control;
-      // Positive control: the argument is consumed, so an entry point that
-      // ignored it could not reach the refusals below looking like this one.
-      if (!argument.controlUnobservable) {
-        expect(argument.call(low)).not.toBe(argument.call(high));
-      }
-      for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
-        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
-      }
-    },
-  );
+  it.each(
+    [...FINITE_ARGUMENTS, ...MFCC_DOMAIN_ARGUMENTS].map(
+      (argument) => [argument.name, argument] as const,
+    ),
+  )('%s', (_name, argument) => {
+    const [low, high] = argument.control;
+    // Positive control: the argument is consumed, so an entry point that
+    // ignored it could not reach the refusals below looking like this one.
+    if (!argument.controlUnobservable) {
+      expect(argument.call(low)).not.toBe(argument.call(high));
+    }
+    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
+      expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+    }
+  });
 });
 
 /**

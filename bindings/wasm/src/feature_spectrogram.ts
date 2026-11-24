@@ -3,7 +3,7 @@
  * their input checks.
  */
 
-import { refuse, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import {
   sampleNeed,
@@ -176,7 +176,7 @@ export interface MfccRequest {
   htk?: boolean;
   /** Coefficients kept. Default 20. */
   nMfcc?: number;
-  /** Cepstral liftering coefficient; 0 is none. Default 0. */
+  /** Finite, nonnegative cepstral lifter. Zero means no liftering. */
   lifter?: number;
 }
 
@@ -616,7 +616,10 @@ export function melSpectrogram(
 export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
   return withEntry('melSpectrogram', () => {
     const r = sampleOneShot<MelSpectrogramRequest>('melSpectrogram', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
+    // Native scans the owned input. Preserve the sample refusal when the
+    // facade alone can distinguish a written zero fmax from omission.
+    const writesZeroFmax = typeof r.fmaxHz === 'number' && Math.fround(r.fmaxHz) === 0;
+    assertAudioInput(r.samples, r.sampleRate, { scanFinite: writesZeroFmax });
     const fft = resolveFftOptions(r.nFft, r.hopLength);
     const nMels = r.nMels ?? 128;
     const fminHz = r.fminHz ?? 0;
@@ -644,6 +647,7 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
           fmaxHz,
           r.htk ?? false,
         ),
+      () => assertAudioInput(samples, sampleRate),
     );
     return {
       sampleRate: native.sampleRate,
@@ -672,7 +676,7 @@ export function mfcc(
 export function mfcc(...args: unknown[]): MfccResult {
   return withEntry('mfcc', () => {
     const r = sampleOneShot<MfccRequest>('mfcc', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
+    assertAudioInput(r.samples, r.sampleRate, { scanFinite: false });
     const fft = resolveFftOptions(r.nFft, r.hopLength);
     const nMels = r.nMels ?? 128;
     const nMfcc = r.nMfcc ?? 20;

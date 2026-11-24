@@ -111,7 +111,7 @@ export interface MfccRequest {
   sampleRate: number;
   /** Coefficients kept. Default 20. */
   nMfcc?: number;
-  /** Cepstral lifter; 0 means none. Default 0. */
+  /** Finite, nonnegative cepstral lifter. Zero means no liftering. */
   lifter?: number;
   /** Mel bands. Default `128`. */
   nMels?: number;
@@ -361,7 +361,7 @@ export function mfcc(
 export function mfcc(...args: unknown[]): MfccResult {
   return withEntry('mfcc', () => {
     const request = sampleOneShot<MfccRequest>('mfcc', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioInput(request.samples, request.sampleRate, { scanFinite: false });
     const fft = resolveFftOptions(request.nFft, request.hopLength);
     const fminHz = request.fminHz ?? 0;
     const fmaxHz = request.fmaxHz ?? 0;

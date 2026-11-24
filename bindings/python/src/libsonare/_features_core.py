@@ -25,7 +25,7 @@ from ._ffi import (
     SonareStftResult,
 )
 from ._field_spelling import surface_spelling
-from ._narrowing import _optional_nonzero_domain_float
+from ._narrowing import _domain_float, _optional_nonzero_domain_float
 from ._runtime import (
     _C_INT_MAX,
     _call_float_array_transform,
@@ -342,20 +342,20 @@ def mfcc(
         fmax: Maximum Mel frequency in Hz (default None = sr / 2); values above Nyquist are
             refused; an explicit 0 is not absence.
         htk: Use the HTK Mel formula instead of Slaney (default False).
-        lifter: Cepstral liftering coefficient (default 0.0 = no liftering).
+        lifter: Finite, nonnegative cepstral lifter (0.0 = no liftering).
 
     Returns:
         MfccResult whose coefficients have shape ``(n_mfcc, n_frames)``.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples(samples)
+    sample_buf = _validate_samples(samples, scan=False)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareMfccResult()
     options = SonareMfccOptions._given(
         fmin_hz=_to_c_float(fmin, "fmin"),
         fmax_hz=_optional_nonzero_domain_float(fmax, "fmax"),
         htk=1 if htk else 0,
-        lifter=_to_c_float(lifter, "lifter"),
+        lifter=_domain_float(lifter, "lifter", preserve_negative=True),
     )
     rc = lib.sonare_mfcc(
         c_array,

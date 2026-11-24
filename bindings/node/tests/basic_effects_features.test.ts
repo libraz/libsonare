@@ -608,8 +608,14 @@ describe('features', () => {
     coeffData[7] = Number.POSITIVE_INFINITY;
     const mfccCoeffs = matrix(coeffData, 5, 4);
     expect(() => mfccToMel({ coefficients: mfccCoeffs, nMels: 8 })).toThrow(
-      /mfccToMel: coefficients\.data contains a non-finite sample at index 7/,
+      /mfccToMel: coefficients contains a non-finite sample at index 7/,
     );
+    expect(() =>
+      mfccToMel({
+        coefficients: { ...mfccCoeffs, data: new Float64Array([0]) } as never,
+        nMels: 8,
+      }),
+    ).toThrow(/mfccToMel: coefficients\.data must be a Float32Array/);
     expect(() =>
       mfccToAudio({
         coefficients: mfccCoeffs,

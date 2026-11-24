@@ -93,7 +93,7 @@ export interface MfccToMelRequest {
   coefficients: Matrix2D;
   /** Mel bands to reconstruct. Default 128. */
   nMels?: number;
-  /** Lifter used by the forward MFCC transform; zero means no liftering. */
+  /** Finite, nonnegative lifter used by forward MFCC. Zero means no liftering. */
   lifter?: number;
 }
 
@@ -103,7 +103,7 @@ export interface MfccToAudioRequest {
   coefficients: Matrix2D;
   /** Mel bands to reconstruct. Default 128. */
   nMels?: number;
-  /** Lifter used by the forward MFCC transform; zero means no liftering. */
+  /** Finite, nonnegative lifter used by forward MFCC. Zero means no liftering. */
   lifter?: number;
   /** Rate of the source audio, in Hz. Default 22050. */
   sampleRate?: number;
@@ -366,7 +366,7 @@ export function mfccToMel(request: MfccToMelRequest): Matrix2D;
 export function mfccToMel(...args: unknown[]): Matrix2D {
   return withEntry('mfccToMel', () => {
     const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
-    const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
+    const coefficients = assertMatrix2D(r.coefficients, 'coefficients', false);
     const nMels = r.nMels ?? 128;
     assertInt32(nMels, 'nMels');
     const call = () =>

@@ -37821,3 +37821,54 @@ changed = "Omit keyHi, velLo and velHi to use the default edge. A written zero o
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/sample-bank.test.ts::omits defaulted MIDI bytes and refuses explicit zero"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.lifter"
+changed = "Forward MFCC already refused nonfinite lifters. A negative lifter is also refused with RangeError naming lifter. Zero disables liftering."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.lifter"
+changed = "Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.lifter"
+changed = "Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.lifter"
+changed = "Forward MFCC already refused nonfinite lifters. A negative lifter is also refused with RangeError naming lifter. Zero disables liftering."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.lifter"
+changed = "Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.lifter"
+changed = "Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+entry = "./analysis"

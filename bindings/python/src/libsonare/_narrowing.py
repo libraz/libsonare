@@ -127,16 +127,22 @@ def _float_narrowing_error(name: str) -> str:
     return f"{name} must be finite and in [-3.4028235e38, 3.4028235e38]"
 
 
-def _domain_float(value: object, name: str) -> ctypes.c_float:
+def _domain_float(value: object, name: str, *, preserve_negative: bool = False) -> ctypes.c_float:
     """Carry ``value`` to a C ``float`` argument whose domain the core refuses by name.
 
     Only a non-number is refused here. NaN and an infinity pass unchanged and a
     double no float can hold saturates to an infinity, so the core's keyed check
     refuses each with the argument's whole domain and no bound is copied here.
+    preserve_negative keeps a negative that rounds to zero outside a nonnegative C domain.
     """
     if not isinstance(value, bool) and isinstance(value, SupportsFloat):
         try:
-            return ctypes.c_float(float(value))
+            number = float(value)
+            negative = preserve_negative and number < 0
+            narrowed = ctypes.c_float(number)
+            if negative and narrowed.value == 0:
+                return ctypes.c_float(-math.inf)
+            return narrowed
         except OverflowError:
             # Only an int too wide for a double overflows; its sign survives.
             return ctypes.c_float(math.inf if isinstance(value, int) and value > 0 else -math.inf)

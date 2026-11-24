@@ -413,16 +413,20 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "nMfcc", &n_mfcc)) return env.Undefined();
   int n_frames{};
   if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
-  if (!ValidateMatrixDims(env, n_mfcc, n_frames, typed.ElementLength())) {
-    return env.Undefined();
-  }
   int n_mels{};
   if (!OptionalIntArg(env, info, 3, "nMels", 128, &n_mels)) return env.Undefined();
-  float lifter{};
-  if (!OptionalFloatArg(env, info, 4, "lifter", 0.0f, &lifter)) return env.Undefined();
+  const double lifter = DomainDoubleValue(env, info[4], "lifter", 0.0);
+  if (env.IsExceptionPending()) return env.Undefined();
 
+  const auto length = typed.ElementLength();
+  const float* data = sonare_node::ElementData(typed);
   std::vector<float> mel =
-      sonare::mfcc_to_mel(sonare_node::ElementData(typed), n_mfcc, n_frames, n_mels, lifter);
+      WithMelRefusalNames("mfcc_to_mel", sonare_c_detail::kMelInverseNames, [&] {
+        sonare_c_detail::admit_mfcc_to_mel(length, n_mfcc, n_frames, n_mels, lifter, [&] {
+          sonare::validate_offline_audio_samples("coefficients", data, length, 0);
+        });
+        return sonare::mfcc_to_mel(data, n_mfcc, n_frames, n_mels, static_cast<float>(lifter));
+      });
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nMels", Napi::Number::New(env, n_mels));
@@ -471,8 +475,8 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 10, "htk", false, &htk)) {
     return env.Undefined();
   }
-  float lifter{};
-  if (!OptionalFloatArg(env, info, 11, "lifter", 0.0f, &lifter)) return env.Undefined();
+  const double lifter = DomainDoubleValue(env, info[11], "lifter", 0.0);
+  if (env.IsExceptionPending()) return env.Undefined();
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -491,7 +495,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
                   "coefficients", sonare_node::ElementData(typed), typed.ElementLength(), 0);
             });
         return sonare::mfcc_to_audio(sonare_node::ElementData(typed), n_mfcc, n_frames, config,
-                                     n_iter, sr, lifter);
+                                     n_iter, sr, static_cast<float>(lifter));
       });
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)

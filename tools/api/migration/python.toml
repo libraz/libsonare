@@ -15291,3 +15291,27 @@ changed = "pass bytes, bytearray or memoryview as data; a list or integer raises
 domain = "engine"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_engine_midi.py::test_push_midi_sysex_rejects_non_buffer_inputs_before_earlier_domain"
+
+[[entry]]
+kind = "option"
+old = "mfcc(lifter)"
+changed = "Forward MFCC already refused nonfinite lifters. A negative lifter is also refused with SonareValueError naming lifter. Zero disables liftering."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_mfcc_lifter.py::test_mfcc_routes_name_the_rejected_lifter"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_mel(lifter)"
+changed = "Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_mfcc_lifter.py::test_mfcc_routes_name_the_rejected_lifter"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(lifter)"
+changed = "Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused."
+domain = "analysis"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_mfcc_lifter.py::test_mfcc_routes_name_the_rejected_lifter"

@@ -103,7 +103,7 @@ export interface MfccToMelRequest {
   coefficients: Matrix2D;
   /** Mel bands to reconstruct. Default 128. */
   nMels?: number;
-  /** Lifter used by the forward MFCC transform; zero means no liftering. */
+  /** Finite, nonnegative lifter used by forward MFCC. Zero means no liftering. */
   lifter?: number;
 }
 
@@ -376,7 +376,7 @@ export function mfccToMel(request: MfccToMelRequest): Matrix2D;
 export function mfccToMel(...args: unknown[]): Matrix2D {
   return withEntry('mfccToMel', () => {
     const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
-    assertMatrix2D(r.coefficients, 'coefficients');
+    assertMatrix2D(r.coefficients, 'coefficients', false);
     const out = addon.mfccToMel(
       r.coefficients.data,
       r.coefficients.rows,

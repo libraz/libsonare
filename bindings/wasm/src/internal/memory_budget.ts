@@ -81,12 +81,13 @@ function largestFitting(need: HeapNeed, n: number, headroom: number): number {
 }
 
 /** Refuses a call whose certain need exceeds what the heap can still hand out. */
-function requireHeadroom(need: HeapNeed): void {
+function requireHeadroom(need: HeapNeed, beforeRefusal?: () => void): void {
   const bytes = need.bytes(need.size);
   const headroom = getSonareModule().sonareHeapHeadroom(bytes);
   if (bytes <= headroom) {
     return;
   }
+  beforeRefusal?.();
   let text = `${need.subject} is ${sizeText(need, need.size)} and needs ${need.measured ? 'at least ' : ''}${ceilMib(bytes)} MiB, more than the ${floorMib(headroom)} MiB available`;
   if (need.monotone) {
     const m = largestFitting(need, need.size, headroom);
@@ -112,8 +113,8 @@ function nameOutOfMemory(error: unknown, need: HeapNeed): unknown {
  * Runs `call` once the heap can hold what it certainly needs, and states the
  * input size on an `OutOfMemory` it raises past that bound.
  */
-export function withHeapNeed<T>(need: HeapNeed, call: () => T): T {
-  requireHeadroom(need);
+export function withHeapNeed<T>(need: HeapNeed, call: () => T, beforeRefusal?: () => void): T {
+  requireHeadroom(need, beforeRefusal);
   let result: T;
   try {
     result = call();
@@ -163,8 +164,13 @@ export function sampleNeed(
 }
 
 /** Runs `call` under `need` when `applies`; an out-of-domain argument is the native reader's refusal. */
-export function withHeapNeedWhen<T>(applies: boolean, need: HeapNeed, call: () => T): T {
-  return applies ? withHeapNeed(need, call) : call();
+export function withHeapNeedWhen<T>(
+  applies: boolean,
+  need: HeapNeed,
+  call: () => T,
+  beforeRefusal?: () => void,
+): T {
+  return applies ? withHeapNeed(need, call, beforeRefusal) : call();
 }
 
 /** Runs a mono call once the heap holds `buffers` float buffers of the input's length. */

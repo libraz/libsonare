@@ -1984,6 +1984,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `momentary_lufs(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `short_term_lufs(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `mfcc(lifter)` | Forward MFCC already refused nonfinite lifters. A negative lifter is also refused with SonareValueError naming lifter. Zero disables liftering. |
+| `mfcc_to_audio(lifter)` | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
+| `mfcc_to_mel(lifter)` | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |
@@ -4921,6 +4929,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `MfccRequest.lifter` | Forward MFCC refuses negative and nonfinite lifters with RangeError naming lifter. Zero disables liftering. |
+| `MfccToMelRequest.lifter` | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
 | `pcen` | returns Matrix2D; the core refuses zero dimensions and non-finite values by their named fields |
 
 #### String values are lowerCamelCase tokens
@@ -8890,6 +8900,17 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `VqtRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `VqtToAudioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `VqtToAudioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MfccRequest.lifter` (`./analysis`) | Forward MFCC already refused nonfinite lifters. A negative lifter is also refused with RangeError naming lifter. Zero disables liftering. |
+| `MfccRequest.lifter` | Forward MFCC already refused nonfinite lifters. A negative lifter is also refused with RangeError naming lifter. Zero disables liftering. |
+| `MfccToAudioRequest.lifter` (`./analysis`) | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
+| `MfccToAudioRequest.lifter` | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
+| `MfccToMelRequest.lifter` (`./analysis`) | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
+| `MfccToMelRequest.lifter` | Inverse MFCC already refused nonfinite and representable negative lifters. A negative lifter that rounds to zero in float32 is also refused. |
 
 #### String values are lowerCamelCase tokens
 
