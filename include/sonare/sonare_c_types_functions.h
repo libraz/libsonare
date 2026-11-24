@@ -662,10 +662,10 @@ SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out);
 ///        thread recorded, or 0 when that failure was not a parameter refusal.
 /// @details A subject is the path of what was refused, rooted at the argument the call was given:
 ///   `sample_rate`, `config.cutoff_hz`, `stages[2].stage`. The list holds the subjects in the
-///   order the message names them. A binding that passes a struct or document under a name its
-///   caller never wrote drops that leading path segment from each subject and renders the message
-///   again with
-///   @ref sonare_last_refusal_render, rather than editing the message text. Like every
+///   order the message names them. When a string argument supplies an undeclared key, the
+///   record holds the argument name and the message prints the supplied key. A binding that
+///   passes a struct or document under a name its caller never wrote drops that leading path
+///   segment from each subject and calls @ref sonare_last_refusal_render. Like every
 ///   sonare_last_* accessor, it records no error, and it clears none.
 size_t sonare_last_refusal_subject_count(void);
 

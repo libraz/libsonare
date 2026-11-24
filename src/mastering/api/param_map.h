@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -349,20 +350,23 @@ inline ParamMap make_map(const std::vector<Param>& params) {
 /// @brief Refuses the first of the supplied keys a processor never read (@p keys is sorted) as an
 ///        unknown key, listing the keys it reads (@p read_keys); no-op when @p keys is empty.
 inline void refuse_unread_params(const std::vector<std::string>& keys,
-                                 const std::vector<std::string>& read_keys) {
+                                 const std::vector<std::string>& read_keys,
+                                 std::string_view root = {}) {
   if (keys.empty()) return;
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, keys.front(),
-                                        sonare::util::json::schema::expected_keys(read_keys))
+  throw SonareParameterRefusal::unknown(
+      ErrorCode::InvalidParameter,
+      root.empty() ? keys.front() : std::string(root) + '.' + keys.front(),
+      sonare::util::json::schema::expected_keys(read_keys))
       .as_caller_spelled();
 }
 
 /// @brief refuse_unread_params() for the keys a configuration read from @p map, which lists the
 ///        keys it read as the expected ones.
-inline void refuse_unread_params(const ParamMap& map) {
+inline void refuse_unread_params(const ParamMap& map, std::string_view root = {}) {
   const std::vector<std::string> unread = map.unprobed_keys();
   if (unread.empty()) return;
   const auto& probed = map.probed_keys();
-  refuse_unread_params(unread, std::vector<std::string>(probed.begin(), probed.end()));
+  refuse_unread_params(unread, std::vector<std::string>(probed.begin(), probed.end()), root);
 }
 
 inline float f(const ParamMap& params, const char* key, float default_value) {

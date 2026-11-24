@@ -882,6 +882,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_streaming_mastering_chain_non_finite_substitution_count(out_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_mastering_enum_value` | a retired flat chain key returns SONARE_ERROR_INVALID_PARAMETER as an unknown key under the key argument (1.x returned SONARE_OK with out_is_enum 0) |
+
 #### Each operation has exactly one entry point
 
 | 1.x | 2.0.0 |

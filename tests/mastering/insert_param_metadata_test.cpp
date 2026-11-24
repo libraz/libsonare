@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "acoustic/rir_synthesizer.h"
+#include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
@@ -46,6 +47,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 #ifdef SONARE_WITH_FX
 #include "effects/delay/stereo_delay.h"
@@ -2130,6 +2132,72 @@ TEST_CASE("an enum parameter's name resolves to the number the flat lists carry"
   CHECK(is_enum == 0);
   CHECK(sonare_mastering_enum_value(nullptr, nullptr, "mcra", &is_enum, &value) ==
         SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("mastering enum query records the scalar key argument",
+          "[mastering][parameter-subjects]") {
+  int is_enum = -1;
+  double value = -1.0;
+  constexpr auto key = "dynamics.multibandComp.lowThresholdDb";
+  REQUIRE(sonare_mastering_enum_value(nullptr, key, "nope", &is_enum, &value) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "key");
+  CHECK(std::string(sonare_last_error_message()) ==
+        sonare::util::json::schema::unknown_key_expected(
+            key, sonare::mastering::api::chain_expected_keys()));
+  CHECK(is_enum == 0);
+  CHECK(value == 0.0);
+  REQUIRE(sonare_mastering_enum_value(nullptr, "repair.denoise.noiseEstimator", "nope", &is_enum,
+                                      &value) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "name");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "name must be one of quantile, mcra, imcra, spp");
+}
+
+TEST_CASE("named mastering pair and stereo refusals identify the parameter bag",
+          "[mastering][parameter-subjects]") {
+  constexpr auto rate = sonare::mastering::api::kInsertProbeSampleRate;
+  constexpr auto length = sonare::mastering::api::kInsertProbeBlockSize;
+  const std::vector<float> samples(length, 0.0f);
+  const float* audio = samples.data();
+  const SonareMasteringParam params[] = {{"undeclared", 0.0}};
+  SonareMasteringResult mono{};
+  SonareMasteringStereoResult stereo{};
+  char* json = nullptr;
+  SonareError rc = SONARE_OK;
+  SECTION("mono pair processing") {
+    rc = sonare_mastering_apply_pair_processor("match.abCrossfade", audio, length, audio, length,
+                                               rate, rate, params, 1, &mono);
+  }
+  SECTION("stereo pair processing") {
+    rc = sonare_mastering_apply_pair_processor_stereo("match.abCrossfade", audio, audio, length,
+                                                      audio, audio, length, rate, rate, params, 1,
+                                                      &stereo);
+  }
+  SECTION("mono pair analysis") {
+    rc = sonare_mastering_analyze_pair("match.estimateReferenceDelaySamples", audio, length, audio,
+                                       length, rate, rate, params, 1, &json);
+  }
+  SECTION("stereo pair analysis") {
+    rc = sonare_mastering_analyze_pair_stereo("match.estimateReferenceDelaySamples", audio, audio,
+                                              length, audio, audio, length, rate, rate, params, 1,
+                                              &json);
+  }
+  SECTION("stereo analysis") {
+    rc = sonare_mastering_analyze_stereo("stereo.monoCompatCheckLogBands", audio, audio, length,
+                                         rate, params, 1, &json);
+  }
+  REQUIRE(rc == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "params.undeclared");
+  CHECK(std::string(sonare_last_error_message()).find("unknown key params.undeclared (expected ") ==
+        0);
+  CHECK(mono.samples == nullptr);
+  CHECK(stereo.left == nullptr);
+  CHECK(stereo.right == nullptr);
+  CHECK(json == nullptr);
 }
 
 TEST_CASE(

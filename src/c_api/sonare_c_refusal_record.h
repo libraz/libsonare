@@ -76,7 +76,8 @@ inline sonare::SonareParameterRefusal refusal_from_parts(const RefusalParts& par
     return spelled(SonareParameterRefusal::wrong_type(parts.code, subject, parts.predicate));
   }
   if (parts.form == "unknownKey") {
-    return spelled(SonareParameterRefusal::unknown(parts.code, subject, parts.expected));
+    return spelled(SonareParameterRefusal::unknown_key_argument(parts.code, subject,
+                                                                parts.predicate, parts.expected));
   }
   if (parts.form == "relation") {
     return spelled(SonareParameterRefusal::relation(parts.code, parts.subjects, parts.predicate));

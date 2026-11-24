@@ -635,10 +635,11 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
 ///   or an unknown processor ID. A caller that was handed a name for a number-valued key
 ///   owns the wrong-type refusal. Zeroed on entry.
 /// @param out_value Receives the value of @p name when @p out_is_enum is 1. Zeroed on entry.
-/// @return SONARE_OK for a resolved name, a non-enum key or an unknown processor ID;
-///   SONARE_ERROR_INVALID_PARAMETER when @p key is an enum and @p name is none of its choices
-///   (the message names the key and every valid name), or when @p key, @p name, @p out_is_enum
-///   or @p out_value is NULL.
+/// @return SONARE_OK for a resolved name, a non-enum key or an unknown processor ID.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a retired flat chain key, an unknown choice
+///   of a recognized enum, or a NULL @p key, @p name, @p out_is_enum or @p out_value.
+///   A retired spelling records @p key; an unknown choice records @p name and lists the
+///   accepted choices.
 SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
                                         int* out_is_enum, double* out_value);
 

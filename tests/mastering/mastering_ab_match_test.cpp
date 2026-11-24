@@ -446,11 +446,11 @@ TEST_CASE("Named stereo A/B crossfade reads parameters like the mono pair proces
   REQUIRE_THROWS_WITH(
       apply_named_pair_processor("match.abCrossfade", source.data(), reference.data(),
                                  source.size(), kSampleRate, unread),
-      Catch::Matchers::Equals("unknown key unexpected (expected mix)"));
+      Catch::Matchers::Equals("unknown key params.unexpected (expected mix)"));
   REQUIRE_THROWS_WITH(apply_named_pair_processor_stereo(
                           "match.abCrossfade", source.data(), source.data(), reference.data(),
                           reference.data(), source.size(), kSampleRate, unread),
-                      Catch::Matchers::Equals("unknown key unexpected (expected mix)"));
+                      Catch::Matchers::Equals("unknown key params.unexpected (expected mix)"));
 }
 
 TEST_CASE("Named stereo pair rejects oversized buffers before copying",

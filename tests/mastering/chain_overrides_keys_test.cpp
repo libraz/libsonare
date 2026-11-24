@@ -371,7 +371,7 @@ TEST_CASE("streaming mastering chain reports the expected keys for an undeclared
   } catch (const SonareParameterRefusal& refusal) {
     CHECK(refusal.code() == ErrorCode::InvalidParameter);
     CHECK(refusal.form() == SonareParameterRefusal::Form::UnknownKey);
-    CHECK(refusal.subject() == key);
+    CHECK(refusal.subject() == "key");
     CHECK(refusal.what() == json::schema::unknown_key_expected(key, chain_expected_keys()));
   }
   CHECK(chain_config_to_json(chain.config()) == before);

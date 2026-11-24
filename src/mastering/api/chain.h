@@ -448,7 +448,7 @@ class StreamingMasteringChain {
   /// are rejected before the live processor is changed.
   /// @throws SonareException(InvalidState) when the chain has not been prepared.
   /// @throws SonareException(InvalidParameter) for an unsupported key or value.
-  void set_parameter(const std::string& full_key, double value);
+  void set_parameter(const std::string& key, double value);
 
   /// @brief Total reported latency in samples across all active processors.
   int latency_samples() const noexcept;

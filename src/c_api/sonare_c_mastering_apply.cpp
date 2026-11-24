@@ -544,7 +544,7 @@ SonareError sonare_mastering_enum_value(const char* processor, const char* key, 
   SONARE_C_REQUIRE_NONNULL(out_is_enum);
   SONARE_C_REQUIRE_NONNULL(out_value);
   SONARE_C_TRY
-  const auto value = sonare::mastering::api::mastering_enum_value(
+  const auto value = sonare::mastering::api::mastering_enum_argument_value(
       processor != nullptr ? processor : "", key, name);
   if (value.has_value()) {
     *out_is_enum = 1;

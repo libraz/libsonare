@@ -1011,7 +1011,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair processor: " + name);
   }
-  detail::refuse_unread_params(map);
+  detail::refuse_unread_params(map, "params");
 
   MonoResult result;
   result.samples.assign(out.data(), out.data() + out.size());
@@ -1055,7 +1055,7 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
   const ::sonare::mastering::match::StereoAudioPair reference{
       reference_at_rate(reference_left, reference_length, reference_sample_rate, sample_rate),
       reference_at_rate(reference_right, reference_length, reference_sample_rate, sample_rate)};
-  detail::refuse_unread_params(map);
+  detail::refuse_unread_params(map, "params");
   const auto mixed = ::sonare::mastering::match::ab_crossfade_stereo(source, reference, mix);
 
   StereoResult result;
@@ -1197,7 +1197,7 @@ std::string analyze_pair(const std::string& name, const Audio& source_audio,
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair analysis: " + name);
   }
-  detail::refuse_unread_params(map);
+  detail::refuse_unread_params(map, "params");
   return json_ns::dump(json_ns::Value(std::move(root)));
 }
 
@@ -1314,7 +1314,7 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
     }
     util::json::put(root, "bands", std::move(band_values));
   }
-  detail::refuse_unread_params(map);
+  detail::refuse_unread_params(map, "params");
   return json_ns::dump(json_ns::Value(std::move(root)));
 }
 

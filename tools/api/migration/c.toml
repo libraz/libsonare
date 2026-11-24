@@ -5248,6 +5248,14 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
+old = "sonare_mastering_enum_value"
+changed = "a retired flat chain key returns SONARE_ERROR_INVALID_PARAMETER as an unknown key under the key argument (1.x returned SONARE_OK with out_is_enum 0)"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/mastering/insert_param_metadata_test.cpp::mastering enum query records the scalar key argument"
+
+[[entry]]
+kind = "function"
 old = "sonare_eq_match"
 changed = "takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate"
 domain = "mastering"

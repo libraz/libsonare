@@ -1374,23 +1374,23 @@ TEST_CASE("the named-processor entry points refuse a key the processor does not 
                                                              b.data(), a.size(), kRate,
                                                              {{"mixx", 0.5}});
                            }),
-                           "mixx"));
+                           "params.mixx"));
     CHECK(names_unread_key(refusal_of([&] {
                              api::apply_named_pair_processor_stereo(
                                  "match.abCrossfade", a.data(), a.data(), b.data(), b.data(),
                                  a.size(), kRate, {{"mixx", 0.5}});
                            }),
-                           "mixx"));
+                           "params.mixx"));
     CHECK(names_unread_key(refusal_of([&] {
                              api::analyze_named_pair("match.referenceLoudness", a.data(), b.data(),
                                                      a.size(), kRate, {{"bogus", 1.0}});
                            }),
-                           "bogus"));
+                           "params.bogus"));
     CHECK(names_unread_key(refusal_of([&] {
                              api::analyze_named_stereo("stereo.monoCompatCheck", a.data(), b.data(),
                                                        a.size(), kRate, {{"bogus", 1.0}});
                            }),
-                           "bogus"));
+                           "params.bogus"));
   }
 }
 

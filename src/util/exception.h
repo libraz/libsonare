@@ -149,8 +149,15 @@ class SonareParameterRefusal : public SonareException {
   ///        already in the caller's spelling, so a respelling leaves them as they are.
   static SonareParameterRefusal unknown(ErrorCode code, const std::string& subject,
                                         const std::string& expected = std::string()) {
-    return SonareParameterRefusal(code, Form::UnknownKey, {subject}, std::string(), expected,
-                                  false);
+    return unknown_key_argument(code, subject, std::string(), expected);
+  }
+
+  /// @brief A string argument whose value is an undeclared key; record the argument's name
+  ///        and print the supplied key. An empty @p key prints @p subject.
+  static SonareParameterRefusal unknown_key_argument(ErrorCode code, const std::string& subject,
+                                                     const std::string& key,
+                                                     const std::string& expected) {
+    return SonareParameterRefusal(code, Form::UnknownKey, {subject}, key, expected, false);
   }
 
   /// @brief A refusal relating several parameters; @p text writes subject @c i as "{i}".
@@ -171,8 +178,8 @@ class SonareParameterRefusal : public SonareException {
   const std::string& subject() const { return subjects_.front(); }
   /// @brief Every subject, in the order the text names them.
   const std::vector<std::string>& subjects() const { return subjects_; }
-  /// @brief The predicate, or a relation's text with its "{i}" placeholders; either may carry
-  ///        presence tokens, which what() renders as C spells them.
+  /// @brief The predicate or relation template, with presence tokens rendered by what().
+  ///        For UnknownKey, this holds a supplied key value when it differs from the subject.
   const std::string& predicate() const { return predicate_; }
   /// @brief The accepted keys an unknown-key refusal lists, or empty.
   const std::string& expected() const { return expected_; }
@@ -224,7 +231,7 @@ class SonareParameterRefusal : public SonareException {
       return subjects.front() + " " + render(predicate, {}, spelling);
     }
     if (form == Form::UnknownKey) {
-      std::string text = "unknown key " + subjects.front();
+      std::string text = "unknown key " + (predicate.empty() ? subjects.front() : predicate);
       if (!expected.empty()) {
         text += " (expected " + expected + ")";
       }

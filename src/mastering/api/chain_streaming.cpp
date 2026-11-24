@@ -550,27 +550,26 @@ void StreamingMasteringChain::reset() {
   flush_started_ = false;
 }
 
-void StreamingMasteringChain::set_parameter(const std::string& full_key, double value) {
+void StreamingMasteringChain::set_parameter(const std::string& key, double value) {
   if (prepared_channels_ == 0) {
     throw SonareException(ErrorCode::InvalidState,
                           "StreamingMasteringChain::set_parameter called before prepare()");
   }
-  if (full_key.empty()) {
+  if (key.empty()) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamingMasteringChain parameter key must not be empty");
   }
-  const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),
-                                   [&full_key](const StreamingParameterTarget& candidate) {
-                                     return candidate.full_key == full_key;
-                                   });
-  if (target == impl_->parameter_targets.end() && !detail::is_declared_chain_key(full_key)) {
-    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, full_key,
-                                          chain_expected_keys())
+  const auto target = std::find_if(
+      impl_->parameter_targets.begin(), impl_->parameter_targets.end(),
+      [&key](const StreamingParameterTarget& candidate) { return candidate.full_key == key; });
+  if (target == impl_->parameter_targets.end() && !detail::is_declared_chain_key(key)) {
+    throw SonareParameterRefusal::unknown_key_argument(ErrorCode::InvalidParameter, "key", key,
+                                                       chain_expected_keys())
         .as_caller_spelled();
   }
   if (!std::isfinite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
                                             ::sonare::util::json::schema::kFloatRangePredicate)
         .as_caller_spelled();
   }
@@ -578,11 +577,11 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
 
   if (target == impl_->parameter_targets.end()) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "unknown or unavailable streaming mastering parameter: " + full_key);
+                          "unknown or unavailable streaming mastering parameter: " + key);
   }
   if (!target->processor->parameter_is_realtime_safe(target->id)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "streaming mastering parameter is not realtime-safe: " + full_key);
+                          "streaming mastering parameter is not realtime-safe: " + key);
   }
 
   // Validate a full candidate first so a rejection leaves config() and the DSP untouched.
@@ -591,9 +590,8 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   const Param param{target->full_key, value};
   apply_chain_config_overrides(candidate, &param, 1);
   if (!same_stage_enablement(config_, candidate)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "streaming mastering parameter would change stage enablement: " + full_key);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "streaming mastering parameter would change stage enablement: " + key);
   }
   validate_mastering_chain_config(candidate);
 
@@ -603,24 +601,23 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   const float canonical_value = static_cast<float>(
       requested_value.has_value() ? *requested_value : static_cast<double>(float_value));
   const auto current_value = chain_config_parameter_value(config_, target->full_key);
-  if (full_key == "dynamics.compressor.sidechainHighPassHz" && !current_value.has_value()) {
+  if (key == "dynamics.compressor.sidechainHighPassHz" && !current_value.has_value()) {
     throw SonareException(
         ErrorCode::InvalidParameter,
-        "streaming mastering parameter would turn the sidechain high-pass on: " + full_key);
+        "streaming mastering parameter would turn the sidechain high-pass on: " + key);
   }
   if (current_value.has_value() && requested_value.has_value() &&
       *current_value == *requested_value) {
     return;
   }
 
-  validate_realtime_parameter_domain(full_key, canonical_value, impl_->prepared_sample_rate);
+  validate_realtime_parameter_domain(key, canonical_value, impl_->prepared_sample_rate);
   validate_chain_config_for_rate(candidate, impl_->prepared_sample_rate);
 
   const float live_value = canonical_value;
   if (!target->processor->set_parameter(target->id, live_value)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "streaming mastering parameter was rejected by its processor: " + full_key);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "streaming mastering parameter was rejected by its processor: " + key);
   }
   config_ = std::move(candidate);
 }

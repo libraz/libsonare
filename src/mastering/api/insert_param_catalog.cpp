@@ -1227,6 +1227,21 @@ std::optional<double> mastering_enum_value(const std::string& processor, const s
   throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, predicate);
 }
 
+std::optional<double> mastering_enum_argument_value(const std::string& processor,
+                                                    const std::string& key,
+                                                    const std::string& name) {
+  try {
+    return mastering_enum_value(processor, key, name);
+  } catch (const SonareParameterRefusal& refusal) {
+    if (refusal.subject() != key) throw;
+    if (refusal.form() == SonareParameterRefusal::Form::UnknownKey) {
+      throw SonareParameterRefusal::unknown_key_argument(refusal.code(), "key", key,
+                                                         refusal.expected());
+    }
+    throw refusal.respelled(refusal.code(), [](const std::string&) { return "name"; }, false);
+  }
+}
+
 std::optional<std::string> mastering_enum_names(const std::string& processor,
                                                 const std::string& key) {
   std::string leaf;
