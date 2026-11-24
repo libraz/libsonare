@@ -4,6 +4,7 @@
 #include "analysis/analysis_rate.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -159,6 +160,58 @@ TEST_CASE("stft_config_scaled_to_rate converts an explicit window on its own",
   bad = make_stft_config(4096, 512);
   bad.win_length = 4097;
   CHECK_THROWS_AS(stft_config_scaled_to_rate(bad, 48000, 44100), SonareException);
+}
+
+TEST_CASE("stft_config_scaled_to_rate refuses rescaled geometry outside its domains",
+          "[analysis_rate][helper][relation]") {
+  constexpr int kReferenceRate = 48000;
+  constexpr int kDoubleRate = 96000;
+
+  SECTION("the largest rescaled FFT size is accepted") {
+    const StftConfig config = make_stft_config(kMaxStftNFft / 2, 512);
+    const StftConfig scaled = stft_config_scaled_to_rate(config, kDoubleRate, kReferenceRate);
+    CHECK(scaled.n_fft == kMaxStftNFft);
+  }
+
+  SECTION("an FFT size beyond the rescaled maximum names both inputs") {
+    const StftConfig config = make_stft_config(kMaxStftNFft / 2 + 2, 512);
+    try {
+      (void)stft_config_scaled_to_rate(config, kDoubleRate, kReferenceRate);
+      FAIL("expected a rescaled FFT-size refusal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) ==
+            "n_fft rescaled to sample_rate must fit the largest FFT size");
+    }
+  }
+
+  SECTION("the largest rescaled hop is accepted") {
+    constexpr int kLargestSourceHop = std::numeric_limits<int>::max() / 2;
+    const StftConfig config = make_stft_config(2048, kLargestSourceHop);
+    const StftConfig scaled = stft_config_scaled_to_rate(config, kDoubleRate, kReferenceRate);
+    CHECK(scaled.hop_length == std::numeric_limits<int>::max() - 1);
+  }
+
+  SECTION("a hop one past the rescaled maximum names both inputs") {
+    constexpr int kSourceHopPastMaximum = std::numeric_limits<int>::max() / 2 + 1;
+    const StftConfig config = make_stft_config(2048, kSourceHopPastMaximum);
+    try {
+      (void)stft_config_scaled_to_rate(config, kDoubleRate, kReferenceRate);
+      FAIL("expected a rescaled hop-length refusal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) ==
+            "hop_length rescaled to sample_rate must fit the largest hop length");
+    }
+  }
+
+  SECTION("the same in-domain values pass when no rescaling is needed") {
+    const int source_hop = std::numeric_limits<int>::max() / 2 + 1;
+    const StftConfig config = make_stft_config(kMaxStftNFft / 2 + 2, source_hop);
+    const StftConfig unchanged = stft_config_scaled_to_rate(config, kReferenceRate, kReferenceRate);
+    CHECK(unchanged.n_fft == config.n_fft);
+    CHECK(unchanged.hop_length == config.hop_length);
+  }
 }
 
 TEST_CASE("rate material has the specified length at each rate", "[analysis_rate][helper]") {

@@ -3,6 +3,8 @@
 
 #include "mixing/assistant/track_profile.h"
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
@@ -102,6 +104,31 @@ int dominant_band(const assistant::TrackProfile& profile) {
 // The STFT is centre-padded, so a signal of n samples yields 1 + n / hop frames.
 int expected_frames(std::size_t frame_count, int hop_length) {
   return 1 + static_cast<int>(frame_count / static_cast<std::size_t>(hop_length));
+}
+
+void check_c_assistant_geometry_at_rates(const char* key, double value,
+                                         const char* expected_message) {
+  const std::vector<float> samples(256, 0.125f);
+  const float* input_left[] = {samples.data()};
+  const char* track_ids[] = {"track"};
+  const std::size_t track_lengths[] = {samples.size()};
+  const SonareMasteringParam params[] = {{key, value}};
+  const auto suggest = [&](int sample_rate, char** out) {
+    return sonare_mixing_assistant_suggest(input_left, nullptr, track_ids, nullptr, track_lengths,
+                                           &sample_rate, 1, sample_rate, params, 1, out);
+  };
+
+  char output_sentinel[] = "must be cleared";
+  char* json_out = output_sentinel;
+  CHECK(suggest(2 * kSampleRate, &json_out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(json_out == nullptr);
+  CHECK(std::string(sonare_last_error_message()) == expected_message);
+  if (json_out != output_sentinel) sonare_free_string(json_out);
+
+  json_out = nullptr;
+  CHECK(suggest(kSampleRate, &json_out) == SONARE_OK);
+  CHECK(json_out != nullptr);
+  sonare_free_string(json_out);
 }
 
 // STFT geometry the hand-built spectra below are written against: bins land
@@ -383,6 +410,21 @@ TEST_CASE("Track profile params reject negative or non-finite minimum duration",
   const api::Param positive[] = {{"minDurationSec", 0.25}};
   CHECK(assistant::track_profile_config_from_params(positive, 1).min_duration_sec == 0.25f);
   CHECK(assistant::track_profile_config_from_params(nullptr, 0).min_duration_sec > 0.0f);
+}
+
+TEST_CASE("the mixing-assistant C entry names an FFT-size rescaling refusal",
+          "[mixing][assistant][c_api][analysis_rate]") {
+  check_c_assistant_geometry_at_rates("nFft", static_cast<double>(sonare::kMaxStftNFft),
+                                      "nFft rescaled to sample_rate must fit the largest FFT size");
+}
+
+TEST_CASE("the mixing-assistant C entry names a hop-length rescaling refusal",
+          "[mixing][assistant][c_api][analysis_rate]") {
+  const double first_source_hop_past_96_khz_limit =
+      static_cast<double>(std::numeric_limits<int>::max() / 2 + 1);
+  check_c_assistant_geometry_at_rates(
+      "hopLength", first_source_hop_past_96_khz_limit,
+      "hopLength rescaled to sample_rate must fit the largest hop length");
 }
 
 TEST_CASE("Track profile reports degenerate input without throwing", "[mixing][assistant]") {

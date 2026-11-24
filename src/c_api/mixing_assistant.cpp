@@ -9,6 +9,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -118,7 +119,10 @@ SonareError sonare_mixing_assistant_suggest(
   std::vector<std::vector<float>> resampled;
   const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
                                    track_sample_rates, input_count, sample_rate, resampled);
-  const auto result = assistant::suggest_scene(tracks, config);
+  constexpr std::array<CName, 2> kProfileParamNames{
+      {{"n_fft", "nFft"}, {"hop_length", "hopLength"}}};
+  const auto result =
+      with_c_names(kProfileParamNames, [&] { return assistant::suggest_scene(tracks, config); });
   *json_out = copy_string(assistant::mix_assistant_result_to_json(result));
   return SONARE_OK;
   SONARE_C_CATCH
