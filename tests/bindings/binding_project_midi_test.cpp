@@ -1,6 +1,9 @@
 /// @file binding_project_midi_test.cpp
 /// @brief Project MIDI parity tests.
 
+#include <array>
+#include <functional>
+
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/project_internal.h"
 #include "midi/midi_clip.h"
@@ -669,6 +672,59 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("MIDI name lookup indexes refuse outside their declared domains",
+          "[midi-domain][project][midi]") {
+  struct LookupCase {
+    const char* subject;
+    int minimum;
+    int maximum;
+    std::function<bool(int)> returns_failure_sentinel;
+  };
+  const std::array<LookupCase, 11> cases{{
+      {"program", 0, 127,
+       [](int value) { return sonare_midi_gm_instrument_name(value) == nullptr; }},
+      {"family", 0, 15, [](int value) { return sonare_midi_gm_family_name(value) == nullptr; }},
+      {"family", 0, 15, [](int value) { return sonare_midi_gm_family_first_program(value) == -1; }},
+      {"bank_lsb", 0, 127,
+       [](int value) { return sonare_midi_gm2_instrument_name(value, 0) == nullptr; }},
+      {"program", 0, 127,
+       [](int value) { return sonare_midi_gm2_instrument_name(0, value) == nullptr; }},
+      {"note", 0, 127, [](int value) { return sonare_midi_gm_drum_name(value) == nullptr; }},
+      {"bank_lsb", 0, 127,
+       [](int value) { return sonare_midi_gm2_drum_set_name(value) == nullptr; }},
+      {"bank_lsb", 0, 127,
+       [](int value) { return sonare_midi_gm2_drum_name(value, 0) == nullptr; }},
+      {"note", 0, 127, [](int value) { return sonare_midi_gm2_drum_name(0, value) == nullptr; }},
+      {"controller", 0, 127, [](int value) { return sonare_midi_cc_name(value) == nullptr; }},
+      {"index", 0, 255,
+       [](int value) { return sonare_midi_per_note_controller_name(value) == nullptr; }},
+  }};
+
+  for (const LookupCase& test : cases) {
+    for (const int value : std::array<int, 2>{test.minimum - 1, test.maximum + 1}) {
+      CHECK(test.returns_failure_sentinel(value));
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            std::string(test.subject) + " must be an integer in [" + std::to_string(test.minimum) +
+                ", " + std::to_string(test.maximum) + "]");
+    }
+
+    // Valid indexes remain queries even when their table slot has no name.
+    (void)test.returns_failure_sentinel(test.minimum);
+    CHECK(sonare_last_error_code() == SONARE_OK);
+    (void)test.returns_failure_sentinel(test.maximum);
+    CHECK(sonare_last_error_code() == SONARE_OK);
+  }
+
+  REQUIRE(sonare_midi_cc_name(-1) == nullptr);
+  REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_entry() != nullptr);
+  CHECK(std::string(sonare_last_refusal_entry()) == "midi_cc_name");
+  CHECK(sonare_midi_cc_name(3) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_OK);
+  CHECK(std::string(sonare_last_error_message()).empty());
 }
 
 TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {

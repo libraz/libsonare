@@ -328,6 +328,20 @@ MIDI_BUILDER_PROBE(midi2_per_note_management,
 
 #undef MIDI_BUILDER_PROBE
 
+template <auto Lookup>
+SonareError probe_midi_lookup(const std::string&, double value) {
+  (void)Lookup(static_cast<int>(value));
+  return sonare_last_error_code();
+}
+
+template <auto Lookup>
+SonareError probe_midi_bank_lookup(const std::string& param, double value) {
+  const int ordinal = static_cast<int>(value);
+  const bool bank = is_param(param, "bank_lsb");
+  (void)Lookup(bank ? ordinal : 0, bank ? 0 : ordinal);
+  return sonare_last_error_code();
+}
+
 SonareError probe_midi_bank_program(const std::string& param, double value) {
   const double ppq = is_param(param, "ppq") ? value : 0.0;
   uint8_t group = 0;
@@ -949,6 +963,15 @@ const std::map<std::string, Probe>& probes() {
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
       {"chord_symbol_from_analysis", probe_chord_symbol_from_analysis},
+      {"midi_cc_name", probe_midi_lookup<sonare_midi_cc_name>},
+      {"midi_gm_drum_name", probe_midi_lookup<sonare_midi_gm_drum_name>},
+      {"midi_gm_family_first_program", probe_midi_lookup<sonare_midi_gm_family_first_program>},
+      {"midi_gm_family_name", probe_midi_lookup<sonare_midi_gm_family_name>},
+      {"midi_gm_instrument_name", probe_midi_lookup<sonare_midi_gm_instrument_name>},
+      {"midi_gm2_drum_set_name", probe_midi_lookup<sonare_midi_gm2_drum_set_name>},
+      {"midi_per_note_controller_name", probe_midi_lookup<sonare_midi_per_note_controller_name>},
+      {"midi_gm2_drum_name", probe_midi_bank_lookup<sonare_midi_gm2_drum_name>},
+      {"midi_gm2_instrument_name", probe_midi_bank_lookup<sonare_midi_gm2_instrument_name>},
       {"midi_bank_program", probe_midi_bank_program},
       {"midi_cc", probe_midi_cc},
       {"midi_cc_learn", probe_midi_cc_learn},

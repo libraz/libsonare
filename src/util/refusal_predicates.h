@@ -228,4 +228,11 @@ inline constexpr const char* kPresentWhenChainRelation = "{0} {must_be_present} 
 inline constexpr const char* kAbsentUnlessChainRelation =
     "{0} {must_be_absent} unless {1} is chain";
 
+/// @brief "{0} must be 0 unless {1} is control-change 14", for the CC 14-bit LSB field.
+inline constexpr const char* kCcLsbNumberUnlessControlChange14Relation =
+    "{0} must be 0 unless {1} is control-change 14";
+/// @brief "{0} must be 0 unless {1} is RPN or NRPN", for MIDI parameter selectors.
+inline constexpr const char* kCcSelectorUnlessRpnOrNrpnRelation =
+    "{0} must be 0 unless {1} is RPN or NRPN";
+
 }  // namespace sonare::util::refusal

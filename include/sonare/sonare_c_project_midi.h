@@ -119,7 +119,7 @@ typedef struct {
   /// MIDI channel 0-15, or SONARE_MIDI_CC_ANY_CHANNEL to match any channel.
   uint8_t channel;
   uint8_t kind;           ///< A @ref SonareMidiCcBindingKind.
-  uint8_t cc_lsb_number;  ///< LSB controller of a 14-bit binding; must be cc_number + 32.
+  uint8_t cc_lsb_number;  ///< cc_number + 32 for a 14-bit binding, 0 for other kinds.
   uint8_t selector_msb;   ///< RPN/NRPN selector MSB; 0 for plain controller kinds.
   uint8_t selector_lsb;   ///< RPN/NRPN selector LSB; 0 for plain controller kinds.
   uint8_t consume;        ///< 0 or 1. Suppress matching live input after automation when 1.
@@ -396,74 +396,51 @@ SonareError sonare_midi_pitch_bend_to_midi2(uint16_t bend14, uint32_t* out_bend3
 /// @brief Narrows a MIDI 2.0 pitch bend to 14 bits (the top 14 bits).
 SonareError sonare_midi2_pitch_bend_to_midi1(uint32_t bend32, uint16_t* out_bend14);
 
-/// @brief Returns the General MIDI Level 1 instrument name for @p program.
-/// @details The returned pointer is a static table entry owned by libsonare; it remains valid for
-///          the program lifetime, nothing invalidates it, and it must never be
-///          freed. NULL means EITHER
-///          @p program is outside [0,127] OR this build has no arrangement
-///          support, and a caller cannot tell the two apart from the return
-///          value alone. To distinguish them, probe with a known-valid argument
-///          (@c sonare_midi_gm_instrument_name(0)): NULL there means the feature
-///          is absent. Every name getter in this family shares this contract.
+/// @brief Returns the GM instrument name for @p program [0, 127], or NULL.
+/// @details The numeric name lookups return immutable library-owned names. A NULL result with
+///          SONARE_OK means an unnamed slot or a build without arrangement support. A NULL result
+///          with SONARE_ERROR_INVALID_PARAMETER from @ref sonare_last_error_code names the
+///          out-of-range argument. Probe index 0 of this entry to detect arrangement support.
+///          The names are static storage, never invalidated; do not free.
 const char* sonare_midi_gm_instrument_name(int program);
 /// @brief Reverse GM instrument lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_gm_program_for_name(const char* name);
-/// @brief Returns the GM family name for @p family [0,15], or NULL.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @brief Returns the GM family name for @p family [0, 15], or NULL.
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm_family_name(int family);
-/// @brief Returns the first GM program in @p family [0,15], or -1.
+/// @brief Returns the first GM program for @p family [0, 15].
+/// @return -1 when arrangement support is absent or @p family is out of range. For an
+///         out-of-range argument, @ref sonare_last_error_code reports InvalidParameter.
 int sonare_midi_gm_family_first_program(int family);
-/// @brief Returns the GM2 melodic instrument name for bank LSB + program.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @brief Returns the GM2 melodic instrument name for bank LSB and program, each in [0, 127].
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm2_instrument_name(int bank_lsb, int program);
-/// @brief Returns the GM drum name for note [35,81], or NULL.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @brief Returns the GM drum name for @p note [0, 127], with names at notes 35 through 81.
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm_drum_name(int note);
 /// @brief Reverse GM drum lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_gm_drum_note_for_name(const char* name);
-/// @brief Returns the GM2 drum set name for bank LSB, or NULL.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @brief Returns the GM2 drum set name for @p bank_lsb [0, 127], or NULL.
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm2_drum_set_name(int bank_lsb);
-/// @brief Returns the GM2 drum name for bank LSB + note, or NULL.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @brief Returns the GM2 drum name for bank LSB and note, each in [0, 127].
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm2_drum_name(int bank_lsb, int note);
-/// @brief Returns the standard MIDI CC name for controller [0,127], or NULL.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @brief Returns the standard MIDI CC name for @p controller [0, 127], or NULL.
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_cc_name(int controller);
 /// @brief Reverse standard MIDI CC lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_cc_index_for_name(const char* name);
 /// @brief Returns a MIDI 2.0 registered per-note controller name, or NULL.
-/// @param index Per-note controller index, [0, 255]: the 8-bit index field of the MIDI 2.0
-///        message. Outside that range the answer is NULL.
-/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
-///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
-///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
-///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
-///          apart.
+/// @param index Per-note controller index [0, 255].
+/// @details Static storage, never invalidated; do not free. NULL follows the contract of
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_per_note_controller_name(int index);
 /// @brief Lowers a bank/program selection to MIDI 1.0 bank MSB, bank LSB,
 ///        program-change events at @p ppq.

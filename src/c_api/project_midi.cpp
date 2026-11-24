@@ -867,13 +867,16 @@ void populate_cc_map(const SonareMidiCcBinding* bindings, size_t binding_count,
 #endif
 
 const char* sonare_midi_gm_instrument_name(int program) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(program, sonare_c_detail::kMidiDataByteDomain, "program");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (program < 0 || program > 127) return nullptr;
   return view_to_cstr(sonare::midi::gm_instrument_name(static_cast<uint8_t>(program)));
 #else
   (void)program;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 int sonare_midi_gm_program_for_name(const char* name) {
@@ -886,28 +889,37 @@ int sonare_midi_gm_program_for_name(const char* name) {
 }
 
 const char* sonare_midi_gm_family_name(int family) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(family, sonare_c_detail::kMidiFamilyIndexDomain, "family");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (family < 0 || family > 15) return nullptr;
   return view_to_cstr(sonare::midi::gm_family_name(static_cast<uint8_t>(family)));
 #else
   (void)family;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 int sonare_midi_gm_family_first_program(int family) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(family, sonare_c_detail::kMidiFamilyIndexDomain, "family");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (family < 0 || family > 15) return -1;
   return sonare::midi::gm_family_first_program(static_cast<uint8_t>(family));
 #else
   (void)family;
   return -1;
 #endif
+  SONARE_C_CATCH_RETURN(-1)
 }
 
 const char* sonare_midi_gm2_instrument_name(int bank_lsb, int program) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(bank_lsb, sonare_c_detail::kMidiDataByteDomain, "bank_lsb");
+  check::integer_within(program, sonare_c_detail::kMidiDataByteDomain, "program");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank_lsb < 0 || bank_lsb > 127 || program < 0 || program > 127) return nullptr;
   return view_to_cstr(sonare::midi::gm2_instrument_name(static_cast<uint8_t>(bank_lsb),
                                                         static_cast<uint8_t>(program)));
 #else
@@ -915,16 +927,20 @@ const char* sonare_midi_gm2_instrument_name(int bank_lsb, int program) {
   (void)program;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_midi_gm_drum_name(int note) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(note, sonare_c_detail::kMidiDataByteDomain, "note");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (note < 0 || note > 127) return nullptr;
   return view_to_cstr(sonare::midi::gm_drum_name(static_cast<uint8_t>(note)));
 #else
   (void)note;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 int sonare_midi_gm_drum_note_for_name(const char* name) {
@@ -937,18 +953,24 @@ int sonare_midi_gm_drum_note_for_name(const char* name) {
 }
 
 const char* sonare_midi_gm2_drum_set_name(int bank_lsb) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(bank_lsb, sonare_c_detail::kMidiDataByteDomain, "bank_lsb");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank_lsb < 0 || bank_lsb > 127) return nullptr;
   return view_to_cstr(sonare::midi::gm2_drum_set_name(static_cast<uint8_t>(bank_lsb)));
 #else
   (void)bank_lsb;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_midi_gm2_drum_name(int bank_lsb, int note) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(bank_lsb, sonare_c_detail::kMidiDataByteDomain, "bank_lsb");
+  check::integer_within(note, sonare_c_detail::kMidiDataByteDomain, "note");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank_lsb < 0 || bank_lsb > 127 || note < 0 || note > 127) return nullptr;
   return view_to_cstr(
       sonare::midi::gm2_drum_name(static_cast<uint8_t>(bank_lsb), static_cast<uint8_t>(note)));
 #else
@@ -956,16 +978,20 @@ const char* sonare_midi_gm2_drum_name(int bank_lsb, int note) {
   (void)note;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_midi_cc_name(int controller) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(controller, sonare_c_detail::kMidiDataByteDomain, "controller");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (controller < 0 || controller > 127) return nullptr;
   return view_to_cstr(sonare::midi::cc_name(static_cast<uint8_t>(controller)));
 #else
   (void)controller;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 int sonare_midi_cc_index_for_name(const char* name) {
@@ -978,13 +1004,16 @@ int sonare_midi_cc_index_for_name(const char* name) {
 }
 
 const char* sonare_midi_per_note_controller_name(int index) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  check::integer_within(index, sonare_c_detail::kMidiPerNoteControllerIndexDomain, "index");
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (index < 0 || index > 255) return nullptr;
   return view_to_cstr(sonare::midi::per_note_controller_name(static_cast<uint8_t>(index)));
 #else
   (void)index;
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel, int bank_msb,

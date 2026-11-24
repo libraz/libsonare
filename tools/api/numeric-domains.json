@@ -4610,6 +4610,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi_cc_name",
+      "param": "controller",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi_cc_to_breakpoint",
       "param": "bindings[].cc_number",
       "kind": "integer",
@@ -4700,6 +4711,105 @@
     {
       "entry": "midi_control_to_midi2",
       "param": "value",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm2_drum_name",
+      "param": "bank_lsb",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm2_drum_name",
+      "param": "note",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm2_drum_set_name",
+      "param": "bank_lsb",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm2_instrument_name",
+      "param": "bank_lsb",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm2_instrument_name",
+      "param": "program",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm_drum_name",
+      "param": "note",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm_family_first_program",
+      "param": "family",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm_family_name",
+      "param": "family",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_gm_instrument_name",
+      "param": "program",
       "kind": "integer",
       "lo": 0,
       "hi": 127,
@@ -4879,6 +4989,17 @@
       "kind": "real",
       "lo": 0,
       "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_per_note_controller_name",
+      "param": "index",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 255,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file midi_cc_binding_check.h
-/// @brief The one row check for a MIDI CC binding, shared by the engine and project entries.
+/// @brief The MIDI CC binding check shared by C entries and the WASM engine reader.
 
 #include <sonare/sonare_c.h>
 
@@ -12,6 +12,32 @@
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
+
+/// Refuses fields a selected kind does not read, preserving both caller-visible subjects.
+template <typename Kind>
+inline void check_midi_cc_binding_kind_fields(Kind kind, Kind control_change_14, Kind rpn,
+                                              Kind nrpn, uint8_t cc_lsb_number,
+                                              uint8_t selector_msb, uint8_t selector_lsb,
+                                              const std::string& cc_lsb_subject,
+                                              const std::string& selector_msb_subject,
+                                              const std::string& selector_lsb_subject,
+                                              const std::string& kind_subject) {
+  namespace check = sonare::util::check;
+  if (kind != control_change_14 && cc_lsb_number != 0) {
+    check::refuse_relation({cc_lsb_subject, kind_subject},
+                           sonare::util::refusal::kCcLsbNumberUnlessControlChange14Relation);
+  }
+  if (kind != rpn && kind != nrpn) {
+    if (selector_msb != 0) {
+      check::refuse_relation({selector_msb_subject, kind_subject},
+                             sonare::util::refusal::kCcSelectorUnlessRpnOrNrpnRelation);
+    }
+    if (selector_lsb != 0) {
+      check::refuse_relation({selector_lsb_subject, kind_subject},
+                             sonare::util::refusal::kCcSelectorUnlessRpnOrNrpnRelation);
+    }
+  }
+}
 
 /// Refuses a binding row no CC map can hold, naming each field under @p path.
 inline void check_midi_cc_binding(const SonareMidiCcBinding& binding, const std::string& path) {
@@ -44,6 +70,11 @@ inline void check_midi_cc_binding(const SonareMidiCcBinding& binding, const std:
                              "{0} must be {1} + 32");
     }
   }
+  check_midi_cc_binding_kind_fields(
+      binding.kind, static_cast<uint8_t>(SONARE_MIDI_CC_CONTROL_CHANGE_14),
+      static_cast<uint8_t>(SONARE_MIDI_CC_RPN), static_cast<uint8_t>(SONARE_MIDI_CC_NRPN),
+      binding.cc_lsb_number, binding.selector_msb, binding.selector_lsb, subject("cc_lsb_number"),
+      subject("selector_msb"), subject("selector_lsb"), subject("kind"));
   if (binding.kind == SONARE_MIDI_CC_RPN || binding.kind == SONARE_MIDI_CC_NRPN) {
     check::integer_within(binding.selector_msb, kMidiDataByteDomain,
                           subject("selector_msb").c_str());

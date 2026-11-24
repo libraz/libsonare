@@ -15,6 +15,12 @@ namespace sonare_c_detail {
 /// @brief What a 7-bit data byte (controller number, program, bank byte, data value) accepts.
 inline constexpr sonare::util::check::NumericDomain kMidiDataByteDomain =
     sonare::util::check::integer_domain(0, 127);
+/// @brief What a General MIDI instrument family index accepts.
+inline constexpr sonare::util::check::NumericDomain kMidiFamilyIndexDomain =
+    sonare::util::check::integer_domain(0, 15);
+/// @brief What a MIDI 2.0 per-note controller index accepts.
+inline constexpr sonare::util::check::NumericDomain kMidiPerNoteControllerIndexDomain =
+    sonare::util::check::integer_domain(0, 255);
 /// @brief What the controller number of a 14-bit control change pair accepts.
 inline constexpr sonare::util::check::NumericDomain kMidiControl14NumberDomain =
     sonare::util::check::integer_domain(0, 31);
