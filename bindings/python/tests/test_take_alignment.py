@@ -13,6 +13,8 @@ the assertions here are about.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -320,3 +322,37 @@ def test_a_non_positive_take_sample_rate_is_refused(
     reference, take = pair
     with pytest.raises(SonareError):
         align_take_to_reference(reference, take, SR, take_sample_rate=take_sample_rate)
+
+
+@pytest.mark.parametrize("perturb", [False, True])
+def test_take_alignment_identity_with_rounding_noise(perturb: bool) -> None:
+    rate = 48000
+    reference = np.array(
+        [
+            0.34 * math.sin(math.tau * 257 * (i / rate))
+            + 0.17 * math.sin(math.tau * 1373 * (i / rate))
+            for i in range(rate // 2)
+        ],
+        dtype=np.float32,
+    )
+    take = reference.copy()
+    if perturb:
+        take[::2] += 1e-8
+        take[1::2] -= 1e-8
+        assert np.any(take != reference)
+    result = align_take_to_reference(reference, take, rate)
+    assert result.anchors == tuple((frame * 512, frame * 512) for frame in range(47))
+    assert result.alignment.reference_frames == result.alignment.take_frames == 47
+    assert abs(result.alignment.mean_residual_frames) < 5e-7
+
+
+def test_take_alignment_keeps_the_known_lag_of_a_glide() -> None:
+    hop = 512
+    lag = 9 * hop
+    reference = glide(1.5)
+    take = np.concatenate((np.zeros(lag, dtype=np.float32), reference))
+    result = align_take_to_reference(reference, take, SR)
+    assert result.alignment.reference_frames == 65
+    assert result.alignment.take_frames == 74
+    anchors = set(result.anchors)
+    assert all((frame * hop, frame * hop + lag) in anchors for frame in range(22, 48))

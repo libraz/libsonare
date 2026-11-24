@@ -31,12 +31,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type RoomEstimateResult,
+  alignTakeToReference as wasmAlignTakeToReference,
   masteringRepairDereverbConfigForRoom as wasmDereverbConfigForRoom,
   detectOnsets as wasmDetectOnsets,
   frameSignal as wasmFrameSignal,
   init as wasmInit,
 } from '../../wasm/dist/index.js';
-import { detectOnsets, frameSignal } from '../src/index.js';
+import { alignTakeToReference, detectOnsets, frameSignal } from '../src/index.js';
 
 const SAMPLE_RATE = 22050;
 
@@ -88,6 +89,60 @@ const DISCRIMINATING: readonly unknown[] = [`${HIGH_DELTA}`, [HIGH_DELTA]];
 
 beforeAll(async () => {
   await wasmInit();
+});
+
+describe('take alignment across Node and WASM', () => {
+  it('keeps identity anchors with or without rounding-level noise', () => {
+    const sampleRate = 48000;
+    const reference = Float32Array.from({ length: sampleRate / 2 }, (_, index) => {
+      const t = index / sampleRate;
+      return 0.34 * Math.sin(2 * Math.PI * 257 * t) + 0.17 * Math.sin(2 * Math.PI * 1373 * t);
+    });
+    const perturbed = Float32Array.from(
+      reference,
+      (value, i) => value + (i % 2 === 0 ? 1e-8 : -1e-8),
+    );
+    expect(perturbed.some((value, i) => value !== reference[i])).toBe(true);
+    for (const take of [reference, perturbed]) {
+      for (const align of [alignTakeToReference, wasmAlignTakeToReference]) {
+        const { anchors, alignment } = align({ reference, take, sampleRate });
+        expect(alignment.referenceFrames).toBe(47);
+        expect(alignment.takeFrames).toBe(47);
+        expect(alignment.meanResidualFrames).toBeCloseTo(0, 6);
+        expect(anchors).toHaveLength(47);
+        for (const [frame, anchor] of anchors.entries()) {
+          expect(anchor.warpSample).toBe(frame * 512);
+          expect(anchor.sourceSample).toBe(frame * 512);
+        }
+      }
+    }
+  });
+
+  it('agrees on the mapping of a delayed pitch glide', () => {
+    const sampleRate = 22050;
+    const hop = 512;
+    const lag = 9 * hop;
+    let phase = 0;
+    const reference = Float32Array.from({ length: 1.5 * sampleRate }, (_, i) => {
+      phase += (2 * Math.PI * 261.63 * 2 ** ((11 * i) / (12 * 1.5 * sampleRate))) / sampleRate;
+      return 0.4 * Math.sin(phase) + 0.2 * Math.sin(2 * phase);
+    });
+    const take = new Float32Array(reference.length + lag);
+    take.set(reference, lag);
+    const request = { reference, take, sampleRate };
+    const node = alignTakeToReference(request);
+    const wasm = wasmAlignTakeToReference(request);
+    expect(wasm.anchors).toEqual(node.anchors);
+    expect(wasm.alignment.referenceFrames).toBe(node.alignment.referenceFrames);
+    expect(wasm.alignment.takeFrames).toBe(node.alignment.takeFrames);
+    expect(wasm.alignment.meanResidualFrames).toBeCloseTo(node.alignment.meanResidualFrames, 6);
+    for (let frame = 22; frame < 48; frame++) {
+      expect(node.anchors).toContainEqual({
+        warpSample: frame * hop,
+        sourceSample: frame * hop + lag,
+      });
+    }
+  });
 });
 
 describe('detectOnsets reads delta on both surfaces', () => {
