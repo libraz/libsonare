@@ -16,6 +16,7 @@ import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertAudioSamples,
   assertPositiveFloatValue,
   requireBoolean,
   sampleOneShot,
@@ -317,12 +318,12 @@ export function zeroCrossings(
 export function zeroCrossings(...args: unknown[]): Int32Array {
   return withEntry('zeroCrossings', () => {
     const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
+    assertAudioSamples(r.samples, r, 'samples', true);
     const refMagnitude = requireBoolean(r.refMagnitude ?? false, 'refMagnitude');
     const pad = requireBoolean(r.pad ?? true, 'pad');
     const zeroPos = requireBoolean(r.zeroPos ?? true, 'zeroPos');
     // The index list can be as long as the input, but only an empty one is certain.
-    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+    return withMonoHeap(r.samples, undefined, 1, () =>
       getSonareModule().zeroCrossings(r.samples, r.threshold ?? 1e-10, refMagnitude, pad, zeroPos),
     );
   });

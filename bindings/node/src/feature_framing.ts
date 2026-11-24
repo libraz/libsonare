@@ -260,7 +260,7 @@ export function preemphasis(
 export function preemphasis(...args: unknown[]): Float32Array {
   return withEntry('preemphasis', () => {
     const request = sampleOneShot<PreemphasisRequest>('preemphasis', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioSamples(request.samples, request, 'samples', true);
     return request.zi === undefined
       ? addon.preemphasis(request.samples, request.coef ?? 0.97)
       : addon.preemphasis(request.samples, request.coef ?? 0.97, request.zi);
@@ -277,7 +277,7 @@ export function deemphasis(
 export function deemphasis(...args: unknown[]): Float32Array {
   return withEntry('deemphasis', () => {
     const request = sampleOneShot<DeemphasisRequest>('deemphasis', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioSamples(request.samples, request, 'samples', true);
     return request.zi === undefined
       ? addon.deemphasis(request.samples, request.coef ?? 0.97)
       : addon.deemphasis(request.samples, request.coef ?? 0.97, request.zi);
@@ -305,7 +305,7 @@ export function trimSilence(
 export function trimSilence(...args: unknown[]): TrimResult {
   return withEntry('trimSilence', () => {
     const request = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioSamples(request.samples, request);
     const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
     return addon.trimSilence(
       request.samples,
@@ -326,7 +326,7 @@ export function splitSilence(
 export function splitSilence(...args: unknown[]): Int32Array {
   return withEntry('splitSilence', () => {
     const request = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioSamples(request.samples, request);
     const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
     return addon.splitSilence(
       request.samples,
@@ -429,7 +429,7 @@ export function frameSignal(
 export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioSamples(request.samples, request, 'samples', true);
     const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
     return toMatrix2D(r.frames, request.frameLength, r.nFrames);
   });

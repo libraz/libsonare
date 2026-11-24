@@ -16,7 +16,13 @@ import type {
   ReverbDetection,
   RoomEstimateResult,
 } from './types.js';
-import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
+import {
+  assertAudioChannels,
+  assertAudioInput,
+  assertIntegerValue,
+  requestOnly,
+  sampleOneShot,
+} from './validation.js';
 
 /** A complete dereverb config, as `masteringRepairDereverbConfigForRoom` returns it. */
 export type DereverbClassicalConfig = Required<DereverbClassicalOptions>;
@@ -284,7 +290,12 @@ export function masteringRepairDereverbConfigForRoom(...args: unknown[]): Dereve
     if (typeof r.estimate !== 'object' || r.estimate === null) {
       throw refuseType('estimate must be a room estimate');
     }
-    assertRepairGeometry(r);
+    if (r.nFft !== undefined) {
+      assertIntegerValue(r.nFft, 'nFft');
+    }
+    if (r.hopLength !== undefined) {
+      assertIntegerValue(r.hopLength, 'hopLength');
+    }
     const { estimate, ...config } = r;
     return addon.masteringRepairDereverbConfigForRoom(estimate, config);
   });

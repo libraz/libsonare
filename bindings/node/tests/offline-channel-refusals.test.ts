@@ -52,7 +52,7 @@ const CASES: Case[] = [
     { prepared: 64, label: `freeze ${n}`, run: freeze({ numChannels: n }), refusal: range(64) },
   ]),
   { prepared: 64, label: 'render 65', run: render(65), refusal: renderRange(64) },
-  { prepared: 64, label: 'render 0', run: render(0), refusal: 'channels must not be empty' },
+  { prepared: 64, label: 'render 0', run: render(0), refusal: renderRange(64) },
   {
     prepared: 64,
     label: 'render ragged',

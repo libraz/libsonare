@@ -30,6 +30,8 @@ interface Entry {
   buffers?: number;
   /** The entry takes no sample rate. */
   noRate?: boolean;
+  /** The numeric rate is kept for call compatibility and does not affect the result. */
+  ignoresRate?: boolean;
   /** An empty or non-finite buffer is reported by the core as an excluded track, not refused. */
   reportsDegenerate?: boolean;
   /** No valid call is built for this entry (its other inputs need state this table cannot make). */
@@ -142,8 +144,8 @@ const TABLE: Entry[] = [
   mono('remix', { intervals: [0, 4096] }),
   mono('remixAlignedIntervals', { intervals: [0, 4096] }),
   linked('decomposeStemsLinked'),
-  mono('trimSilence'),
-  mono('splitSilence'),
+  { ...mono('trimSilence'), ignoresRate: true },
+  { ...mono('splitSilence'), ignoresRate: true },
   // Silence and waveform helpers without a sample rate
   ...['splitSilenceCommon', 'splitSilenceCommonWithReport'].map(
     (name): Entry => ({
@@ -617,10 +619,13 @@ describe('audio preflight contract', () => {
     expectError(error, TypeError);
   });
 
-  it.each(RATE_PROBES)('%s refuses an out-of-range or fractional rate', async (_name, entry) => {
-    expectError(await refusal(() => (entry as Entry).call(tone(), 1000, 0)), RangeError);
-    expectError(await refusal(() => (entry as Entry).call(tone(), 44100.5, 0)), RangeError);
-  });
+  it.each(RATE_PROBES.filter(([, entry]) => !(entry as Entry).ignoresRate))(
+    '%s refuses an out-of-range or fractional rate',
+    async (_name, entry) => {
+      expectError(await refusal(() => (entry as Entry).call(tone(), 1000, 0)), RangeError);
+      expectError(await refusal(() => (entry as Entry).call(tone(), 44100.5, 0)), RangeError);
+    },
+  );
 
   it.each(RATE_PROBES)('%s refuses a non-numeric rate', async (_name, entry) => {
     const error = await refusal(() =>

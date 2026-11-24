@@ -193,10 +193,6 @@ inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
                                       &inputs)) {
     return {};
   }
-  if (inputs.ptrs.empty() || inputs.length == 0) {
-    Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
-    return {};
-  }
   ChannelBlock block;
   block.frames = static_cast<int>(inputs.length);
   block.storage.reserve(inputs.ptrs.size());

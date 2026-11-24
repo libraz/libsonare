@@ -10,7 +10,6 @@ import {
   assertFloat32Array,
   assertFloatValue,
   assertNonNegativeSafeInteger,
-  assertSampleRate,
   requestOnly,
   sampleOneShot,
 } from './validation.js';
@@ -224,7 +223,6 @@ export function tempogram(...args: unknown[]): Matrix2D {
     const r = requestOnly<TempogramRequest>('tempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     const out = addon.tempogram(
       r.onsetEnvelope,
       sampleRate,
@@ -245,7 +243,6 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
     const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate;
-    assertSampleRate(sampleRate);
     const out = addon.cyclicTempogram(
       r.onsetEnvelope,
       sampleRate,
@@ -265,7 +262,6 @@ export function plp(...args: unknown[]): Float32Array {
     const r = requestOnly<PlpRequest>('plp', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     return addon.plp(
       r.onsetEnvelope,
       sampleRate,
@@ -334,7 +330,6 @@ export function fourierTempogram(...args: unknown[]): Matrix2D {
       throw refuseType('center must be a boolean');
     }
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     assertFiniteSamples(r.onsetEnvelope, true, 'onsetEnvelope');
     const out = addon.fourierTempogram(
       r.onsetEnvelope,
@@ -354,7 +349,6 @@ export function tempogramRatio(...args: unknown[]): Float32Array {
   return withEntry('tempogramRatio', () => {
     const r = requestOnly<TempogramRatioRequest>('tempogramRatio', args);
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     assertMatrix2D(r.tempogram, 'tempogram');
     return addon.tempogramRatio(
       r.tempogram.data,

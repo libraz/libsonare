@@ -230,6 +230,8 @@ describe('marker keyFifths is stored as written or refused, never wrapped', () =
         }
         expect(found).toBe(fifths);
       }
+      expect(() => p.setMarker({ ...keySignature(8), id: 0 })).toThrow(RangeError);
+      expect(() => p.setMarker({ ...keySignature(128), id: 0, kind: 0 })).toThrow(RangeError);
       const before = project.toJson();
       for (const bad of [256, -129, 200]) {
         expect(() => p.setMarker({ ...keySignature(bad), id: 0 })).toThrow(RangeError);

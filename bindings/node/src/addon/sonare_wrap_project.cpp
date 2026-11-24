@@ -673,8 +673,7 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   SonareProjectMarker marker{};
   marker.id = Uint32Property(obj, "id", kZeroIsSentinel);
   marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
-  marker.key_fifths = sonare_node::DomainProperty<int8_t>(obj, "keyFifths", 0,
-                                                          sonare_c_detail::kMarkerKeyFifthsDomain);
+  marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
   marker.key_minor = BoolProperty(obj, "keyMinor", marker.key_minor != 0) ? 1 : 0;
   if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
   const std::string name = StringProperty(obj, "name", "");

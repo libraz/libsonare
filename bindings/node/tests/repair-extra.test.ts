@@ -210,6 +210,18 @@ describe('masteringRepairDereverbConfigForRoom (Node)', () => {
     expect(config.lateDelayMs).toBeCloseTo(50, 5); // sqrt(2500)
   });
 
+  it('preserves hop geometry until the configuration is used for repair', () => {
+    const config = masteringRepairDereverbConfigForRoom({
+      estimate: roomEstimate(2500),
+      hopLength: 0,
+    });
+    expect(config.hopLength).toBe(0);
+    expect(config.t60Sec).toBeCloseTo(1.5, 5);
+    expect(() =>
+      masteringRepairDereverbConfigForRoom({ estimate: roomEstimate(2500), hopLength: 0.5 }),
+    ).toThrow(RangeError);
+  });
+
   it('leaves the taste fields as they went in', () => {
     const config = masteringRepairDereverbConfigForRoom({
       estimate: roomEstimate(2500),

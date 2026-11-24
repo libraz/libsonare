@@ -39,9 +39,6 @@ std::unique_ptr<rt::ProcessorBase> makeWasmGraphProcessor(val node) {
 
 RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_val) {
   const int count = static_cast<int>(wasmPlaneListLength(channels_val, "channels"));
-  if (count <= 0) {
-    throw WasmRangeError("channels must not be empty");
-  }
   ChannelBlock block;
   block.storage.reserve(static_cast<size_t>(count));
   block.pointers.reserve(static_cast<size_t>(count));
@@ -50,9 +47,6 @@ RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_v
     std::vector<float> channel = float32ArrayToVector(channels_val[ch], channel_name.c_str());
     if (ch == 0) {
       block.frames = static_cast<int>(channel.size());
-      if (block.frames <= 0) {
-        throw WasmRangeError("channels must not be empty");
-      }
     } else if (static_cast<int>(channel.size()) != block.frames) {
       throw WasmRangeError(channel_name + " must have the same length as channels[0]");
     }

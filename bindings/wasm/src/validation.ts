@@ -213,9 +213,13 @@ export function assertAudioSamples(
   samples: unknown,
   options: object = {},
   argName = 'samples',
+  allowEmpty = false,
 ): void {
   assertFloat32Array(samples, argName);
-  assertSamples(samples, (options as { scanFinite?: boolean }).scanFinite !== false, argName);
+  if (!allowEmpty) {
+    assertNonEmptySamples(samples, argName);
+  }
+  assertFiniteSamples(samples, (options as { scanFinite?: boolean }).scanFinite !== false, argName);
 }
 
 /** A `Float32Array` argument; anything else is a `TypeError` naming the field. */
@@ -837,6 +841,16 @@ function assertNoExtraArguments(args: readonly unknown[], from: number): void {
   }
 }
 
+// These sample-count operations keep a numeric sampleRate for call compatibility.
+const RATE_FREE_SAMPLE_CALLS: ReadonlySet<RequestFn> = new Set([
+  'preemphasis',
+  'deemphasis',
+  'trimSilence',
+  'splitSilence',
+  'frameSignal',
+  'zeroCrossings',
+]);
+
 /**
  * Normalises the two accepted call forms of a one-shot over audio into one
  * request: `(request)` and `(samples, sampleRate, options?)`.
@@ -884,7 +898,9 @@ export function sampleOneShot<R extends SampleRequest>(
   assertIntegerType(sampleRate, 'sampleRate');
   const normalized = request as unknown as R;
   checkShape?.(normalized);
-  assertSampleRateRange(sampleRate);
+  if (!RATE_FREE_SAMPLE_CALLS.has(requestName)) {
+    assertSampleRateRange(sampleRate);
+  }
   return normalized;
 }
 

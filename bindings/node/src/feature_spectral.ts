@@ -14,6 +14,7 @@ import type {
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertAudioSamples,
   assertClosedToken,
   assertFiniteScalar,
   assertFloatFields,
@@ -524,7 +525,7 @@ export function zeroCrossings(
 export function zeroCrossings(...args: unknown[]): Int32Array {
   return withEntry('zeroCrossings', () => {
     const request = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
+    assertAudioSamples(request.samples, request, 'samples', true);
     return addon.zeroCrossings(
       request.samples,
       request.threshold ?? 1e-10,

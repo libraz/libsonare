@@ -37,16 +37,6 @@ void validateMatrix(const std::vector<float>& values, const std::string& name, i
   validateFiniteVector(values, name);
 }
 
-// The tempogram / PLP family takes an onset envelope (not raw audio); its
-// sample_rate is only a BPM-scaling factor, so — matching the C ABI oracle,
-// which does not band-limit it — we require it to be positive rather than
-// inside the [kMin,kMax]AudioSampleRate audio band.
-void validatePositiveSampleRate(int sample_rate) {
-  if (sample_rate <= 0) {
-    throw WasmRangeError("sampleRate must be an integer in [1, 2147483647]");
-  }
-}
-
 }  // namespace
 
 // ============================================================================
@@ -397,7 +387,6 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
   validateFiniteVector(data, "onsetEnvelope");
-  validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -501,7 +490,6 @@ val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const v
   const int win_length =
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
-  validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -525,7 +513,6 @@ val js_tempogram_ratio(val tempogram_data, const val& win_length_val, const val&
     validateWasmFloat32ArrayPair(tempogram_data, "tempogram", factors, "factors", false);
   }
   std::vector<float> data = float32ArrayToVector(tempogram_data, "tempogram");
-  validatePositiveSampleRate(sample_rate);
   // An undefined/null/empty factors argument falls back to the library default
   // {0.5, 1, 2, 3, 4}, matching the C and Node behaviour.
   if (!has_factors) {

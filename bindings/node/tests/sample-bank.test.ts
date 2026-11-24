@@ -158,8 +158,11 @@ describe('SampleBank', () => {
     withBank((bank) => {
       // @ts-expect-error deliberately unknown loop mode name.
       expect(() => bank.addSample(sampleSine(64), { loopMode: 'ping-pong' })).toThrow(
-        /Unknown sample loop mode name/,
+        new RangeError(
+          "SampleBank.addSample: Unknown sample loop mode name: 'ping-pong' (expected none, continuous or keyDown)",
+        ),
       );
+      expect(() => bank.addSample(sampleSine(64), { loopMode: true as never })).toThrow(TypeError);
       expect(bank.sampleCount).toBe(0);
     });
   });

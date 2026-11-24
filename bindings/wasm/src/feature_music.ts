@@ -761,7 +761,6 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
       throw refuseType('onsetEnvelope must be a Float32Array');
     }
     const center = optionalBoolean(r.center, 'center', true);
-    assertSampleRate(sampleRate);
     assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
     // Native takes a `norm` flag; the normalised form is the only one exposed.
     const onsetEnvelope = r.onsetEnvelope;
@@ -804,7 +803,6 @@ export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
     const tempogram = assertMatrix2D(r.tempogram, 'tempogram');
     const sampleRate = r.sampleRate ?? 22050;
     const hopLength = r.hopLength ?? 512;
-    assertSampleRate(sampleRate);
     const factors = r.factors;
     const factorCount =
       Array.isArray(factors) || factors instanceof Float32Array ? factors.length : 0;

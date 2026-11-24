@@ -14,7 +14,6 @@ import { getSonareModule } from './module_state.js';
 import type { Matrix2D, NormType, TempogramMode } from './public_types.js';
 import type { OptionsOf } from './validation.js';
 import {
-  assertAudioInput,
   assertAudioSamples,
   assertFloat32Array,
   assertFloatFields,
@@ -24,7 +23,6 @@ import {
   assertNonNegativeSafeInteger,
   assertNumber,
   assertPositiveInteger,
-  assertSampleRate,
   assertString,
   optionalBoolean,
   requestOnly,
@@ -768,8 +766,8 @@ export function preemphasis(
 export function preemphasis(...args: unknown[]): Float32Array {
   return withEntry('preemphasis', () => {
     const r = sampleOneShot<PreemphasisRequest>('preemphasis', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
-    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+    assertAudioSamples(r.samples, r, 'samples', true);
+    return withMonoHeap(r.samples, undefined, 2, () =>
       getSonareModule().preemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null),
     );
   });
@@ -785,8 +783,8 @@ export function deemphasis(
 export function deemphasis(...args: unknown[]): Float32Array {
   return withEntry('deemphasis', () => {
     const r = sampleOneShot<DeemphasisRequest>('deemphasis', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
-    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+    assertAudioSamples(r.samples, r, 'samples', true);
+    return withMonoHeap(r.samples, undefined, 2, () =>
       getSonareModule().deemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null),
     );
   });
@@ -802,8 +800,8 @@ export function trimSilence(
 export function trimSilence(...args: unknown[]): TrimResult {
   return withEntry('trimSilence', () => {
     const r = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
-    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+    assertAudioSamples(r.samples, r);
+    return withMonoHeap(r.samples, undefined, 1, () =>
       getSonareModule().trimSilence(
         r.samples,
         r.topDb ?? 60.0,
@@ -824,8 +822,8 @@ export function splitSilence(
 export function splitSilence(...args: unknown[]): Int32Array {
   return withEntry('splitSilence', () => {
     const r = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
-    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+    assertAudioSamples(r.samples, r);
+    return withMonoHeap(r.samples, undefined, 1, () =>
       getSonareModule().splitSilence(
         r.samples,
         r.topDb ?? 60.0,
@@ -919,7 +917,7 @@ export function frameSignal(
 export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
+    assertAudioSamples(r.samples, r, 'samples', true);
     const { frameLength, hopLength } = r;
     // An out-of-domain length or hop is the native reader's refusal, not a memory one.
     const { nFrames, frames } = withHeapNeedWhen(
@@ -927,7 +925,7 @@ export function frameSignal(...args: unknown[]): Matrix2D {
       sampleNeed(
         'samples',
         r.samples.length,
-        r.sampleRate,
+        undefined,
         // The input copy and the returned frames.
         (n) =>
           4 * n +
@@ -1182,7 +1180,6 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
   return withEntry('cyclicTempogram', () => {
     const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
-    assertSampleRate(r.sampleRate);
     const onsetEnvelope = r.onsetEnvelope;
     const hopLength = r.hopLength ?? 512;
     const winLength = r.winLength ?? 384;
