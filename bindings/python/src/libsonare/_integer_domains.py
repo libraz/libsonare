@@ -303,6 +303,7 @@ DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {
     ("istft", "n_fft"): (4, 524288, "even"),
     ("lufs_interleaved", "num_channels"): (1, 2147483647, None),
     ("lufs_series_interleaved", "num_channels"): (1, 2147483647, None),
+    ("mastering_analyze_stereo", "bandsPerOctave"): (1, 2147483647, None),
     ("mastering_apply_processor", "bitDepth"): (2, 24, None),
     ("mastering_apply_processor_stereo", "bitDepth"): (2, 24, None),
     ("mastering_apply_processor_stereo", "delay_samples"): (0, 2147483647, None),

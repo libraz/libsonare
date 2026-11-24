@@ -29,6 +29,7 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
 #include "mastering/saturation/bitcrusher.h"
+#include "mastering/stereo/mono_compat_check.h"
 #include "mastering/stereo/phase_align.h"
 #include "metering/basic.h"
 #include "metering/clipping.h"
@@ -76,6 +77,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"griffin_lim", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"lufs_interleaved", "num_channels", kInterleavedChannelsDomain, nullptr},
     {"lufs_series_interleaved", "num_channels", kInterleavedChannelsDomain, nullptr},
+    {"mastering_analyze_stereo", "params.bandsPerOctave",
+     sonare::mastering::stereo::kMonoCompatBandsPerOctaveDomain, nullptr},
     {"mastering_apply_processor", "params.bitDepth",
      sonare::mastering::saturation::kBitCrusherBitDepthDomain, nullptr},
     {"mastering_apply_processor_stereo", "params.bitDepth",

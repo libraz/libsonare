@@ -69,7 +69,7 @@ std::pair<size_t, size_t> band_bin_span(double low_hz, double high_hz, size_t n_
 }  // namespace
 
 void check_mono_compat_bands_per_octave(int bands_per_octave, const char* subject) {
-  check::integer_at_least(bands_per_octave, 1, subject);
+  check::integer_within(bands_per_octave, kMonoCompatBandsPerOctaveDomain, subject);
 }
 
 MonoCompatResult mono_compat_check(const float* left, const float* right, size_t length,

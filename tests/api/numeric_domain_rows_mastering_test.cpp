@@ -868,6 +868,16 @@ SonareError probe_repair_noise_band_bins(const std::string& param, double value)
 // Mastering processors, profile, equalizer and streaming chain
 // ---------------------------------------------------------------------------
 
+SonareError probe_analyze_stereo(const std::string&, double value) {
+  const SonareMasteringParam parameter{"bandsPerOctave", value};
+  char* json = nullptr;
+  const SonareError err = sonare_mastering_analyze_stereo(
+      "stereo.monoCompatCheckLogBands", analysis_samples().data(), analysis_samples().data(),
+      analysis_samples().size(), kAnalysisRate, &parameter, 1, &json);
+  if (err == SONARE_OK) sonare_free_string(json);
+  return err;
+}
+
 SonareMasteringParam processor_param(const std::string& param, double value) {
   if (is_param(param, "params.delay_samples")) return {"delaySamples", value};
   return {"bitDepth", value};
@@ -993,6 +1003,7 @@ const std::map<std::string, Probe>& probes() {
 #if defined(SONARE_WITH_MASTERING)
       {"eq_match", probe_eq_match},
       {"eq_set_band", probe_eq_set_band},
+      {"mastering_analyze_stereo", probe_analyze_stereo},
       {"mastering_apply_processor", probe_apply_processor},
       {"mastering_apply_processor_stereo", probe_apply_processor_stereo},
       {"mastering_audio_profile", probe_audio_profile},

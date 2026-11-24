@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "util/db.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
 
@@ -33,7 +34,11 @@ struct MonoCompatBandResult {
   float side_rms = 0.0f;
 };
 
-/// @brief Refuses a log-band count below the one-band minimum under @p subject.
+/// @brief Domain of the log-band count per octave, stated once for the core check.
+inline constexpr util::check::NumericDomain kMonoCompatBandsPerOctaveDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief Refuses a log-band count outside @c kMonoCompatBandsPerOctaveDomain under @p subject.
 void check_mono_compat_bands_per_octave(int bands_per_octave, const char* subject);
 
 MonoCompatResult mono_compat_check(const float* left, const float* right, size_t length,

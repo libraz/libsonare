@@ -3015,6 +3015,17 @@
       "sentinel": null
     },
     {
+      "entry": "mastering_analyze_stereo",
+      "param": "params.bandsPerOctave",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "mastering_apply_processor",
       "param": "params.bitDepth",
       "kind": "integer",
