@@ -24,18 +24,6 @@ const std::array<CName, 1> kCqtInverseNames{{{"fmin", "fmin_hz"}}};
 
 namespace check = sonare::util::check;
 
-// Refuses a non-positive row or frame count, then an input length that does not match them.
-SonareError validate_inverse_input(size_t input_length, int rows, int n_frames,
-                                   const check::NumericDomain& rows_domain,
-                                   const check::NumericDomain& frames_domain,
-                                   const char* rows_subject) {
-  return run_validation([&] {
-    check::integer_within(rows, rows_domain, rows_subject);
-    check::integer_within(n_frames, frames_domain, "n_frames");
-    check_inverse_input_length(input_length, rows, n_frames, rows_subject);
-  });
-}
-
 // The non-finite element case is not checked here: griffinlim_cqt / griffinlim_vqt
 // / mel_to_stft / mfcc_to_mel / griffin_lim reject it themselves, so the rule has
 // a single home that WASM (which calls the core directly) inherits too.
@@ -355,19 +343,22 @@ SonareError sonare_mfcc_to_mel(const float* coefficients, size_t input_length, i
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  if (const SonareError err =
-          validate_inverse_input(input_length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
-                                 sonare::kInverseFramesDomain, "n_mfcc");
-      err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_REQUIRE_NONNULL(out);
-
   SONARE_C_TRY
+  admit_inverse_shape(input_length, n_mfcc, n_frames, kInverseMfccCountDomain, kInverseFramesDomain,
+                      "n_mfcc");
+  SONARE_C_REQUIRE_NONNULL(out);
+  with_c_names(kMfccLifterOptionName, [&] {
+    admit_inverse_mfcc_coefficients(n_mfcc, n_mels, resolved.lifter, [&] {
+      validate_offline_audio_samples("coefficients", coefficients, input_length, 0);
+    });
+  });
   std::vector<float> mel = with_c_names(kInverseNames, [&] {
     return mfcc_to_mel(coefficients, n_mfcc, n_frames, n_mels, resolved.lifter);
   });
-  return fill_inverse_result(mel, n_mels, n_frames, out);
+  SonareInverseResult result{};
+  const SonareError status = fill_inverse_result(mel, n_mels, n_frames, &result);
+  if (status == SONARE_OK) *out = result;
+  return status;
   SONARE_C_CATCH
 }
 
@@ -399,11 +390,13 @@ SonareError sonare_mfcc_to_audio(const float* coefficients, size_t input_length,
   config.fmin = fmin_hz;
   config.fmax = fmax_hz;
   config.htk = resolved.htk != 0;
-  with_c_names(kInverseNames, [&] {
-    admit_inverse_mel(MelInverseKind::kMfccAudio, input_length, n_mfcc, n_frames, sample_rate,
-                      config, n_iter, resolved.lifter, [&] {
-                        validate_offline_audio_samples("mfcc", coefficients, input_length, 0);
-                      });
+  with_c_names(kMfccLifterOptionName, [&] {
+    with_c_names(kInverseNames, [&] {
+      admit_inverse_mel(MelInverseKind::kMfccAudio, input_length, n_mfcc, n_frames, sample_rate,
+                        config, n_iter, resolved.lifter, [&] {
+                          validate_offline_audio_samples("mfcc", coefficients, input_length, 0);
+                        });
+    });
   });
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);

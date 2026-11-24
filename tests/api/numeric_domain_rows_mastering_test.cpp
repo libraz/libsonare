@@ -204,20 +204,26 @@ SonareError probe_mel_to_audio(const std::string& param, double value) {
 
 SonareError probe_mfcc_to_mel(const std::string& param, double value) {
   const InverseArguments a = inverse_arguments(param, value);
+  SonareMfccToMelOptions options;
+  sonare_mfcc_to_mel_options_init(&options);
+  if (is_param(param, "options.lifter")) options.lifter = static_cast<float>(value);
   SonareInverseResult out{};
   return finish_inverse(sonare_mfcc_to_mel(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc,
-                                           a.n_frames, a.n_mels, nullptr, &out),
+                                           a.n_frames, a.n_mels, &options, &out),
                         &out);
 }
 
 SonareError probe_mfcc_to_audio(const std::string& param, double value) {
   const InverseArguments a = inverse_arguments(param, value);
+  SonareMfccToAudioOptions options;
+  sonare_mfcc_to_audio_options_init(&options);
+  if (is_param(param, "options.lifter")) options.lifter = static_cast<float>(value);
   float* out = nullptr;
   size_t out_length = 0;
   return finish_audio(
       sonare_mfcc_to_audio(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc, a.n_frames,
                            a.n_mels, a.sample_rate, a.n_fft, a.hop_length, 0.0f, 0.0f, a.n_iter,
-                           nullptr, &out, &out_length),
+                           &options, &out, &out_length),
       out);
 }
 

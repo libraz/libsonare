@@ -22,8 +22,6 @@ constexpr util::check::NumericDomain kMelFeatureDimensionDomain =
 
 }  // namespace
 
-using sonare::constants::kPi;
-
 MelSpectrogram::MelSpectrogram() : n_mels_(0), n_frames_(0), sample_rate_(0), hop_length_(0) {}
 
 MelSpectrogram::MelSpectrogram(std::vector<float> power, int n_mels, int n_frames, int sample_rate,
@@ -89,6 +87,8 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   if (n_mfcc > n_mels_)
     util::check::refuse_relation({"n_mfcc", "n_mels"}, "{0} must be at most {1}");
 
+  validate_mfcc_lifter(lifter);
+
   // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling and
   // top_db clamp. This is exactly the shared power_to_db (ref=1.0, amin=kEpsilon,
   // top_db=kDefaultTopDb), so route through it instead of reimplementing it.
@@ -120,7 +120,7 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   // coefficient (k=0) receives a nonzero lift, matching librosa 0.11.0.
   if (lifter > 0.0f) {
     for (int k = 0; k < n_mfcc; ++k) {
-      float lift = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k + 1) / lifter);
+      float lift = mfcc_lift_at(lifter, k);
       for (int t = 0; t < n_frames_; ++t) {
         mfcc_out[k * n_frames_ + t] *= lift;
       }

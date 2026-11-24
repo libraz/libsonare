@@ -3,6 +3,7 @@
 /// @file mel_spectrogram.h
 /// @brief Mel spectrogram and MFCC computation.
 
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -20,6 +21,24 @@ namespace sonare {
 /// @brief Default MFCC coefficient count of @ref MelSpectrogram::mfcc.
 inline constexpr int kMfccDefaultCount = 20;
 
+/// @brief The finite, nonnegative lifter shared by forward and inverse MFCC.
+inline constexpr util::check::NumericDomain kMfccLifterDomain =
+    util::check::real_domain_above(0.0, true);
+
+inline void validate_mfcc_lifter(double lifter) {
+  if (!util::check::in_domain(lifter, kMfccLifterDomain) ||
+      lifter > std::numeric_limits<float>::max()) {
+    util::check::refuse_outside(kMfccLifterDomain, "lifter");
+  }
+}
+
+/// @brief Gain applied to one MFCC coefficient. A tiny gain rounds to unity.
+inline float mfcc_lift_at(float lifter, int coefficient) {
+  if (lifter < std::numeric_limits<float>::epsilon() / 2.0f) return 1.0f;
+  return 1.0f +
+         (lifter / 2.0f) * std::sin(constants::kPi * static_cast<float>(coefficient + 1) / lifter);
+}
+
 /// @brief The delta smoothing widths of @ref MelSpectrogram::delta: odd integers from 3.
 inline constexpr util::check::NumericDomain kMelDeltaWidthDomain =
     util::check::integer_domain(3, std::numeric_limits<int>::max());
@@ -31,8 +50,8 @@ inline constexpr util::check::NumericDomain kMfccCountDomain =
 /// @brief Configuration for Mel spectrogram computation.
 struct MelConfig {
   // Mel filterbank settings
-  int n_mels = 128;                ///< Number of Mel bands
-  float fmin = 0.0f;               ///< Minimum frequency in Hz
+  int n_mels = constants::kDefaultNMels;  ///< Number of Mel bands
+  float fmin = 0.0f;                      ///< Minimum frequency in Hz
   float fmax = 0.0f;               ///< Maximum frequency in Hz, at most Nyquist (0 = Nyquist).
   bool htk = false;                ///< Use HTK formula instead of Slaney
   MelNorm norm = MelNorm::Slaney;  ///< Normalization type
@@ -136,7 +155,7 @@ class MelSpectrogram {
 
   /// @brief Computes MFCC coefficients [n_mfcc x n_frames].
   /// @param n_mfcc Number of MFCC coefficients to return
-  /// @param lifter Liftering coefficient (0 = no liftering)
+  /// @param lifter Finite nonnegative liftering coefficient (0 = no liftering)
   /// @return MFCC coefficients
   /// @details Applies DCT-II to log Mel spectrogram.
   std::vector<float> mfcc(int n_mfcc = kMfccDefaultCount, float lifter = 0.0f) const;

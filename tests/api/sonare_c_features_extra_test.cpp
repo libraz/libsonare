@@ -963,3 +963,197 @@ TEST_CASE("a bad Mel edge is refused before allocating audio storage",
   sonare_free_mel_result(&result);
 }
 #endif
+
+TEST_CASE("C MFCC routes refuse a nonfinite or negative lifter before publishing outputs",
+          "[c_api][mfcc][refusal]") {
+  constexpr int kRate = sonare::constants::kDefaultSampleRate;
+  constexpr int kFft = 512;
+  constexpr int kHop = 128;
+  constexpr int kMelBands = 16;
+  constexpr int kMfcc = 8;
+  constexpr int kFrames = 4;
+  const std::array<float, kFft> samples{};
+  const std::array<float, kMfcc * kFrames> coefficients{};
+  constexpr const char* kMessage = "options.lifter must be finite and at least 0";
+
+  SonareMfccOptions forward;
+  SonareMfccToMelOptions mel;
+  SonareMfccToAudioOptions audio;
+  sonare_mfcc_options_init(&forward);
+  sonare_mfcc_to_mel_options_init(&mel);
+  sonare_mfcc_to_audio_options_init(&audio);
+
+  const float infinity = std::numeric_limits<float>::infinity();
+  for (float lifter : {std::numeric_limits<float>::quiet_NaN(), infinity, -infinity, -1.0f}) {
+    CAPTURE(lifter);
+    forward.lifter = mel.lifter = audio.lifter = lifter;
+
+    SonareMfccResult mfcc_result{};
+    mfcc_result.n_mfcc = kMfcc;
+    const SonareError forward_error = sonare_mfcc(samples.data(), samples.size(), kRate, kFft, kHop,
+                                                  kMelBands, kMfcc, &forward, &mfcc_result);
+    CHECK(forward_error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == kMessage);
+    CHECK(mfcc_result.coefficients == nullptr);
+    CHECK(mfcc_result.n_mfcc == 0);
+    sonare_free_mfcc_result(&mfcc_result);
+
+    SonareInverseResult mel_result{};
+    mel_result.rows = kMelBands;
+    CHECK(sonare_mfcc_to_mel(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMelBands,
+                             &mel, &mel_result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == kMessage);
+    CHECK(mel_result.data == nullptr);
+    CHECK(mel_result.rows == 0);
+    sonare_free_inverse_result(&mel_result);
+
+    float* out = non_null_floats();
+    size_t length = kFrames;
+    CHECK(sonare_mfcc_to_audio(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMelBands,
+                               kRate, kFft, kHop, 0.0f, 0.0f, 1, &audio, &out,
+                               &length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == kMessage);
+    CHECK(out == nullptr);
+    CHECK(length == 0);
+    sonare_free_floats(out);
+  }
+
+  forward.lifter = std::numeric_limits<float>::quiet_NaN();
+  forward.fmax_hz = kRate;
+  SonareMfccResult rejected_forward{};
+  REQUIRE(sonare_mfcc(samples.data(), samples.size(), kRate, kFft, kHop, kMelBands, kMfcc, &forward,
+                      &rejected_forward) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be finite and at most 11025");
+  CHECK(rejected_forward.coefficients == nullptr);
+  // A missing output still wins before the forward input domain.
+  CHECK(sonare_mfcc(samples.data(), samples.size(), kRate, kFft, kHop, kMelBands, kMfcc, &forward,
+                    nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out must not be NULL");
+  forward.fmax_hz = 0.0f;
+  auto invalid_samples = samples;
+  invalid_samples[1] = std::numeric_limits<float>::quiet_NaN();
+  CHECK(sonare_mfcc(invalid_samples.data(), invalid_samples.size(), kRate, kFft, kHop, kMelBands,
+                    kMfcc, &forward, &rejected_forward) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == kMessage);
+  CHECK(rejected_forward.coefficients == nullptr);
+
+  mel.lifter = std::numeric_limits<float>::quiet_NaN();
+  SonareInverseResult mel_result{};
+  CHECK(sonare_mfcc_to_mel(coefficients.data(), coefficients.size() - 1, kMfcc, kFrames, kMelBands,
+                           &mel, &mel_result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "input_length must equal n_mfcc * n_frames");
+  CHECK(mel_result.data == nullptr);
+
+  CHECK(sonare_mfcc_to_mel(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMelBands,
+                           &mel, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out must not be NULL");
+
+  forward.lifter = mel.lifter = audio.lifter = 0.0f;
+  SonareMfccResult mfcc_result{};
+  REQUIRE(sonare_mfcc(samples.data(), samples.size(), kRate, kFft, kHop, kMelBands, kMfcc, &forward,
+                      &mfcc_result) == SONARE_OK);
+  CHECK(mfcc_result.n_mfcc == kMfcc);
+  sonare_free_mfcc_result(&mfcc_result);
+  REQUIRE(sonare_mfcc_to_mel(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMelBands,
+                             &mel, &mel_result) == SONARE_OK);
+  CHECK(mel_result.rows == kMelBands);
+  sonare_free_inverse_result(&mel_result);
+  float* out = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_mfcc_to_audio(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMelBands,
+                               kRate, kFft, kHop, 0.0f, 0.0f, 1, &audio, &out,
+                               &length) == SONARE_OK);
+  CHECK(length > 0);
+  sonare_free_floats(out);
+}
+
+TEST_CASE("MFCC routes keep the smallest positive float lifter finite", "[c_api][mfcc]") {
+  constexpr int kRate = sonare::constants::kDefaultSampleRate;
+  constexpr int kFft = 512;
+  constexpr int kHop = 128;
+  constexpr int kMels = 16;
+  constexpr int kMfcc = 8;
+  constexpr int kFrames = 4;
+  const std::array<float, kFft> samples{};
+  const std::array<float, kMfcc * kFrames> coefficients{};
+  const float lifter = std::numeric_limits<float>::denorm_min();
+
+  SonareMfccOptions forward;
+  sonare_mfcc_options_init(&forward);
+  forward.lifter = lifter;
+  SonareMfccResult mfcc{};
+  REQUIRE(sonare_mfcc(samples.data(), samples.size(), kRate, kFft, kHop, kMels, kMfcc, &forward,
+                      &mfcc) == SONARE_OK);
+  CHECK(std::all_of(mfcc.coefficients, mfcc.coefficients + mfcc.n_mfcc * mfcc.n_frames,
+                    [](float value) { return std::isfinite(value); }));
+  sonare_free_mfcc_result(&mfcc);
+
+  SonareMfccToMelOptions mel_options;
+  sonare_mfcc_to_mel_options_init(&mel_options);
+  mel_options.lifter = lifter;
+  SonareInverseResult mel{};
+  REQUIRE(sonare_mfcc_to_mel(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMels,
+                             &mel_options, &mel) == SONARE_OK);
+  CHECK(std::all_of(mel.data, mel.data + mel.rows * mel.n_frames,
+                    [](float value) { return std::isfinite(value); }));
+  sonare_free_inverse_result(&mel);
+
+  SonareMfccToAudioOptions audio_options;
+  sonare_mfcc_to_audio_options_init(&audio_options);
+  audio_options.lifter = lifter;
+  float* out = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_mfcc_to_audio(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMels,
+                               kRate, kFft, kHop, 0.0f, 0.0f, 1, &audio_options, &out,
+                               &length) == SONARE_OK);
+  REQUIRE(length > 0);
+  CHECK(std::all_of(out, out + length, [](float value) { return std::isfinite(value); }));
+  sonare_free_floats(out);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("C MFCC-to-Mel output stays empty on the final allocation failure",
+          "[c_api][mfcc][allocation]") {
+  constexpr int kMfcc = 8;
+  constexpr int kFrames = 4;
+  constexpr int kMels = 16;
+  const std::array<float, kMfcc * kFrames> coefficients{};
+  auto convert = [&](SonareInverseResult* out) {
+    return sonare_mfcc_to_mel(coefficients.data(), coefficients.size(), kMfcc, kFrames, kMels,
+                              nullptr, out);
+  };
+  auto count_allocations = [&] {
+    SonareInverseResult out{};
+    SonareError status;
+    size_t allocations;
+    {
+      sonare::test::AllocationGuard guard;
+      status = convert(&out);
+      allocations = guard.count();
+    }
+    REQUIRE(status == SONARE_OK);
+    REQUIRE(out.data != nullptr);
+    sonare_free_inverse_result(&out);
+    return allocations;
+  };
+  (void)count_allocations();
+  const auto allocations = count_allocations();
+  REQUIRE(allocations > 0);
+  REQUIRE(count_allocations() == allocations);
+
+  SonareInverseResult out{};
+  out.data = non_null_floats();
+  out.rows = 17;
+  out.n_frames = 23;
+  SonareError status;
+  {
+    sonare::test::AllocationFailureAtGuard fail_output_copy(allocations);
+    status = convert(&out);
+  }
+  REQUIRE(status == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(out.data == nullptr);
+  CHECK(out.rows == 0);
+  CHECK(out.n_frames == 0);
+}
+#endif

@@ -467,7 +467,7 @@ typedef struct {
   float fmax_hz;
   /// Non-zero uses the HTK Mel formula instead of Slaney. Default 0.
   int32_t htk;
-  /// Cepstral liftering coefficient (0.0 = no liftering, the librosa default). The inverses
+  /// Finite, nonnegative cepstral lifter (0.0 = no liftering). The inverses
   /// (@ref sonare_mfcc_to_mel, @ref sonare_mfcc_to_audio) undo it when given the same value,
   /// which the result carries as @c lifter. Default 0.
   float lifter;
@@ -590,7 +590,7 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
 typedef struct {
   /// Size of this struct in bytes, written by @ref sonare_mfcc_to_mel_options_init.
   uint32_t struct_size;
-  /// Lifter used by the forward MFCC transform. Zero means no liftering; positive values undo
+  /// Finite, nonnegative lifter used by forward MFCC. Zero means no liftering; positive values undo
   /// the matching sinusoidal lift. Default 0.
   float lifter;
 } SonareMfccToMelOptions;
@@ -618,7 +618,7 @@ typedef struct {
   /// Non-zero rebuilds the intermediate inverse Mel filterbank with HTK Mel spacing; zero is
   /// Slaney. Default 0.
   int32_t htk;
-  /// Lifter used by the forward MFCC transform (0 = none). Default 0.
+  /// Finite, nonnegative lifter used by forward MFCC (0 = none). Default 0.
   float lifter;
 } SonareMfccToAudioOptions;
 

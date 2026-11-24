@@ -156,6 +156,7 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"mfcc", "n_fft", sonare::kStftNFftDomain, "even"},
     {"mfcc", "n_mels", sonare::kMelBandsDomain, nullptr},
     {"mfcc", "n_mfcc", sonare::kMfccCountDomain, nullptr},
+    {"mfcc", "options.lifter", sonare::kMfccLifterDomain, nullptr},
     {"nnls_chroma", "options.hop_length", sonare::kNnlsHopLengthDomain, nullptr},
     {"nnls_chroma", "options.stft_blend_n_fft", sonare::kStftNFftDomain, "even"},
     {"note_segments", "n_frames", sonare_c_detail::kNoteSegmentFrameCountDomain, nullptr},

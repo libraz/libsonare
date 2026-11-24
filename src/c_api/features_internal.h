@@ -31,6 +31,8 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
+inline constexpr std::array<CName, 1> kMfccLifterOptionName{{{"lifter", "options.lifter"}}};
+
 /// The core spells the mel range "fmin" / "fmax"; every mel entry takes them as fmin_hz / fmax_hz.
 inline const std::array<CName, 2> kMelRangeNames{{{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
 /// The forward mel entries take the range in their options struct, so they refuse it under it.

@@ -2401,10 +2401,10 @@ test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses 
 [[entry]]
 kind = "function"
 old = "sonare_mfcc_to_audio"
-changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist. As in 1.x, a nonfinite or negative lifter is refused. The refusal names options.lifter."
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
+test = "tests/api/sonare_c_features_extra_test.cpp::C MFCC routes refuse a nonfinite or negative lifter before publishing outputs"
 
 [[entry]]
 kind = "export"
@@ -4307,18 +4307,18 @@ test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses 
 [[entry]]
 kind = "function"
 old = "sonare_mfcc"
-changed = "takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist"
+changed = "takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct; a finite fmax_hz above Nyquist is refused instead of clamped; 0 still means Nyquist. A finite, nonnegative options.lifter is required. In 1.x a finite negative, -Inf or NaN bypassed liftering, and +Inf produced nonfinite coefficients. A positive lifter whose gain rounds to unity keeps the coefficients finite."
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_features_metering_test.cpp::the C Mel family refuses fmax above Nyquist by name"
+test = "tests/api/sonare_c_features_extra_test.cpp::C MFCC routes refuse a nonfinite or negative lifter before publishing outputs"
 
 [[entry]]
 kind = "function"
 old = "sonare_mfcc_to_mel"
-changed = "takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToMelOptions* options (NULL = defaults; sonare_mfcc_to_mel_options_init) before out; lifter moved into the struct"
+changed = "takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToMelOptions* options (NULL = defaults; sonare_mfcc_to_mel_options_init) before out; lifter moved into the struct. As in 1.x, a nonfinite or negative lifter is refused. The refusal names options.lifter."
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_abi_version_test.cpp::MFCC inverse C API accepts the forward lifter"
+test = "tests/api/sonare_c_features_extra_test.cpp::C MFCC routes refuse a nonfinite or negative lifter before publishing outputs"
 
 [[entry]]
 kind = "function"

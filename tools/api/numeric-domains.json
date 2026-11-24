@@ -3994,6 +3994,17 @@
       "sentinel": null
     },
     {
+      "entry": "mfcc",
+      "param": "options.lifter",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "mfcc_to_audio",
       "param": "n_fft",
       "kind": "integer",
@@ -4050,6 +4061,17 @@
     },
     {
       "entry": "mfcc_to_audio",
+      "param": "options.lifter",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "mfcc_to_audio",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 8000,
@@ -4087,6 +4109,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "mfcc_to_mel",
+      "param": "options.lifter",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

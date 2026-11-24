@@ -233,16 +233,21 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   if (samples == nullptr) validate_offline_audio_input("samples", samples, length, sample_rate);
   const MelConfig config =
       make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz, resolved.fmax_hz, resolved.htk);
-  with_c_names(kMelOptionsRangeNames, [&] {
-    admit_forward_mel(
-        length, sample_rate, config,
-        [&] { validate_offline_audio_samples("samples", samples, length, 0); }, &n_mfcc);
+  with_c_names(kMfccLifterOptionName, [&] {
+    with_c_names(kMelOptionsRangeNames, [&] {
+      admit_forward_mel(
+          length, sample_rate, config,
+          [&] { validate_offline_audio_samples("samples", samples, length, 0); },
+          MfccAdmission{n_mfcc, resolved.lifter});
+    });
   });
   const Audio audio = Audio::from_buffer(samples, length, sample_rate);
   MelSpectrogram mel =
       with_c_names(kMelOptionsRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
   std::vector<float> mfcc_data = mel.mfcc(n_mfcc, resolved.lifter);
 
+  std::unique_ptr<float[]> coeffs(new float[mfcc_data.size()]);
+  std::memcpy(coeffs.get(), mfcc_data.data(), mfcc_data.size() * sizeof(float));
   out->n_mfcc = n_mfcc;
   out->n_frames = mel.n_frames();
   out->sample_rate = mel.sample_rate();
@@ -254,8 +259,6 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   out->htk = config.htk ? 1 : 0;
   out->is_db = 0;
   out->lifter = resolved.lifter;
-  std::unique_ptr<float[]> coeffs(new float[mfcc_data.size()]);
-  std::memcpy(coeffs.get(), mfcc_data.data(), mfcc_data.size() * sizeof(float));
   out->coefficients = release_array(coeffs);
   return SONARE_OK;
   SONARE_C_CATCH

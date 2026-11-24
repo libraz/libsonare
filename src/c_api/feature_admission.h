@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "feature/inverse.h"
@@ -10,23 +12,35 @@
 
 namespace sonare_c_detail {
 
-// Admit the input buffer before scalar arguments, without constructing an Audio.
-template <typename ScanSamples>
-void admit_forward_mel(std::size_t length, int sample_rate, const sonare::MelConfig& config,
-                       ScanSamples&& scan_samples, const int* n_mfcc = nullptr) {
+struct MfccAdmission {
+  int count;
+  double lifter;
+};
+
+inline void admit_forward_mel_config(int sample_rate, const sonare::MelConfig& config,
+                                     std::optional<MfccAdmission> mfcc = std::nullopt) {
   namespace check = sonare::util::check;
-  sonare::validate_offline_audio_extent("samples", length, sample_rate);
-  scan_samples();
   // Refuse the edges before admitting the STFT geometry.
   sonare::validate_mel_bounds(config.fmin, config.fmax, sample_rate);
   sonare::validate_config(config.to_stft_config());
   check::integer_within(config.n_mels, sonare::kMelBandsDomain, "n_mels");
-  if (n_mfcc) {
-    check::integer_within(*n_mfcc, sonare::kMfccCountDomain, "n_mfcc");
-    if (*n_mfcc > config.n_mels) {
+  if (mfcc) {
+    check::integer_within(mfcc->count, sonare::kMfccCountDomain, "n_mfcc");
+    if (mfcc->count > config.n_mels) {
       check::refuse_relation({"n_mfcc", "n_mels"}, "{0} must be at most {1}");
     }
+    sonare::validate_mfcc_lifter(mfcc->lifter);
   }
+}
+
+template <typename ScanSamples>
+void admit_forward_mel(std::size_t length, int sample_rate, const sonare::MelConfig& config,
+                       ScanSamples&& scan_samples,
+                       std::optional<MfccAdmission> mfcc = std::nullopt) {
+  sonare::validate_offline_audio_extent("samples", length, sample_rate);
+  if (!mfcc) scan_samples();
+  admit_forward_mel_config(sample_rate, config, mfcc);
+  if (mfcc) scan_samples();
 }
 
 // Refuses an inverse-transform input buffer that does not hold exactly rows * n_frames floats,
@@ -46,19 +60,43 @@ inline void check_inverse_input_length(size_t input_length, int rows, int n_fram
   }
 }
 
+inline void admit_inverse_shape(size_t length, int rows, int frames,
+                                const sonare::util::check::NumericDomain& rows_domain,
+                                const sonare::util::check::NumericDomain& frames_domain,
+                                const char* rows_subject) {
+  sonare::util::check::integer_within(rows, rows_domain, rows_subject);
+  sonare::util::check::integer_within(frames, frames_domain, "n_frames");
+  check_inverse_input_length(length, rows, frames, rows_subject);
+}
+
+template <typename ScanCoefficients>
+void admit_inverse_mfcc_coefficients(int n_mfcc, int n_mels, double lifter,
+                                     ScanCoefficients&& scan_coefficients) {
+  sonare::util::check::integer_within(n_mels, sonare::kInverseMelBandsDomain, "n_mels");
+  sonare::validate_inverse_mfcc_lifter(lifter, n_mfcc);
+  scan_coefficients();
+}
+
+template <typename ScanCoefficients>
+void admit_mfcc_to_mel(size_t length, int n_mfcc, int n_frames, int n_mels, double lifter,
+                       ScanCoefficients&& scan_coefficients) {
+  admit_inverse_shape(length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
+                      sonare::kInverseFramesDomain, "n_mfcc");
+  admit_inverse_mfcc_coefficients(n_mfcc, n_mels, lifter, scan_coefficients);
+}
+
 enum class MelInverseKind { kStft, kMelAudio, kMfccAudio };
 
 template <typename ScanCoefficients>
 void admit_inverse_mel(MelInverseKind kind, size_t length, int rows, int frames, int sample_rate,
-                       const sonare::MelConfig& config, int n_iter, float lifter,
+                       const sonare::MelConfig& config, int n_iter, double lifter,
                        ScanCoefficients&& scan_coefficients) {
   namespace check = sonare::util::check;
   const bool mfcc = kind == MelInverseKind::kMfccAudio;
   const char* rows_subject = mfcc ? "n_mfcc" : "n_mels";
-  check::integer_within(
-      rows, mfcc ? sonare::kInverseMfccCountDomain : sonare::kInverseMelBandsDomain, rows_subject);
-  check::integer_within(frames, sonare::kMelToStftFramesDomain, "n_frames");
-  check_inverse_input_length(length, rows, frames, rows_subject);
+  admit_inverse_shape(length, rows, frames,
+                      mfcc ? sonare::kInverseMfccCountDomain : sonare::kInverseMelBandsDomain,
+                      sonare::kMelToStftFramesDomain, rows_subject);
   const auto check_hop = [&] {
     if (config.hop_length != 0) {
       check::integer_within(config.hop_length, sonare::kStftHopDomain, "hop_length");
@@ -75,9 +113,7 @@ void admit_inverse_mel(MelInverseKind kind, size_t length, int rows, int frames,
   }
   sonare::validate_mel_bounds(config.fmin, config.fmax, sample_rate);
   if (kind == MelInverseKind::kMfccAudio) {
-    check::integer_within(config.n_mels, sonare::kInverseMelBandsDomain, "n_mels");
-    check::at_least(lifter, 0.0, "lifter");
-    scan_coefficients();
+    admit_inverse_mfcc_coefficients(rows, config.n_mels, lifter, scan_coefficients);
   }
   if (kind != MelInverseKind::kStft) {
     check::integer_within(n_iter, sonare::kInverseIterationsDomain, "n_iter");

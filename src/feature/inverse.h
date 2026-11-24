@@ -54,6 +54,9 @@ inline constexpr util::check::NumericDomain kInverseFramesDomain =
 inline constexpr util::check::NumericDomain kInverseMelBandsDomain =
     util::check::integer_domain_of<int>(1);
 
+/// @brief Checks the lifter and that its window can be inverted.
+void validate_inverse_mfcc_lifter(double lifter, int n_mfcc);
+
 /// @brief Approximate inverse of a Mel filterbank.
 /// @details Uses the pseudo-inverse of the Mel filterbank matrix (the same
 /// strategy librosa's NNLS path falls back to when NNLS is unavailable). Output

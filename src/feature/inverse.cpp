@@ -17,8 +17,6 @@
 
 namespace sonare {
 
-using sonare::constants::kPi;
-
 namespace {
 
 /// Smallest lift-window magnitude mfcc_to_mel divides by; below it the inverse amplifies a
@@ -26,6 +24,18 @@ namespace {
 constexpr float kMinLift = 1.0e-3f;
 
 }  // namespace
+
+void validate_inverse_mfcc_lifter(double lifter_value, int n_mfcc) {
+  validate_mfcc_lifter(lifter_value);
+  const auto lifter = static_cast<float>(lifter_value);
+  if (lifter == 0.0f) return;
+  for (int k = 0; k < n_mfcc; ++k) {
+    if (std::abs(mfcc_lift_at(lifter, k)) < kMinLift) {
+      util::check::refuse_relation({"lifter", "n_mfcc"},
+                                   "{0} must not zero the lift window below {1}");
+    }
+  }
+}
 
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr) {
@@ -83,7 +93,7 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   util::check::integer_within(n_mfcc, kInverseMfccCountDomain, "n_mfcc");
   util::check::integer_within(n_frames, kInverseFramesDomain, "n_frames");
   util::check::integer_within(n_mels, kInverseMelBandsDomain, "n_mels");
-  util::check::at_least(lifter, 0.0, "lifter");
+  validate_inverse_mfcc_lifter(lifter, n_mfcc);
   // A non-finite coefficient spreads across every Mel band through the inverse
   // DCT, and the dB-to-power conversion turns part of it back into 0 or Inf, so
   // the caller gets a plausible-looking spectrogram with no way to detect it.
@@ -102,12 +112,7 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   if (lifter > 0.0f) {
     lift.resize(n_mfcc);
     for (int k = 0; k < n_mfcc; ++k) {
-      lift[k] = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k + 1) / lifter);
-      // A window that reaches zero cannot be divided back out of the coefficient it zeroed.
-      if (std::abs(lift[k]) < kMinLift) {
-        util::check::refuse_relation({"lifter", "n_mfcc"},
-                                     "{0} must not zero the lift window below {1}");
-      }
+      lift[k] = mfcc_lift_at(lifter, k);
     }
   }
 

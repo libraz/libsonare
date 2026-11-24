@@ -542,6 +542,7 @@ SonareError probe_mfcc(const std::string& param, double value) {
   const Mel m = mel_of(param, value);
   SonareMfccOptions options{};
   sonare_mfcc_options_init(&options);
+  if (is_param(param, "options.lifter")) options.lifter = static_cast<float>(value);
   SonareMfccResult out{};
   const SonareError err = sonare_mfcc(pcm(), pcm_length(), kAnalysisRate, m.frame.n_fft,
                                       m.frame.hop_length, m.n_mels, m.n_mfcc, &options, &out);
