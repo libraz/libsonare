@@ -531,7 +531,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint32_t scope_band_count() const noexcept { return scope_tap_.band_count(); }
 #endif
   transport::TransportState transport_state_control() const noexcept;
+  /// Replaces the tempo map with a finite BPM in [1e-6, 100000].
   void set_tempo(double bpm);
+  /// Each BPM and nonzero ramp target must be finite and in [1e-6, 100000].
   void set_tempo_segments(std::vector<transport::TempoSegment> segments);
   /// Throws the capture refusal set_tempo_segments(@p segments) would throw, changing nothing, so
   /// a caller can refuse a tempo before its first mutation. The segments must already be valid.

@@ -176,7 +176,7 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
     const double b1 = segments[i + 1].bpm;   // next segment's final start tempo
     seg.end_bpm = b1;
     if (std::abs(b1 - m) < 1.0e-9) continue;  // constant segment
-    const double lo_b = transport::kMinEffectiveTempoBpm;
+    const double lo_b = transport::kMinPublicTempoBpm;
     const double hi_b = transport::kMaxPublicTempoBpm;
     if (m < log_mean(lo_b, b1) || m > log_mean(hi_b, b1)) {
       seg.bpm = m;

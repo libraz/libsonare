@@ -24,8 +24,17 @@ inline constexpr double kMaxPublicPpq = 1.0e12;
 /// far above a musical tempo while keeping MIDI-clock and beat-grid work
 /// bounded enough for realtime code to enforce a small per-block budget.
 inline constexpr double kMaxPublicTempoBpm = 100000.0;
-/// Effective lower tempo used by TempoMap for interpolation and playback.
-inline constexpr double kMinEffectiveTempoBpm = 1.0e-6;
+/// Lowest tempo accepted by public controls and used by internal tempo producers.
+inline constexpr double kMinPublicTempoBpm = 1.0e-6;
+/// Public tempo accepted by scalar controls and tempo segment endpoints.
+inline constexpr auto kTempoBpmDomain =
+    ::sonare::util::check::real_domain(kMinPublicTempoBpm, kMaxPublicTempoBpm);
+/// Tempo segment endpoint domain with zero reserved for the no-ramp sentinel.
+inline constexpr auto kTempoRampBpmDomain =
+    ::sonare::util::check::with_sentinel(kTempoBpmDomain, 0.0);
+/// Internal producers retain their existing lack of an upper tempo bound.
+inline constexpr auto kInternalTempoBpmDomain =
+    ::sonare::util::check::real_domain_above(kMinPublicTempoBpm, true);
 
 inline bool valid_public_ppq(double ppq) noexcept { return ppq >= 0.0 && ppq <= kMaxPublicPpq; }
 
@@ -42,7 +51,11 @@ inline void check_loop_range(double start_ppq, double end_ppq, bool enabled) {
 }
 
 inline bool valid_public_tempo(double bpm) noexcept {
-  return std::isfinite(bpm) && bpm > 0.0 && bpm <= kMaxPublicTempoBpm;
+  return ::sonare::util::check::in_domain(bpm, kTempoBpmDomain);
+}
+
+inline bool valid_internal_tempo_bpm(double bpm) noexcept {
+  return util::check::in_domain(bpm, kInternalTempoBpmDomain);
 }
 
 struct TempoSegment {
@@ -61,8 +74,55 @@ struct TempoSegment {
 
 inline bool valid_public_tempo_segment(const TempoSegment& segment) noexcept {
   return std::isfinite(segment.start_ppq) && valid_public_ppq(segment.start_ppq) &&
-         valid_public_tempo(segment.bpm) && std::isfinite(segment.end_bpm) &&
-         segment.end_bpm >= 0.0 && (segment.end_bpm == 0.0 || valid_public_tempo(segment.end_bpm));
+         valid_public_tempo(segment.bpm) &&
+         (segment.end_bpm == *kTempoRampBpmDomain.sentinel ||
+          util::check::in_domain(segment.end_bpm, kTempoRampBpmDomain));
+}
+
+namespace detail {
+
+inline void check_tempo_segment_bpms(double bpm, double end_bpm, std::size_t index,
+                                     const char* prefix, const char* end_field,
+                                     const util::check::NumericDomain& bpm_domain,
+                                     const util::check::NumericDomain& ramp_domain) {
+  if (!util::check::in_domain(bpm, bpm_domain)) {
+    util::check::refuse_outside(bpm_domain,
+                                util::check::indexed_subject(prefix, index, "bpm").c_str());
+  }
+  if (end_bpm != *ramp_domain.sentinel && !util::check::in_domain(end_bpm, ramp_domain)) {
+    util::check::refuse_outside(ramp_domain,
+                                util::check::indexed_subject(prefix, index, end_field).c_str());
+  }
+}
+
+}  // namespace detail
+
+/// @brief Checks the authored BPM fields of one public tempo segment.
+template <typename Segment>
+inline void check_public_tempo_segment(const Segment& segment, std::size_t index,
+                                       const char* prefix = "segments",
+                                       const char* end_field = "end_bpm") {
+  detail::check_tempo_segment_bpms(segment.bpm, segment.end_bpm, index, prefix, end_field,
+                                   kTempoBpmDomain, kTempoRampBpmDomain);
+}
+
+/// @brief Checks the authored BPM fields in stored order.
+inline void check_public_tempo_segments(const std::vector<TempoSegment>& segments,
+                                        const char* prefix = "segments",
+                                        const char* end_field = "end_bpm") {
+  for (std::size_t i = 0; i < segments.size(); ++i) {
+    check_public_tempo_segment(segments[i], i, prefix, end_field);
+  }
+}
+
+/// @brief Internal tempo vectors have a lower bound but no upper bound.
+inline void check_internal_tempo_segments(const std::vector<TempoSegment>& segments,
+                                          const char* prefix = "segments") {
+  constexpr auto ramp_domain = util::check::with_sentinel(kInternalTempoBpmDomain, 0.0);
+  for (std::size_t i = 0; i < segments.size(); ++i) {
+    detail::check_tempo_segment_bpms(segments[i].bpm, segments[i].end_bpm, i, prefix, "end_bpm",
+                                     kInternalTempoBpmDomain, ramp_domain);
+  }
 }
 
 struct TimeSignature {
@@ -109,6 +169,8 @@ void sort_by_start(std::vector<TimeSignatureSegment>* segments);
 class TempoMap {
  public:
   void prepare(double sample_rate);
+  /// @brief Installs a tempo map. Both endpoints must meet the transport floor;
+  ///          a zero end_bpm means the segment is constant.
   void set_segments(std::vector<TempoSegment> segments);
   /// @brief Installs the meter map.
   /// @details Before the first signature the span is read in that signature: its bar grid starts

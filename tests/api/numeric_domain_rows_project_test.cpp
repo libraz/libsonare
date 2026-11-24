@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <map>
 #include <string>
 #include <vector>
@@ -190,10 +191,6 @@ SonareError probe_strip_insert(const std::string& param, double value) {
 #endif  // SONARE_WITH_MIXING
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT)
-
-SonareError probe_validate_mixing_assistant_config(const std::string&, double value) {
-  return sonare_validate_mixing_assistant_config(static_cast<int>(value), nullptr, 0);
-}
 
 SonareError probe_mixing_assistant_suggest(const std::string& param, double value) {
   const float* left[] = {nullptr};
@@ -633,9 +630,12 @@ SonareError probe_set_time_signatures(const std::string& param, double value) {
   return sonare_project_set_time_signatures(project.handle, &segment, 1);
 }
 
-SonareError probe_set_tempo_segments(const std::string&, double value) {
+SonareError probe_set_tempo_segments(const std::string& param, double value) {
   Project project;
-  const SonareProjectTempoSegment segment{value, 120.0, 0.0};
+  SonareProjectTempoSegment segment{0.0, 120.0, 0.0};
+  if (param == "segments[].start_ppq") segment.start_ppq = value;
+  if (param == "segments[].bpm") segment.bpm = value;
+  if (param == "segments[].end_bpm") segment.end_bpm = value;
   return sonare_project_set_tempo_segments(project.handle, &segment, 1);
 }
 
@@ -898,8 +898,9 @@ SonareError probe_transcribe(const std::string& param, double value) {
   const SonareTranscribeConfig config = transcribe_config(param, value);
   const std::vector<float>& samples = analysis_samples();
   SonareTranscribeResult result{};
+  const float bpm = param == "tempo_bpm" ? static_cast<float>(value) : 120.0f;
   const SonareError err =
-      sonare_transcribe(samples.data(), samples.size(), kAnalysisRate, 120.0f, &config, &result);
+      sonare_transcribe(samples.data(), samples.size(), kAnalysisRate, bpm, &config, &result);
   sonare_free_transcribe_result(&result);
   return err;
 }
@@ -964,7 +965,6 @@ const std::map<std::string, Probe>& probes() {
 #endif
 #if defined(SONARE_WITH_MIXING_ASSISTANT)
       {"mixing_assistant_suggest", probe_mixing_assistant_suggest},
-      {"validate_mixing_assistant_config", probe_validate_mixing_assistant_config},
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
       {"chord_symbol_from_analysis", probe_chord_symbol_from_analysis},
@@ -1076,6 +1076,10 @@ double inside_value(const NumericDomainRow& row) {
     if (param == "config.f0_max_hz") return 2000.0;
     if (param == "config.reference_hz") return 440.0;
     if (param == "config.velocity_floor_db") return -60.0;
+    if (param == "tempo_bpm") {
+      return std::nextafterf(static_cast<float>(*row.domain.lo),
+                             std::numeric_limits<float>::infinity());
+    }
   }
   // An annotation span must end after its start, which the probe holds at 0.
   if (entry.rfind("project_annotate_", 0) == 0 && param.size() >= 7 &&

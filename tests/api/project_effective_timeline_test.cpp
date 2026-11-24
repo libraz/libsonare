@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -43,6 +44,15 @@ double bar_start(const SonareProject* project, int64_t bar_index) {
   return result;
 }
 
+std::vector<SonareProjectTempoSegment> tempo_segments(const SonareProject* project) {
+  SonareProjectTempoSegmentList result{};
+  REQUIRE(sonare_project_tempo_segments(project, &result) == SONARE_OK);
+  std::vector<SonareProjectTempoSegment> copied;
+  if (result.count > 0) copied.assign(result.items, result.items + result.count);
+  sonare_free_project_tempo_segment_list(&result);
+  return copied;
+}
+
 }  // namespace
 
 TEST_CASE("project end PPQ includes audible clips only", "[c_api][project][effective_timeline]") {
@@ -69,6 +79,70 @@ TEST_CASE("project end PPQ includes audible clips only", "[c_api][project][effec
   CHECK(end_ppq(project.value) == 12.0);
   REQUIRE(sonare_project_set_track_solo(project.value, short_track, 0) == SONARE_OK);
   CHECK(end_ppq(project.value) == 22.0);
+}
+
+TEST_CASE("project deserialization refuses sub-floor tempo at its document field",
+          "[c_api][project][tempo_floor]") {
+  constexpr const char* documents[] = {
+      R"({"version":7,"tempoSegments":[{"startPpq":0,"bpm":1e-8},{"startPpq":0,"bpm":120}]})",
+      R"({"version":7,"tempoSegments":[{"startPpq":0,"bpm":120,"endBpm":1e-8}]})",
+  };
+  const char* subjects[] = {"tempoSegments[0].bpm", "tempoSegments[0].endBpm"};
+  for (size_t i = 0; i < 2; ++i) {
+    const std::string document = documents[i];
+    SonareProject* out = nullptr;
+    char* diagnostics = nullptr;
+    const SonareError code =
+        sonare_project_deserialize(document.data(), document.size(), &out, &diagnostics);
+    const std::string message = sonare_last_error_message();
+    const std::string diagnostic_text = diagnostics ? diagnostics : "";
+    CHECK(out == nullptr);
+    sonare_free_string(diagnostics);
+    sonare_project_destroy(out);
+
+    const std::string expected = std::string(subjects[i]) + " must be finite and in [1e-6, 100000]";
+    CHECK(code == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(message.find(expected) != std::string::npos);
+    CHECK(diagnostic_text.find(expected) != std::string::npos);
+  }
+}
+
+TEST_CASE("project tempo setter enforces the floor and preserves stored segments on refusal",
+          "[c_api][project][effective_timeline][tempo_floor]") {
+  ProjectHandle project;
+  const SonareProjectTempoSegment valid[] = {{0.0, 120.0, 0.0}, {4.0, 90.0, 0.0}};
+  REQUIRE(sonare_project_set_tempo_segments(project.value, valid, 2) == SONARE_OK);
+  const auto before = tempo_segments(project.value);
+  REQUIRE(before.size() == 2);
+
+  const SonareProjectTempoSegment bad_start[] = {{0.0, 120.0, 0.0}, {4.0, 1.0e-8, 0.0}};
+  CHECK(sonare_project_set_tempo_segments(project.value, bad_start, 2) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "segments[1].bpm must be finite and in [1e-6, 100000]");
+  const auto after_start_refusal = tempo_segments(project.value);
+  REQUIRE(after_start_refusal.size() == before.size());
+  CHECK(after_start_refusal[0].bpm == before[0].bpm);
+  CHECK(after_start_refusal[1].bpm == before[1].bpm);
+
+  for (const double end_bpm : {1.0e-8, -1.0, std::numeric_limits<double>::quiet_NaN()}) {
+    const SonareProjectTempoSegment bad_ramp[] = {{0.0, 120.0, end_bpm}, {4.0, 90.0, 0.0}};
+    CHECK(sonare_project_set_tempo_segments(project.value, bad_ramp, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "segments[0].end_bpm must be finite and in [1e-6, 100000]");
+    const auto after_ramp_refusal = tempo_segments(project.value);
+    REQUIRE(after_ramp_refusal.size() == before.size());
+    CHECK(after_ramp_refusal[0].end_bpm == before[0].end_bpm);
+    CHECK(after_ramp_refusal[1].bpm == before[1].bpm);
+  }
+
+  const SonareProjectTempoSegment floor[] = {{0.0, 120.0, 1.0e-6}, {4.0, 1.0e-6, 0.0}};
+  REQUIRE(sonare_project_set_tempo_segments(project.value, floor, 2) == SONARE_OK);
+  const auto accepted = tempo_segments(project.value);
+  REQUIRE(accepted.size() == 2);
+  CHECK(accepted[0].end_bpm == 1.0e-6);
+  CHECK(accepted[1].bpm == 1.0e-6);
 }
 
 TEST_CASE("project position and bar readers follow the effective meter grid",

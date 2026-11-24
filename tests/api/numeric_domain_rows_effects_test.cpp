@@ -542,9 +542,16 @@ SonareError probe_engine_set_time_signature(const std::string& param, double val
   return sonare_engine_set_time_signature(engine.get(), numerator, denominator);
 }
 
+SonareError probe_engine_set_tempo(const std::string&, double value) {
+  PreparedEngine engine;
+  return sonare_engine_set_tempo(engine.get(), value);
+}
+
 SonareError probe_engine_set_tempo_segments(const std::string& param, double value) {
   PreparedEngine engine;
   SonareProjectTempoSegment segment{0.0, 120.0, 0.0};
+  if (is_param(param, "segments[].bpm")) segment.bpm = value;
+  if (is_param(param, "segments[].end_bpm")) segment.end_bpm = value;
   if (is_param(param, "segments[].start_ppq")) segment.start_ppq = value;
   const std::size_t count = is_param(param, "segment_count") ? as_size(value) : 1;
   return sonare_engine_set_tempo_segments(engine.get(), &segment, count);
@@ -1003,6 +1010,7 @@ const std::map<std::string, Probe>& probes() {
       {"engine_set_clips", probe_engine_set_clips},
       {"engine_set_loop", probe_engine_set_loop},
       {"engine_set_markers", probe_engine_set_markers},
+      {"engine_set_tempo", probe_engine_set_tempo},
       {"engine_set_tempo_segments", probe_engine_set_tempo_segments},
       {"engine_set_time_signature", probe_engine_set_time_signature},
       {"engine_set_time_signature_segments", probe_engine_set_time_signature_segments},

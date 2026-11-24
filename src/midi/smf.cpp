@@ -935,6 +935,7 @@ std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSe
                                             uint16_t ppqn) {
   std::vector<SmfTempoEvent> events;
   if (segments.empty()) return events;
+  transport::check_internal_tempo_segments(segments, "segments");
   std::vector<transport::TempoSegment> sorted = segments;
   transport::sort_by_start(&sorted);
   transport::TempoMap map;
@@ -943,7 +944,7 @@ std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSe
   const double ticks_per_ppq = static_cast<double>(ppqn);
   for (size_t i = 0; i < sorted.size(); ++i) {
     const transport::TempoSegment& seg = sorted[i];
-    const double bpm = seg.bpm > 0.0 ? seg.bpm : sonare::constants::kDefaultBpm;
+    const double bpm = seg.bpm;
     const int64_t start = smf_ppq_to_ticks(seg.start_ppq, ppqn);
     // The map holds the first tempo back to ppq 0, where a reader would assume 120 BPM.
     const int64_t hold = i == 0 ? 0 : start;
@@ -991,6 +992,8 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     return result;
   }
 
+  const std::vector<SmfTempoEvent> tempo_events = smf_tempo_events(tempo_segments, ppqn);
+
   // Header: format 1, num_tracks = 1 meta track + one per clip.
   const uint16_t num_tracks = static_cast<uint16_t>(1 + clips.size());
   size_t written_tracks = 0;
@@ -1017,7 +1020,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
       bool key_minor = false;                              // key signature only.
     };
     std::vector<MetaItem> items;
-    for (const SmfTempoEvent& tempo : smf_tempo_events(tempo_segments, ppqn)) {
+    for (const SmfTempoEvent& tempo : tempo_events) {
       items.push_back({tempo.tick, 0, tempo.bpm, 0, 0, 24, 8, {}});
     }
     for (const auto& seg : exported_time_signatures(time_signatures)) {

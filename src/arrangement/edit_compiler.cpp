@@ -470,16 +470,10 @@ void validate_mix_automation(const CompiledTimeline& timeline, CompileResult* re
 }
 #endif
 
-// Validates tempo segments: bpm/end_bpm must be > 0 and start_ppq monotonic and
-// non-negative. Returns false (with diagnostics appended) on any violation.
+// Validates that tempo positions are nonnegative and increasing.
 bool validate_tempo(const Project& project, CompileResult* result) {
   double prev_ppq = -1.0;
   for (const auto& seg : project.tempo_segments()) {
-    if (seg.bpm <= 0.0 || (seg.end_bpm < 0.0)) {
-      add_diag(result, Diagnostic::Code::kInvalidTempo, Diagnostic::Severity::kError, 0,
-               "tempo segment has non-positive BPM");
-      return false;
-    }
     if (seg.start_ppq < 0.0 || seg.start_ppq <= prev_ppq) {
       add_diag(result, Diagnostic::Code::kInvalidTempo, Diagnostic::Severity::kError, 0,
                "tempo segment start_ppq is negative or non-monotonic");

@@ -5,10 +5,12 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "transport/musical_time.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -181,63 +183,85 @@ TEST_CASE("TempoMap reports bar and beat positions", "[transport]") {
   REQUIRE_THAT(map.bar_start_ppq(10.0), WithinAbs(8.0, 1.0e-9));
 }
 
-TEST_CASE("TempoMap clamps both endpoints before integrating a tempo ramp", "[transport][tempo]") {
+TEST_CASE("TempoMap accepts the transport tempo floor exactly", "[transport][tempo]") {
   sonare::transport::TempoMap map;
   map.prepare(48000.0);
+  map.set_segments({{0.0, sonare::transport::kMinPublicTempoBpm, 0.0}});
 
-  // Both raw endpoints are positive but below the playhead's 1e-6 BPM floor.
-  // Once clamped, this is a constant-tempo segment and must use the exact
-  // constant-tempo conversion instead of a zero-slope logarithmic ramp.
-  sonare::transport::TempoSegment ramp{};
-  ramp.start_ppq = 0.0;
-  ramp.bpm = 1.0e-7;
-  ramp.end_bpm = 5.0e-7;
-  sonare::transport::TempoSegment tail{};
-  tail.start_ppq = 4.0;
-  tail.bpm = 5.0e-7;
-  map.set_segments({ramp, tail});
-
-  constexpr int64_t kSamplesPerPpqAtMinBpm = 2'880'000'000'000;
-  REQUIRE(map.ppq_to_sample(1.0) == kSamplesPerPpqAtMinBpm);
-  REQUIRE(map.ppq_to_sample(4.0) == 4 * kSamplesPerPpqAtMinBpm);
-  REQUIRE_THAT(map.sample_to_ppq(kSamplesPerPpqAtMinBpm), WithinAbs(1.0, 1.0e-12));
-  REQUIRE_THAT(map.bpm_at_sample(0), WithinAbs(1.0e-6, 1.0e-12));
+  constexpr int64_t kSamplesPerPpqAtFloor = 2'880'000'000'000;
+  CHECK(map.ppq_to_sample(1.0) == kSamplesPerPpqAtFloor);
+  CHECK_THAT(map.sample_to_ppq(kSamplesPerPpqAtFloor), WithinAbs(1.0, 1.0e-12));
+  CHECK(map.bpm_at_ppq(0.0) == sonare::transport::kMinPublicTempoBpm);
+  CHECK(map.bpm_at_sample(0) == sonare::transport::kMinPublicTempoBpm);
 }
 
-TEST_CASE("TempoMap ramps from a clamped low endpoint consistently", "[transport][tempo]") {
+TEST_CASE("TempoMap retains the internal domain above the public ceiling", "[transport][tempo]") {
   sonare::transport::TempoMap map;
   map.prepare(48000.0);
-
-  sonare::transport::TempoSegment ramp{};
-  ramp.start_ppq = 0.0;
-  ramp.bpm = 1.0e-7;
-  ramp.end_bpm = 5.0e-6;
-  sonare::transport::TempoSegment tail{};
-  tail.start_ppq = 4.0;
-  tail.bpm = 5.0e-6;
-  map.set_segments({ramp, tail});
-
-  const int64_t sample_at_one_ppq = map.ppq_to_sample(1.0);
-  REQUIRE(sample_at_one_ppq > 0);
-  REQUIRE_THAT(map.sample_to_ppq(sample_at_one_ppq), WithinAbs(1.0, 5.0e-4));
-  REQUIRE_THAT(map.bpm_at_sample(0), WithinAbs(1.0e-6, 1.0e-12));
-  // The instantaneous value must use the clamped start endpoint too. Using the
-  // raw 1e-7 BPM base shifts the middle of the ramp by 9e-7 BPM.
-  const double expected_at_one_ppq = 1.0e-6 + (5.0e-6 - 1.0e-6) / 4.0;
-  REQUIRE_THAT(map.bpm_at_sample(sample_at_one_ppq), WithinAbs(expected_at_one_ppq, 1.0e-12));
+  const double bpm = sonare::transport::kMaxPublicTempoBpm + 1.0;
+  map.set_segments({{0.0, bpm, 0.0}});
+  CHECK(map.bpm_at_ppq(0.0) == bpm);
 }
 
-TEST_CASE("TempoMap reported tempo tracks the clamped playhead tempo", "[transport]") {
-  // A positive-but-sub-kMinBpm segment passes the finite-positive load guard, but
-  // the playhead advances at kMinBpm (samples_per_ppq clamps). The reported tempo
-  // must be clamped to match, not echo the raw near-zero value.
+TEST_CASE("TempoMap refuses sub-floor endpoints without replacing the installed map",
+          "[transport][tempo]") {
   sonare::transport::TempoMap map;
   map.prepare(48000.0);
-  sonare::transport::TempoSegment tiny{};
-  tiny.start_ppq = 0.0;
-  tiny.bpm = 1.0e-300;  // finite, positive, far below kMinBpm (1e-6)
-  map.set_segments({tiny});
-  REQUIRE(map.bpm_at_sample(0) >= 1.0e-6);
+  map.set_segments({{0.0, 120.0, 0.0}});
+  const int64_t installed_sample = map.ppq_to_sample(1.0);
+
+  const auto expect_refusal = [](auto install, const char* expected) {
+    bool refused = false;
+    try {
+      install();
+    } catch (const sonare::SonareException& error) {
+      refused = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == expected);
+    }
+    CHECK(refused);
+  };
+
+  expect_refusal([&] { map.set_segments({{0.0, 1.0e-8, 0.0}}); },
+                 "segments[0].bpm must be finite and at least 1e-6");
+  CHECK(map.ppq_to_sample(1.0) == installed_sample);
+
+  sonare::transport::TempoSegment ramp{0.0, 120.0, 0.0, 1.0e-8};
+  sonare::transport::TempoSegment tail{4.0, 60.0, 0.0};
+  expect_refusal([&] { map.set_segments({ramp, tail}); },
+                 "segments[0].end_bpm must be finite and at least 1e-6");
+  CHECK(map.ppq_to_sample(1.0) == installed_sample);
+}
+
+TEST_CASE("TempoMap integrates and inverts a steep ramp ending at the floor",
+          "[transport][tempo]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  const double floor = sonare::transport::kMinPublicTempoBpm;
+  map.set_segments({{0.0, 100000.0, 0.0, floor}, {4.0, floor, 0.0}});
+
+  double previous_seconds = -1.0;
+  for (const double ppq : {0.0, 0.25, 1.0, 2.0, 3.0, 3.75, 4.0}) {
+    const double seconds = map.ppq_to_seconds(ppq);
+    REQUIRE(std::isfinite(seconds));
+    CHECK(seconds > previous_seconds);
+    previous_seconds = seconds;
+    CHECK_THAT(map.seconds_to_ppq(seconds), WithinAbs(ppq, 2.0e-10));
+  }
+  CHECK(map.bpm_at_ppq(0.0) == 100000.0);
+  CHECK(map.bpm_at_ppq(4.0) == floor);
+  CHECK_THAT(map.bpm_at_sample(map.ppq_to_sample(4.0)), WithinAbs(floor, floor * 1.0e-5));
+}
+
+TEST_CASE("TempoMap extrapolates a ramp before its first segment", "[transport][tempo]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_segments({{-4.0, 120.0, 0.0, 60.0}, {0.0, 60.0, 0.0}});
+
+  const double seconds = -4.0 * std::log(1.5);
+  CHECK_THAT(map.ppq_to_seconds(-8.0), WithinAbs(seconds, 1.0e-12));
+  CHECK_THAT(map.seconds_to_ppq(seconds), WithinAbs(-8.0, 1.0e-12));
+  CHECK(map.bpm_at_ppq(-8.0) == 180.0);
 }
 
 TEST_CASE("TempoMap numbers bars across an off-grid time-signature change", "[transport]") {

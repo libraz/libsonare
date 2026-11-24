@@ -580,6 +580,7 @@ class Project {
     return tempo_segments_;
   }
   void set_tempo_segments(std::vector<transport::TempoSegment> segments) {
+    transport::check_internal_tempo_segments(segments);
     tempo_segments_ = std::move(segments);
   }
 

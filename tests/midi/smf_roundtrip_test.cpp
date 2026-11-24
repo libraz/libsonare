@@ -6,7 +6,6 @@
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <cfenv>
 #include <cstdint>
 #include <limits>
 #include <new>
@@ -640,34 +639,60 @@ TEST_CASE("SMF export clamps an extreme slow tempo to the 24-bit field", "[midi]
   REQUIRE(round.tempo_segments[0].bpm == Catch::Approx(clamped_bpm).epsilon(1e-6));
 }
 
-TEST_CASE("SMF export clamps a tiny positive BPM before converting to the wire field", "[midi]") {
-  for (const double bpm : {std::numeric_limits<double>::min(), 1.0e-20}) {
-    CAPTURE(bpm);
-    const std::vector<sonare::transport::TempoSegment> tempos = {{0.0, bpm, 0.0}};
-    std::feclearexcept(FE_ALL_EXCEPT);
-    const auto exported = export_smf({}, tempos, {}, {}, {});
-    // Both inputs produce a quotient larger than the integer conversion range;
-    // clamping the floating quotient first avoids llround's invalid operation.
-    CHECK((std::fetestexcept(FE_INVALID) & FE_INVALID) == 0);
-    REQUIRE(exported.ok());
-    REQUIRE(first_smf_tempo_word(exported.bytes) == 0xFFFFFFu);
-  }
+TEST_CASE("SMF export refuses invalid tempo endpoints in caller order", "[midi]") {
+  using sonare::ErrorCode;
+  using sonare::SonareParameterRefusal;
+  using sonare::transport::TempoSegment;
+
+  const auto expect_refusal = [](const std::vector<TempoSegment>& segments,
+                                 const std::string& expected_subject) {
+    bool caught = false;
+    try {
+      (void)export_smf({}, segments, {}, {}, {});
+    } catch (const SonareParameterRefusal& refusal) {
+      caught = true;
+      CHECK(refusal.code() == ErrorCode::InvalidParameter);
+      CHECK(refusal.subject() == expected_subject);
+    }
+    CHECK(caught);
+  };
+
+  const double floor = sonare::transport::kMinPublicTempoBpm;
+  expect_refusal({{0.0, floor * 0.5, 0.0}}, "segments[0].bpm");
+  expect_refusal({{0.0, 0.0, 0.0}}, "segments[0].bpm");
+  expect_refusal({{0.0, std::numeric_limits<double>::quiet_NaN(), 0.0}}, "segments[0].bpm");
+
+  // The original caller index is preserved even though valid tempo maps are sorted by PPQ.
+  expect_refusal({{96.0, 120.0, 0.0}, {0.0, floor * 0.5, 0.0}}, "segments[1].bpm");
+
+  TempoSegment invalid_end{0.0, 120.0, 0.0};
+  invalid_end.end_bpm = floor * 0.5;
+  expect_refusal({invalid_end}, "segments[0].end_bpm");
+}
+
+TEST_CASE("SMF export accepts the internal floor and clamps to tempo wire limits", "[midi]") {
+  const double floor = sonare::transport::kMinPublicTempoBpm;
+  const auto at_floor = export_smf({}, {{0.0, floor, 0.0}}, {}, {}, {});
+  REQUIRE(at_floor.ok());
+  CHECK(first_smf_tempo_word(at_floor.bytes) == 0xFFFFFFu);
+
+  const double slowest_wire_bpm = 60'000'000.0 / static_cast<double>(0xFFFFFFu);
+  const auto at_slowest_wire = export_smf({}, {{0.0, slowest_wire_bpm, 0.0}}, {}, {}, {});
+  REQUIRE(at_slowest_wire.ok());
+  CHECK(first_smf_tempo_word(at_slowest_wire.bytes) == 0xFFFFFFu);
+  const SmfImportResult imported = import_smf(at_slowest_wire.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.tempo_segments.size() == 1);
+  CHECK(imported.tempo_segments.front().bpm == Catch::Approx(slowest_wire_bpm).epsilon(1e-12));
+
+  // Direct C++ export retains its lower-only internal domain beyond the public tempo maximum.
+  const auto above_fastest_wire = export_smf({}, {{0.0, 120'000'000.0, 0.0}}, {}, {}, {});
+  REQUIRE(above_fastest_wire.ok());
+  CHECK(first_smf_tempo_word(above_fastest_wire.bytes) == 1u);
 
   const auto normal = export_smf({}, {{0.0, 120.0, 0.0}}, {}, {}, {});
   REQUIRE(normal.ok());
   CHECK(first_smf_tempo_word(normal.bytes) == 500'000u);
-}
-
-TEST_CASE("SMF export round-trips the minimum representable tempo", "[midi]") {
-  const double minimum_bpm = 60'000'000.0 / static_cast<double>(0xFFFFFFu);
-  const auto exported = export_smf({}, {{0.0, minimum_bpm, 0.0}}, {}, {}, {});
-  REQUIRE(exported.ok());
-  REQUIRE(first_smf_tempo_word(exported.bytes) == 0xFFFFFFu);
-
-  const SmfImportResult imported = import_smf(exported.bytes);
-  REQUIRE(imported.ok());
-  REQUIRE(imported.tempo_segments.size() == 1);
-  CHECK(imported.tempo_segments.front().bpm == Catch::Approx(minimum_bpm).epsilon(1e-12));
 }
 
 TEST_CASE("SMF export flags a non-power-of-two time-signature denominator as lossy", "[midi]") {

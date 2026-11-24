@@ -227,7 +227,12 @@ struct SmfExportResult {
 /// The result is round-trippable through @ref import_smf for MIDI 1.0
 /// channel-voice data and stored SysEx payloads. Format 1 reserves one 16-bit
 /// track-count slot for the conductor track, so more than 65,534 clips are
-/// rejected before any output bytes are written.
+/// rejected before any output bytes are written. Tempo endpoints are checked in
+/// input order and must be finite and at least @ref transport::kMinPublicTempoBpm;
+/// zero remains the no-ramp sentinel for end_bpm. Direct C++ exports retain
+/// their lower-only internal domain without an upper BPM bound. Values are
+/// quantized to the nearest SMF tempo unit and clamped to its representable
+/// range.
 SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                            const std::vector<transport::TempoSegment>& tempo_segments,
                            const std::vector<transport::TimeSignatureSegment>& time_signatures,
@@ -243,7 +248,10 @@ struct SmfTempoEvent {
 /// The step-function tempo events that reproduce `segments` at `ppqn`, shared by
 /// the SMF and MIDI Clip File exporters. The first tempo is placed at tick 0, as
 /// the tempo map holds it there, and a ramp becomes sixteenth-note (or coarser)
-/// steps whose boundaries land at the ramp's exact time. Sorted by tick.
+/// steps whose boundaries land at the ramp's exact time. Tempo endpoints are
+/// checked in the caller's order before sorting; an invalid endpoint raises a
+/// structured InvalidParameter refusal naming segments[i].bpm or
+/// segments[i].end_bpm. Sorted by tick.
 std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSegment>& segments,
                                             uint16_t ppqn);
 

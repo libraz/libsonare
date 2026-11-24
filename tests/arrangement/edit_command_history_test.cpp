@@ -1488,6 +1488,35 @@ TEST_CASE("Timeline command round-trips", "[arrangement]") {
   }
 }
 
+TEST_CASE("SetTempoSegment refusal rolls back model and history state", "[arrangement][tempo]") {
+  Fixture fixture;
+  EditHistory history{fixture.project};
+  REQUIRE(history.apply(std::make_unique<SetTempoSegment>(
+      std::vector<sonare::transport::TempoSegment>{{0.0, 120.0, 0.0}})));
+  REQUIRE(history.undo());
+  const Project before = history.project();
+  const size_t undo_before = history.undo_depth();
+  const size_t redo_before = history.redo_depth();
+
+  bool refused = false;
+  try {
+    history.apply(std::make_unique<SetTempoSegment>(
+        std::vector<sonare::transport::TempoSegment>{{0.0, 120.0, 0.0}, {4.0, 1.0e-8, 0.0}}));
+  } catch (const sonare::SonareException& error) {
+    refused = true;
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()) == "segments[1].bpm must be finite and at least 1e-6");
+  }
+
+  CHECK(refused);
+  CHECK(project_equal(history.project(), before));
+  CHECK(history.undo_depth() == undo_before);
+  CHECK(history.redo_depth() == redo_before);
+  REQUIRE(history.redo());
+  REQUIRE(history.project().tempo_segments().size() == 1);
+  CHECK(history.project().tempo_segments()[0].bpm == 120.0);
+}
+
 TEST_CASE("RemoveMarkerInternal invert restores a key-signature marker fully", "[arrangement]") {
   Fixture f;
   MidiContentStore store;

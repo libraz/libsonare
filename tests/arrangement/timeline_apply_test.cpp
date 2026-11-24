@@ -196,8 +196,9 @@ EngineState capture(RealtimeEngine& engine) {
 }
 
 /// Applies @p bad over an engine holding timeline A and requires that nothing changed.
-void require_refused_unchanged(const arr::CompiledTimeline& bad, const arr::ApplyOptions& options,
-                               ErrorCode expected) {
+arr::ApplyResult require_refused_unchanged(const arr::CompiledTimeline& bad,
+                                           const arr::ApplyOptions& options, ErrorCode expected,
+                                           const char* message = nullptr) {
   const arr::CompiledTimeline a = timeline_a();
   RealtimeEngine engine;
   RealtimeEngine reference;
@@ -209,13 +210,15 @@ void require_refused_unchanged(const arr::CompiledTimeline& bad, const arr::Appl
   REQUIRE(before.markers == 2);
   REQUIRE(before.bpm_start == 100.0);
 
-  const arr::ApplyResult result = arr::apply_to_engine(bad, engine, options);
+  arr::ApplyResult result = arr::apply_to_engine(bad, engine, options);
   REQUIRE_FALSE(result.ok());
   REQUIRE(result.code == expected);
+  if (message) CHECK(result.message == message);
   REQUIRE(result.outcome == arr::ApplyOutcome::kUnchanged);
   REQUIRE(result.installed_automation.empty());
   REQUIRE(capture(engine) == before);
   REQUIRE(render(engine) == render(reference));
+  return result;
 }
 
 void require_reprepare_rate_refused(RealtimeEngine& engine) {
@@ -431,11 +434,11 @@ TEST_CASE("compile rejects a fractional project sample rate", "[arrangement][tim
   }));
 }
 
-TEST_CASE("compile reports a bad tempo alongside an out-of-range project rate",
+TEST_CASE("compile reports bad tempo placement alongside an out-of-range project rate",
           "[arrangement][timeline-apply][rate-bounds]") {
   arr::Project project;
   project.set_sample_rate(4000.0);
-  project.set_tempo_segments({{0.0, 0.0, 0.0}});
+  project.set_tempo_segments({{-1.0, 120.0, 0.0}});
   const auto result = arr::compile(project, {}, {});
   REQUIRE_FALSE(result.timeline.has_value());
   const auto rate = std::find_if(
@@ -452,8 +455,26 @@ TEST_CASE("compile reports a bad tempo alongside an out-of-range project rate",
 TEST_CASE("apply refuses an invalid tempo without changing the engine",
           "[arrangement][timeline-apply]") {
   arr::CompiledTimeline bad = timeline_b();
-  bad.tempo_segments = {{0.0, 0.0, 0.0}};
-  require_refused_unchanged(bad, {}, ErrorCode::InvalidParameter);
+  bad.tempo_segments = {{0.0, 1e-8, 0.0}};
+  require_refused_unchanged(bad, {}, ErrorCode::InvalidParameter,
+                            "timeline.tempoSegments[0].bpm must be finite and in [1e-6, 100000]");
+  bad.tempo_segments = {{0.0, 120.0, 0.0, 1e-8}, {4.0, 120.0, 0.0}};
+  const auto result = require_refused_unchanged(
+      bad, {}, ErrorCode::InvalidParameter,
+      "timeline.tempoSegments[0].endBpm must be finite and in [1e-6, 100000]");
+  REQUIRE(result.refusal);
+  try {
+    std::rethrow_exception(result.refusal);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    CHECK(refusal.subject() == "timeline.tempoSegments[0].endBpm");
+    REQUIRE(refusal.domain());
+    CHECK(refusal.domain()->lo == sonare::transport::kMinPublicTempoBpm);
+  }
+
+  // The internal timeline can store faster tempi than realtime playback admits.
+  bad.tempo_segments = {{0.0, sonare::transport::kMaxPublicTempoBpm + 1.0, 0.0}};
+  require_refused_unchanged(bad, {}, ErrorCode::InvalidParameter,
+                            "timeline.tempoSegments[0].bpm must be finite and in [1e-6, 100000]");
 }
 
 namespace {

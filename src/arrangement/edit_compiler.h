@@ -22,6 +22,7 @@
 /// timeline comes back alongside it.
 
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <map>
 #include <optional>
@@ -423,6 +424,9 @@ struct ApplyResult {
   ApplyOutcome outcome = ApplyOutcome::kUnchanged;
   /// The automation lane vector published to the engine, typed ids already resolved.
   std::vector<automation::AutomationLane> installed_automation;
+
+  /// A structured refusal raised during timeline validation, if any.
+  std::exception_ptr refusal;
 
   bool ok() const noexcept { return code == ErrorCode::Ok; }
 };

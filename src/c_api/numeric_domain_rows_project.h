@@ -15,6 +15,7 @@
 #include "c_api/transcribe_input_domains.h"
 #include "editing/event_model/event_extractor.h"
 #include "editing/pitch_editor/scale_quantizer.h"
+#include "transport/tempo_map.h"
 
 namespace sonare_c_detail {
 
@@ -244,6 +245,9 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"project_set_source_audio", "channels", kAudioPayloadChannelsDomain, nullptr},
     {"project_set_source_audio", "frames", kAudioPayloadFramesDomain, nullptr},
     {"project_set_source_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
+    {"project_set_tempo_segments", "segments[].bpm", sonare::transport::kTempoBpmDomain, nullptr},
+    {"project_set_tempo_segments", "segments[].end_bpm", sonare::transport::kTempoRampBpmDomain,
+     nullptr},
     {"project_set_tempo_segments", "segments[].start_ppq", kPublicPpqDomain, nullptr},
     {"project_set_time_signatures", "segments[].denominator", kTimeSignatureDenominatorDomain,
      nullptr},
@@ -308,7 +312,8 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"transcribe", "config.segmentation_threshold_cents", kTranscribeSegmentationCentsDomain,
      nullptr},
     {"transcribe", "config.velocity_floor_db", kTranscribeVelocityFloorDbDomain, nullptr},
-    {"validate_mixing_assistant_config", "sample_rate", kMixingAssistantSampleRateDomain, nullptr},
+    {"transcribe", "tempo_bpm",
+     sonare::util::check::with_sentinel(sonare::transport::kInternalTempoBpmDomain, 0.0), nullptr},
     {"vocal_session_create", "options.frame_length_samples", kVocalCreateFrameLengthDomain,
      nullptr},
     {"vocal_session_create", "options.hop_length_samples", kVocalCreateHopLengthDomain, nullptr},

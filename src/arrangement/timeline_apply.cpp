@@ -240,10 +240,20 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     return apply_refused(ErrorCode::InvalidParameter,
                          "timeline sample rate does not match the prepared engine");
   }
-  for (const transport::TempoSegment& segment : timeline.tempo_segments) {
-    if (!transport::valid_public_tempo_segment(segment)) {
+  try {
+    transport::check_public_tempo_segments(timeline.tempo_segments, "timeline.tempoSegments",
+                                           "endBpm");
+  } catch (const SonareParameterRefusal& e) {
+    ApplyResult result = apply_refused(e.code(), e.what());
+    result.refusal = std::current_exception();
+    return result;
+  } catch (const std::bad_alloc&) {
+    return apply_refused(ErrorCode::OutOfMemory, "out of memory");
+  }
+  for (const auto& segment : timeline.tempo_segments) {
+    if (!transport::valid_public_ppq(segment.start_ppq)) {
       return apply_refused(ErrorCode::InvalidParameter,
-                           "tempo segments contain invalid timeline or out-of-range BPM values");
+                           "tempo segment startPpq is outside the range the edit API accepts");
     }
   }
   for (const transport::TimeSignatureSegment& segment : timeline.time_signatures) {

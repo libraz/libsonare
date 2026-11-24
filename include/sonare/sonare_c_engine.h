@@ -213,18 +213,18 @@ SonareError sonare_engine_settle_insert_parameters(SonareEngine* engine);
 ///   @ref sonare_engine_flush_control_commands, which drains future commands too.
 /// @warning Not safe concurrently with a running @ref sonare_engine_process.
 SonareError sonare_engine_apply_commands_due_now_preserving_future(SonareEngine* engine);
-/// @brief Sets a finite tempo in the range (0, 100000] BPM.
-/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite, non-positive,
-///         or greater-than-100000 value.
+/// @brief Sets a finite tempo in the range [1e-6, 100000] BPM.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER when @p bpm is not finite or is outside that range.
 SonareError sonare_engine_set_tempo(SonareEngine* engine, double bpm);
 /// @brief Sets the time signature; @p numerator and @p denominator must be positive.
 SonareError sonare_engine_set_time_signature(SonareEngine* engine, int numerator, int denominator);
 /// @brief Installs a tempo map from @p segment_count ramp segments (control
 ///   thread only). Each segment needs a @c start_ppq in [0, 1e12] and a
-///   @c bpm in (0, 100000]; a non-zero @c end_bpm ramps to a value in the same
-///   range. Passing zero segments clears the map back to the single-tempo
-///   value. Sample positions are derived internally. Of two segments at one @c start_ppq, the
-///   later-supplied one takes effect.
+///   @c bpm in [1e-6, 100000]; a non-zero @c end_bpm ramps to a value in the same
+///   range. Passing zero as @c end_bpm keeps the segment constant. Passing zero
+///   segments clears the map back to the single-tempo value. Sample positions are
+///   derived internally. Of two segments at one @c start_ppq, the later-supplied
+///   one takes effect.
 SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
                                              const SonareProjectTempoSegment* segments,
                                              size_t segment_count);

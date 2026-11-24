@@ -37,7 +37,7 @@ typedef enum SONARE_ENUM_BASE {
 /// tempo-map normalization when the project is compiled.
 typedef struct {
   double start_ppq;  ///< Segment start in quarter notes, [0, 1e12].
-  double bpm;        ///< Tempo in beats per minute, in (0, 100000].
+  double bpm;        ///< Tempo in beats per minute, finite and in [1e-6, 100000].
   double end_bpm;    ///< Tempo reached at the segment end in BPM; 0 = constant tempo.
 } SonareProjectTempoSegment;
 
@@ -275,8 +275,9 @@ SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t o
 /// @details Takes the same segments as its engine counterpart
 ///          (@ref sonare_engine_set_tempo_segments): @c start_ppq in
 ///          [0, 1e12] and strictly increasing across the list, @c bpm finite and
-///          in (0, 100000], @c end_bpm either 0 (no ramp) or in the same tempo
-///          range. Anything else returns SONARE_ERROR_INVALID_PARAMETER; the
+///          in [1e-6, 100000], @c end_bpm either 0 (no ramp) or finite and in
+///          the same tempo range. Anything else returns
+///          SONARE_ERROR_INVALID_PARAMETER; the
 ///          segments a project stores are the segments its own MIR and loop
 ///          helpers build a tempo map from, so an unbounded one computes
 ///          meaningless sample positions rather than failing.

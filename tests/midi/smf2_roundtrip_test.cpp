@@ -7,7 +7,6 @@
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <cfenv>
 #include <cmath>
 #include <cstdint>
 #include <initializer_list>
@@ -20,6 +19,7 @@
 #include "midi/smf2.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 
 TEST_CASE("SMF2 export rejects inconsistent UMP word counts", "[midi][smf2]") {
   for (const uint8_t count : {uint8_t{1}, uint8_t{5}}) {
@@ -569,7 +569,7 @@ TEST_CASE("SMF2 export keeps every event time under a tempo ramp and a late firs
 
 TEST_CASE("SMF2 export clamps very low BPM tempo instead of wrapping", "[midi][smf2]") {
   MidiClip clip;
-  std::vector<sonare::transport::TempoSegment> tempos = {{0.0, 1.0, 0.0}, {1.0, 0.5, 0.0}};
+  std::vector<sonare::transport::TempoSegment> tempos = {{0.0, 1.0, 0.0}, {1.0, 1.0, 0.0}};
 
   const auto exported = export_clip_file(clip, tempos, {}, Smf2ExportOptions{});
   const Smf2ImportResult imported = import_clip_file(exported.bytes);
@@ -582,36 +582,63 @@ TEST_CASE("SMF2 export clamps very low BPM tempo instead of wrapping", "[midi][s
   REQUIRE(imported.tempo_segments[1].bpm == Catch::Approx(min_representable_bpm).epsilon(1e-9));
 }
 
-TEST_CASE("SMF2 export clamps a tiny positive BPM before converting to the wire field",
+TEST_CASE("SMF2 export refuses invalid tempo endpoints in caller order", "[midi][smf2]") {
+  using sonare::ErrorCode;
+  using sonare::SonareParameterRefusal;
+  using sonare::transport::TempoSegment;
+
+  const auto expect_refusal = [](const std::vector<TempoSegment>& segments,
+                                 const std::string& expected_subject) {
+    bool caught = false;
+    try {
+      (void)export_clip_file(MidiClip{}, segments, {}, Smf2ExportOptions{});
+    } catch (const SonareParameterRefusal& refusal) {
+      caught = true;
+      CHECK(refusal.code() == ErrorCode::InvalidParameter);
+      CHECK(refusal.subject() == expected_subject);
+    }
+    CHECK(caught);
+  };
+
+  const double floor = sonare::transport::kMinPublicTempoBpm;
+  expect_refusal({{0.0, floor * 0.5, 0.0}}, "segments[0].bpm");
+  expect_refusal({{0.0, 0.0, 0.0}}, "segments[0].bpm");
+  expect_refusal({{0.0, std::numeric_limits<double>::quiet_NaN(), 0.0}}, "segments[0].bpm");
+
+  // The original caller index is preserved even though valid tempo maps are sorted by PPQ.
+  expect_refusal({{96.0, 120.0, 0.0}, {0.0, floor * 0.5, 0.0}}, "segments[1].bpm");
+
+  TempoSegment invalid_end{0.0, 120.0, 0.0};
+  invalid_end.end_bpm = floor * 0.5;
+  expect_refusal({invalid_end}, "segments[0].end_bpm");
+}
+
+TEST_CASE("SMF2 export accepts the internal floor and clamps to tempo wire limits",
           "[midi][smf2]") {
-  for (const double bpm : {std::numeric_limits<double>::min(), 1.0e-20}) {
-    CAPTURE(bpm);
-    const std::vector<sonare::transport::TempoSegment> tempos = {{0.0, bpm, 0.0}};
-    std::feclearexcept(FE_ALL_EXCEPT);
-    const auto exported = export_clip_file(MidiClip{}, tempos, {}, Smf2ExportOptions{});
-    // Both inputs produce a quotient larger than the integer conversion range;
-    // clamping the floating quotient first avoids llround's invalid operation.
-    CHECK((std::fetestexcept(FE_INVALID) & FE_INVALID) == 0);
-    REQUIRE(exported.ok());
-    REQUIRE(first_smf2_tempo_word(exported.bytes) == std::numeric_limits<uint32_t>::max());
-  }
+  const double floor = sonare::transport::kMinPublicTempoBpm;
+  const auto at_floor = export_clip_file(MidiClip{}, {{0.0, floor, 0.0}}, {}, Smf2ExportOptions{});
+  REQUIRE(at_floor.ok());
+  CHECK(first_smf2_tempo_word(at_floor.bytes) == std::numeric_limits<uint32_t>::max());
+
+  const double slowest_wire_bpm = 6.0e9 / static_cast<double>(std::numeric_limits<uint32_t>::max());
+  const auto at_slowest_wire =
+      export_clip_file(MidiClip{}, {{0.0, slowest_wire_bpm, 0.0}}, {}, Smf2ExportOptions{});
+  REQUIRE(at_slowest_wire.ok());
+  CHECK(first_smf2_tempo_word(at_slowest_wire.bytes) == std::numeric_limits<uint32_t>::max());
+  const Smf2ImportResult imported = import_clip_file(at_slowest_wire.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.tempo_segments.size() == 1);
+  CHECK(imported.tempo_segments.front().bpm == Catch::Approx(slowest_wire_bpm).epsilon(1e-12));
+
+  // Direct C++ export retains its lower-only internal domain beyond the public tempo maximum.
+  const auto above_fastest_wire =
+      export_clip_file(MidiClip{}, {{0.0, 12.0e9, 0.0}}, {}, Smf2ExportOptions{});
+  REQUIRE(above_fastest_wire.ok());
+  CHECK(first_smf2_tempo_word(above_fastest_wire.bytes) == 1u);
 
   const auto normal = export_clip_file(MidiClip{}, {{0.0, 120.0, 0.0}}, {}, Smf2ExportOptions{});
   REQUIRE(normal.ok());
   CHECK(first_smf2_tempo_word(normal.bytes) == 50'000'000u);
-}
-
-TEST_CASE("SMF2 export round-trips the minimum representable tempo", "[midi][smf2]") {
-  const double minimum_bpm = 6.0e9 / static_cast<double>(std::numeric_limits<uint32_t>::max());
-  const auto exported =
-      export_clip_file(MidiClip{}, {{0.0, minimum_bpm, 0.0}}, {}, Smf2ExportOptions{});
-  REQUIRE(exported.ok());
-  REQUIRE(first_smf2_tempo_word(exported.bytes) == std::numeric_limits<uint32_t>::max());
-
-  const Smf2ImportResult imported = import_clip_file(exported.bytes);
-  REQUIRE(imported.ok());
-  REQUIRE(imported.tempo_segments.size() == 1);
-  CHECK(imported.tempo_segments.front().bpm == Catch::Approx(minimum_bpm).epsilon(1e-12));
 }
 
 TEST_CASE("SMF2 round-trips the clip name via Flex Data metadata", "[midi][smf2]") {

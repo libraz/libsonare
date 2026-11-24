@@ -85,8 +85,7 @@ uint32_t time_signature_word(const transport::TimeSignatureSegment& seg,
 }
 
 uint32_t tempo_10ns_from_bpm(double bpm) noexcept {
-  const double safe_bpm = bpm > 0.0 ? bpm : sonare::constants::kDefaultBpm;
-  const double tempo = std::clamp(kTenNanosPerQuarterToBpm / safe_bpm, 1.0,
+  const double tempo = std::clamp(kTenNanosPerQuarterToBpm / bpm, 1.0,
                                   static_cast<double>(std::numeric_limits<uint32_t>::max()));
   return static_cast<uint32_t>(std::llround(tempo));
 }
@@ -1016,9 +1015,10 @@ Smf2ExportResult export_clip_file(
     const Smf2ExportOptions& options) {
   const std::vector<transport::TimeSignatureSegment> time_signatures =
       exported_time_signatures(stored_time_signatures);
-  Smf2ExportResult result;
   const uint16_t dctpq =
       options.ticks_per_quarter == 0 ? kDefaultTicksPerQuarter : options.ticks_per_quarter;
+  const std::vector<SmfTempoEvent> tempo_events = smf_tempo_events(tempo_segments, dctpq);
+  Smf2ExportResult result;
 
   std::vector<uint8_t>& out = result.bytes;
   out.insert(out.end(), kFileHeader, kFileHeader + sizeof(kFileHeader));
@@ -1030,7 +1030,6 @@ Smf2ExportResult export_clip_file(
   // The config header carries only the tick-0 initial state. The tempo map holds its first
   // tempo and its first signature back to ppq 0, so both have an event at tick 0; a first
   // signature stored at start_ppq > 0 also stays a DCS-positioned item at its position.
-  const std::vector<SmfTempoEvent> tempo_events = smf_tempo_events(tempo_segments, dctpq);
   const bool tempo_in_header = !tempo_events.empty() && tempo_events.front().tick == 0;
   const bool tsig_in_header = !time_signatures.empty() && time_signatures.front().start_ppq == 0.0;
   if (tempo_in_header) {

@@ -626,9 +626,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
     project.set_overlap_policy(
         enum_or(root, "", "overlapPolicy", arrangement::OverlapPolicy::kDisallow));
 
-    // Tempo / time signature. Segments are validated (finite, positive BPM and
-    // start_ppq) and normalized on load: a segment with NaN/Inf or non-positive
-    // BPM, or a non-finite start_ppq, is rejected with a diagnostic rather than
+    // Tempo / time signature. Segments are validated (finite, in-domain BPM and
+    // start_ppq) and normalized on load: a segment with an out-of-domain BPM or
+    // a non-finite start_ppq is rejected with a diagnostic rather than
     // propagated; the surviving segments are sorted by start_ppq and de-duped on
     // start_ppq (last writer wins) so the in-memory map is well-ordered.
     std::vector<transport::TempoSegment> tempo;
@@ -643,18 +643,16 @@ DeserializeResult project_from_json(const std::string& json_text) {
                schema::refusal(schema::child_path(at, "startPpq"), "must be finite")});
           return result;
         }
-        if (!std::isfinite(s.bpm) || s.bpm <= 0.0) {
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kError, "invalid_tempo_bpm",
-               schema::refusal(schema::child_path(at, "bpm"), "must be finite and positive")});
-          return result;
-        }
-        // end_bpm == 0 means "constant tempo"; any explicit end_bpm must be a
-        // finite positive ramp target.
-        if (s.end_bpm != 0.0 && (!std::isfinite(s.end_bpm) || s.end_bpm < 0.0)) {
-          result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_tempo_end_bpm",
-                                        schema::refusal(schema::child_path(at, "endBpm"),
-                                                        "must be 0 or finite and positive")});
+        try {
+          transport::check_public_tempo_segment(s, index, "tempoSegments", "endBpm");
+        } catch (const SonareParameterRefusal& e) {
+          const bool is_start = e.subject() == schema::child_path(at, "bpm");
+          const double bpm = is_start ? s.bpm : s.end_bpm;
+          const char* diagnostic = std::isfinite(bpm) && bpm > transport::kMaxPublicTempoBpm
+                                       ? "invalid_tempo_segment"
+                                   : is_start ? "invalid_tempo_bpm"
+                                              : "invalid_tempo_end_bpm";
+          result.diagnostics.push_back({DiagnosticSeverity::kError, diagnostic, e.what()});
           return result;
         }
         if (!std::isfinite(s.start_sample)) s.start_sample = 0.0;

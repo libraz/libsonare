@@ -1280,15 +1280,44 @@ TEST_CASE("tempo segments are normalized (sorted + deduped) on load", "[serializ
   CHECK(segs[2].start_ppq == 1920.0);
 }
 
-TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]") {
-  auto result = project_from_json("{\"version\": 7, \"tempoSegments\": [{\"bpm\": -5.0}]}");
-  CHECK_FALSE(result.ok());
-  REQUIRE(result.has_error());
-  bool found = false;
-  for (const auto& d : result.diagnostics) {
-    if (d.code == "invalid_tempo_bpm") found = true;
+TEST_CASE("project loader refuses tempo below the named floor before normalization",
+          "[serialize]") {
+  struct Case {
+    const char* json;
+    const char* code;
+    const char* message;
+  };
+  const Case cases[] = {
+      {R"({"version":7,"tempoSegments":[{"startPpq":0,"bpm":1e-8}]})", "invalid_tempo_bpm",
+       "tempoSegments[0].bpm must be finite and in [1e-6, 100000]"},
+      {R"({"version":7,"tempoSegments":[{"startPpq":0,"bpm":120,"endBpm":1e-8}]})",
+       "invalid_tempo_end_bpm", "tempoSegments[0].endBpm must be finite and in [1e-6, 100000]"},
+      // Validation precedes sorting and de-duplication, so a later duplicate cannot
+      // hide an authored value that the public edit API would refuse.
+      {R"json({"version":7,"tempoSegments":[
+          {"startPpq":0,"bpm":1e-8}, {"startPpq":0,"bpm":120}]})json",
+       "invalid_tempo_bpm", "tempoSegments[0].bpm must be finite and in [1e-6, 100000]"},
+  };
+  for (const Case& c : cases) {
+    const auto result = project_from_json(c.json);
+    CAPTURE(c.json);
+    CHECK_FALSE(result.ok());
+    REQUIRE(result.has_error());
+    bool matched = false;
+    for (const auto& d : result.diagnostics) {
+      if (d.code == c.code && d.message == c.message) matched = true;
+    }
+    CHECK(matched);
   }
-  CHECK(found);
+
+  const auto at_floor = project_from_json(R"json({"version":7,"tempoSegments":[
+      {"startPpq":0,"bpm":1e-6,"endBpm":1e-6},
+      {"startPpq":4,"bpm":120,"endBpm":0}]})json");
+  REQUIRE(at_floor.ok());
+  REQUIRE(at_floor.project->tempo_segments().size() == 2);
+  CHECK(at_floor.project->tempo_segments()[0].bpm == 1.0e-6);
+  CHECK(at_floor.project->tempo_segments()[0].end_bpm == 1.0e-6);
+  CHECK(at_floor.project->tempo_segments()[1].end_bpm == 0.0);
 }
 
 TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[serialize]") {

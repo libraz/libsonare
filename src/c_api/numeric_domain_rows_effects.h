@@ -16,6 +16,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/scale_quantizer.h"
 #include "effects/silence.h"
+#include "transport/tempo_map.h"
 
 namespace sonare_c_detail {
 
@@ -102,7 +103,11 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_set_midi_clips", "clips[].loop_length_samples", kEngineMidiClipLoopLengthDomain,
      nullptr},
     {"engine_set_midi_clips", "clips[].start_ppq", kPublicPpqDomain, nullptr},
+    {"engine_set_tempo", "bpm", sonare::transport::kTempoBpmDomain, nullptr},
     {"engine_set_tempo_segments", "segment_count", kEngineSegmentCountDomain, nullptr},
+    {"engine_set_tempo_segments", "segments[].bpm", sonare::transport::kTempoBpmDomain, nullptr},
+    {"engine_set_tempo_segments", "segments[].end_bpm", sonare::transport::kTempoRampBpmDomain,
+     nullptr},
     {"engine_set_tempo_segments", "segments[].start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_time_signature", "denominator", kEngineTimeSignatureDenominatorDomain, nullptr},
     {"engine_set_time_signature", "numerator", kEngineTimeSignatureNumeratorDomain, nullptr},

@@ -116,7 +116,8 @@ TEST_CASE("engine transport refusals name the parameter", "[c_api][engine_refusa
   CHECK(last_message() == refused("ppq", refusal::range_predicate(0.0, 1.0e12)));
 
   CHECK(sonare_engine_set_tempo(engine, 0.0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == refused("bpm", refusal::interval_predicate(0.0, false, 100000.0, true)));
+  CHECK(last_message() ==
+        refused("bpm", refusal::interval_predicate(1.0e-6, true, 100000.0, true)));
 
   CHECK(sonare_engine_set_time_signature(engine, 0, 4) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("numerator", int_at_least_1()));
@@ -162,11 +163,12 @@ TEST_CASE("engine tempo and signature segment refusals", "[c_api][engine_refusal
   tempo.bpm = 0.0;
   CHECK(sonare_engine_set_tempo_segments(engine, &tempo, 1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        refused("segments[0].bpm", refusal::interval_predicate(0.0, false, 100000.0, true)));
+        refused("segments[0].bpm", refusal::interval_predicate(1.0e-6, true, 100000.0, true)));
   tempo.bpm = 120.0;
   tempo.end_bpm = -1.0;
   CHECK(sonare_engine_set_tempo_segments(engine, &tempo, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == refused("segments[0].end_bpm", refusal::range_predicate(0.0, 100000.0)));
+  CHECK(last_message() ==
+        refused("segments[0].end_bpm", refusal::interval_predicate(1.0e-6, true, 100000.0, true)));
 
   // A segment after the first names its position.
   SonareProjectTempoSegment two_tempo[2]{};
@@ -175,7 +177,7 @@ TEST_CASE("engine tempo and signature segment refusals", "[c_api][engine_refusal
   two_tempo[1].start_ppq = 4.0;
   CHECK(sonare_engine_set_tempo_segments(engine, two_tempo, 2) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        refused("segments[1].bpm", refusal::interval_predicate(0.0, false, 100000.0, true)));
+        refused("segments[1].bpm", refusal::interval_predicate(1.0e-6, true, 100000.0, true)));
 
   CHECK(sonare_engine_set_time_signature_segments(engine, nullptr, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -192,6 +194,39 @@ TEST_CASE("engine tempo and signature segment refusals", "[c_api][engine_refusal
   CHECK(sonare_engine_set_time_signature_segments(engine, &sig, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("segments[0].denominator", int_at_least_1()));
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine tempo floor accepts its endpoint and refuses sub-floor BPM without mutation",
+          "[c_api][engine_refusal][tempo_floor]") {
+  SonareEngine* engine = make_engine();
+  const std::string domain = refusal::interval_predicate(1.0e-6, true, 100000.0, true);
+
+  REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
+  CHECK(sonare_engine_set_tempo(engine, 1.0e-8) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("bpm", domain));
+  SonareTransportState state{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  CHECK(state.bpm == 120.0);
+
+  REQUIRE(sonare_engine_set_tempo(engine, 1.0e-6) == SONARE_OK);
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  CHECK(state.bpm == 1.0e-6);
+
+  const SonareProjectTempoSegment valid[] = {{0.0, 120.0, 0.0}, {4.0, 90.0, 0.0}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, valid, 2) == SONARE_OK);
+  SonareProjectTempoSegment bad_start[] = {{0.0, 120.0, 0.0}, {4.0, 1.0e-8, 0.0}};
+  CHECK(sonare_engine_set_tempo_segments(engine, bad_start, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("segments[1].bpm", domain));
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  CHECK(state.bpm == 120.0);
+
+  const SonareProjectTempoSegment bad_ramp[] = {{0.0, 120.0, 1.0e-8}, {4.0, 90.0, 0.0}};
+  CHECK(sonare_engine_set_tempo_segments(engine, bad_ramp, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("segments[0].end_bpm", domain));
+
+  const SonareProjectTempoSegment floor_ramp[] = {{0.0, 120.0, 1.0e-6}, {4.0, 1.0e-6, 0.0}};
+  CHECK(sonare_engine_set_tempo_segments(engine, floor_ramp, 2) == SONARE_OK);
   sonare_engine_destroy(engine);
 }
 

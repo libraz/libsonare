@@ -304,18 +304,9 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
   double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
-    // Same admissible set as the engine's setter (sonare_engine_set_tempo_segments):
-    // both positions and tempi are bounded, not merely finite. The project side
-    // used to take any finite positive BPM, and the two consumers that build a
-    // raw TempoMap from the stored segments (sonare_project_set_loop_from_audio,
-    // sonare_project_snap_to_grid) then computed silently clamped, meaningless
-    // sample positions from it.
     const std::string prefix = "segments[" + std::to_string(i) + "].";
     check::within(in.start_ppq, sonare_c_detail::kPublicPpqDomain, (prefix + "start_ppq").c_str());
-    check::in_interval(in.bpm, 0.0, false, sonare::transport::kMaxPublicTempoBpm, true,
-                       (prefix + "bpm").c_str());
-    check::in_range(in.end_bpm, 0.0, sonare::transport::kMaxPublicTempoBpm,
-                    (prefix + "end_bpm").c_str());
+    sonare::transport::check_public_tempo_segment(in, i);
     if (in.start_ppq <= previous_start_ppq) {
       check::refuse_relation(
           {prefix + "start_ppq", "segments[" + std::to_string(i - 1) + "].start_ppq"},

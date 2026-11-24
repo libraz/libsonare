@@ -162,10 +162,13 @@ typedef struct {
 ///          cannot resolve, come back as NULL events with zero counts, and
 ///          @c tempo_bpm still reports the tempo that was used or detected.
 /// @param samples Mono source; @p length must be non-zero.
-/// @param tempo_bpm The tempo the PPQ grid is built on. Pass a value <= 0 to
-///        have it detected from @p samples, which costs an onset/tempo pass.
-///        It is also the tempo @c min_note_division is read at, so a grid tempo
-///        that is not the music's wants @c min_note_ms instead.
+/// @param tempo_bpm The tempo the PPQ grid is built on. Pass 0 to detect it
+///        from @p samples, which costs an onset/tempo pass. Otherwise it must
+///        be finite and at least 1e-6 BPM; because this field is a float, pass
+///        the first representable float at or above that bound. A negative or
+///        smaller positive value is refused. This is also the tempo
+///        @c min_note_division is read at, so a grid tempo that is not the
+///        music's wants @c min_note_ms instead.
 /// @param config Optional; NULL selects the defaults.
 /// @param out Receives a heap-owned result, cleared before validation.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the

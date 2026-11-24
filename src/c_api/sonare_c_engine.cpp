@@ -297,9 +297,8 @@ SonareError sonare_engine_apply_commands_due_now_preserving_future(SonareEngine*
 SonareError sonare_engine_set_tempo(SonareEngine* engine, double bpm) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
-  if (const SonareError err = run_validation([&] {
-        util::check::in_interval(bpm, 0.0, false, transport::kMaxPublicTempoBpm, true, "bpm");
-      });
+  if (const SonareError err =
+          run_validation([&] { util::check::within(bpm, transport::kTempoBpmDomain, "bpm"); });
       err != SONARE_OK) {
     return err;
   }
@@ -344,10 +343,7 @@ SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
     const SonareProjectTempoSegment& in = segments[i];
     const std::string prefix = "segments[" + std::to_string(i) + "].";
     util::check::within(in.start_ppq, kPublicPpqDomain, (prefix + "start_ppq").c_str());
-    util::check::in_interval(in.bpm, 0.0, false, transport::kMaxPublicTempoBpm, true,
-                             (prefix + "bpm").c_str());
-    util::check::in_range(in.end_bpm, 0.0, transport::kMaxPublicTempoBpm,
-                          (prefix + "end_bpm").c_str());
+    transport::check_public_tempo_segment(in, i);
     transport::TempoSegment seg;
     seg.start_ppq = in.start_ppq;
     seg.bpm = in.bpm;

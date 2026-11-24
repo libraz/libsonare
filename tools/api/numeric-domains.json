@@ -2047,6 +2047,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_tempo",
+      "param": "bpm",
+      "kind": "real",
+      "lo": 9.9999999999999995e-07,
+      "hi": 100000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_tempo_segments",
       "param": "segment_count",
       "kind": "integer",
@@ -2056,6 +2067,28 @@
       "hi_included": true,
       "stricter": null,
       "sentinel": null
+    },
+    {
+      "entry": "engine_set_tempo_segments",
+      "param": "segments[].bpm",
+      "kind": "real",
+      "lo": 9.9999999999999995e-07,
+      "hi": 100000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_tempo_segments",
+      "param": "segments[].end_bpm",
+      "kind": "real",
+      "lo": 9.9999999999999995e-07,
+      "hi": 100000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_set_tempo_segments",
@@ -6723,6 +6756,28 @@
     },
     {
       "entry": "project_set_tempo_segments",
+      "param": "segments[].bpm",
+      "kind": "real",
+      "lo": 9.9999999999999995e-07,
+      "hi": 100000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_tempo_segments",
+      "param": "segments[].end_bpm",
+      "kind": "real",
+      "lo": 9.9999999999999995e-07,
+      "hi": 100000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
+      "entry": "project_set_tempo_segments",
       "param": "segments[].start_ppq",
       "kind": "real",
       "lo": 0,
@@ -8603,6 +8658,17 @@
       "sentinel": null
     },
     {
+      "entry": "transcribe",
+      "param": "tempo_bpm",
+      "kind": "real",
+      "lo": 9.9999999999999995e-07,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
       "entry": "trim",
       "param": "options.frame_length",
       "kind": "integer",
@@ -8641,17 +8707,6 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "validate_mixing_assistant_config",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

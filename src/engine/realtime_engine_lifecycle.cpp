@@ -651,8 +651,7 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 }
 
 void RealtimeEngine::set_tempo(double bpm) {
-  SONARE_CHECK_MSG(transport::valid_public_tempo(bpm), ErrorCode::InvalidParameter,
-                   "tempo must be finite, positive, and at most 100000 BPM");
+  util::check::within(bpm, transport::kTempoBpmDomain, "bpm");
   std::vector<transport::TempoSegment> segments{{0.0, bpm, 0.0}};
   check_tempo_segments(segments);
   control_single_tempo_bpm_ = bpm;
@@ -661,9 +660,14 @@ void RealtimeEngine::set_tempo(double bpm) {
 }
 
 void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> segments) {
-  for (const transport::TempoSegment& segment : segments) {
-    SONARE_CHECK_MSG(transport::valid_public_tempo_segment(segment), ErrorCode::InvalidParameter,
-                     "tempo segments contain invalid timeline or out-of-range BPM values");
+  constexpr auto ppq_domain = util::check::real_domain(0.0, transport::kMaxPublicPpq);
+  for (size_t i = 0; i < segments.size(); ++i) {
+    const auto& segment = segments[i];
+    if (!transport::valid_public_ppq(segment.start_ppq)) {
+      util::check::refuse_outside(ppq_domain,
+                                  util::check::indexed_subject("segments", i, "start_ppq").c_str());
+    }
+    transport::check_public_tempo_segment(segment, i);
   }
   check_tempo_segments(segments);
   control_tempo_segments_ = std::move(segments);

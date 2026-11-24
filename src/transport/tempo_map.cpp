@@ -36,23 +36,15 @@ size_t last_index_at_or_before(const Vec& v, double x, KeyFn key) noexcept {
 constexpr double kRampBpmEpsilon = 1.0e-9;
 
 double samples_per_ppq(double sample_rate, double bpm) noexcept {
-  const double safe_bpm = std::max(bpm, kMinEffectiveTempoBpm);
-  return sample_rate * constants::kSecondsPerMinute / safe_bpm;
+  return sample_rate * constants::kSecondsPerMinute / bpm;
 }
 
-double effective_start_bpm(const TempoSegment& segment) noexcept {
-  return std::max(segment.bpm, kMinEffectiveTempoBpm);
-}
-
-// Effective end BPM for a segment: clamp both endpoints before deciding whether
-// a ramp exists. This keeps two raw values below kMinEffectiveTempoBpm from
-// turning into a zero-slope logarithmic formula (0/0), while preserving the
-// exact constant-tempo path when the effective endpoints are equal.
+// A zero target or a segment without a finite span means no ramp.
 double effective_end_bpm(const TempoSegment& segment) noexcept {
-  const double start_bpm = effective_start_bpm(segment);
-  if (!std::isfinite(segment.end_bpm) || segment.end_bpm <= 0.0) return start_bpm;
+  const double start_bpm = segment.bpm;
+  if (segment.end_bpm == 0.0) return start_bpm;
   if (!std::isfinite(segment.end_ppq) || segment.end_ppq <= segment.start_ppq) return start_bpm;
-  const double end_bpm = std::max(segment.end_bpm, kMinEffectiveTempoBpm);
+  const double end_bpm = segment.end_bpm;
   if (std::abs(end_bpm - start_bpm) < kRampBpmEpsilon) return start_bpm;
   return end_bpm;
 }
@@ -60,7 +52,7 @@ double effective_end_bpm(const TempoSegment& segment) noexcept {
 // Samples elapsed from a segment's start to ppq `p` (>= start_ppq). Constant
 // segments use the exact legacy formula; ramped segments integrate 60/bpm(p).
 double segment_samples_at_ppq(const TempoSegment& segment, double sample_rate, double p) noexcept {
-  const double bpm0 = effective_start_bpm(segment);
+  const double bpm0 = segment.bpm;
   const double end_bpm = effective_end_bpm(segment);
   const double dp = p - segment.start_ppq;
   if (end_bpm == bpm0) {
@@ -69,15 +61,16 @@ double segment_samples_at_ppq(const TempoSegment& segment, double sample_rate, d
   // Linear BPM vs ppq: bpm(p) = bpm0 + slope * (p - start_ppq).
   const double slope = (end_bpm - bpm0) / (segment.end_ppq - segment.start_ppq);
   // s(p) = (sr*60/slope) * ln(bpm(p)/bpm0); log1p keeps a sub-ulp tempo change.
-  const double log_ratio = bpm0 + slope * dp > kMinEffectiveTempoBpm
+  // An extrapolated ramp can cross the floor outside its authored interval.
+  const double log_ratio = bpm0 + slope * dp > kMinPublicTempoBpm
                                ? std::log1p(slope * dp / bpm0)
-                               : std::log(kMinEffectiveTempoBpm / bpm0);
+                               : std::log(kMinPublicTempoBpm / bpm0);
   return (sample_rate * constants::kSecondsPerMinute / slope) * log_ratio;
 }
 
 // Inverse of segment_samples_at_ppq: ppq reached after `s` samples from start.
 double segment_ppq_at_samples(const TempoSegment& segment, double sample_rate, double s) noexcept {
-  const double bpm0 = effective_start_bpm(segment);
+  const double bpm0 = segment.bpm;
   const double end_bpm = effective_end_bpm(segment);
   if (end_bpm == bpm0) {
     return segment.start_ppq + s / samples_per_ppq(sample_rate, bpm0);
@@ -90,7 +83,7 @@ double segment_ppq_at_samples(const TempoSegment& segment, double sample_rate, d
 
 // Inverse of the PPQ-to-seconds integral from a segment's start.
 double segment_ppq_at_seconds(const TempoSegment& segment, double seconds) noexcept {
-  const double bpm0 = effective_start_bpm(segment);
+  const double bpm0 = segment.bpm;
   const double end_bpm = effective_end_bpm(segment);
   if (end_bpm == bpm0) {
     return segment.start_ppq + seconds * bpm0 / constants::kSecondsPerMinute;
@@ -168,12 +161,10 @@ void keep_last_per_start(std::vector<Segment>* segments) {
 
 std::vector<TempoSegment> normalize_segments(std::vector<TempoSegment> segments,
                                              double sample_rate) {
-  segments.erase(std::remove_if(segments.begin(), segments.end(),
-                                [](const TempoSegment& segment) {
-                                  return !std::isfinite(segment.start_ppq) ||
-                                         !std::isfinite(segment.bpm) || segment.bpm <= 0.0;
-                                }),
-                 segments.end());
+  segments.erase(
+      std::remove_if(segments.begin(), segments.end(),
+                     [](const TempoSegment& segment) { return !std::isfinite(segment.start_ppq); }),
+      segments.end());
   if (segments.empty()) {
     segments.push_back(kDefaultTempoSegment);
   }
@@ -248,6 +239,7 @@ void TempoMap::prepare(double sample_rate) {
 }
 
 void TempoMap::set_segments(std::vector<TempoSegment> segments) {
+  check_internal_tempo_segments(segments);
   segments_.publish(std::make_shared<const std::vector<TempoSegment>>(
       normalize_segments(std::move(segments), sample_rate_)));
 }
@@ -310,11 +302,11 @@ double TempoMap::bpm_at_ppq(double ppq) const noexcept {
   const auto segments = segments_.read();
   if (!segments || segments->empty() || !std::isfinite(ppq)) return constants::kDefaultBpm;
   const TempoSegment& segment = (*segments)[segment_index_for_ppq(*segments, ppq)];
-  const double start_bpm = effective_start_bpm(segment);
+  const double start_bpm = segment.bpm;
   const double end_bpm = effective_end_bpm(segment);
   if (end_bpm == start_bpm) return start_bpm;
   const double slope = (end_bpm - start_bpm) / (segment.end_ppq - segment.start_ppq);
-  return std::max(start_bpm + slope * (ppq - segment.start_ppq), kMinEffectiveTempoBpm);
+  return std::max(start_bpm + slope * (ppq - segment.start_ppq), kMinPublicTempoBpm);
 }
 
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
@@ -322,18 +314,14 @@ double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
   if (!segments || segments->empty()) return constants::kDefaultBpm;
   const TempoSegment& segment =
       (*segments)[segment_index_for_sample(*segments, static_cast<double>(sample))];
-  const double start_bpm = effective_start_bpm(segment);
+  const double start_bpm = segment.bpm;
   const double end_bpm = effective_end_bpm(segment);
-  // Clamp to kMinEffectiveTempoBpm so the reported tempo matches the effective
-  // playhead tempo. Otherwise a positive sub-floor segment that passes the
-  // finite-positive load guard would display a tempo below the rate at which the
-  // transport advances. The ramped path below already clamps its result.
   if (end_bpm == start_bpm) return start_bpm;
   // Report the instantaneous ramped tempo at this sample position.
   const double ppq = segment_ppq_at_samples(segment, sample_rate_,
                                             static_cast<double>(sample) - segment.start_sample);
   const double slope = (end_bpm - start_bpm) / (segment.end_ppq - segment.start_ppq);
-  return std::max(start_bpm + slope * (ppq - segment.start_ppq), kMinEffectiveTempoBpm);
+  return std::max(start_bpm + slope * (ppq - segment.start_ppq), kMinPublicTempoBpm);
 }
 
 TimeSignature TempoMap::time_signature_at_ppq(double ppq) const noexcept {

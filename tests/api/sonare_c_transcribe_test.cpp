@@ -30,6 +30,7 @@
 #include "editing/note_model/note_transcriber.h"
 #include "editing/polyphony/f0_salience.h"
 #include "feature/pitch.h"
+#include "transport/tempo_map.h"
 
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -136,6 +137,11 @@ void require_same_events(const std::vector<SonareMidiEventPod>& actual,
     INFO("event " << i);
     REQUIRE(same_event(actual[i], expected[i]));
   }
+}
+
+std::string last_message() {
+  const char* message = sonare_last_error_message();
+  return message == nullptr ? "" : message;
 }
 
 /// @brief Transcribes @p samples, requiring success and at least one note, so a
@@ -459,17 +465,36 @@ TEST_CASE("the tempo is echoed when given and detected when not", "[c_api][trans
     }
   }
 
-  SECTION("a non-tempo is detected") {
-    for (const float bpm : {0.0f, -1.0f, std::numeric_limits<float>::quiet_NaN()}) {
-      INFO("requested " << bpm);
-      Result result;
-      transcribe_into(&result, samples, bpm, nullptr);
-      const float detected = result.get().tempo_bpm;
-      INFO("detected " << detected);
-      CHECK(std::isfinite(detected));
-      CHECK(detected > 0.0f);
-    }
+  SECTION("zero selects detection") {
+    Result result;
+    transcribe_into(&result, samples, 0.0f, nullptr);
+    CHECK(std::isfinite(result.get().tempo_bpm));
+    CHECK(result.get().tempo_bpm > 0.0f);
   }
+}
+
+TEST_CASE("standalone transcribe refuses a sub-floor supplied tempo", "[c_api][transcribe]") {
+  const std::vector<float> samples = separated_notes({60, 64, 67, 72});
+  for (const float bpm : {1.0e-8f, 1.0e-6f, -1.0f, std::numeric_limits<float>::quiet_NaN(),
+                          std::numeric_limits<float>::infinity()}) {
+    CAPTURE(bpm);
+    Result refused;
+    refused.out()->tempo_bpm = 120.0f;
+    refused.out()->note_count = 1;
+    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, bpm, nullptr,
+                            refused.out()) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "tempo_bpm must be finite and at least 1e-6");
+    CHECK(refused.get().tempo_bpm == 0.0f);
+    CHECK(refused.get().events == nullptr);
+    CHECK(refused.get().count == 0);
+    CHECK(refused.get().note_count == 0);
+  }
+
+  const float lowest_accepted = std::nextafter(1.0e-6f, std::numeric_limits<float>::infinity());
+  REQUIRE(static_cast<double>(lowest_accepted) >= sonare::transport::kMinPublicTempoBpm);
+  Result accepted;
+  transcribe_into(&accepted, samples, lowest_accepted, nullptr);
+  CHECK(accepted.get().tempo_bpm == lowest_accepted);
 }
 
 TEST_CASE("the tempo places the notes on the grid rather than being carried along",

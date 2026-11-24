@@ -40,6 +40,7 @@ SonareError sonare_engine_apply_project_timeline(SonareEngine* engine,
     engine->marker_strings.clear();
     engine->applied_timeline.reset();
   }
+  if (result.refusal) std::rethrow_exception(result.refusal);
   if (!result.ok()) throw sonare::SonareException(result.code, result.message);
   return SONARE_OK;
   SONARE_C_CATCH

@@ -664,9 +664,10 @@ TEST_CASE("compiler preserves finite PPQ boundaries and exact schedules", "[arra
   }
 }
 
-TEST_CASE("invalid project: negative tempo returns an error and no timeline", "[arrangement]") {
+TEST_CASE("invalid project: negative tempo position returns an error and no timeline",
+          "[arrangement]") {
   Fixture f = make_fixture();
-  f.project.set_tempo_segments({{0.0, -120.0, 0.0}});
+  f.project.set_tempo_segments({{-1.0, 120.0, 0.0}});
 
   arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
   REQUIRE(r.has_errors());

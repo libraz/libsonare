@@ -854,21 +854,15 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
   }
 
   // ---- Positions are non-negative ------------------------------------------
-  // The C-ABI setters bound position AND tempo, not merely their sign
-  // (sonare_project_set_tempo_segments / _set_time_signatures both run the
-  // valid_public_* predicate). A document that skipped the upper bounds here
-  // loaded fine and then could not be re-saved through the edit path it claims
-  // to round-trip with, while TempoMap consumers read silently clamped
-  // positions from it.
+  // Document positions share the public setters' PPQ bounds.
   for (const transport::TempoSegment& s : project->tempo_segments()) {
     if (!valid_position_ppq(s.start_ppq)) {
       return InvariantViolation{"invalid_tempo_start_ppq",
                                 "tempo segment startPpq must be finite and non-negative"};
     }
-    if (!transport::valid_public_tempo_segment(s)) {
-      return InvariantViolation{
-          "invalid_tempo_segment",
-          "tempo segment startPpq or bpm is outside the range the edit API accepts"};
+    if (!transport::valid_public_ppq(s.start_ppq)) {
+      return InvariantViolation{"invalid_tempo_segment",
+                                "tempo segment startPpq is outside the range the edit API accepts"};
     }
   }
   for (const transport::TimeSignatureSegment& s : project->time_signatures()) {

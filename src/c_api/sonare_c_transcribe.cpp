@@ -13,6 +13,7 @@
 #include "editing/polyphony/multi_f0.h"
 #include "feature/chroma.h"
 #include "feature/pitch.h"
+#include "transport/tempo_map.h"
 #include "util/insertion_sort.h"
 #include "util/parameter_checks.h"
 #endif
@@ -216,9 +217,9 @@ float resolve_reference(const sonare::Audio& audio, bool reference_auto,
 /// it is detected, and a detector that answers with nothing usable falls back to
 /// the project default rather than refusing the transcription.
 float resolve_tempo(float requested, const sonare::Audio& audio) {
-  if (std::isfinite(requested) && requested > 0.0f) return requested;
+  if (requested != 0.0f) return requested;
   const float detected = sonare::BpmAnalyzer(audio).bpm();
-  if (std::isfinite(detected) && detected > 0.0f) return detected;
+  if (sonare::transport::valid_internal_tempo_bpm(static_cast<double>(detected))) return detected;
   return static_cast<float>(sonare::constants::kDefaultBpm);
 }
 
@@ -286,6 +287,13 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   // apart from silence.
   const SonareError audio_error = validate_audio_params("samples", samples, length, sample_rate);
   if (audio_error != SONARE_OK) return audio_error;
+  const SonareError tempo_error = run_validation([&] {
+    if (tempo_bpm != 0.0f) {
+      within(static_cast<double>(tempo_bpm), sonare::transport::kInternalTempoBpmDomain,
+             "tempo_bpm");
+    }
+  });
+  if (tempo_error != SONARE_OK) return tempo_error;
   ntm::TranscribeConfig core_config;
   uint8_t group = 0;
   uint8_t channel = 0;
