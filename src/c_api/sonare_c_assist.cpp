@@ -213,7 +213,7 @@ void describe_commands(const assist::AssistResult& result, json::Object* documen
     const auto* patch_command =
         dynamic_cast<const sonare::arrangement::PatchMidiClip*>(command.get());
     if (patch_command == nullptr) {
-      unrendered.push_back(json::Value(std::string(command->type_name())));
+      unrendered.emplace_back(std::string(command->type_name()));
       continue;
     }
     const sonare::arrangement::MidiClipPatch& patch = patch_command->patch();
@@ -223,12 +223,12 @@ void describe_commands(const assist::AssistResult& result, json::Object* documen
       pod["ppq"] = json::Value(event.ppq);
       pod["word0"] = json::Value(static_cast<double>(event.word0));
       pod["word1"] = json::Value(static_cast<double>(event.word1));
-      added.push_back(json::Value(std::move(pod)));
+      added.emplace_back(std::move(pod));
     }
     json::Object entry;
     entry["clipId"] = json::Value(static_cast<double>(patch.clip_id));
     entry["add"] = json::Value(std::move(added));
-    patches.push_back(json::Value(std::move(entry)));
+    patches.emplace_back(std::move(entry));
   }
   (*document)["patches"] = json::Value(std::move(patches));
   (*document)["unrenderedCommands"] = json::Value(std::move(unrendered));
@@ -244,7 +244,7 @@ std::string build_document(const assist::AssistResult& result) {
   describe_commands(result, &document);
   json::Array payloads;
   for (const std::string& payload : result.candidate_payloads) {
-    payloads.push_back(json::Value(payload));
+    payloads.emplace_back(payload);
   }
   document["payloads"] = json::Value(std::move(payloads));
   return json::dump(json::Value(std::move(document)));

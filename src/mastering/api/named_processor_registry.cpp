@@ -721,7 +721,7 @@ std::string amp_preset_catalog_json() {
     entry["index"] = static_cast<int>(index);
     entry["name"] = names[index];
     entry["params"] = std::move(params);
-    catalog.push_back(std::move(entry));
+    catalog.emplace_back(std::move(entry));
   }
   return json::dump(catalog);
 }

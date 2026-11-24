@@ -58,7 +58,7 @@ Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
       Object so;
       so["processor"] = stage.processor;
       so["params"] = json::parse(stage.params_json);
-      inserts.push_back(std::move(so));
+      inserts.emplace_back(std::move(so));
     }
     o["inserts"] = std::move(inserts);
   }

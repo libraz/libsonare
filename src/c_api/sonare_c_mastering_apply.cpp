@@ -329,7 +329,7 @@ std::string build_capability_catalog_json() {
     entry["maxLimiterGainReductionDb"] =
         is_mastering ? json::Value(config.loudness.max_limiter_gain_reduction_db)
                      : json::Value(nullptr);
-    mastering_presets.emplace_back(json::Value(std::move(entry)));
+    mastering_presets.emplace_back(std::move(entry));
   }
   catalog["masteringPresets"] = std::move(mastering_presets);
   return json::dump(json::Value(std::move(catalog)));
