@@ -11515,6 +11515,14 @@ rule = "string-closed-sets"
 test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets"
 
 [[entry]]
+kind = "option"
+old = "Project.setMaxUndoDepth(depth)"
+changed = "Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention."
+domain = "project"
+rule = "individual"
+test = "bindings/node/tests/runtime-refusal-parity.test.ts::refuses an undo depth outside [1, 500000000] and a fractional one with the size_t text"
+
+[[entry]]
 kind = "method"
 old = "Project.annotateChords"
 changed = "quality is a name. Accepts a readonly list and requires startPpq and endPpq on each chord."
@@ -13334,7 +13342,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.
 [[entry]]
 kind = "field"
 old = "SpectrumOptions.nFft"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\")"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); nFft is omitted for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, throw RangeError '<entry>: nFft must be a power of two in [2, 4194304]' from meteringSpectrum and meteringSpectrumFrame"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.nFft"
@@ -13875,6 +13883,22 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 
 [[entry]]
 kind = "method"
+old = "StreamingMasteringChain.flushMono"
+changed = "an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead"
+domain = "mastering"
+rule = "individual"
+test = "bindings/node/tests/basic_streaming_metering.test.ts::refuses to flush an unbounded tail"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.flushStereo"
+changed = "an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushStereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processStereo instead"
+domain = "mastering"
+rule = "individual"
+test = "bindings/node/tests/basic_streaming_metering.test.ts::refuses to flush an unbounded tail"
+
+[[entry]]
+kind = "method"
 old = "StreamingMasteringChain.nonFiniteDiscardCount"
 changed = "readonly getter nonFiniteDiscardCount: number"
 domain = "mastering"
@@ -14123,7 +14147,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringProcess"
 to = "masteringApplyProcessor"
-changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001)"
+changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/insert-key-spellings.test.ts::reads the repair.trimSilence threshold as thresholdDb in dBFS"

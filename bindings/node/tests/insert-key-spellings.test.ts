@@ -77,6 +77,22 @@ describe('insert key spellings', () => {
     );
   });
 
+  it.each([
+    ['final.bitDepth', 'targetBits'],
+    ['final.outputChain', 'ditherType, targetBits'],
+  ] as const)('%s refuses the retired clamp key as an unknown key', (processor, expected) => {
+    expect(() =>
+      masteringApplyProcessor({
+        samples: new Float32Array(64),
+        sampleRate: 48000,
+        processor,
+        params: { clamp: true } as never,
+      }),
+    ).toThrow(
+      new TypeError(`masteringApplyProcessor: unknown key params.clamp (expected ${expected})`),
+    );
+  });
+
   it('reads the repair.trimSilence threshold as thresholdDb in dBFS', () => {
     const samples = new Float32Array(4800);
     samples.fill(0.5, 1200, 3600);

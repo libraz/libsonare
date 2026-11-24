@@ -258,6 +258,27 @@ describe('StreamingMasteringChain', () => {
     expect(chain.flushMono()).toHaveLength(0);
   });
 
+  it.each([1, 2] as const)('refuses to flush an unbounded tail on %i channel(s)', (numChannels) => {
+    // Tape saturation with a bias rings forever, so no finite flush drains it.
+    const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      numChannels,
+      maxBlockSize: 64,
+      saturation: { tape: { enabled: true, bias: 0.1 } },
+    });
+    const block = new Float32Array(64).fill(0.5);
+    const entry = numChannels === 1 ? 'flushMono' : 'flushStereo';
+    if (numChannels === 1) chain.processMono(block);
+    else chain.processStereo(block, block);
+    expect(() => (numChannels === 1 ? chain.flushMono() : chain.flushStereo())).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.NotSupported,
+        message: `StreamingMasteringChain.${entry}: cannot automatically flush a chain with an unbounded tail`,
+      }),
+    );
+    chain.destroy();
+  });
+
   it('accepts denoise by default and refuses its whole-signal estimator', () => {
     expect(
       () =>

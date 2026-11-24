@@ -6,6 +6,7 @@ import math
 import re
 
 import numpy as np
+import pytest
 
 import libsonare
 
@@ -93,6 +94,31 @@ def test_streaming_mastering_chain_flushes_delayed_output() -> None:
             tail.extend(block)
         assert len(tail) >= chain.latency_samples
         assert chain.flush_mono().size == 0
+
+
+@pytest.mark.parametrize("num_channels", [1, 2])
+def test_streaming_mastering_chain_refuses_to_flush_an_unbounded_tail(num_channels: int) -> None:
+    """Tape saturation with a bias rings forever, so no finite flush drains it."""
+    from libsonare import ErrorCode, StreamingMasteringChain
+
+    entry = "flush_mono" if num_channels == 1 else "flush_stereo"
+    text = (
+        rf"^\[6\] StreamingMasteringChain\.{entry}: "
+        r"cannot automatically flush a chain with an unbounded tail$"
+    )
+    with StreamingMasteringChain(
+        {"saturation": {"tape": {"enabled": 1, "bias": 0.1}}},
+        sample_rate=48000,
+        max_block_size=64,
+        num_channels=num_channels,
+    ) as chain:
+        block = [0.5] * 64
+        if num_channels == 1:
+            chain.process_mono(block)
+        else:
+            chain.process_stereo(block, block)
+        with raises_coded(ErrorCode.NOT_SUPPORTED, match=text):
+            chain.flush_mono() if num_channels == 1 else chain.flush_stereo()
 
 
 @pytest.mark.parametrize(

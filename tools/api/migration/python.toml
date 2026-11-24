@@ -5625,7 +5625,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit
 [[entry]]
 kind = "option"
 old = "metering_spectrum(n_fft)"
-changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'metering_spectrum: n_fft must be a power of two in [2, 4194304]'"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
@@ -5657,7 +5657,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit
 [[entry]]
 kind = "option"
 old = "metering_spectrum_frame(n_fft)"
-changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'metering_spectrum_frame: n_fft must be a power of two in [2, 4194304]'"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
@@ -5689,7 +5689,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit
 [[entry]]
 kind = "option"
 old = "Audio.spectrum(n_fft)"
-changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'Audio.spectrum: n_fft must be a power of two in [2, 4194304]'"
 domain = "core"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
@@ -5721,7 +5721,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit
 [[entry]]
 kind = "option"
 old = "Audio.spectrum_frame(n_fft)"
-changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'Audio.spectrum_frame: n_fft must be a power of two in [2, 4194304]'"
 domain = "core"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
@@ -5840,7 +5840,7 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.flush_mono"
-changed = "returns a float32 ndarray instead of list[float]"
+changed = "returns a float32 ndarray instead of list[float]; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_mono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_mono instead"
 domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
@@ -5856,7 +5856,7 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_stereo_b
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.flush_stereo"
-changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists"
+changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_stereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_stereo instead"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_stereo_block_names_its_channels_and_still_unpacks"
@@ -9974,7 +9974,7 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_
 [[entry]]
 kind = "option"
 old = "Project.bounce(num_channels)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError; an omitted width follows the scene master's layout (2 with no master) instead of always 2, and the result's channels has one row per channel of that width"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
@@ -15093,6 +15093,14 @@ changed = "Returns None before any bounce has produced a compile result. Check f
 domain = "project"
 rule = "individual"
 test = "bindings/python/tests/test_project_bounce.py::test_last_bounce_compile_result_is_none_before_any_bounce"
+
+[[entry]]
+kind = "option"
+old = "Project.set_max_undo_depth(depth)"
+changed = "Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now raises SonareValueError. Use set_max_history_bytes(0) to disable undo retention."
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_project_edit_ops.py::test_set_max_undo_depth_limits_history"
 
 [[entry]]
 kind = "method"

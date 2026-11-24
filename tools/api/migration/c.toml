@@ -67,6 +67,62 @@ domain = "core"
 rule = "abi-probes"
 
 [[entry]]
+kind = "export"
+old = "SONARE_ABI_VERSION"
+changed = "The packed ABI version changes from 0x05030207 to 0x06040308. Rebuild with matching headers and compare against the macro instead of hard-coding the old value."
+domain = "core"
+rule = "individual"
+test = "tests/api/sonare_c_abi_version_test.cpp::sonare_abi_version mirrors the compile-time aggregate"
+
+[[entry]]
+kind = "export"
+old = "SONARE_ACOUSTIC_ABI_VERSION"
+changed = "The acoustic ABI counter changes from 5 to 6. Update the ABI expectation and rebuild."
+domain = "core"
+rule = "individual"
+test = "tests/api/sonare_c_abi_version_test.cpp::sonare_abi_version mirrors the compile-time aggregate"
+
+[[entry]]
+kind = "export"
+old = "SONARE_FEATURE_ABI_VERSION"
+changed = "The feature ABI counter changes from 7 to 8. Update the ABI expectation and rebuild."
+domain = "core"
+rule = "individual"
+test = "tests/api/sonare_c_abi_version_test.cpp::sonare_abi_version mirrors the compile-time aggregate"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_abi_version"
+changed = "The engine ABI counter changes from 3 to 4. Compare against SONARE_ENGINE_ABI_VERSION, which the header now defines, instead of hard-coding the old value."
+domain = "core"
+rule = "individual"
+test = "tests/api/surface_core_test.cpp::Each ABI counter accessor returns its macro"
+
+[[entry]]
+kind = "export"
+old = "SONARE_PROJECT_ABI_VERSION"
+changed = "The project ABI counter changes from 2 to 3. Update the ABI expectation and rebuild."
+domain = "core"
+rule = "individual"
+test = "tests/api/sonare_c_abi_version_test.cpp::sonare_abi_version mirrors the compile-time aggregate"
+
+[[entry]]
+kind = "export"
+old = "SONARE_SYNTH_ENGINE_MODE_COUNT"
+changed = "The synth-engine mode count changes from 18 to 19. Size tables from the current header constant and account for the additional mode."
+domain = "engine"
+rule = "individual"
+test = "tests/api/sonare_c_abi_version_test.cpp::C synth-engine mode count includes the final mode"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VOICE_CHANGER_ABI_VERSION"
+changed = "The voice-changer ABI counter changes from 3 to 4. Update the ABI expectation and rebuild."
+domain = "core"
+rule = "individual"
+test = "tests/api/sonare_c_abi_version_test.cpp::sonare_abi_version mirrors the compile-time aggregate"
+
+[[entry]]
 kind = "field"
 old = "SonareVocalCapabilities.api_version"
 new = "SonareVocalCapabilities.abi_version"
@@ -1356,6 +1412,14 @@ rule = "aliases-removed"
 
 [[entry]]
 kind = "type"
+old = "SonareMidiEventPod"
+changed = "Appends const uint8_t* sysex and size_t sysex_size. Recompile and extend layout mirrors. Set both to NULL/0 for channel-voice events, or supply framed SysEx bytes and their size. The project event list owns its returned bytes until sonare_free_midi_event_list."
+domain = "project"
+rule = "individual"
+test = "tests/api/project_readers_test.cpp::project MIDI event reader preserves imported SMF SysEx"
+
+[[entry]]
+kind = "type"
 old = "SonareAnalyzer"
 removed = true
 no_replacement = "no function created or accepted this handle; drop any declaration that names it"
@@ -1727,7 +1791,7 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_sample_bank_create r
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create"
-changed = "SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is"
+changed = "SonareError sonare_streaming_mastering_chain_create(config_json, options, &chain); read the error from the return value, the handle from chain (NULL on failure); options is a const SonareStreamingMasteringChainOptions* (NULL = defaults; sonare_streaming_mastering_chain_options_init); the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is"
 domain = "mastering"
 rule = "c-create"
 test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming"
@@ -2448,6 +2512,14 @@ test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine bounce re
 
 [[entry]]
 kind = "type"
+old = "SonareEngineBounceResult"
+changed = "Appends quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the count only when present."
+domain = "engine"
+rule = "individual"
+test = "tests/api/sonare_c_engine_bounce_test.cpp::a bounce reports its clipped-sample count only when it dithered"
+
+[[entry]]
+kind = "type"
 old = "SonareEngineFreezeOptions"
 changed = "leads with uint32_t struct_size; prepare it with sonare_engine_freeze_options_init, after which every field is read literally: block_size SONARE_ENGINE_BLOCK_SIZE_AUTO (-1) takes the default offline block and 0 is refused"
 domain = "engine"
@@ -2673,12 +2745,28 @@ rule = "c-count-types"
 test = "tests/api/sonare_c_mastering_test.cpp::every mastering chain entry point reports the true non-finite substitution count"
 
 [[entry]]
+kind = "type"
+old = "SonareMasteringResult"
+changed = "Appends declip_unreconstructed_runs, has_declip_unreconstructed_runs, quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the counters only when their matching presence flags are set."
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_test.cpp::a C mastering result carries each stage count only when its stage ran"
+
+[[entry]]
 kind = "field"
 old = "SonareMasteringStereoResult.non_finite_substitution_count"
 changed = "the count is a size_t instead of a uint32_t"
 domain = "mastering"
 rule = "c-count-types"
 test = "tests/api/sonare_c_mastering_test.cpp::every mastering chain entry point reports the true non-finite substitution count"
+
+[[entry]]
+kind = "type"
+old = "SonareMasteringStereoResult"
+changed = "Appends declip_unreconstructed_runs, has_declip_unreconstructed_runs, quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the counters only when their matching presence flags are set."
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_test.cpp::a C mastering result carries each stage count only when its stage ran"
 
 [[entry]]
 kind = "option"
@@ -2703,6 +2791,22 @@ changed = "the count is a size_t instead of a uint32_t"
 domain = "mastering"
 rule = "c-count-types"
 test = "tests/api/c_bare_refusal_mastering_streaming_test.cpp::the streaming chain refuses a NULL handle by name"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_flush_mono"
+changed = "an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_mono instead"
+domain = "mastering"
+rule = "individual"
+test = "tests/mastering/streaming_flush_tail_test.cpp::Streaming mastering C API refuses unbounded mono and stereo flushes safely"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_flush_stereo"
+changed = "an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_stereo instead"
+domain = "mastering"
+rule = "individual"
+test = "tests/mastering/streaming_flush_tail_test.cpp::Streaming mastering C API refuses unbounded mono and stereo flushes safely"
 
 [[entry]]
 kind = "option"
@@ -2848,6 +2952,14 @@ changed = "the hop is a size_t instead of an int; a value above 2147483647 is re
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "type"
+old = "SonareCqtResult"
+changed = "Appends float gamma, the effective bandwidth parameter. Recompile allocation and layout mirrors."
+domain = "analysis"
+rule = "individual"
+test = "tests/api/sonare_c_features_metering_test.cpp::C CQT reports the effective gamma"
 
 [[entry]]
 kind = "field"
@@ -4499,10 +4611,18 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_stft"
-changed = "takes const SonareStftOptions* options (NULL = defaults; sonare_stft_options_init) before out; options->db non-zero also fills SonareStftResult.db with the magnitude in dB"
+changed = "Takes const SonareStftOptions* options before out. Initialize with sonare_stft_options_init or pass NULL for defaults. Nonzero options->db fills out.db with magnitude in dB and nonzero options->phase fills out.phase in radians. Both pointers are NULL unless their planes are requested. Release the owned output with sonare_free_stft_result."
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_stft fills the dB plane only when asked and sizes options"
+test = "tests/api/istft_test.cpp::sonare_stft exposes a phase plane only when requested"
+
+[[entry]]
+kind = "type"
+old = "SonareStftResult"
+changed = "Appends float* db and float* phase. Recompile layout mirrors. Either plane is NULL unless requested in SonareStftOptions. Release all owned planes with sonare_free_stft_result."
+domain = "analysis"
+rule = "individual"
+test = "tests/api/istft_test.cpp::sonare_stft exposes a phase plane only when requested"
 
 [[entry]]
 kind = "function"
@@ -4897,6 +5017,14 @@ changed = "takes const SonareDecomposeOptions* options (NULL = defaults; sonare_
 domain = "effects"
 rule = "options-struct"
 test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_decompose names an unknown init and a wrong struct_size"
+
+[[entry]]
+kind = "option"
+old = "sonare_mastering_apply_processor(params)"
+changed = "final.bitDepth and final.outputChain take no clamp param and refuse it with SONARE_ERROR_INVALID_PARAMETER as an unknown key naming the keys they read, since the code range holds a sample past full scale on its own"
+domain = "mastering"
+rule = "individual"
+test = "tests/mastering/param_wiring_test.cpp::the final quantizing processors take no clamp parameter"
 
 [[entry]]
 kind = "function"
@@ -5326,7 +5454,7 @@ test = "tests/api/sonare_c_mastering_repair_test.cpp::by default each channel re
 [[entry]]
 kind = "function"
 old = "sonare_metering_spectrum"
-changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin)"
+changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]'"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse a non-finite dB reference or floor by name"
@@ -5334,7 +5462,7 @@ test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse 
 [[entry]]
 kind = "function"
 old = "sonare_metering_spectrum_frame"
-changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin)"
+changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]'"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse a non-finite dB reference or floor by name"
@@ -5342,7 +5470,7 @@ test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse 
 [[entry]]
 kind = "function"
 old = "sonare_audio_spectrum"
-changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin)"
+changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]'"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse a non-finite dB reference or floor by name"
@@ -5350,7 +5478,7 @@ test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse 
 [[entry]]
 kind = "function"
 old = "sonare_audio_spectrum_frame"
-changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin)"
+changed = "db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]'"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse a non-finite dB reference or floor by name"
@@ -5955,6 +6083,14 @@ domain = "project"
 rule = "absent-not-sentinel"
 
 [[entry]]
+kind = "option"
+old = "sonare_project_set_max_undo_depth(depth)"
+changed = "Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now returns SONARE_ERROR_INVALID_PARAMETER. Use sonare_project_set_max_history_bytes(project, 0) to disable undo retention."
+domain = "project"
+rule = "individual"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI clear_history and set_max_undo_depth manage the undo stack"
+
+[[entry]]
 kind = "function"
 old = "sonare_project_annotate_chords"
 changed = "omit a Roman numeral with NULL. A non-NULL empty string is refused under chords[i].roman_numeral."
@@ -5973,7 +6109,7 @@ rule = "individual"
 [[entry]]
 kind = "function"
 old = "sonare_project_set_mixer_scene_json"
-changed = "An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys."
+changed = "An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys. A NULL document clears the scene, after which sonare_project_mixer_scene_json reports none, where 1.x refused it with SONARE_ERROR_INVALID_PARAMETER."
 domain = "project"
 rule = "json-input-kinds"
 test = "tests/api/project_writers_test.cpp::project scene documents refuse unread insert parameters"
@@ -5992,3 +6128,83 @@ old = "SonareProjectBounceOptions.sample_rate"
 removed = "set the sample rate on the project; bounce always renders at that rate"
 domain = "project"
 rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "SonareDeclickConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_declick_config_init, then assign the required fields."
+domain = "mastering"
+rule = "options-struct"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics configs are refused until their init sets struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareDecrackleConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_decrackle_config_init, then assign the required fields."
+domain = "mastering"
+rule = "options-struct"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics configs are refused until their init sets struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareDehumConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_dehum_config_init, then assign the required fields."
+domain = "mastering"
+rule = "options-struct"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics configs are refused until their init sets struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareNoteTargetAssignConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_note_target_assign_config_init, then assign the required fields."
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/c_header_order_editing_test.cpp::note-target-assignment config requires struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonarePitchCorrectionConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_pitch_correction_config_init, then assign the required fields."
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/c_header_order_editing_test.cpp::pitch-correction config requires struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareReverbDetection"
+changed = "Appends has_late_predictability. Recompile layout mirrors and read late_predictability only when the flag is set."
+domain = "effects"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::sonare_mastering_repair_dereverb_classical_stereo"
+
+[[entry]]
+kind = "type"
+old = "SonareRoomEstimateConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_room_estimate_config_init, then assign the required fields."
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API refuses a room config below its struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareSpectralRegionOp"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_spectral_region_op_init, then assign the required fields."
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/c_header_order_editing_test.cpp::spectral region operation requires struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareStreamQuantizeConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_stream_quantize_config_init, then assign the required fields."
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::stream quantize config requires struct_size"
+
+[[entry]]
+kind = "type"
+old = "SonareTransientShaperConfig"
+changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_transient_shaper_config_init, then assign the required fields."
+domain = "mastering"
+rule = "options-struct"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics configs are refused until their init sets struct_size"

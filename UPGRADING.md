@@ -54,6 +54,17 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_vocal_available` | removed: call sonare_has_feature("vocalEdit"), which returns 1 when vocal editing is compiled in |
 | `sonare_vocal_edit_api_version` | `sonare_vocal_edit_abi_version` |
 
+#### Other individual changes
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SONARE_ABI_VERSION` | The packed ABI version changes from 0x05030207 to 0x06040308. Rebuild with matching headers and compare against the macro instead of hard-coding the old value. |
+| `SONARE_ACOUSTIC_ABI_VERSION` | The acoustic ABI counter changes from 5 to 6. Update the ABI expectation and rebuild. |
+| `SONARE_FEATURE_ABI_VERSION` | The feature ABI counter changes from 7 to 8. Update the ABI expectation and rebuild. |
+| `SONARE_PROJECT_ABI_VERSION` | The project ABI counter changes from 2 to 3. Update the ABI expectation and rebuild. |
+| `SONARE_VOICE_CHANGER_ABI_VERSION` | The voice-changer ABI counter changes from 3 to 4. Update the ABI expectation and rebuild. |
+| `sonare_engine_abi_version` | The engine ABI counter changes from 3 to 4. Compare against SONARE_ENGINE_ABI_VERSION, which the header now defines, instead of hard-coding the old value. |
+
 ### C: Analysis and features
 
 #### Sample rate is spelled sampleRate, sample_rate and --sample-rate
@@ -206,6 +217,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMusicAnalyzeOptions.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_music_analyze_options_init |
 | `SonareNoteSegmenterConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_note_segmenter_config_init |
 | `SonarePolyphonicConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_polyphonic_config_init |
+| `SonareStreamQuantizeConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_stream_quantize_config_init, then assign the required fields. |
 | `SonareTranscribeConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_transcribe_config_init |
 | `SonareTranscribeResult.struct_version` | removed: the field is gone; read the result's other fields directly |
 | `sonare_analyze_impulse_response_ex` | removed: call sonare_analyze_impulse_response with SonareAnalyzeImpulseResponseOptions min_decay_db set |
@@ -267,7 +279,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_spectral_bandwidth` | takes const SonareSpectralBandwidthOptions* options (NULL = defaults; sonare_spectral_bandwidth_options_init) before out; p moved into the struct |
 | `sonare_split_silence_common_ex` | removed: call sonare_split_silence_common, which takes the nullable out_report |
 | `sonare_split_silence_common` | takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added |
-| `sonare_stft` | takes const SonareStftOptions* options (NULL = defaults; sonare_stft_options_init) before out; options->db non-zero also fills SonareStftResult.db with the magnitude in dB |
+| `sonare_stft` | Takes const SonareStftOptions* options before out. Initialize with sonare_stft_options_init or pass NULL for defaults. Nonzero options->db fills out.db with magnitude in dB and nonzero options->phase fills out.phase in radians. Both pointers are NULL unless their planes are requested. Release the owned output with sonare_free_stft_result. |
 | `sonare_stream_analyzer_config_default` | removed: call sonare_stream_config_init(&config) on a caller-owned struct instead |
 | `sonare_stream_analyzer_read_frames_i16_ex` | removed: call sonare_stream_analyzer_read_quantized_frames_i16, which now takes the config |
 | `sonare_stream_analyzer_read_frames_i16` | `sonare_stream_analyzer_read_quantized_frames_i16`: takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
@@ -472,7 +484,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareAnalysisResult` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `SonareAnalyzer` | removed, no replacement: no function created or accepted this handle; drop any declaration that names it |
 | `SonareBpmCandidateRelation` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
+| `SonareCqtResult` | Appends float gamma, the effective bandwidth parameter. Recompile allocation and layout mirrors. |
 | `SonareSectionResult` | gains an owned char* form, one letter per section in time order, freed by sonare_free_section_result |
+| `SonareStftResult` | Appends float* db and float* phase. Recompile layout mirrors. Either plane is NULL unless requested in SonareStftOptions. Release all owned planes with sonare_free_stft_result. |
 | `sonare_analyze_bpm(start_bpm)` | removed: omit start_bpm and move n_fft, hop_length, max_candidates and out one position earlier. The result reports NaN when no tempo is measured. Apply any fallback in the caller. |
 | `sonare_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
@@ -561,9 +575,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareDecomposeStemsConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_decompose_stems_config_init |
 | `SonareNoteExtractorConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_note_extractor_config_init |
 | `SonareNoteRenderConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_note_render_config_init |
+| `SonareNoteTargetAssignConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_note_target_assign_config_init, then assign the required fields. |
 | `SonarePercussiveEventConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_percussive_event_config_init |
 | `SonarePercussiveRenderConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_percussive_render_config_init |
+| `SonarePitchCorrectionConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_pitch_correction_config_init, then assign the required fields. |
 | `SonareRealtimeVoiceChangerConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_realtime_voice_changer_config_init |
+| `SonareRoomEstimateConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_room_estimate_config_init, then assign the required fields. |
+| `SonareSpectralRegionOp` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_spectral_region_op_init, then assign the required fields. |
 | `SonareVoiceChangeConfig.struct_version` | removed: the field is gone; set pitch_semitones, formant_factor and formant_mode directly |
 | `sonare_decompose_with_init` | removed: call sonare_decompose with SonareDecomposeOptions init set |
 | `sonare_decompose` | takes const SonareDecomposeOptions* options (NULL = defaults; sonare_decompose_options_init) before out_w; an unknown init is refused as options.init |
@@ -692,6 +710,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareDeclipReport.linked_runs` | 0 unless config.link_channels is set on a multichannel entry point |
 | `SonareNoteEdit.envelope_count` | `SonareNoteEdit.amplitude_envelope_count` |
 | `SonareNoteEdit.envelope_offset` | `SonareNoteEdit.amplitude_envelope_offset` |
+| `SonareReverbDetection` | Appends has_late_predictability. Recompile layout mirrors and read late_predictability only when the flag is set. |
 | `SonareRirSynthConfig.absorption_band_count` | `SonareRirSynthConfig.band_absorption_count` |
 | `SonareRirSynthConfig.absorption_bands` | `SonareRirSynthConfig.band_absorption` |
 | `SonareRirSynthConfig.late_model` | `SonareRirSynthConfig.prefer_eyring` |
@@ -757,10 +776,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareDenoiseStereoResult` | embeds SonareDenoiseReport, whose packed noise detection grew; recompile against the 2.0 header |
 | `SonareMasteringChainResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
 | `SonareMasteringChainStereoResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
-| `sonare_audio_spectrum_frame` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
-| `sonare_audio_spectrum` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
-| `sonare_metering_spectrum_frame` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
-| `sonare_metering_spectrum` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
+| `sonare_audio_spectrum_frame` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]' |
+| `sonare_audio_spectrum` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]' |
+| `sonare_metering_spectrum_frame` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]' |
+| `sonare_metering_spectrum` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin); n_fft is 0 for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, are refused with SONARE_ERROR_INVALID_PARAMETER 'n_fft must be a power of two in [2, 4194304]' |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -796,6 +815,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareDeclickConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_declick_config_init, then assign the required fields. |
+| `SonareDecrackleConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_decrackle_config_init, then assign the required fields. |
+| `SonareDehumConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_dehum_config_init, then assign the required fields. |
+| `SonareTransientShaperConfig` | Begins with uint32_t struct_size. Recompile and replace old aggregate initialization with sonare_transient_shaper_config_init, then assign the required fields. |
 | `sonare_master_audio_stereo_with_progress_ex` | removed: call sonare_master_audio_stereo with SonareMasterAudioOptions carrying progress_callback, cancel_callback and their user data |
 | `sonare_master_audio_stereo_with_progress` | removed: call sonare_master_audio_stereo with SonareMasterAudioOptions progress_callback and progress_user_data set |
 | `sonare_master_audio_with_progress_ex` | removed: call sonare_master_audio with SonareMasterAudioOptions carrying progress_callback, cancel_callback and their user data |
@@ -810,7 +833,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_eq_create` | SonareError sonare_eq_create(sample_rate, max_block_size, &eq); read the error from the return value, the handle from eq (NULL on failure) |
 | `sonare_mixer_create` | SonareError sonare_mixer_create(sample_rate, max_block_size, &mixer); read the error from the return value, the handle from mixer (NULL on failure) |
-| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is |
+| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, options, &chain); read the error from the return value, the handle from chain (NULL on failure); options is a const SonareStreamingMasteringChainOptions* (NULL = defaults; sonare_streaming_mastering_chain_options_init); the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is |
 
 #### C results are released by a function named after the result
 
@@ -903,9 +926,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareDeclipConfig.lpc_blend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `SonareDeclipConfig` | gains int32_t link_channels at the tail, 0 by default; values other than 0 and 1 are refused on every entry and 1 on the mono entry point; recompile against the 2.0 header |
+| `SonareMasteringResult` | Appends declip_unreconstructed_runs, has_declip_unreconstructed_runs, quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the counters only when their matching presence flags are set. |
+| `SonareMasteringStereoResult` | Appends declip_unreconstructed_runs, has_declip_unreconstructed_runs, quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the counters only when their matching presence flags are set. |
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `sonare_mastering_apply_processor(params)` | final.bitDepth and final.outputChain take no clamp param and refuse it with SONARE_ERROR_INVALID_PARAMETER as an unknown key naming the keys they read, since the code range holds a sample past full scale on its own |
 | `sonare_mastering_insert_param_names` | Pass a declared insert name. An undeclared name no longer returns an empty success. sonare_mastering_insert_param_names returns NULL and sets SONARE_ERROR_INVALID_PARAMETER. sonare_mastering_insert_param_info returns that error and leaves out_json NULL. Both report "unknown insert processor: <id>", with " (renamed to <current id>)" appended for a retired id. |
+| `sonare_streaming_mastering_chain_flush_mono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_mono instead |
+| `sonare_streaming_mastering_chain_flush_stereo` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_stereo instead |
 
 ### C: Realtime engine, synthesis, MIDI and playback
 
@@ -1057,6 +1085,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SONARE_SYNTH_ENGINE_MODE_COUNT` | The synth-engine mode count changes from 18 to 19. Size tables from the current header constant and account for the additional mode. |
+| `SonareEngineBounceResult` | Appends quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the count only when present. |
 | `SonareTransportState.bar_count` | `SonareTransportState.bar_index` |
 | `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
@@ -1241,7 +1271,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_project_deserialize(json)` | `sonare_project_deserialize(document)` |
 | `sonare_project_set_mixer_scene_json(scene_json)` | `sonare_project_set_mixer_scene_json(document)` |
-| `sonare_project_set_mixer_scene_json` | An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys. |
+| `sonare_project_set_mixer_scene_json` | An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys. A NULL document clears the scene, after which sonare_project_mixer_scene_json reports none, where 1.x refused it with SONARE_ERROR_INVALID_PARAMETER. |
 
 #### Historical aliases are removed
 
@@ -1277,7 +1307,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareMidiCcBinding.reserved` | the old uint16_t is split into uint8_t consume followed by uint8_t reserved. Set reserved to zero and set consume to one to suppress live forwarding after automation. |
+| `SonareMidiEventPod` | Appends const uint8_t* sysex and size_t sysex_size. Recompile and extend layout mirrors. Set both to NULL/0 for channel-voice events, or supply framed SysEx bytes and their size. The project event list owns its returned bytes until sonare_free_midi_event_list. |
 | `SonareSf2InstrumentBinding` | adds const char* sound_font_uri at the tail. Set it to NULL for the default font. Recompile code passing an array of these records. |
+| `sonare_project_set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now returns SONARE_ERROR_INVALID_PARAMETER. Use sonare_project_set_max_history_bytes(project, 0) to disable undo retention. |
 
 ## Python
 
@@ -1333,11 +1365,11 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.mastering(release_ms)` | absent is None (the library default 50 ms); an explicit 0 or a negative value raises SonareValueError |
 | `Audio.spectrum(db_amin)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.spectrum(db_ref)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
-| `Audio.spectrum(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
+| `Audio.spectrum(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'Audio.spectrum: n_fft must be a power of two in [2, 4194304]' |
 | `Audio.spectrum(octave_fraction)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.spectrum_frame(db_amin)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.spectrum_frame(db_ref)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
-| `Audio.spectrum_frame(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
+| `Audio.spectrum_frame(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'Audio.spectrum_frame: n_fft must be a power of two in [2, 4194304]' |
 | `Audio.spectrum_frame(octave_fraction)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `Audio.true_peak_db(oversample_factor)` | `Audio.true_peak_dbtp(oversample_factor)`: None (the default) is 4; an explicit 0 raises SonareValueError |
 | `project_abi_version` | returns None instead of 0 when arrangement support is compiled out |
@@ -2836,11 +2868,11 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_phase_scope(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
 | `metering_spectrum(db_amin)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_spectrum(db_ref)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
-| `metering_spectrum(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
+| `metering_spectrum(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'metering_spectrum: n_fft must be a power of two in [2, 4194304]' |
 | `metering_spectrum(octave_fraction)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_spectrum_frame(db_amin)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_spectrum_frame(db_ref)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
-| `metering_spectrum_frame(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
+| `metering_spectrum_frame(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError; n_fft is None for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, raise SonareValueError 'metering_spectrum_frame: n_fft must be a power of two in [2, 4194304]' |
 | `metering_spectrum_frame(octave_fraction)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_true_peak_db(oversample_factor)` | `metering_true_peak_dbtp(oversample_factor)`: None (the default) is 4; an explicit 0 raises SonareValueError |
 | `metering_vectorscope(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
@@ -3013,7 +3045,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StereoMonoCompatCheckResult.sideRms` | `StereoMonoCompatCheckResult.side_rms` |
 | `StereoMonoCompatCheckResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; width is inf for a fully out-of-phase pair, and correlation and width are None when both channels are silent |
 | `StreamingEqualizer.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
-| `StreamingMasteringChain.flush_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
+| `StreamingMasteringChain.flush_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_stereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_stereo instead |
 | `StreamingMasteringChain.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `master_audio(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `master_audio_stereo(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
@@ -3056,7 +3088,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MixerStereoResult` | a frozen dataclass instead of a NamedTuple, so it no longer unpacks; left and right are float32 ndarrays |
 | `StreamingEqualizer.magnitude_response` | returns float32 ndarrays instead of list[float] |
 | `StreamingEqualizer.process_mono` | returns float32 ndarrays instead of list[float] |
-| `StreamingMasteringChain.flush_mono` | returns a float32 ndarray instead of list[float] |
+| `StreamingMasteringChain.flush_mono` | returns a float32 ndarray instead of list[float]; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_mono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_mono instead |
 | `StreamingMasteringChain.process_mono` | returns a float32 ndarray instead of list[float] |
 | `TrimSilenceStereoResult` | left, right are float32 ndarrays instead of list[float]; the record compares by identity |
 
@@ -3756,7 +3788,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.add_track(name)` | an empty string raises SonareValueError; omit the name or pass None for an unnamed track |
 | `Project.apply_vocal_edit(take_id)` | int \| None, default None: None edits the clip's base source and an explicit 0 raises SonareValueError |
 | `Project.bounce(block_size)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
+| `Project.bounce(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError; an omitted width follows the scene master's layout (2 with no master) instead of always 2, and the result's channels has one row per channel of that width |
 | `Project.bounce(sample_rate)` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sample_rate reports it. |
 | `Project.bounce(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.move_clip(new_track_id)` | int \| None, default None: None keeps the clip on its track and an explicit 0 raises SonareValueError |
@@ -4077,6 +4109,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.last_bounce_compile_result` | Returns None before any bounce has produced a compile result. Check for None before accessing ProjectCompileResult fields. |
 | `Project.load_soundfont` | `Project.load_sound_font`: takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode |
 | `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
+| `Project.set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now raises SonareValueError. Use set_max_history_bytes(0) to disable undo retention. |
 | `Project.soundfont_manifest` | `Project.sound_font_manifest`: takes keyword-only uri=None to read the manifest for the named URI; None selects the default SoundFont and an empty URI is refused |
 | `Project.soundfont_preset_count` | `Project.sound_font_preset_count`: a method with keyword-only uri=None, which selects the default SoundFont; an empty URI is refused |
 | `ProjectMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only, the field order of EngineMarker |
@@ -6164,7 +6197,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PhaseScopeReport.correlation` | optional; absent when either channel has zero energy (was a required number) |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
+| `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default"); nFft is omitted for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, throw RangeError '<entry>: nFft must be a power of two in [2, 4194304]' from meteringSpectrum and meteringSpectrumFrame |
 | `SpectrumOptions.octaveFraction` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `StreamingEqualizer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is refused |
 | `StripMeteringOptions.truePeakOversample` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
@@ -6453,7 +6486,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
-| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001) |
+| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
 | `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object) |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
@@ -6681,6 +6714,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MeteringDynamicRangeOptions.lowPercentile` | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
+| `StreamingMasteringChain.flushMono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead |
+| `StreamingMasteringChain.flushStereo` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushStereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processStereo instead |
 | `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), a nested MasteringChainConfig that masterAudio takes unchanged as overrides |
@@ -7599,6 +7634,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
 | `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
 | `Project.loadSoundFont` | loadSoundFont(data, { uri }?) loads or replaces one named SoundFont. Omit the URI for the default font. |
+| `Project.setMaxUndoDepth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention. |
 | `Project.setMixerSceneJson` | removed: Use setMixerScene(scene) with a scene object, or omit it to clear. Unknown keys are TypeError and refusal paths start at scene. Use version 2 or omit the version, and remove the former surroundPan distance and elevation keys. |
 | `Project.soundFontManifest` | soundFontManifest({ uri }?) reports program coverage for the selected SoundFont. Omit the URI for the default font. |
 | `Project.soundFontPresetCount` | soundFontPresetCount({ uri }?) reads one named SoundFont; omit the URI for the default font. An empty URI is refused. |
@@ -11117,8 +11153,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `SpectrumOptions.nFft` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
+| `SpectrumOptions.nFft` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default"); nFft is omitted for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, throw RangeError '<entry>: nFft must be a power of two in [2, 4194304]' from meteringSpectrum and meteringSpectrumFrame |
+| `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default"); nFft is omitted for the library default or a power of two in [2, 4194304]; 1 and powers of two above 4194304, which 1.x accepted, throw RangeError '<entry>: nFft must be a power of two in [2, 4194304]' from meteringSpectrum and meteringSpectrumFrame |
 | `SpectrumOptions.octaveFraction` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.octaveFraction` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `StreamingMasteringChainConfig.loudnessStaticGainDb` (`./analysis`) | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
@@ -11509,7 +11545,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
-| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001) |
+| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
 | `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object) |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
@@ -11938,6 +11974,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SoloProcessor` (`./analysis`) | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `SoloProcessor` | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
+| `StreamingMasteringChain.flushMono` (`./worklet`) | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead |
+| `StreamingMasteringChain.flushMono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead |
+| `StreamingMasteringChain.flushStereo` (`./worklet`) | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushStereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processStereo instead |
+| `StreamingMasteringChain.flushStereo` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushStereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processStereo instead |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./analysis`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./worklet`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
@@ -13397,6 +13437,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
 | `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
 | `Project.loadSoundFont` | Accepts (data, { uri }?). Omit the URI to replace the default SoundFont. A supplied empty URI is refused. |
+| `Project.setMaxUndoDepth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention. |
 | `Project.setMixerSceneJson` | removed: Pass a MixSceneDocumentInput to setMixerScene(scene), or omit scene to clear it. Unknown scene keys and wrong field types are TypeError. Out-of-domain values are RangeError. |
 | `Project.setTrackRoute` | Omit a route string to clear it. A supplied empty channelStripRef or outputTarget is refused with a RangeError naming the argument. trackId is required and an omitted trackId is a TypeError. |
 | `Project.soundFontManifest` | Accepts ({ uri }?). Omit the URI to inspect the default SoundFont. |

@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   init,
   StreamingEqualizer,
   StreamingMasteringChain,
@@ -64,6 +65,33 @@ describe('Sonare WASM Module', () => {
         chain.destroy();
       }
     });
+
+    it.each([1, 2] as const)(
+      'refuses to flush an unbounded tail on %i channel(s)',
+      (numChannels) => {
+        // Tape saturation with a bias rings forever, so no finite flush drains it.
+        const chain = new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels,
+          maxBlockSize: 64,
+          saturation: { tape: { enabled: true, bias: 0.1 } },
+        });
+        try {
+          const block = new Float32Array(64).fill(0.5);
+          const entry = numChannels === 1 ? 'flushMono' : 'flushStereo';
+          if (numChannels === 1) chain.processMono(block);
+          else chain.processStereo(block, block);
+          expect(() => (numChannels === 1 ? chain.flushMono() : chain.flushStereo())).toThrow(
+            expect.objectContaining({
+              code: ErrorCode.NotSupported,
+              message: `StreamingMasteringChain.${entry}: cannot automatically flush a chain with an unbounded tail`,
+            }),
+          );
+        } finally {
+          chain.destroy();
+        }
+      },
+    );
 
     it('uses the canonical flat parser for nested streaming-chain configuration', () => {
       const chain = new StreamingMasteringChain({

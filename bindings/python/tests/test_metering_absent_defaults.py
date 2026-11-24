@@ -8,6 +8,7 @@ are ranks in [0, 1] with the low one at most the high one.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -131,3 +132,23 @@ def test_the_unit_interval_ends_are_real_requests() -> None:
         ramp, SR, low_percentile=0.0, high_percentile=1.0, **windows
     )
     assert full.dynamic_range_db > default.dynamic_range_db
+
+
+@pytest.mark.parametrize(
+    ("entry", "call"),
+    [
+        ("metering_spectrum", _spectrum),
+        ("metering_spectrum_frame", _spectrum_frame),
+        ("Audio.spectrum", _audio_spectrum),
+        ("Audio.spectrum_frame", _audio_spectrum_frame),
+    ],
+)
+def test_a_power_of_two_outside_the_fft_range_is_refused(
+    entry: str, call: Callable[..., object]
+) -> None:
+    text = rf"^{re.escape(entry)}: n_fft must be a power of two in \[2, 4194304\]$"
+    for n_fft in (1, 8388608):
+        with pytest.raises(SonareValueError, match=text):
+            call(n_fft=n_fft)
+    for n_fft in (2, 4194304):
+        call(n_fft=n_fft)

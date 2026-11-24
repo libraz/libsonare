@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { masteringNormalizeLoudness, meteringSpectrum } from '../src/index.js';
+import { masteringNormalizeLoudness, meteringSpectrum, meteringSpectrumFrame } from '../src/index.js';
 
 const SR = 44100;
 
@@ -108,5 +108,18 @@ describe('meteringSpectrum optional scalars', () => {
     // The controls for the equalities above: both fields really reach the core.
     expect(Array.from(spectrum({ dbRef: 2 }))).not.toEqual(Array.from(spectrum()));
     expect(spectrum({ nFft: 1024 }).length).not.toBe(spectrum().length);
+  });
+
+  it.each([
+    ['meteringSpectrum', meteringSpectrum],
+    ['meteringSpectrumFrame', meteringSpectrumFrame],
+  ] as const)('%s refuses a power of two outside [2, 4194304]', (name, entry) => {
+    const run = (nFft: number) => entry({ samples, sampleRate: SR, nFft } as never);
+    for (const nFft of [1, 8388608]) {
+      expect(() => run(nFft)).toThrow(
+        new RangeError(`${name}: nFft must be a power of two in [2, 4194304]`),
+      );
+    }
+    for (const nFft of [2, 4194304]) expect(() => run(nFft)).not.toThrow();
   });
 });
