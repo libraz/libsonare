@@ -1196,14 +1196,16 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
   }
   SONARE_C_REQUIRE_NONNULL(out_binding);
   SONARE_C_TRY
-  sonare::midi::CcMap map;
-  map.begin_learn(param_id, min_value, max_value, min_movement);
-  sonare::midi::CcBinding learned{};
   for (size_t i = 0; i < count; ++i) {
     check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
                          check::indexed_subject("events", i, "sysex"),
                          check::indexed_subject("events", i, "word0"),
                          check::indexed_subject("events", i, "word1"));
+  }
+  sonare::midi::CcMap map;
+  map.begin_learn(param_id, min_value, max_value, min_movement);
+  sonare::midi::CcBinding learned{};
+  for (size_t i = 0; i < count; ++i) {
     if (((events[i].word0 >> 28u) & 0x0Fu) ==
         static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
       continue;

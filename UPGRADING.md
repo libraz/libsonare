@@ -1179,6 +1179,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_set_markers` | a key-signature marker with key_fifths outside [-7, 7] returns SONARE_ERROR_INVALID_PARAMETER and leaves the previous markers unchanged (1.x stored it) |
 | `sonare_engine_set_midi_clips` | a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period) |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_midi_cc_learn` | validates the entire events array before learning; an invalid event after a learnable prefix returns SONARE_ERROR_INVALID_PARAMETER and clears out_binding (1.x could return the binding without reading the rest) |
 | `sonare_midi_param_to_cc` | a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it) |
 | `sonare_playback_renderer_input_channel_count` | `sonare_playback_renderer_num_input_channels` |
 | `sonare_playback_renderer_output_channel_count` | `sonare_playback_renderer_num_output_channels` |

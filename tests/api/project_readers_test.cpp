@@ -447,6 +447,20 @@ TEST_CASE("C MIDI router borrows SysEx bytes and ignores its channels",
   CHECK(sonare_midi_cc_to_breakpoint(nullptr, 0, &events[0], &point) == SONARE_ERROR_NOT_SUPPORTED);
 }
 
+TEST_CASE("MIDI CC learning validates the entire event list", "[c_api][project][readers][sysex]") {
+  const SonareMidiEventPod events[] = {{0.0, 0x20B00700u, 0, nullptr, 0},
+                                       {1.0, 0x20B00740u, 0, nullptr, 0},
+                                       {2.0, 0x20903C64u, 0, kGsReset, sizeof(kGsReset)}};
+  SonareMidiCcBinding binding{};
+  REQUIRE(sonare_midi_cc_learn(events, 2, 1, 0.0f, 1.0f, 0, &binding) == SONARE_OK);
+  CHECK(binding.cc_number == 7);
+  REQUIRE(sonare_midi_cc_learn(events, 3, 1, 0.0f, 1.0f, 0, &binding) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "events[2].sysex must be NULL and empty for a channel-voice event");
+  CHECK(binding.param_id == 0);
+}
+
 TEST_CASE("project MIDI CC conversions record their refused state",
           "[c_api][project][midi-error]") {
   const SonareMidiEventPod sysex{1.0, kGroupThreeSysExWord, 0, kGsReset, sizeof(kGsReset)};

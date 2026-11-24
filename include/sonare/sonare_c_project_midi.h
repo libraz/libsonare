@@ -474,7 +474,8 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
                                      size_t* out_overflow_count);
 
 /// @brief Runs MIDI learn over an event stream and returns the learned binding.
-/// @details The returned binding has consume set to 0.
+/// @details The returned binding has consume set to 0. All events are validated
+///          before learning. Well-formed SysEx events are skipped.
 /// @details Observes events in order using the native CcMap learn logic,
 ///          including 14-bit CC pair and RPN/NRPN selector assembly. Returns
 ///          SONARE_ERROR_INVALID_STATE if no binding is learned.
