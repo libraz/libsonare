@@ -56,6 +56,41 @@ TEST_CASE("C insert metadata serves declared processors", "[c_api][metadata-and-
     sonare_free_string(json);
   }
 }
+
+TEST_CASE("C insert metadata refuses a rate outside the audio domain",
+          "[c_api][metadata-and-midi-loss]") {
+  for (const int rate : {-1, 7999, 384001}) {
+    CAPTURE(rate);
+    char sentinel = 0;
+    char* json = &sentinel;
+    CHECK(sonare_mastering_insert_param_info("utility.gain", rate, &json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(json == nullptr);
+    CHECK(std::string_view(sonare_last_error_message()) ==
+          "sample_rate must be an integer in [8000, 384000]");
+  }
+  char* json = nullptr;
+  REQUIRE(sonare_mastering_insert_param_info("utility.gain", 8000, &json) == SONARE_OK);
+  sonare_free_string(json);
+}
+
+TEST_CASE("C insert timing refuses in parameter order", "[c_api][metadata-and-midi-loss]") {
+  int latency = -1;
+  int tail = -1;
+  CHECK(sonare_mastering_insert_timing("not.a.real.processor", "{\"nope\":1}", 7999, &latency,
+                                       &tail) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string_view(sonare_last_error_message()) ==
+        "unknown insert processor: not.a.real.processor");
+  CHECK(sonare_mastering_insert_timing("utility.gain", "{\"nope\":1}", 7999, &latency, &tail) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string_view(sonare_last_error_message()).rfind("unknown key params.nope", 0) == 0);
+  CHECK(sonare_mastering_insert_timing("utility.gain", "{}", 7999, &latency, &tail) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string_view(sonare_last_error_message()) ==
+        "sample_rate must be an integer in [8000, 384000]");
+  CHECK(latency == 0);
+  CHECK(tail == 0);
+}
 #else
 TEST_CASE("C insert metadata refuses when mastering is compiled out",
           "[c_api][metadata-and-midi-loss]") {

@@ -13588,10 +13588,10 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertName
 [[entry]]
 kind = "function"
 old = "masteringInsertParamInfo"
-changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list"
+changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list; a given sampleRate outside [8000, 384000], 0 included, is a RangeError 'masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]'"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/mastering-descriptors.test.ts::serves the catalog rows of an offline repair stage"
+test = "bindings/node/tests/insert-catalog-timing.test.ts::names an unknown metadata insert before a rate outside the audio domain"
 
 [[entry]]
 kind = "function"

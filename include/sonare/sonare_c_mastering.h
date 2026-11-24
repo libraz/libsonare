@@ -580,9 +580,9 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 /// @param insert Processor ID (see @ref sonare_mastering_processor_catalog).
 ///   With mastering enabled, NULL or an undeclared insert is refused with
 ///   SONARE_ERROR_INVALID_PARAMETER.
-/// @param sample_rate Host rate in Hz, within the range the other sample-rate arguments
-///   of this header accept, or 0 for the rate-less query; anything else is refused with
-///   SONARE_ERROR_INVALID_PARAMETER.
+/// @param sample_rate Host rate in Hz, an integer in [8000, 384000], or 0 for the rate-less
+///   query; anything else is refused with SONARE_ERROR_INVALID_PARAMETER at subject
+///   `sample_rate`, after an undeclared @p insert.
 /// @param[out] out_json Receives the document; the caller
 ///   releases it with @ref sonare_free_string. Set to NULL on failure.
 SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,
@@ -606,7 +606,8 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
 /// @param params_json JSON object of flat parameter values, keyed as in @ref
 ///   sonare_mastering_insert_param_info. NULL is the empty object. A refusal names the key
 ///   under the root `params`.
-/// @param sample_rate Rate the insert is prepared at.
+/// @param sample_rate Rate the insert is prepared at, an integer in [8000, 384000] Hz; any other
+///   rate is refused at subject `sample_rate`, after @p insert and @p params_json.
 /// @param out_latency_samples Receives the latency in samples at @p sample_rate.
 /// @param out_tail_samples Receives the tail in samples at @p sample_rate: an upper bound on
 ///   the time after the last input until the insert's response to a unit impulse stays

@@ -331,7 +331,6 @@ export class StreamingMasteringChain {
   }
 }
 
-const STREAM_REFERENCE_HZ_RANGE = [220, 880] as const;
 const STREAM_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'sampleRate',
   'nFft',
@@ -553,22 +552,6 @@ function streamStats(s: NativeStreamStats): StreamStats {
   };
 }
 
-/** Refuses an A4 reference outside what native accepts: `TypeError` for a non-number, `RangeError` outside 220..880 Hz. */
-function assertStreamReferenceHz(referenceHz: unknown): asserts referenceHz is number {
-  if (typeof referenceHz !== 'number') {
-    throw refuseType(`referenceHz must be a number`);
-  }
-  if (
-    !Number.isFinite(referenceHz) ||
-    referenceHz < STREAM_REFERENCE_HZ_RANGE[0] ||
-    referenceHz > STREAM_REFERENCE_HZ_RANGE[1]
-  ) {
-    throw refuse(
-      `referenceHz must be within ${STREAM_REFERENCE_HZ_RANGE[0]}..${STREAM_REFERENCE_HZ_RANGE[1]} Hz`,
-    );
-  }
-}
-
 /** Validates the public config and spells it the way the addon reads it. */
 function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   if (!isNonArrayObject(config)) {
@@ -590,7 +573,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
     native.fmax = fmaxHz;
   }
   if (referenceHz !== undefined) {
-    assertStreamReferenceHz(referenceHz);
+    assertFloatValue(referenceHz, 'referenceHz');
     native.referenceHz = referenceHz;
   }
   if (window !== undefined) {
@@ -787,14 +770,11 @@ export class StreamAnalyzer {
   /**
    * Set the A4 reference frequency in Hz for key/chroma analysis.
    *
-   * `referenceHz` must be a finite number within 220..880, the same range
-   * {@link StreamConfig}'s `referenceHz` accepts at construction. A non-number
-   * is a `TypeError`; a value outside the range is a `RangeError` rather than
-   * being clamped, so the chromagram cannot depend on which entry point
-   * supplied the reference.
+   * A wrong-typed value is a `TypeError`. The library checks the float32 value
+   * against [220, 880] Hz at creation and here.
    */
   setReferenceHz(referenceHz: number): void {
-    assertStreamReferenceHz(referenceHz);
+    assertFloatValue(referenceHz, 'referenceHz');
     this.native.setReferenceHz(referenceHz);
   }
 

@@ -540,7 +540,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_
 [[entry]]
 kind = "function"
 old = "mastering_insert_param_info"
-changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError 'mastering_insert_param_info: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list"
+changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError 'mastering_insert_param_info: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list; a sample_rate outside [8000, 384000] raises SonareValueError 'mastering_insert_param_info: sample_rate must be an integer in [8000, 384000]'"
 domain = "mastering"
 rule = "frozen-results"
 test = "bindings/python/tests/test_mastering_insert_timing.py::test_param_info_flags_exclusive_bounds_and_nyquist_ceilings"
@@ -548,7 +548,7 @@ test = "bindings/python/tests/test_mastering_insert_timing.py::test_param_info_f
 [[entry]]
 kind = "function"
 old = "mastering_insert_timing"
-changed = "returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples"
+changed = "returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples; a sample_rate outside [8000, 384000] raises SonareValueError 'mastering_insert_timing: sample_rate must be an integer in [8000, 384000]'"
 domain = "mastering"
 rule = "frozen-results"
 test = "bindings/python/tests/test_mastering_insert_timing.py::test_insert_timing_at_defaults_matches_the_capability_catalog"

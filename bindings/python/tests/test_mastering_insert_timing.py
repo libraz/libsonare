@@ -73,6 +73,20 @@ def test_param_info_sample_rate_resolves_the_nyquist_ceiling() -> None:
         libsonare.mastering_insert_param_info("eq.parametric", sample_rate=0)
 
 
+@pytest.mark.parametrize("rate", [7999, 384001])
+def test_insert_queries_refuse_a_rate_outside_the_audio_domain(rate: int) -> None:
+    """Both insert queries refuse the rate in the library's own domain wording."""
+    import libsonare
+
+    predicate = r"sample_rate must be an integer in \[8000, 384000\]$"
+    with pytest.raises(
+        libsonare.SonareValueError, match=r"^mastering_insert_param_info: " + predicate
+    ):
+        libsonare.mastering_insert_param_info("utility.gain", sample_rate=rate)
+    with pytest.raises(libsonare.SonareValueError, match=r"^mastering_insert_timing: " + predicate):
+        libsonare.mastering_insert_timing("utility.gain", {}, rate)
+
+
 def test_insert_timing_reports_positive_latency_for_oversampling() -> None:
     """Selecting the 4x-oversampling choice reports a non-zero latency."""
     import libsonare

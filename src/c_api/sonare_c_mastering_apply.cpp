@@ -509,16 +509,12 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
   SONARE_C_REQUIRE_NONNULL(insert);
   SONARE_C_TRY
   const std::string name = insert;
-  mastering::api::require_insert_metadata_processor(name);
-  if (sample_rate != 0 && (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  SONARE_C_REQUIRE_NONNULL(out_json);
-  *out_json = copy_string(
+  // Rate 0 is the rate-less query; the core refuses an undeclared name, then any other rate.
+  std::string info =
       sample_rate == 0 ? sonare::mastering::api::insert_param_info_json(name)
-                       : sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate));
+                       : sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate);
+  SONARE_C_REQUIRE_NONNULL(out_json);
+  *out_json = copy_string(info);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -529,18 +525,10 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_latency_samples, out_tail_samples);
   SONARE_C_TRY
-  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_REQUIRE_NONNULL(out_latency_samples);
   SONARE_C_REQUIRE_NONNULL(out_tail_samples);
-
-  const auto timing = sonare::util::check::under_member("params", [&] {
-    return sonare::mastering::api::insert_timing(
-        insert != nullptr ? insert : "", params_json != nullptr ? params_json : "{}", sample_rate);
-  });
+  const auto timing = sonare::mastering::api::insert_timing(
+      insert != nullptr ? insert : "", params_json != nullptr ? params_json : "{}", sample_rate);
   *out_latency_samples = timing.latency_samples;
   *out_tail_samples = timing.tail_samples;
   return SONARE_OK;

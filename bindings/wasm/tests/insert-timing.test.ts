@@ -85,10 +85,10 @@ describe('insert timing and construction-key catalog (WASM)', () => {
       nativeRefusal(module, () => module.masteringInsertTiming('utility.gain', '{}', 7999)),
     ).toMatchObject({
       kind: 'RangeError',
-      message: 'sampleRate 7999 is out of range',
+      message: 'sampleRate must be an integer in [8000, 384000]',
     });
     expect(() => timingOf('utility.gain', {}, 7999)).toThrow(
-      new RangeError('masteringInsertTiming: sampleRate 7999 is out of range'),
+      new RangeError('masteringInsertTiming: sampleRate must be an integer in [8000, 384000]'),
     );
   });
 
@@ -103,13 +103,13 @@ describe('insert timing and construction-key catalog (WASM)', () => {
       nativeRefusal(module, () => module.masteringInsertParamInfo('utility.gain', 8000.5)),
     ).toMatchObject({
       kind: 'RangeError',
-      message: 'sampleRate must be an integer in [-2147483648, 2147483647]',
+      message: 'sampleRate must be an integer in [8000, 384000]',
     });
     expect(
       nativeRefusal(module, () => module.masteringInsertParamInfo('utility.gain', 0)),
     ).toMatchObject({
       kind: 'RangeError',
-      message: 'sampleRate 0 is out of range',
+      message: 'sampleRate must be an integer in [8000, 384000]',
     });
     expect(() =>
       masteringInsertParamInfo({ insert: 'not.a.real.processor' as never, sampleRate: 7999 }),

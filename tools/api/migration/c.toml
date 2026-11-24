@@ -340,7 +340,7 @@ test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_amp_preset_catal
 [[entry]]
 kind = "function"
 old = "sonare_mastering_insert_param_info"
-changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for; any other rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range')"
 domain = "mastering"
 rule = "c-free"
 test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descriptor query refuses a rate outside the supported range"
@@ -5951,6 +5951,14 @@ old = "sonare_playback_render_interleaved(config_json)"
 new = "sonare_playback_render_interleaved(document)"
 domain = "engine"
 rule = "json-input-kinds"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_insert_timing"
+changed = "a sample_rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range'); a params key the insert does not read names params.<key>"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_insert_timing"
 
 [[entry]]
 kind = "option"

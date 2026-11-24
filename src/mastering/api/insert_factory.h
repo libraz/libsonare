@@ -151,9 +151,10 @@ std::string offline_param_info_json(const std::string& name);
 /// @details Such a key's `max` and `maxExclusive` are re-measured by building
 ///          and preparing the insert at @p sample_rate, so they are the bound
 ///          actually accepted there, including a cap fixed when the insert was
-///          built. Every other field is the rate-less answer. @p sample_rate is
-///          not range-checked here; a value that is not positive gives the
-///          rate-less answer.
+///          built. Every other field is the rate-less answer.
+/// @throws sonare::SonareException (InvalidParameter) for a name outside the insert registry,
+///         then sonare::SonareParameterRefusal at @c sample_rate for a rate outside
+///         kAudioSampleRateDomain.
 std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate);
 
 /// @brief insert_param_info_json_at_rate() measured key by key, uncached.
@@ -235,10 +236,11 @@ struct InsertTiming {
 /// @brief Latency and tail of insert @p name built from @p json_params and
 ///        prepared at @p sample_rate with kInsertProbeBlockSize.
 /// @details Both are clamped at zero. The block size does not change either.
-/// @throws sonare::SonareException (InvalidParameter) for an unknown @p name
+/// @throws sonare::SonareException (InvalidParameter), in parameter order: an unknown @p name
 ///         ("unknown insert processor: <name>"), a key the insert does not read
-///         ("unknown key <k> (expected <keys it reads>)", the first such key), or a value its
-///         construction or prepare refuses.
+///         ("unknown key params.<k> (expected <keys it reads>)", the first such key) or a value
+///         its construction refuses, then a rate outside kAudioSampleRateDomain (subject
+///         @c sample_rate), then a value prepare refuses; parameter subjects sit under @c params.
 InsertTiming insert_timing(const std::string& name, const std::string& json_params,
                            double sample_rate);
 

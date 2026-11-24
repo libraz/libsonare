@@ -847,7 +847,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_capability_catalog_json` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 | `sonare_mastering_amp_preset_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
-| `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for |
+| `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for; any other rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range') |
 | `sonare_mastering_processor_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 
 #### C counts are size_t and returned through an out parameter
@@ -938,6 +938,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `sonare_mastering_apply_processor(params)` | final.bitDepth and final.outputChain take no clamp param and refuse it with SONARE_ERROR_INVALID_PARAMETER as an unknown key naming the keys they read, since the code range holds a sample past full scale on its own |
 | `sonare_mastering_insert_param_names` | Pass a declared insert name. An undeclared name no longer returns an empty success. sonare_mastering_insert_param_names returns NULL and sets SONARE_ERROR_INVALID_PARAMETER. sonare_mastering_insert_param_info returns that error and leaves out_json NULL. Both report "unknown insert processor: <id>", with " (renamed to <current id>)" appended for a retired id. |
+| `sonare_mastering_insert_timing` | a sample_rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range'); a params key the insert does not read names params.<key> |
 | `sonare_streaming_mastering_chain_flush_mono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_mono instead |
 | `sonare_streaming_mastering_chain_flush_stereo` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_stereo instead |
 
@@ -3138,8 +3139,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringPresetCatalogEntry` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `MasteringProcessorCatalogEntry` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `mastering_amp_preset_catalog` | returns frozen MasteringAmpPresetCatalogEntry dataclasses read by attribute |
-| `mastering_insert_param_info` | returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError 'mastering_insert_param_info: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list |
-| `mastering_insert_timing` | returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples |
+| `mastering_insert_param_info` | returns frozen MasteringInsertParamInfo dataclasses read by attribute; an insert outside the mastering_processor_catalog() ids raises SonareValueError 'mastering_insert_param_info: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of returning an empty list; a sample_rate outside [8000, 384000] raises SonareValueError 'mastering_insert_param_info: sample_rate must be an integer in [8000, 384000]' |
+| `mastering_insert_timing` | returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples; a sample_rate outside [8000, 384000] raises SonareValueError 'mastering_insert_timing: sample_rate must be an integer in [8000, 384000]' |
 | `mastering_processor_catalog` | returns frozen MasteringProcessorCatalogEntry dataclasses read by attribute |
 
 #### Python keyword arguments and attributes are snake_case only
@@ -6416,7 +6417,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
-| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list |
+| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list; a given sampleRate outside [8000, 384000], 0 included, is a RangeError 'masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]' |
 | `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |
@@ -11426,7 +11427,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
-| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list |
+| `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list; a given sampleRate outside [8000, 384000], 0 included, is a RangeError 'masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]' |
 | `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |

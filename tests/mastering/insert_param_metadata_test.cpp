@@ -659,12 +659,17 @@ TEST_CASE("a rate-specific descriptor publishes the ceiling accepted at that rat
 
 TEST_CASE("the rate-specific descriptor query refuses a rate outside the supported range",
           "[mastering][catalog]") {
-  for (int rate : {-1, -48000, 100000000}) {
+  for (int rate : {-1, -48000, 7999, 100000000}) {
     CAPTURE(rate);
     CHECK(sonare_test::c_string_error(sonare_mastering_insert_param_info, "eq.parametric", rate) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "sample_rate must be an integer in [8000, 384000]");
   }
+  // The core query owns the check, so a fractional rate no C int can carry is refused there too.
+  CHECK_THROWS_WITH(insert_param_info_json_at_rate("eq.parametric", 44100.5),
+                    "sample_rate must be an integer in [8000, 384000]");
 
   CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "eq.parametric", 44100) ==
         insert_param_info_json_at_rate("eq.parametric", 44100.0));

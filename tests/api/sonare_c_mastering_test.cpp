@@ -1458,8 +1458,7 @@ TEST_CASE("sonare_mastering_insert_timing refuses what it cannot answer for",
       tail = -1;
       REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{}", rate, &latency,
                                              &tail) == SONARE_ERROR_INVALID_PARAMETER);
-      CHECK(message().find("sample_rate " + std::to_string(rate) + " is out of range") !=
-            std::string::npos);
+      CHECK(message() == "sample_rate must be an integer in [8000, 384000]");
       CHECK(latency == 0);
       CHECK(tail == 0);
     }

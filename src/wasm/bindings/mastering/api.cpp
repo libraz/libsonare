@@ -48,29 +48,17 @@ val js_mastering_insert_param_names(std::string name) {
   return stringVectorToVal(mastering::api::insert_param_names(name));
 }
 
-namespace {
-
-int insertSampleRate(const val& value) {
-  const int sample_rate = checkedIntFromVal(value, "sampleRate");
-  if (!sonare::is_supported_sample_rate(sample_rate)) {
-    throw WasmRangeError("sampleRate " + std::to_string(sample_rate) + " is out of range");
-  }
-  return sample_rate;
-}
-
-}  // namespace
-
 // Parameter descriptors for the keys an insert reads, ordered by automation id then by name; the
-// field contract is sonare_mastering_insert_param_info's. A name outside the processor catalog is
-// refused with "unknown insert processor: <id>" before the rate is read. An omitted rate selects
-// the rate-less query; a supplied rate resolves the Nyquist ceilings.
+// field contract is sonare_mastering_insert_param_info's. The library refuses a name outside the
+// processor catalog, then a supplied rate outside the audio sample-rate domain. An omitted rate
+// selects the rate-less query; a supplied rate resolves the Nyquist ceilings.
 std::string js_mastering_insert_param_info(std::string name, const val& sample_rate_val) {
   wasmRefuseEmbeddedNul(name, "name");
   if (sample_rate_val.isUndefined() || sample_rate_val.isNull()) {
     return mastering::api::insert_param_info_json(name);
   }
-  mastering::api::require_insert_metadata_processor(name);
-  return mastering::api::insert_param_info_json_at_rate(name, insertSampleRate(sample_rate_val));
+  return mastering::api::insert_param_info_json_at_rate(
+      name, numberFromVal(sample_rate_val, "sampleRate"));
 }
 
 // Latency and tail an insert reports once built from `json_params` and
@@ -81,10 +69,9 @@ std::string js_mastering_insert_param_info(std::string name, const val& sample_r
 val js_mastering_insert_timing(std::string name, std::string json_params,
                                const val& sample_rate_val) {
   wasmRefuseEmbeddedNul(name, "name");
-  const int sample_rate = insertSampleRate(sample_rate_val);
-  // The parameter bag is refused under `params`, as the Node addon reports it through the C entry.
-  const mastering::api::InsertTiming timing = sonare::util::check::under_member(
-      "params", [&] { return mastering::api::insert_timing(name, json_params, sample_rate); });
+  // The library refuses the name, the parameter bag under `params`, then the rate.
+  const mastering::api::InsertTiming timing = mastering::api::insert_timing(
+      name, json_params, numberFromVal(sample_rate_val, "sampleRate"));
   val out = val::object();
   out.set("latencySamples", timing.latency_samples);
   out.set("tailSamples", timing.tail_samples);

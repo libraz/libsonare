@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_construction.h"
 #include "mastering/api/insert_factory.h"
@@ -22,6 +23,7 @@
 #include "util/insertion_sort.h"
 #include "util/json_schema.h"
 #include "util/number_format.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::api {
 
@@ -1386,6 +1388,7 @@ std::string insert_param_info_json(const std::string& name) {
 
 std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate) {
   require_insert_metadata_processor(name);
+  util::check::within(sample_rate, kAudioSampleRateDomain, "sample_rate");
   // Keyed apart from the rate-less memo, so the rate-less answer never depends on
   // an earlier call.
   static thread_local std::unordered_map<std::string, std::string> memo;

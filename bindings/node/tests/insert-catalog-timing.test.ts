@@ -9,6 +9,24 @@ import {
 } from '../src/index.js';
 
 describe('insert catalog carries construction-only params, and timing answers per-configuration', () => {
+  it('names an unknown metadata insert before a rate outside the audio domain', () => {
+    const insert = 'nope.nope' as never;
+    const unknown = new RangeError('masteringInsertParamInfo: unknown insert processor: nope.nope');
+    expect(() => masteringInsertParamInfo({ insert, sampleRate: 7999 })).toThrow(unknown);
+    expect(() => masteringInsertParamInfo({ insert })).toThrow(unknown);
+    const outOfDomain = new RangeError(
+      'masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]',
+    );
+    for (const sampleRate of [0, 7999, 384001]) {
+      expect(() => masteringInsertParamInfo({ insert: 'utility.gain', sampleRate })).toThrow(
+        outOfDomain,
+      );
+    }
+    expect(masteringInsertParamInfo({ insert: 'utility.gain', sampleRate: 8000 })).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'levelDb' })]),
+    );
+  });
+
   it('reports softClipper aliasing as a construction-only enum with choices', () => {
     const info = masteringInsertParamInfo({ insert: 'saturation.softClipper' });
     const aliasing = info.find((param) => param.name === 'aliasing');

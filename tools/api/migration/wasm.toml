@@ -25048,10 +25048,10 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertName
 [[entry]]
 kind = "function"
 old = "masteringInsertParamInfo"
-changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list"
+changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]; an insert outside the masteringProcessorCatalog() ids is a RangeError 'masteringInsertParamInfo: unknown insert processor: <id>' (a retired id with ' (renamed to <current id>)' appended) instead of an empty list; a given sampleRate outside [8000, 384000], 0 included, is a RangeError 'masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]'"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/insert-param-validation.test.ts::reports realtime-automatable insert param descriptors"
+test = "bindings/wasm/tests/insert-param-validation.test.ts::resolves a Nyquist-following ceiling for the host rate and leaves other keys alone"
 
 [[entry]]
 kind = "function"

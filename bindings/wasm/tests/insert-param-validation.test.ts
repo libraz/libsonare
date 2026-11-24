@@ -72,12 +72,14 @@ describe('insert param validation (WASM)', () => {
         (d) => d.name === 'ratio',
       );
     expect(ratio(44100)).toEqual(ratio());
-    expect(
-      expectRefusalOf(
-        () => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: 0 }),
-        RangeError,
-      ).message,
-    ).toBe('masteringInsertParamInfo: sampleRate 0 is out of range');
+    for (const sampleRate of [0, 7999, 384001]) {
+      expect(
+        expectRefusalOf(
+          () => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate }),
+          RangeError,
+        ).message,
+      ).toBe('masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]');
+    }
   });
 
   it('reports realtime-automatable insert param descriptors', () => {

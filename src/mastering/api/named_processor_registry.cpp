@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
@@ -15,6 +16,7 @@
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::api {
 
@@ -202,14 +204,17 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_reading_every_key(
 
 InsertTiming insert_timing(const std::string& name, const std::string& json_params,
                            double sample_rate) {
-  std::unique_ptr<sonare::rt::ProcessorBase> processor =
-      make_insert_reading_every_key(name, json_params);
+  // Refused in parameter order: the insert, then the parameter bag under `params`, then the rate.
+  std::unique_ptr<sonare::rt::ProcessorBase> processor = util::check::under_member(
+      "params", [&] { return make_insert_reading_every_key(name, json_params); });
   if (processor == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown insert processor: " + name + retired_processor_note(name));
   }
+  util::check::within(sample_rate, kAudioSampleRateDomain, "sample_rate");
   // The default width, so the timing is the one a host gets from an insert it prepares plainly.
-  processor->prepare(sample_rate, kInsertProbeBlockSize);
+  util::check::under_member("params",
+                            [&] { processor->prepare(sample_rate, kInsertProbeBlockSize); });
   return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
 }
 

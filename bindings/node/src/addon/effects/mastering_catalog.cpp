@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
@@ -13,6 +14,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 
@@ -167,14 +169,20 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   // A JSON array the TS facade parses into the typed MasteringInsertParamInfo[]; the C entry
   // refuses an undeclared insert. An omitted sample rate is the rate-less query (C rate 0).
   const std::string name = node_narrow_string(env, info[0], "name");
-  int sample_rate = 0;
   const bool at_rate = !(info[1].IsUndefined() || info[1].IsNull());
-  // 0 is the C ABI's rate-less query, so a given 0 is refused here rather than read as absent.
-  if (at_rate && !sonare_node::ReadWholeHertzSampleRate(env, info[1], &sample_rate)) {
+  // The rate is narrowed for transport only; C refuses an undeclared name, then the rate.
+  int sample_rate = 0;
+  if (!sonare_node::OptionalIntArg(env, info, 1, "sampleRate", 0, &sample_rate)) {
     return env.Undefined();
   }
   char* json = nullptr;
-  const SonareError err = sonare_mastering_insert_param_info(name.c_str(), sample_rate, &json);
+  SonareError err = sonare_mastering_insert_param_info(name.c_str(), sample_rate, &json);
+  // C reads 0 as the rate-less query, so a given 0 is refused in the rate's own domain once C
+  // has accepted the name.
+  if (err == SONARE_OK && at_rate && sample_rate == 0) {
+    sonare_free_string(json);
+    sonare::util::check::within(0.0, sonare::kAudioSampleRateDomain, "sample_rate");
+  }
   if (err != SONARE_OK) {
     ThrowSonareError(env, err);
     return env.Undefined();

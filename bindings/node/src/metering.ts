@@ -363,15 +363,6 @@ export function meteringDynamicRange(...args: unknown[]): DynamicRangeReport {
         assertUnitInterval(r[field], field);
       }
     }
-    if (
-      r.lowPercentile !== undefined &&
-      r.lowPercentile !== null &&
-      r.highPercentile !== undefined &&
-      r.highPercentile !== null &&
-      r.lowPercentile > r.highPercentile
-    ) {
-      throw refuse('lowPercentile must not exceed highPercentile');
-    }
     return addon.meteringDynamicRange(
       r.samples,
       r.sampleRate,

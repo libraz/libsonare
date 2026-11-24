@@ -3,7 +3,6 @@ import { withEntry } from './internal/entry.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
 import { resolveInsertParams } from './internal/processor_params.js';
 import { parseCatalogJson } from './internal/record_json.js';
-import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   MasteringChainConfig,
@@ -168,7 +167,7 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
  *
  * @throws {TypeError} when the request is the wrong type or `insert` is not a string
  * @throws {RangeError} for an `insert` that is no processor catalog id, or a
- *   `sampleRate` outside the supported range
+ *   `sampleRate` outside the supported whole-hertz range
  */
 export function masteringInsertParamInfo(
   request: MasteringInsertParamInfoRequest,
@@ -176,9 +175,6 @@ export function masteringInsertParamInfo(
   return withEntry('masteringInsertParamInfo', () => {
     const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
     assertString(r.insert, 'insert');
-    if (!isAbsent(r.sampleRate)) {
-      assertSampleRate(r.sampleRate);
-    }
     const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
     return parseCatalogJson(json) as MasteringInsertParamInfo[];
   });
