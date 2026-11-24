@@ -418,6 +418,17 @@ def test_realtime_voice_changer_render_renders_a_new_preset() -> None:
     assert np.isfinite(out).all()
 
 
+def test_realtime_voice_changer_render_refuses_an_external_carrier_as_not_supported() -> None:
+    with pytest.raises(SonareError) as raised:
+        libsonare.realtime_voice_changer_render(_tone(), SAMPLE_RATE, config=_vocoder("external"))
+    assert not isinstance(raised.value, SonareValueError)
+    assert raised.value.code == int(ErrorCode.NOT_SUPPORTED)
+    assert str(raised.value).endswith(
+        "config.vocoder_carrier_source external is not supported for the offline render: "
+        "it has no carrier input"
+    )
+
+
 def test_one_planar_channel_takes_the_mono_path() -> None:
     samples = _tone()
     with (
