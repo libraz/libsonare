@@ -44,7 +44,7 @@ import {
   synthGsVariationIsVoicedApart,
 } from '../dist/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/project_types';
-import { expectArgumentRefusal, expectRefusalOf } from './_helpers';
+import { expectArgumentRefusal, expectRefusalOf, unknownKeyText } from './_helpers';
 
 describe('Sonare WASM Project', () => {
   beforeAll(async () => {
@@ -1723,15 +1723,15 @@ describe('Sonare WASM Project', () => {
       const typeRefusals: [unknown, string][] = [
         [{ transposeSemitones: '12' }, 'config.transposeSemitones must be a number'],
         [{ chordIntervals: [0, '4'] }, 'config.chordIntervals[1] must be a number'],
-        [
-          { transpose_semitones: 12 },
-          'unknown key config.transpose_semitones (renamed to config.transposeSemitones)',
-        ],
         [{ seed: Number.NaN }, 'config.seed must be a number'],
-        [{ nope: 1 }, 'unknown key config.nope'],
       ];
       for (const [config, text] of typeRefusals) {
         refused(config, text);
+      }
+      for (const key of ['transpose_semitones', 'nope']) {
+        expect(expectRefusalOf(bake({ [key]: 1 }), TypeError).message).toMatch(
+          new RegExp(`^${unknownKeyText(`${entry}unknown key config.${key}`).source}$`),
+        );
       }
       expect(
         expectRefusalOf(() => project.previewMidiFxCount({ clipId, config: 1 as never }), TypeError)

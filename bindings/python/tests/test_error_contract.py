@@ -76,8 +76,10 @@ def test_bad_scene_json_carries_oracle_code_and_detail() -> None:
 def test_a_null_handle_refusal_is_the_library_detail_under_the_entry_prefix() -> None:
     with pytest.raises(SonareError) as scene:
         Mixer.from_json('{"strips": [{"id": "a", "faderDB": 0}]}', sample_rate=48000)
-    assert str(scene.value) == (
-        f"[{scene.value.code}] Mixer.from_json: unknown key strips[0].faderDB"
+    assert re.fullmatch(
+        rf"\[{int(scene.value.code)}\] Mixer\.from_json: unknown key strips\[0\]\.faderDB "
+        r"\(expected [^)]*\bfaderDb\b[^)]*\)",
+        str(scene.value),
     )
     mixer = Mixer(sample_rate=48000)
     mixer.add_strip("a")

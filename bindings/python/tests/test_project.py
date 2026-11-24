@@ -12,6 +12,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import json
+import re
 from collections.abc import Callable
 from typing import Any, get_args
 
@@ -481,7 +482,11 @@ def test_a_refused_load_names_no_diagnostic_code() -> None:
     for entry, load in loads:
         with pytest.raises(SonareError) as caught:
             load(json.dumps(document))
-        assert str(caught.value) == f"[{ErrorCode.INVALID_FORMAT}] {entry}: unknown key bogus"
+        assert re.fullmatch(
+            rf"\[{int(ErrorCode.INVALID_FORMAT)}\] {re.escape(entry)}: unknown key bogus "
+            r"\(expected [^)]*\)",
+            str(caught.value),
+        )
 
 
 def test_from_json_with_diagnostics_returns_success_warnings() -> None:

@@ -33,7 +33,7 @@ import {
   projectAbiVersion,
 } from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
-import { expectRefusal, unknownKeyError } from './_helpers.js';
+import { expectRefusal, unknownKeyError, unknownKeyText } from './_helpers.js';
 
 /** Asserts the empty-chord refusal a MIDI-FX config gets at `entry`. */
 const expectEmptyChord = (run: () => unknown, entry: string): void => {
@@ -2319,11 +2319,8 @@ describe('MIDI message module functions', () => {
       [{ transposeSemitones: '12' }, 'config\\.transposeSemitones must be a number'],
       [{ chordIntervals: [0, 'x'] }, 'config\\.chordIntervals\\[1\\] must be a number'],
       [{ velocityScale: Number.NaN }, 'config\\.velocityScale must be a number'],
-      [
-        { transpose_semitones: 1 },
-        'unknown key config\\.transpose_semitones \\(renamed to config\\.transposeSemitones\\)',
-      ],
-      [{ nope: 1 }, 'unknown key config\\.nope'],
+      [{ transpose_semitones: 1 }, unknownKeyText('unknown key config.transpose_semitones').source],
+      [{ nope: 1 }, unknownKeyText('unknown key config.nope').source],
     ];
     for (const [config, text] of typeRefusals) {
       expectRefusal(() => bad(config), TypeError, new RegExp(`^${entry}${text}$`));

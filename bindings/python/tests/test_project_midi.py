@@ -779,7 +779,7 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
     [
         (
             {"transpose_semitones": 12},
-            "unknown key config.transpose_semitones (renamed to config.transposeSemitones)",
+            "unknown key config.transpose_semitones (expected ",
         ),
         ({"transposeSemitone": 12}, "unknown key config.transposeSemitone"),
         ({"velocityScale": float("nan")}, None),
