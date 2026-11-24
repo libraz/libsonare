@@ -23397,7 +23397,7 @@
             "--params",
             "tempoBpm=5"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
