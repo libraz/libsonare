@@ -3293,7 +3293,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
-| `mastering_audio_profile(params)` | a refused nFft or hopLength raises SonareValueError naming the key under the mapping the caller passed: 'mastering_audio_profile: params.nFft must be an integer in [1, 524288]', 'mastering_audio_profile: params.nFft rescaled to sample_rate must fit the largest FFT size' |
+| `mastering_audio_profile(params)` | a refused nFft or hopLength raises SonareValueError naming the key under the mapping the caller passed: 'mastering_audio_profile: params.nFft must be an even integer in [2, 524288]', 'mastering_audio_profile: params.nFft rescaled to sample_rate must fit the largest FFT size' |
 | `mastering_insert_param_info(name)` | `mastering_insert_param_info(insert)` |
 | `mastering_insert_timing(name)` | `mastering_insert_timing(insert)` |
 | `mastering_pair_analyze(analysis_name)` | `mastering_analyze_pair(analysis)`: pass the analysis name with the analysis keyword |

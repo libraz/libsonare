@@ -793,7 +793,7 @@ describe('results: unit-named fields and objects', () => {
   });
 
   it.each([
-    [{ nFft: 0 }, 48000, 'nFft must be an integer in [1, 524288]'],
+    [{ nFft: 0 }, 48000, 'nFft must be an even integer in [2, 524288]'],
     [{ nFft: 524288 }, 96000, 'nFft rescaled to sampleRate must fit the largest FFT size'],
     [
       { hopLength: 2 ** 30 },
@@ -804,6 +804,17 @@ describe('results: unit-named fields and objects', () => {
     expect(() =>
       sonare.masteringAudioProfile({ samples: left, sampleRate: rate, ...fields }),
     ).toThrow(new RangeError(`masteringAudioProfile: ${text}`));
+  });
+
+  // Evenness is checked on the caller's value, so an odd size is refused at every rate.
+  it.each([48000, 96000])('both audio profile entries refuse an odd nFft at %d Hz', (rate) => {
+    const text = 'nFft must be an even integer in [2, 524288]';
+    expect(() =>
+      sonare.masteringAudioProfile({ samples: left, sampleRate: rate, nFft: 1023 }),
+    ).toThrow(new RangeError(`masteringAudioProfile: ${text}`));
+    expect(() =>
+      sonare.masteringAudioProfileStereo({ left, right, sampleRate: rate, nFft: 1023 }),
+    ).toThrow(new RangeError(`masteringAudioProfileStereo: ${text}`));
   });
 
   it.each([0, 1.5, -1])('the audio profile refuses nFft %s', (nFft) => {

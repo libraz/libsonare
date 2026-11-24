@@ -15184,7 +15184,7 @@ test = "bindings/python/tests/test_vocal_edit.py::test_draft_edit_evaluate_commi
 [[entry]]
 kind = "option"
 old = "mastering_audio_profile(params)"
-changed = "a refused nFft or hopLength raises SonareValueError naming the key under the mapping the caller passed: 'mastering_audio_profile: params.nFft must be an integer in [1, 524288]', 'mastering_audio_profile: params.nFft rescaled to sample_rate must fit the largest FFT size'"
+changed = "a refused nFft or hopLength raises SonareValueError naming the key under the mapping the caller passed: 'mastering_audio_profile: params.nFft must be an even integer in [2, 524288]', 'mastering_audio_profile: params.nFft rescaled to sample_rate must fit the largest FFT size'"
 domain = "mastering"
 rule = "individual"
 test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_audio_profile_names_the_params_key_it_refuses"

@@ -502,7 +502,7 @@ def test_mastering_audio_profile_returns_its_record() -> None:
 @pytest.mark.parametrize(
     ("params", "sr", "text"),
     [
-        ({"nFft": 0}, 48000, "params.nFft must be an integer in [1, 524288]"),
+        ({"nFft": 0}, 48000, "params.nFft must be an even integer in [2, 524288]"),
         (
             {"nFft": 524288},
             96000,
@@ -524,6 +524,23 @@ def test_mastering_audio_profile_names_the_params_key_it_refuses(params, sr, tex
         libsonare.SonareValueError, match=rf"^mastering_audio_profile: {re.escape(text)}$"
     ):
         libsonare.mastering_audio_profile(samples, sample_rate=sr, params=params)
+
+
+@pytest.mark.parametrize("sr", [48000, 96000])
+def test_both_audio_profile_entries_refuse_an_odd_n_fft(sr) -> None:
+    """Evenness is checked on the caller's value, so an odd size is refused at every rate."""
+    import libsonare
+
+    samples = np.zeros(4800, dtype=np.float32)
+    text = re.escape("params.nFft must be an even integer in [2, 524288]")
+    with pytest.raises(libsonare.SonareValueError, match=rf"^mastering_audio_profile: {text}$"):
+        libsonare.mastering_audio_profile(samples, sample_rate=sr, params={"nFft": 1023})
+    with pytest.raises(
+        libsonare.SonareValueError, match=rf"^mastering_audio_profile_stereo: {text}$"
+    ):
+        libsonare.mastering_audio_profile_stereo(
+            samples, samples, sample_rate=sr, params={"nFft": 1023}
+        )
 
 
 def _decorrelated_pair(sr: int, seconds: int) -> tuple[list[float], list[float], list[float]]:

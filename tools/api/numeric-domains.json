@@ -2677,11 +2677,11 @@
       "entry": "mastering_audio_profile",
       "param": "params.nFft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 2,
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "even",
       "sentinel": null
     },
     {
@@ -2699,11 +2699,11 @@
       "entry": "mastering_audio_profile_stereo",
       "param": "params.nFft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 2,
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "even",
       "sentinel": null
     },
     {
