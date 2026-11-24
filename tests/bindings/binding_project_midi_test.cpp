@@ -933,12 +933,114 @@ TEST_CASE("project C surface set_marker stores kind and key signature", "[projec
   bad.key_fifths = -8;
   REQUIRE(sonare_project_set_marker(project, &bad, "bad", &bad_id) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  // The same out-of-range fifths is accepted on a non-key-signature kind, where
-  // the field is unused.
+  // Unused key fields use zero as absence on other marker kinds.
   bad.kind = SONARE_MARKER_KIND_MARKER;
+  bad.key_fifths = 0;
+  bad.key_minor = 0;
   REQUIRE(sonare_project_set_marker(project, &bad, "bad", &bad_id) == SONARE_OK);
 
   sonare_project_destroy(round);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project set_marker rejects inactive key fields", "[domain-marker]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectMarker existing{};
+  existing.kind = SONARE_MARKER_KIND_MARKER;
+  existing.ppq = 2.0;
+  uint32_t existing_id = 0;
+  REQUIRE(sonare_project_set_marker(project, &existing, "preserved", &existing_id) == SONARE_OK);
+
+  const std::array<uint8_t, 4> non_key_kinds = {SONARE_MARKER_KIND_MARKER, SONARE_MARKER_KIND_TEXT,
+                                                SONARE_MARKER_KIND_LYRIC,
+                                                SONARE_MARKER_KIND_CUE_POINT};
+  for (const uint8_t kind : non_key_kinds) {
+    for (const bool fifths_field : {true, false}) {
+      CAPTURE(kind);
+      CAPTURE(fifths_field);
+      SonareProjectMarker candidate = existing;
+      candidate.kind = kind;
+      candidate.ppq = 9.0;
+      if (fifths_field) {
+        candidate.key_fifths = 1;
+      } else {
+        candidate.key_minor = 1;
+      }
+
+      uint32_t out_id = 77;
+      CHECK(sonare_project_set_marker(project, &candidate, "replacement", &out_id) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+      const std::string field = fifths_field ? "key_fifths" : "key_minor";
+      CHECK(std::string(sonare_last_error_message()) ==
+            "marker." + field + " must be 0 unless marker.kind is key signature");
+      CHECK(out_id == 0);
+
+      size_t count = 0;
+      REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+      CHECK(count == 1);
+      SonareProjectMarker preserved{};
+      REQUIRE(sonare_project_marker_by_index(project, 0, &preserved) == SONARE_OK);
+      CHECK(preserved.id == existing_id);
+      CHECK(preserved.kind == SONARE_MARKER_KIND_MARKER);
+      CHECK(preserved.ppq == 2.0);
+      char* preserved_name = nullptr;
+      REQUIRE(sonare_project_marker_name_by_index(project, 0, &preserved_name) == SONARE_OK);
+      CHECK(std::string(preserved_name) == "preserved");
+      sonare_free_string(preserved_name);
+    }
+  }
+
+  const std::array<uint8_t, 5> kinds = {SONARE_MARKER_KIND_MARKER, SONARE_MARKER_KIND_TEXT,
+                                        SONARE_MARKER_KIND_LYRIC, SONARE_MARKER_KIND_CUE_POINT,
+                                        SONARE_MARKER_KIND_KEY_SIGNATURE};
+  for (const uint8_t kind : kinds) {
+    SonareProjectMarker accepted{};
+    accepted.kind = kind;
+    accepted.ppq = 4.0;
+    if (kind == SONARE_MARKER_KIND_KEY_SIGNATURE) {
+      accepted.key_fifths = 7;
+      accepted.key_minor = 1;
+    }
+    uint32_t out_id = 0;
+    REQUIRE(sonare_project_set_marker(project, &accepted, "accepted", &out_id) == SONARE_OK);
+    CHECK(out_id != 0);
+  }
+
+  size_t count = 0;
+  REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+  CHECK(count == 6);
+  bool found_key_signature = false;
+  for (size_t i = 0; i < count; ++i) {
+    SonareProjectMarker marker{};
+    REQUIRE(sonare_project_marker_by_index(project, i, &marker) == SONARE_OK);
+    if (marker.kind == SONARE_MARKER_KIND_KEY_SIGNATURE) {
+      found_key_signature = true;
+      CHECK(marker.key_fifths == 7);
+      CHECK(marker.key_minor == 1);
+    } else {
+      CHECK(marker.key_fifths == 0);
+      CHECK(marker.key_minor == 0);
+    }
+  }
+  CHECK(found_key_signature);
+
+  SonareProject* null_name_project = nullptr;
+  REQUIRE(sonare_project_create(&null_name_project) == SONARE_OK);
+  SonareProjectMarker null_name_marker{};
+  null_name_marker.kind = SONARE_MARKER_KIND_MARKER;
+  null_name_marker.ppq = 1.0;
+  uint32_t null_name_id = 0;
+  REQUIRE(sonare_project_set_marker(null_name_project, &null_name_marker, nullptr, &null_name_id) ==
+          SONARE_OK);
+  char* null_name = nullptr;
+  REQUIRE(sonare_project_marker_name_by_index(null_name_project, 0, &null_name) == SONARE_OK);
+  CHECK(std::string(null_name).empty());
+  sonare_free_string(null_name);
+  sonare_project_destroy(null_name_project);
+
   sonare_project_destroy(project);
 }
 

@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <string>
 
@@ -376,6 +377,73 @@ TEST_CASE("engine marker refusals", "[c_api][engine_refusal]") {
   CHECK(last_message() ==
         "the marker end_marker_id names must be after the marker "
         "start_marker_id names");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine marker key fields are refused when the kind does not read them",
+          "[domain-marker]") {
+  SonareEngine* engine = make_engine();
+
+  SonareEngineMarker existing{};
+  existing.id = 1;
+  existing.kind = SONARE_MARKER_KIND_MARKER;
+  existing.ppq = 2.0;
+  std::strncpy(existing.name, "preserved", sizeof(existing.name) - 1);
+  REQUIRE(sonare_engine_set_markers(engine, &existing, 1) == SONARE_OK);
+
+  const std::array<uint8_t, 4> non_key_kinds = {SONARE_MARKER_KIND_MARKER, SONARE_MARKER_KIND_TEXT,
+                                                SONARE_MARKER_KIND_LYRIC,
+                                                SONARE_MARKER_KIND_CUE_POINT};
+  for (const uint8_t kind : non_key_kinds) {
+    for (const bool fifths_field : {true, false}) {
+      CAPTURE(kind);
+      CAPTURE(fifths_field);
+      SonareEngineMarker candidate = existing;
+      candidate.kind = kind;
+      candidate.ppq = 9.0;
+      std::strncpy(candidate.name, "replacement", sizeof(candidate.name) - 1);
+      if (fifths_field) {
+        candidate.key_fifths = 1;
+      } else {
+        candidate.key_minor = 1;
+      }
+
+      CHECK(sonare_engine_set_markers(engine, &candidate, 1) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+      const std::string field = fifths_field ? "key_fifths" : "key_minor";
+      CHECK(last_message() ==
+            "markers[0]." + field + " must be 0 unless markers[0].kind is key signature");
+      size_t count = 0;
+      REQUIRE(sonare_engine_marker_count(engine, &count) == SONARE_OK);
+      CHECK(count == 1);
+      SonareEngineMarker preserved{};
+      REQUIRE(sonare_engine_marker(engine, existing.id, &preserved) == SONARE_OK);
+      CHECK(preserved.id == existing.id);
+      CHECK(preserved.kind == SONARE_MARKER_KIND_MARKER);
+      CHECK(preserved.ppq == 2.0);
+      CHECK(std::string(preserved.name) == "preserved");
+    }
+  }
+
+  const std::array<uint8_t, 5> kinds = {SONARE_MARKER_KIND_MARKER, SONARE_MARKER_KIND_TEXT,
+                                        SONARE_MARKER_KIND_LYRIC, SONARE_MARKER_KIND_CUE_POINT,
+                                        SONARE_MARKER_KIND_KEY_SIGNATURE};
+  for (const uint8_t kind : kinds) {
+    SonareEngineMarker accepted{};
+    accepted.id = static_cast<uint32_t>(100 + kind);
+    accepted.kind = kind;
+    accepted.ppq = 4.0;
+    REQUIRE(sonare_engine_set_markers(engine, &accepted, 1) == SONARE_OK);
+    size_t count = 0;
+    REQUIRE(sonare_engine_marker_count(engine, &count) == SONARE_OK);
+    CHECK(count == 1);
+    SonareEngineMarker out{};
+    REQUIRE(sonare_engine_marker_by_index(engine, 0, &out) == SONARE_OK);
+    CHECK(out.kind == kind);
+    CHECK(out.key_fifths == accepted.key_fifths);
+    CHECK(out.key_minor == accepted.key_minor);
+  }
+
   sonare_engine_destroy(engine);
 }
 

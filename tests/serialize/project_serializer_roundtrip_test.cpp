@@ -2834,9 +2834,7 @@ TEST_CASE("assist sidecar identity canonicalizes signed zero and keeps first slo
 }
 
 TEST_CASE("marker key fields survive a save/load on any marker kind", "[serialize]") {
-  // sonare_project_set_marker range-checks key_fifths only for the
-  // key-signature kind but accepts the fields on every kind, so a serializer
-  // that writes them only for kind 4 loses state the edit API can produce.
+  // Older documents can carry nonzero key fields on a non-key marker.
   Project p;
   MidiContentStore midi;
   REQUIRE(

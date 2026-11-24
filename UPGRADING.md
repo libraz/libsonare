@@ -1123,6 +1123,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_engine_external_midi_dropped_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_engine_set_markers` | a nonzero key_fifths or key_minor is refused when marker.kind does not read key-signature fields |
 | `sonare_engine_set_midi_clips` | a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period) |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_midi_param_to_cc` | a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it) |
@@ -1212,7 +1213,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_remove_automation_lane(target_param_id)` | `sonare_project_remove_automation_lane(lane_id)` |
 | `sonare_project_remove_automation_lane` | takes the lane_id returned by add or the lane reader |
 | `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
-| `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id |
+| `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id; nonzero key_fifths or key_minor on other kinds is refused with SONARE_ERROR_INVALID_PARAMETER |
 | `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division |
 | `sonare_project_snap_to_grid` | takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init |
 

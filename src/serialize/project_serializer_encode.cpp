@@ -339,14 +339,8 @@ Value marker_to_json(const arrangement::ProjectMarker& m) {
   o["id"] = static_cast<double>(m.id);
   o["ppq"] = m.ppq;
   o["name"] = m.name;
-  // `kind` holds an arrangement::MarkerKind ordinal. Omitted for the default
-  // marker kind to keep existing marker JSON unchanged. The key fields are
-  // written for the key-signature kind and, independently, whenever they carry a
-  // non-zero value: the C ABI range-checks key_fifths only for the key-signature
-  // kind but accepts the fields on any kind, so keying the write on the kind
-  // alone would drop state the edit API can legitimately produce. A marker with
-  // zeroed key fields still emits nothing, so ordinary marker JSON is
-  // byte-identical.
+  // The default marker kind is omitted. Preserve nonzero key fields from older
+  // documents even on non-key kinds, so loading and saving keeps their data.
   if (m.kind != static_cast<uint8_t>(arrangement::MarkerKind::kMarker)) {
     o["kind"] = enum_token(static_cast<arrangement::MarkerKind>(m.kind));
   }

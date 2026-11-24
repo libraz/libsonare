@@ -328,8 +328,8 @@ SonareError sonare_project_end_ppq(const SonareProject* project, double* out_end
 
 /// @brief Project timeline marker with its kind and (for key signatures) the
 ///        structured key. @c kind is a SonareMarkerKind ordinal; the key fields
-///        apply only to the key-signature kind. The name travels beside the
-///        record: @ref sonare_project_set_marker takes it, and
+///        apply only to the key-signature kind and must be zero when setting another kind.
+///        The name travels beside the record: @ref sonare_project_set_marker takes it,
 ///        @ref sonare_project_marker_name_by_index reads it.
 typedef struct {
   uint32_t id;        ///< Stable marker id; 0 on input allocates a new one.
@@ -348,9 +348,10 @@ static_assert(offsetof(SonareProjectMarker, ppq) == 8u, "SonareProjectMarker ppq
 ///        its kind and key signature, with an unbounded UTF-8 name.
 /// @details @p marker->id 0 allocates a new id and UINT32_MAX is reserved
 ///          (SONARE_ERROR_INVALID_PARAMETER); the allocated / affected id is
-///          returned via @p out_marker_id. For the key-signature kind
-///          @p marker->key_fifths must be in -7..7 (the SMF `sf` range); an
-///          out-of-range value yields SONARE_ERROR_INVALID_PARAMETER.
+///          returned via @p out_marker_id. For a key-signature marker,
+///          @p marker->key_fifths must be in -7..7 (the SMF `sf` range).
+///          A nonzero @p marker->key_fifths or @p marker->key_minor on any other
+///          kind yields SONARE_ERROR_INVALID_PARAMETER.
 ///          @p name is copied verbatim; NULL is the empty name.
 SonareError sonare_project_set_marker(SonareProject* project, const SonareProjectMarker* marker,
                                       const char* name, uint32_t* out_marker_id);

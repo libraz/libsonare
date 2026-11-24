@@ -4955,10 +4955,18 @@ test = "tests/api/engine_midi_cc_bindings_test.cpp::MIDI CC conversion routes re
 [[entry]]
 kind = "function"
 old = "sonare_project_set_marker"
-changed = "takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id"
+changed = "takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id; nonzero key_fifths or key_minor on other kinds is refused with SONARE_ERROR_INVALID_PARAMETER"
 domain = "project"
 rule = "options-struct"
-test = "tests/bindings/binding_project_midi_test.cpp::project C surface set_marker reads a NULL name as the empty name"
+test = "tests/bindings/binding_project_midi_test.cpp::project set_marker rejects inactive key fields"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_markers"
+changed = "a nonzero key_fifths or key_minor is refused when marker.kind does not read key-signature fields"
+domain = "engine"
+rule = "individual"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine marker key fields are refused when the kind does not read them"
 
 [[entry]]
 kind = "function"

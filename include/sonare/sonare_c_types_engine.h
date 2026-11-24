@@ -194,6 +194,7 @@ typedef enum SONARE_ENUM_BASE {
 
 /// One timeline marker. The kind / key fields occupy the 4-byte padding hole after `id`, so the
 /// layout (and ppq / name offsets) is unchanged from when this struct carried only id / ppq / name.
+/// When setting a marker, only the key-signature kind accepts nonzero `key_fifths` or `key_minor`.
 typedef struct {
   uint32_t id;        ///< Marker id.
   uint8_t kind;       ///< A @ref SonareMarkerKind selecting the marker's meaning.

@@ -238,4 +238,8 @@ inline constexpr const char* kCcSelectorUnlessRpnOrNrpnRelation =
 inline constexpr const char* kMidiClipLoopLengthUnlessLoopEnabledRelation =
     "{0} must be 0 unless {1} is enabled";
 
+/// @brief "{0} must be 0 unless {1} is key signature", for a marker's key fields.
+inline constexpr const char* kMarkerKeyFieldUnlessKeySignatureRelation =
+    "{0} must be 0 unless {1} is key signature";
+
 }  // namespace sonare::util::refusal
