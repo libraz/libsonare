@@ -484,6 +484,7 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
 
 /// @brief Converts a CC event to one automation breakpoint using a binding table.
 /// @details Validates consume without applying it to this conversion.
+/// @return SONARE_ERROR_NOT_SUPPORTED for a SysEx event.
 SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, size_t binding_count,
                                          const SonareMidiEventPod* event,
                                          SonareAutomationPoint* out_point);

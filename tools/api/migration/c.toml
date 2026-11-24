@@ -4826,6 +4826,14 @@ rule = "options-struct"
 
 [[entry]]
 kind = "function"
+old = "sonare_midi_cc_to_breakpoint"
+changed = "a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/project_readers_test.cpp::SysEx is not converted to a breakpoint"
+
+[[entry]]
+kind = "function"
 old = "sonare_project_set_marker"
 changed = "takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id"
 domain = "project"

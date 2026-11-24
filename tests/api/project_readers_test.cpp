@@ -377,7 +377,7 @@ TEST_CASE("C MIDI router borrows SysEx bytes and ignores its channels",
   SonareMidiCcBinding binding{};
   CHECK(sonare_midi_cc_learn(events, 1, 1, 0.0f, 1.0f, 0, &binding) == SONARE_ERROR_INVALID_STATE);
   SonareAutomationPoint point{};
-  CHECK(sonare_midi_cc_to_breakpoint(nullptr, 0, &events[0], &point) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_midi_cc_to_breakpoint(nullptr, 0, &events[0], &point) == SONARE_ERROR_NOT_SUPPORTED);
 }
 
 TEST_CASE("project MIDI CC conversions record their refused state",
@@ -403,7 +403,7 @@ TEST_CASE("project MIDI CC conversions record their refused state",
   SECTION("SysEx is not converted to a breakpoint") {
     SonareAutomationPoint point{1.0, 1.0f, 1};
     const SonareError status = sonare_midi_cc_to_breakpoint(nullptr, 0, &sysex, &point);
-    CHECK(status == SONARE_ERROR_INVALID_STATE);
+    CHECK(status == SONARE_ERROR_NOT_SUPPORTED);
     CHECK(sonare_last_error_code() == status);
     CHECK(std::string(sonare_last_error_message()) ==
           "MIDI CC conversion does not support SysEx events");

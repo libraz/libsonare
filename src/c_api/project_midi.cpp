@@ -1245,9 +1245,9 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
   SONARE_C_TRY
   if (((event->word0 >> 28u) & 0x0Fu) ==
       static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
-    sonare_c_detail::set_last_error_static(SONARE_ERROR_INVALID_STATE,
+    sonare_c_detail::set_last_error_static(SONARE_ERROR_NOT_SUPPORTED,
                                            "MIDI CC conversion does not support SysEx events");
-    return SONARE_ERROR_INVALID_STATE;
+    return SONARE_ERROR_NOT_SUPPORTED;
   }
   sonare::midi::CcMap map;
   populate_cc_map(bindings, binding_count, &map);
