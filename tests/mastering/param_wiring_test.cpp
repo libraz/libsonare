@@ -1403,14 +1403,14 @@ TEST_CASE("an unknown insert key lists the keys the insert reads, indices collap
 
   const std::string multiband = refusal_of(
       [&] { (void)api::insert_timing("multiband.compressor", R"({"bogus":1})", 48000.0); });
-  CHECK(names_unread_key(multiband, "bogus"));
+  CHECK(names_unread_key(multiband, "params.bogus"));
   CHECK(multiband.find("band{i}.attackMs") != std::string::npos);
   CHECK(multiband.find("band0.") == std::string::npos);
   // Only the first unread key (sorted) is named.
   const std::string two = refusal_of([&] {
     (void)api::insert_timing("multiband.compressor", R"({"zeta":1,"alpha":1})", 48000.0);
   });
-  CHECK(names_unread_key(two, "alpha"));
+  CHECK(names_unread_key(two, "params.alpha"));
   CHECK(two.find("zeta") == std::string::npos);
 }
 
@@ -1513,12 +1513,12 @@ TEST_CASE("a renamed processor parameter is refused with the keys the processor 
       CAPTURE(row[0], row[1]);
       const std::string message =
           refusal_of([&] { (void)api::insert_timing(row[0], "{\"" + row[1] + "\":1}", 48000.0); });
-      CHECK(lists_current_key(message, row[1], row[2]));
+      CHECK(lists_current_key(message, "params." + row[1], row[2]));
     }
     // The old spelling is a live key elsewhere, so another insert lists its own keys.
     const std::string elsewhere = refusal_of(
         [&] { (void)api::insert_timing("effects.reverb.velvet", "{\"semitones\":1}", 48000.0); });
-    CHECK(names_unread_key(elsewhere, "semitones"));
+    CHECK(names_unread_key(elsewhere, "params.semitones"));
     CHECK(elsewhere.find("renamed") == std::string::npos);
 
     const std::string trim = refusal_of([&] {
