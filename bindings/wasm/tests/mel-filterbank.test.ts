@@ -124,12 +124,13 @@ describe('the filterbank and its mel points', () => {
     }
   });
 
-  it('reads an omitted fmaxHz, and one above the Nyquist, as the Nyquist', () => {
+  it('reads an omitted fmaxHz as the Nyquist and refuses one above it', () => {
     const omitted = melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32 });
     const nyquist = melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32, fmaxHz: 22050 });
-    const above = melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32, fmaxHz: 30000 });
     expect(nyquist.data).toEqual(omitted.data);
-    expect(above.data).toEqual(omitted.data);
+    expect(() =>
+      melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32, fmaxHz: 22051 }),
+    ).toThrow(new RangeError('melFilterbank: fmaxHz must be finite and at most 22050'));
   });
 
   it("divides each band by its width under 'slaney' and leaves it at unit peak under 'none'", () => {

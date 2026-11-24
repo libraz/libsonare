@@ -2039,34 +2039,34 @@ test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_no
 [[entry]]
 kind = "option"
 old = "mfcc(fmax)"
-changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist"
 
 [[entry]]
 kind = "option"
 old = "mel_to_stft(fmax)"
-changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist"
 
 [[entry]]
 kind = "option"
 old = "mel_to_audio(fmax)"
-changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist"
 
 [[entry]]
 kind = "option"
 old = "mfcc_to_audio(fmax)"
-changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist"
 
 [[entry]]
 kind = "function"
@@ -4768,10 +4768,10 @@ rule = "frequency-bounds"
 kind = "option"
 old = "mel_spectrogram(fmax)"
 to = "mel_spectrogram(fmax_hz)"
-changed = "renamed to fmax_hz; None (the default) is the Nyquist and an explicit 0 is refused instead of read as the default"
+changed = "renamed to fmax_hz; None (the default) is the Nyquist and an explicit 0 is refused instead of read as the default; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_refuses_an_upper_edge_that_is_not_positive_and_finite"
+test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist"
 
 [[entry]]
 kind = "option"

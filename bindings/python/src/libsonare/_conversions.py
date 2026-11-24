@@ -122,8 +122,8 @@ def mel_filterbank(
         n_fft: FFT size.
         n_mels: Number of bands, in [1, 4096] (default 128).
         fmin_hz: Lower edge of the lowest band in Hz (default 0.0).
-        fmax_hz: Upper edge of the highest band in Hz; None (default) is the Nyquist, and a
-            value above the Nyquist is held at it. Must be greater than 0 when given.
+        fmax_hz: Upper edge of the highest band in Hz; None (default) is the Nyquist. Must be
+            greater than 0 and at most the Nyquist when given.
         htk: Use the HTK mel formula instead of Slaney's (default False).
         norm: ``"slaney"`` (default) divides each band by its width so every band has the
             same area; ``"none"`` leaves each at unit peak.

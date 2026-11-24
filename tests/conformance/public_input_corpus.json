@@ -573,7 +573,8 @@
     "cases": [
       {"id": "one_band", "args": {"n_mels": 1}, "accepted": true, "expect": {"mel_filterbank": {"shape": [1, 513]}, "mel_frequencies": {"values": [0]}}},
       {"id": "one_point_is_fmin", "args": {"n_mels": 1, "fmin_hz": 100, "fmax_hz": 200}, "only": ["mel_frequencies"], "accepted": true, "expect": {"mel_frequencies": {"values": [100]}}},
-      {"id": "fmax_above_nyquist", "args": {"fmax_hz": 30000}, "only": ["mel_filterbank"], "accepted": true, "expect": {"mel_filterbank": {"shape": [16, 513]}}},
+      {"id": "fmax_at_nyquist", "args": {"fmax_hz": 11025}, "only": ["mel_filterbank"], "accepted": true, "expect": {"mel_filterbank": {"shape": [16, 513]}}},
+      {"id": "fmax_above_nyquist", "args": {"fmax_hz": 11026}, "only": ["mel_filterbank"], "refused": "range", "predicate": "{fmax_hz} must be finite and at most 11025"},
       {"id": "fmin_hz_nan", "args": {"fmin_hz": {"$number": "nan"}}, "refused": "range", "predicate": "{fmin_hz} must be finite and at least 0"},
       {"id": "fmin_hz_inf", "args": {"fmin_hz": {"$number": "inf"}}, "refused": "range", "predicate": "{fmin_hz} must be finite and at least 0"},
       {"id": "fmin_hz_neg_inf", "args": {"fmin_hz": {"$number": "neg_inf"}}, "refused": "range", "predicate": "{fmin_hz} must be finite and at least 0"},

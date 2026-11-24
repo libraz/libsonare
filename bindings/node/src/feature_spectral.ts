@@ -58,7 +58,7 @@ export interface MelFilterbankRequest {
   nMels?: number;
   /** Lower edge of the lowest band in Hz. Default 0. */
   fminHz?: number;
-  /** Upper edge of the highest band in Hz. Absent means the Nyquist, and a value above the Nyquist is held at it; when given it must be greater than 0. */
+  /** Upper edge of the highest band in Hz. Absent means the Nyquist; when given it must be greater than 0 and at most the Nyquist. */
   fmaxHz?: number;
   /** HTK mel formula instead of Slaney. Default false. */
   htk?: boolean;

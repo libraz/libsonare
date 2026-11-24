@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  Audio,
   analyzeBpm,
   analyzeImpulseResponse,
   analyzeMelody,
@@ -24,6 +25,7 @@ import {
   mfcc,
   mfccToAudio,
   nnlsChroma,
+  pitchTuning,
   pseudoCqt,
   spectralEdit,
   vqt,
@@ -258,5 +260,49 @@ describe('CQT family and melody frequency bounds', () => {
     );
     expect(() => analyzeMelody(samples, SR, { f0MinHz: 0 })).toThrow(named('f0MinHz'));
     expect(() => analyzeMelody(samples, SR, { threshold: 0 })).toThrow(named('threshold'));
+  });
+});
+
+describe('mel fmaxHz above the Nyquist', () => {
+  const samples = new Float32Array(SR / 4).map(
+    (_, i) => 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR),
+  );
+  const nMels = 16;
+  const nFrames = 4;
+  const power = { data: new Float32Array(nMels * nFrames).fill(1), rows: nMels, cols: nFrames };
+  const coefficients = { data: new Float32Array(13 * nFrames), rows: 13, cols: nFrames };
+  const inverse = { sampleRate: SR, nFft: 512, hopLength: 128, nIter: 1 };
+  const nyquist = SR / 2;
+  const calls: [string, (fmaxHz: number) => unknown][] = [
+    ['melSpectrogram', (fmaxHz) => melSpectrogram({ samples, sampleRate: SR, fmaxHz })],
+    ['mfcc', (fmaxHz) => mfcc({ samples, sampleRate: SR, fmaxHz })],
+    ['Audio.melSpectrogram', (fmaxHz) => Audio.fromBuffer(samples, SR).melSpectrogram({ fmaxHz })],
+    ['Audio.mfcc', (fmaxHz) => Audio.fromBuffer(samples, SR).mfcc({ fmaxHz })],
+    ['melToStft', (fmaxHz) => melToStft({ power, sampleRate: SR, nFft: 512, fmaxHz })],
+    ['melToAudio', (fmaxHz) => melToAudio({ power, ...inverse, fmaxHz })],
+    ['mfccToAudio', (fmaxHz) => mfccToAudio({ coefficients, nMels, ...inverse, fmaxHz })],
+  ];
+
+  it.each(calls)(
+    '%s refuses an fmaxHz of 0 or above the Nyquist and accepts the Nyquist',
+    (_name, call) => {
+      expect(() => call(nyquist)).not.toThrow();
+      expect(() => call(0)).toThrow(RangeError);
+      expect(() => call(nyquist + 1)).toThrow(RangeError);
+      expect(() => call(nyquist + 1)).toThrow(/fmaxHz must be finite and at most 11025$/);
+    },
+  );
+});
+
+describe('pitchTuning frequencies', () => {
+  it('refuses an infinite frequency by index and still ignores NaN as an unvoiced frame', () => {
+    const tuned = new Float32Array([440, 880, 660]);
+    expect(pitchTuning({ frequencies: tuned })).toBe(0);
+    expect(pitchTuning({ frequencies: new Float32Array([440, Number.NaN, 880]) })).toBe(0);
+    for (const value of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const call = () => pitchTuning({ frequencies: new Float32Array([440, value]) });
+      expect(call).toThrow(RangeError);
+      expect(call).toThrow(/frequencies contains a non-finite sample at index 1$/);
+    }
   });
 });

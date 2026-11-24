@@ -1781,10 +1781,10 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `detect_onsets(threshold)` | float \| None, default None: None selects the adaptive threshold and an explicit 0 raises SonareValueError |
 | `frames_to_samples(n_fft)` | absent is None (librosa's default); an explicit 0 raises SonareValueError |
 | `frames_to_time` | a non-positive sr or hop_length raises SonareValueError (returned NaN) |
-| `mel_to_audio(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError |
-| `mel_to_stft(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError |
-| `mfcc(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError |
-| `mfcc_to_audio(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError |
+| `mel_to_audio(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist |
+| `mel_to_stft(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist |
+| `mfcc(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist |
+| `mfcc_to_audio(fmax)` | absent is None (librosa's default); an explicit 0 raises SonareValueError; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist |
 | `samples_to_frames(n_fft)` | absent is None (librosa's default); an explicit 0 raises SonareValueError |
 | `time_to_frames` | a non-positive sr or hop_length raises SonareValueError (returned 0) |
 | `transcribe(reattack_ratio)` | None means no split; an explicit 0, a negative value or a value up to 1 raises SonareValueError |
@@ -2211,7 +2211,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `analyze_melody(fmax)` | `analyze_melody(f0_max_hz)` |
 | `analyze_melody(fmin)` | `analyze_melody(f0_min_hz)` |
 | `cqt_to_audio(fmin)` | `cqt_to_audio(fmin_hz)` |
-| `mel_spectrogram(fmax)` | `mel_spectrogram(fmax_hz)`: renamed to fmax_hz; None (the default) is the Nyquist and an explicit 0 is refused instead of read as the default |
+| `mel_spectrogram(fmax)` | `mel_spectrogram(fmax_hz)`: renamed to fmax_hz; None (the default) is the Nyquist and an explicit 0 is refused instead of read as the default; a finite value above the Nyquist raises SonareValueError instead of being held at the Nyquist |
 | `mel_spectrogram(fmin)` | `mel_spectrogram(fmin_hz)` |
 | `pitch_pyin(fmax)` | `pitch_pyin(f0_max_hz)` |
 | `pitch_pyin(fmin)` | `pitch_pyin(f0_min_hz)` |
@@ -5298,7 +5298,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `pitchTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of PitchTuningRequest |
 | `pitchTuning(frequencies)` | removed: pass frequencies as a field of PitchTuningRequest |
 | `pitchTuning(resolution)` | removed: pass resolution as a field of PitchTuningRequest |
-| `pitchTuning` | request-only: pitchTuning(request: PitchTuningRequest) |
+| `pitchTuning` | request-only: pitchTuning(request: PitchTuningRequest); an infinite frequency, ignored in 1.x, is refused with a RangeError naming its index, and NaN still marks an unvoiced frame and is ignored |
 | `pitchYin(fmax)` | removed: Pass it as f0MaxHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MaxHz }) or pitchYin({ samples, sampleRate, f0MaxHz }). |
 | `pitchYin(fmin)` | removed: Pass it as f0MinHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MinHz }) or pitchYin({ samples, sampleRate, f0MinHz }). |
 | `pitchYin(frameLength)` | removed: pass frameLength as a field of PitchYinRequest |
@@ -5493,21 +5493,21 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ChirpRequest.fmin` | `ChirpRequest.fminHz` |
 | `CqtRequest.fmin` | `CqtRequest.fminHz` |
 | `CqtToAudioRequest.fmin` | `CqtToAudioRequest.fminHz` |
-| `MelSpectrogramRequest.fmax` | `MelSpectrogramRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MelSpectrogramRequest.fmax` | `MelSpectrogramRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MelSpectrogramRequest.fmin` | `MelSpectrogramRequest.fminHz` |
 | `MelSpectrogramResult.fmax` | `MelSpectrogramResult.fmaxHz` |
 | `MelSpectrogramResult.fmin` | `MelSpectrogramResult.fminHz` |
-| `MelToAudioRequest.fmax` | `MelToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MelToAudioRequest.fmax` | `MelToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MelToAudioRequest.fmin` | `MelToAudioRequest.fminHz` |
-| `MelToStftRequest.fmax` | `MelToStftRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MelToStftRequest.fmax` | `MelToStftRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MelToStftRequest.fmin` | `MelToStftRequest.fminHz` |
 | `MelodyOptions.fmax` | `MelodyOptions.f0MaxHz` |
 | `MelodyOptions.fmin` | `MelodyOptions.f0MinHz` |
-| `MfccRequest.fmax` | `MfccRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MfccRequest.fmax` | `MfccRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MfccRequest.fmin` | `MfccRequest.fminHz` |
 | `MfccResult.fmax` | `MfccResult.fmaxHz` |
 | `MfccResult.fmin` | `MfccResult.fminHz` |
-| `MfccToAudioRequest.fmax` | `MfccToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MfccToAudioRequest.fmax` | `MfccToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MfccToAudioRequest.fmin` | `MfccToAudioRequest.fminHz` |
 | `PiptrackRequest.fmax` | `PiptrackRequest.fmaxHz` |
 | `PiptrackRequest.fmin` | `PiptrackRequest.fminHz` |
@@ -9637,8 +9637,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `pitchTuning(frequencies)` | removed: pass frequencies as a field of PitchTuningRequest |
 | `pitchTuning(resolution)` (`./analysis`) | removed: pass resolution as a field of PitchTuningRequest |
 | `pitchTuning(resolution)` | removed: pass resolution as a field of PitchTuningRequest |
-| `pitchTuning` (`./analysis`) | request-only: pitchTuning(request: PitchTuningRequest) |
-| `pitchTuning` | request-only: pitchTuning(request: PitchTuningRequest) |
+| `pitchTuning` (`./analysis`) | request-only: pitchTuning(request: PitchTuningRequest); an infinite frequency, ignored in 1.x, is refused with a RangeError naming its index, and NaN still marks an unvoiced frame and is ignored |
+| `pitchTuning` | request-only: pitchTuning(request: PitchTuningRequest); an infinite frequency, ignored in 1.x, is refused with a RangeError naming its index, and NaN still marks an unvoiced frame and is ignored |
 | `pitchYin(fmax)` (`./analysis`) | removed: Pass it as f0MaxHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MaxHz }) or pitchYin({ samples, sampleRate, f0MaxHz }). |
 | `pitchYin(fmax)` | removed: Pass it as f0MaxHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MaxHz }) or pitchYin({ samples, sampleRate, f0MaxHz }). |
 | `pitchYin(fmin)` (`./analysis`) | removed: Pass it as f0MinHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MinHz }) or pitchYin({ samples, sampleRate, f0MinHz }). |
@@ -9988,36 +9988,36 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `CqtRequest.fmin` | `CqtRequest.fminHz` |
 | `CqtToAudioRequest.fmin` (`./analysis`) | `CqtToAudioRequest.fminHz` |
 | `CqtToAudioRequest.fmin` | `CqtToAudioRequest.fminHz` |
-| `MelSpectrogramRequest.fmax` (`./analysis`) | `MelSpectrogramRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
-| `MelSpectrogramRequest.fmax` | `MelSpectrogramRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MelSpectrogramRequest.fmax` (`./analysis`) | `MelSpectrogramRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
+| `MelSpectrogramRequest.fmax` | `MelSpectrogramRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MelSpectrogramRequest.fmin` (`./analysis`) | `MelSpectrogramRequest.fminHz` |
 | `MelSpectrogramRequest.fmin` | `MelSpectrogramRequest.fminHz` |
 | `MelSpectrogramResult.fmax` (`./analysis`) | `MelSpectrogramResult.fmaxHz` |
 | `MelSpectrogramResult.fmax` | `MelSpectrogramResult.fmaxHz` |
 | `MelSpectrogramResult.fmin` (`./analysis`) | `MelSpectrogramResult.fminHz` |
 | `MelSpectrogramResult.fmin` | `MelSpectrogramResult.fminHz` |
-| `MelToAudioRequest.fmax` (`./analysis`) | `MelToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
-| `MelToAudioRequest.fmax` | `MelToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MelToAudioRequest.fmax` (`./analysis`) | `MelToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
+| `MelToAudioRequest.fmax` | `MelToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MelToAudioRequest.fmin` (`./analysis`) | `MelToAudioRequest.fminHz` |
 | `MelToAudioRequest.fmin` | `MelToAudioRequest.fminHz` |
-| `MelToStftRequest.fmax` (`./analysis`) | `MelToStftRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
-| `MelToStftRequest.fmax` | `MelToStftRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MelToStftRequest.fmax` (`./analysis`) | `MelToStftRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
+| `MelToStftRequest.fmax` | `MelToStftRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MelToStftRequest.fmin` (`./analysis`) | `MelToStftRequest.fminHz` |
 | `MelToStftRequest.fmin` | `MelToStftRequest.fminHz` |
 | `MelodyOptions.fmax` (`./analysis`) | `MelodyOptions.f0MaxHz` |
 | `MelodyOptions.fmax` | `MelodyOptions.f0MaxHz` |
 | `MelodyOptions.fmin` (`./analysis`) | `MelodyOptions.f0MinHz` |
 | `MelodyOptions.fmin` | `MelodyOptions.f0MinHz` |
-| `MfccRequest.fmax` (`./analysis`) | `MfccRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
-| `MfccRequest.fmax` | `MfccRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MfccRequest.fmax` (`./analysis`) | `MfccRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
+| `MfccRequest.fmax` | `MfccRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MfccRequest.fmin` (`./analysis`) | `MfccRequest.fminHz` |
 | `MfccRequest.fmin` | `MfccRequest.fminHz` |
 | `MfccResult.fmax` (`./analysis`) | `MfccResult.fmaxHz` |
 | `MfccResult.fmax` | `MfccResult.fmaxHz` |
 | `MfccResult.fmin` (`./analysis`) | `MfccResult.fminHz` |
 | `MfccResult.fmin` | `MfccResult.fminHz` |
-| `MfccToAudioRequest.fmax` (`./analysis`) | `MfccToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
-| `MfccToAudioRequest.fmax` | `MfccToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist |
+| `MfccToAudioRequest.fmax` (`./analysis`) | `MfccToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
+| `MfccToAudioRequest.fmax` | `MfccToAudioRequest.fmaxHz`: an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist; a finite fmaxHz above the Nyquist is refused with RangeError instead of being held at the Nyquist |
 | `MfccToAudioRequest.fmin` (`./analysis`) | `MfccToAudioRequest.fminHz` |
 | `MfccToAudioRequest.fmin` | `MfccToAudioRequest.fminHz` |
 | `PiptrackRequest.fmax` (`./analysis`) | `PiptrackRequest.fmaxHz` |

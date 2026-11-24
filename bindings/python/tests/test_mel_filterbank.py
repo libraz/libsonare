@@ -72,12 +72,15 @@ def test_mel_filterbank_band_peaks_at_its_centre_point() -> None:
         assert abs(int(np.argmax(fb[m])) * bin_hz - float(points[m + 1])) <= bin_hz
 
 
-def test_mel_filterbank_omitted_fmax_is_the_nyquist() -> None:
+def test_mel_filterbank_omitted_fmax_is_the_nyquist_and_above_it_is_refused() -> None:
     omitted = libsonare.mel_filterbank(44100, 1024, n_mels=32)
     nyquist = libsonare.mel_filterbank(44100, 1024, n_mels=32, fmax_hz=22050.0)
-    above = libsonare.mel_filterbank(44100, 1024, n_mels=32, fmax_hz=30000.0)
     np.testing.assert_array_equal(omitted, nyquist)
-    np.testing.assert_array_equal(omitted, above)
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=r"^mel_filterbank: fmax_hz must be finite and at most 22050$",
+    ):
+        libsonare.mel_filterbank(44100, 1024, n_mels=32, fmax_hz=22051.0)
 
 
 def test_mel_filterbank_slaney_divides_each_band_by_its_width() -> None:
@@ -181,3 +184,31 @@ def test_mel_family_names_both_bounds_of_an_empty_band_range(call, message: str)
     with pytest.raises(SonareValueError) as caught:
         call()
     assert str(caught.value) == message
+
+
+_SR = 22050
+_TONE = (0.5 * np.sin(2 * np.pi * 440 * np.arange(_SR // 4) / _SR)).astype(np.float32)
+_MEL = np.ones((16, 4), dtype=np.float32)
+_MFCC = np.zeros((13, 4), dtype=np.float32)
+_MEL_FAMILY = {
+    "mel_spectrogram": lambda fmax: libsonare.mel_spectrogram(_TONE, _SR, fmax_hz=fmax),
+    "mfcc": lambda fmax: libsonare.mfcc(_TONE, sr=_SR, fmax=fmax),
+    "mel_to_stft": lambda fmax: libsonare.mel_to_stft(_MEL, sr=_SR, n_fft=512, fmax=fmax),
+    "mel_to_audio": lambda fmax: libsonare.mel_to_audio(
+        _MEL, sr=_SR, n_fft=512, hop_length=128, fmax=fmax, n_iter=1
+    ),
+    "mfcc_to_audio": lambda fmax: libsonare.mfcc_to_audio(
+        _MFCC, n_mels=16, sr=_SR, n_fft=512, hop_length=128, fmax=fmax, n_iter=1
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_MEL_FAMILY))
+def test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist(name) -> None:
+    """The Nyquist is the upper Mel edge; 0 and a larger finite value are refused, never read."""
+    call = _MEL_FAMILY[name]
+    call(_SR / 2)
+    with pytest.raises(libsonare.SonareValueError):
+        call(0.0)
+    with pytest.raises(libsonare.SonareValueError, match=r"must be finite and at most 11025$"):
+        call(_SR / 2 + 1)
