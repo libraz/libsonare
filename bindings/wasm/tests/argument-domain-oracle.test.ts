@@ -13,6 +13,7 @@ import {
   chromaCqt,
   cqt,
   cqtToAudio,
+  cyclicTempogram,
   detectAcoustic,
   detectKey,
   detectKeyCandidates,
@@ -148,6 +149,51 @@ describe('spectralEdit op fields', () => {
   });
 });
 
+describe('compound signal argument refusals', () => {
+  const fmaxHz = SR / 2 + 1;
+  const samples = new Float32Array(2048).fill(0.1);
+  const power = { data: new Float32Array(16 * 4).fill(1), rows: 16, cols: 4 };
+  const coefficients = { data: new Float32Array(13 * 4), rows: 13, cols: 4 };
+
+  it('refuses a bad Mel edge before FFT geometry or Griffin-Lim iterations', () => {
+    const forward = { nFft: 3, fmaxHz };
+    const inverse = { sampleRate: SR, nFft: 512, hopLength: 128, nIter: 0, fmaxHz };
+    for (const [entry, run] of [
+      ['melSpectrogram', () => melSpectrogram({ samples, sampleRate: SR, ...forward })],
+      ['melSpectrogram', () => melSpectrogram(samples, SR, forward)],
+      ['mfcc', () => mfcc({ samples, sampleRate: SR, ...forward })],
+      ['mfcc', () => mfcc(samples, SR, forward)],
+      ['melToAudio', () => melToAudio({ power, ...inverse })],
+      ['mfccToAudio', () => mfccToAudio({ coefficients, nMels: 16, ...inverse })],
+    ] as const) {
+      expect(run).toThrow(new RangeError(`${entry}: fmaxHz must be finite and at most ${SR / 2}`));
+    }
+  });
+
+  it('refuses an inverse Mel edge before scanning matrix values', () => {
+    const data = Float32Array.from(power.data);
+    data[1] = Number.NaN;
+    expect(() =>
+      melToAudio({ power: { ...power, data }, sampleRate: SR, nFft: 512, fmaxHz }),
+    ).toThrow(new RangeError(`melToAudio: fmaxHz must be finite and at most ${SR / 2}`));
+  });
+
+  it('refuses the cyclic tempogram envelope before BPM and window domains', () => {
+    const onsetEnvelope = new Float32Array(4200).fill(0.1);
+    onsetEnvelope[4199] = Number.NaN;
+    expect(() =>
+      cyclicTempogram({
+        onsetEnvelope,
+        sampleRate: SR,
+        winLength: 0,
+        bpmMin: Number.NaN,
+      }),
+    ).toThrow(
+      new RangeError('cyclicTempogram: onsetEnvelope contains a non-finite sample at index 4199'),
+    );
+  });
+});
+
 describe('mel band edges', () => {
   const samples = tone(0.25);
   const nMels = 16;
@@ -157,7 +203,7 @@ describe('mel band edges', () => {
 
   it('refuses a negative fmin or fmax on the forward and inverse entries', () => {
     for (const [fminHz, fmaxHz] of [
-      [-1000, 0],
+      [-1000, 1000],
       [0, -1],
     ]) {
       expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fminHz, fmaxHz }));
@@ -181,16 +227,53 @@ describe('mel band edges', () => {
     }
   });
 
-  it('refuses an fmax at or below fmin and an explicit fmax of 0, and takes the Nyquist when it is omitted', () => {
+  it('refuses a supplied Mel edge that rounds to the omission marker in both forms', () => {
+    const input = new Float32Array(2048).fill(0.1);
+    for (const fmaxHz of [Number.MIN_VALUE, -Number.MIN_VALUE]) {
+      for (const run of [
+        () => melSpectrogram({ samples: input, sampleRate: SR, fmaxHz }),
+        () => melSpectrogram(input, SR, { fmaxHz }),
+        () => mfcc({ samples: input, sampleRate: SR, fmaxHz }),
+        () => mfcc(input, SR, { fmaxHz }),
+      ]) {
+        expect(run).toThrow(RangeError);
+        expect(run).toThrow(/fmaxHz must be greater than 0; omit it for the default/);
+      }
+    }
+  });
+
+  it('uses Nyquist when fmax is omitted and refuses explicit zero', () => {
     expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fminHz: 4000, fmaxHz: 2000 }));
     expectRefusalOf(() =>
       melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 4000, fmaxHz: 4000 }),
     );
     expect(melSpectrogram({ samples, sampleRate: SR, fminHz: 0 }).fmaxHz).toBe(SR / 2);
-    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0 }).cols).toBe(nFrames);
-    expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fmaxHz: 0 }));
-    expectRefusalOf(() => mfcc({ samples, sampleRate: SR, fmaxHz: 0 }));
-    expectRefusalOf(() => melToStft({ power, sampleRate: SR, nFft: 512, fmaxHz: 0 }));
+    expect(mfcc({ samples, sampleRate: SR }).fmaxHz).toBe(SR / 2);
+    expect(() => melSpectrogram({ samples, sampleRate: SR, fmaxHz: 0 })).toThrow(
+      new RangeError('melSpectrogram: fmaxHz must be greater than 0; omit it for the default'),
+    );
+    expect(() => mfcc({ samples, sampleRate: SR, fmaxHz: 0 })).toThrow(
+      new RangeError('mfcc: fmaxHz must be greater than 0; omit it for the default'),
+    );
+    expect(() => melToStft({ power, sampleRate: SR, nFft: 512, fmaxHz: 0 })).toThrow(
+      new RangeError('melToStft: fmaxHz must be greater than 0; omit it for the default'),
+    );
+    expect(() =>
+      melToAudio({ power, sampleRate: SR, nFft: 512, hopLength: 128, fmaxHz: 0, nIter: 1 }),
+    ).toThrow(new RangeError('melToAudio: fmaxHz must be greater than 0; omit it for the default'));
+    expect(() =>
+      mfccToAudio({
+        coefficients,
+        nMels,
+        sampleRate: SR,
+        nFft: 512,
+        hopLength: 128,
+        fmaxHz: 0,
+        nIter: 1,
+      }),
+    ).toThrow(
+      new RangeError('mfccToAudio: fmaxHz must be greater than 0; omit it for the default'),
+    );
   });
 });
 

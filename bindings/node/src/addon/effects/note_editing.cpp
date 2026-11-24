@@ -727,11 +727,10 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
     if (!ReadUnmatchedTargetPolicy(env, opts, &config.unmatched_policy)) {
       return env.Undefined();
     }
-    // Neither field documents a non-finite spelling, so the finite reader: an
-    // infinity is out of domain rather than a request.
-    config.min_overlap_ratio = FloatProperty(opts, "minOverlapRatio", config.min_overlap_ratio);
+    config.min_overlap_ratio =
+        DomainFloatProperty(opts, "minOverlapRatio", config.min_overlap_ratio);
     config.max_correction_semitones =
-        FloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
+        DomainFloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
   }
 
   std::vector<SonareNoteObject> notes;

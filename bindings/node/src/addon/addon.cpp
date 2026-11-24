@@ -298,7 +298,8 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
 // Required fields are validated explicitly so a missing/wrong-typed one raises a
 // single clear TypeError and the caller stops; optional fields go through the
 // shared *Property readers so an explicit `undefined` reads as an omitted field.
-bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* out) {
+bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* out,
+                         std::vector<uint8_t>* sysex_payload, const std::string& sysex_subject) {
   const Napi::Value ppq = event.Get("ppq");
   const Napi::Value word0 = event.Get("word0");
   if (!ppq.IsNumber() || !word0.IsNumber()) {
@@ -310,6 +311,20 @@ bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* 
   out->ppq = ppq.As<Napi::Number>().DoubleValue();
   out->word0 = sonare_node::node_narrow_word(env, word0, "word0");
   out->word1 = sonare_node::WordProperty(event, "word1", 0);
+  if (env.IsExceptionPending()) return false;
+
+  const Napi::Value sysex_value = event.Get("sysex");
+  if (!sysex_value.IsUndefined() && !sysex_value.IsNull()) {
+    Napi::Uint8Array sysex;
+    if (!sonare_node::RequiredUint8ArrayValue(env, sysex_value, sysex_subject, &sysex)) {
+      return false;
+    }
+    const size_t size = sysex.ElementLength();
+    const uint8_t* bytes = sonare_node::ElementData(sysex);
+    if (size > 0) sysex_payload->assign(bytes, bytes + size);
+    out->sysex = sonare_node::ElementData(*sysex_payload);
+    out->sysex_size = size;
+  }
   return !env.IsExceptionPending();
 }
 
@@ -343,9 +358,12 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   Napi::Array array = info[0].As<Napi::Array>();
   const uint32_t array_count = sonare_node::node_list_length(array, "events");
   std::vector<SonareMidiEventPod> events(array_count);
+  std::vector<std::vector<uint8_t>> sysex_payloads(array_count);
   for (uint32_t i = 0; i < array_count; ++i) {
     const Napi::Value item = array.Get(i);
-    if (!item.IsObject() || !MidiEventFromObject(env, item.As<Napi::Object>(), &events[i])) {
+    const std::string sysex_subject = "events[" + std::to_string(i) + "].sysex";
+    if (!item.IsObject() || !MidiEventFromObject(env, item.As<Napi::Object>(), &events[i],
+                                                 &sysex_payloads[i], sysex_subject)) {
       if (!env.IsExceptionPending()) {
         Napi::TypeError::New(env, "events must contain objects").ThrowAsJavaScriptException();
       }
@@ -371,10 +389,7 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
       sonare_midi_cc_learn(events.empty() ? nullptr : events.data(), events.size(), param_id,
                            min_value, max_value, min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
-  if (err != SONARE_OK) {
-    Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (err != SONARE_OK) return sonare_node::CheckCResult(env, err);
   return sonare_node::CcBindingToObject(env, learned);
   SONARE_NODE_CATCH(env)
 }
@@ -393,7 +408,11 @@ Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
   std::vector<SonareMidiCcBinding> bindings;
   if (!CcBindingsFromArray(env, info[0].As<Napi::Array>(), &bindings)) return env.Undefined();
   SonareMidiEventPod event{};
-  if (!MidiEventFromObject(env, info[1].As<Napi::Object>(), &event)) return env.Undefined();
+  std::vector<uint8_t> sysex_payload;
+  if (!MidiEventFromObject(env, info[1].As<Napi::Object>(), &event, &sysex_payload,
+                           "event.sysex")) {
+    return env.Undefined();
+  }
   SonareAutomationPoint point{};
   const SonareError err = sonare_midi_cc_to_breakpoint(bindings.empty() ? nullptr : bindings.data(),
                                                        bindings.size(), &event, &point);
@@ -472,19 +491,9 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object event = value.As<Napi::Object>();
-    if (!MidiEventFromObject(env, event, &input[i])) return env.Undefined();
-    const Napi::Value sysex_value = event.Get("sysex");
-    if (!sysex_value.IsUndefined() && !sysex_value.IsNull()) {
-      Napi::Uint8Array sysex;
-      const std::string subject = "events[" + std::to_string(i) + "].sysex";
-      if (!sonare_node::RequiredUint8ArrayValue(env, sysex_value, subject, &sysex)) {
-        return env.Undefined();
-      }
-      const size_t size = sysex.ElementLength();
-      const uint8_t* bytes = sonare_node::ElementData(sysex);
-      if (size > 0) sysex_payloads[i].assign(bytes, bytes + size);
-      input[i].sysex = sonare_node::ElementData(sysex_payloads[i]);
-      input[i].sysex_size = size;
+    const std::string sysex_subject = "events[" + std::to_string(i) + "].sysex";
+    if (!MidiEventFromObject(env, event, &input[i], &sysex_payloads[i], sysex_subject)) {
+      return env.Undefined();
     }
   }
 

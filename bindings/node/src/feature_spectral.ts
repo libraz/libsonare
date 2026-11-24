@@ -1,7 +1,6 @@
-import { refuse, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
-import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   Matrix2D,
@@ -16,12 +15,9 @@ import {
   assertAudioInput,
   assertAudioSamples,
   assertClosedToken,
-  assertFiniteScalar,
-  assertFloatFields,
+  assertMelFmaxOmitted,
   assertNonNegativeScalar,
   assertPositiveFloatValue,
-  assertPositiveInteger,
-  assertSampleRate,
   requestOnly,
   sampleOneShot,
 } from './validation.js';
@@ -97,7 +93,7 @@ export interface MelSpectrogramRequest {
   nMels?: number;
   /** Lower band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Upper band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper edge in Hz. Omit it for Nyquist; explicit 0 is refused; otherwise it must be above fminHz and at most Nyquist. */
   fmaxHz?: number;
   /** HTK mel formula instead of Slaney. Default false. */
   htk?: boolean;
@@ -121,7 +117,7 @@ export interface MfccRequest {
   nMels?: number;
   /** Lower Mel band edge in Hz. Default `0`. */
   fminHz?: number;
-  /** Upper Mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper Mel band edge in Hz. Omit it for Nyquist. A supplied edge must be above fminHz and at most Nyquist. */
   fmaxHz?: number;
   /** HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -331,11 +327,7 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
     const fft = resolveFftOptions(request.nFft, request.hopLength);
     const fminHz = request.fminHz ?? 0;
     const fmaxHz = request.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (request.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertMelFmaxOmitted(request.fmaxHz);
     const r = addon.melSpectrogram(
       request.samples,
       request.sampleRate,
@@ -373,11 +365,7 @@ export function mfcc(...args: unknown[]): MfccResult {
     const fft = resolveFftOptions(request.nFft, request.hopLength);
     const fminHz = request.fminHz ?? 0;
     const fmaxHz = request.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (request.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertMelFmaxOmitted(request.fmaxHz);
     const r = addon.mfcc(
       request.samples,
       request.sampleRate,
@@ -672,16 +660,8 @@ export function pcen(request: PcenRequest): Matrix2D;
 export function pcen(...args: unknown[]): Matrix2D {
   return withEntry('pcen', () => {
     const r = requestOnly<PcenRequest>('pcen', args);
-    assertMatrix2D(r.values, 'values');
+    assertMatrix2D(r.values, 'values', false, true);
     const { values, ...options } = r;
-    // Only what the caller supplied: an omitted field's default belongs to the
-    // addon's options reader, so resolving one here would check this file's guess.
-    if (options.sampleRate !== undefined) {
-      assertSampleRate(options.sampleRate);
-    }
-    if (options.hopLength !== undefined) {
-      assertPositiveInteger(options.hopLength, 'hopLength');
-    }
     const out = addon.pcen(values.data, values.rows, values.cols, options);
     return toMatrix2D(out, values.rows, values.cols);
   });
@@ -702,15 +682,9 @@ export function melFilterbank(request: MelFilterbankRequest): Matrix2D;
 export function melFilterbank(...args: unknown[]): Matrix2D {
   return withEntry('melFilterbank', () => {
     const r = requestOnly<MelFilterbankRequest>('melFilterbank', args);
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (!isAbsent(r.fmaxHz)) {
-      assertFiniteScalar(r.fmaxHz, 'fmaxHz');
-      if (r.fmaxHz <= 0) {
-        throw refuse('fmaxHz must be greater than 0; omit it for the default');
-      }
-    }
     const norm = r.norm ?? 'slaney';
     assertClosedToken(norm, MEL_NORMS, 'norm');
+    assertMelFmaxOmitted(r.fmaxHz);
     const out = addon.melFilterbank(
       r.sampleRate,
       r.nFft,

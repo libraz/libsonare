@@ -27,9 +27,9 @@ from ._errors import (
     _require_open,
 )
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
-from ._narrowing import _is_number, _narrow_double, _optional_nonzero
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
+from ._narrowing import _is_number, _narrow_double, _narrow_int, _optional_nonzero
 from ._runtime import (
-    _UINT8_MAX,
     _UINT32_MAX,
     _check,
     _get_lib,
@@ -517,6 +517,12 @@ def _finite(value: float, name: str) -> float:
     return v
 
 
+def _bank_midi_byte(value: int, entry: str, name: str) -> int:
+    low, high, _ = _INTEGER_DOMAINS[(entry, name)]
+    assert high is not None
+    return _narrow_int(value, name, low, high)
+
+
 class SampleBank:
     """Host-supplied PCM the NativeSynth sample engine plays.
 
@@ -594,7 +600,7 @@ class SampleBank:
         self,
         data: Sequence[float] | np.ndarray,
         *,
-        root_key: int = 60,
+        root_key: int | None = None,
         fine_tune_cents: float = 0.0,
         source_rate: float | None = None,
         loop_start: int = 0,
@@ -607,8 +613,8 @@ class SampleBank:
             data: Mono PCM as a 1-D float buffer; copied, so it may be freed
                 afterwards. Decoding is the caller's job.
             root_key: MIDI key at which the sample sounds at its recorded pitch
-                (0-127). The default is middle C, which is also what the C ABI
-                substitutes for an unset value.
+                (1-127). ``None`` leaves the C field absent, which selects middle C;
+                explicit zero is refused because zero is the C sentinel.
             fine_tune_cents: Tuning offset applied on top of the recorded pitch.
             source_rate: Rate the sample was recorded at. ``None`` means "the
                 render's own rate", so a bank built without rate information
@@ -629,8 +635,13 @@ class SampleBank:
                 budget.
         """
         buf = _validate_samples(data, arg_name="data")
-        desc = SonareSampleDesc(
-            root_key=_unsigned(root_key, "root_key", 127),
+        root_key_value = (
+            None
+            if root_key is None
+            else _bank_midi_byte(root_key, "SampleBank.add_sample", "root_key")
+        )
+        desc = SonareSampleDesc._given(
+            root_key=root_key_value,
             fine_tune_cents=_finite(fine_tune_cents, "fine_tune_cents"),
             source_rate=_finite(
                 _optional_nonzero(source_rate, "source_rate", "the render's own rate"),
@@ -661,9 +672,9 @@ class SampleBank:
         *,
         sample_index: int,
         key_lo: int = 0,
-        key_hi: int = 127,
-        vel_lo: int = 1,
-        vel_hi: int = 127,
+        key_hi: int | None = None,
+        vel_lo: int | None = None,
+        vel_hi: int | None = None,
         tune_cents: float = 0.0,
         gain: float = 1.0,
         pan_units: float = 0.0,
@@ -675,18 +686,18 @@ class SampleBank:
         general. Sets are dense: adding to set 3 creates sets 0-2 empty.
 
         Every bound defaults on its own, so narrowing one edge never collapses
-        another: the defaults here spell out the whole keyboard at every
-        velocity, and passing a bound explicitly narrows only that edge. A zero
-        passed through reaches the C ABI's own sentinels -- an upper bound of
-        zero reads as 127 and ``vel_lo`` of zero as 1, velocity zero being a
-        note-off rather than a dynamic, while ``key_lo`` of zero is simply the
-        lowest key. The one rectangle this cannot express is the single key 0.
+        another: ``None`` leaves the C field absent and selects the full keyboard
+        or velocity range. A given bound narrows only that edge. Explicit zero is
+        refused for ``key_hi``, ``vel_lo`` and ``vel_hi`` because the C ABI uses
+        zero as their absence sentinel; ``key_lo=0`` is the lowest key.
 
         Args:
             set_index: Keymap set to append to (below 4096).
             sample_index: A value :meth:`add_sample` returned.
-            key_lo / key_hi: Inclusive MIDI key bounds (0-127).
-            vel_lo / vel_hi: Inclusive MIDI velocity bounds (1-127).
+            key_lo: Inclusive lower MIDI key bound (0-127).
+            key_hi: Inclusive upper MIDI key bound (1-127), or ``None`` for 127.
+            vel_lo: Inclusive lower MIDI velocity bound (1-127), or ``None`` for 1.
+            vel_hi: Inclusive upper MIDI velocity bound (1-127), or ``None`` for 127.
             tune_cents: Added to the sample's own fine tuning.
             gain: Linear zone gain; ``0.0`` reads as 1.0.
             pan_units: SoundFont pan units, clamped to -500..500.
@@ -697,11 +708,12 @@ class SampleBank:
                 not have, an inverted key or velocity range, or a ``set_index``
                 at or above 4096.
         """
-        zone = SonareSampleZoneDesc(
-            key_lo=_unsigned(key_lo, "key_lo", _UINT8_MAX),
-            key_hi=_unsigned(key_hi, "key_hi", _UINT8_MAX),
-            vel_lo=_unsigned(vel_lo, "vel_lo", _UINT8_MAX),
-            vel_hi=_unsigned(vel_hi, "vel_hi", _UINT8_MAX),
+        entry = "SampleBank.add_zone"
+        zone = SonareSampleZoneDesc._given(
+            key_lo=_bank_midi_byte(key_lo, entry, "key_lo"),
+            key_hi=None if key_hi is None else _bank_midi_byte(key_hi, entry, "key_hi"),
+            vel_lo=None if vel_lo is None else _bank_midi_byte(vel_lo, entry, "vel_lo"),
+            vel_hi=None if vel_hi is None else _bank_midi_byte(vel_hi, entry, "vel_hi"),
             sample_index=_unsigned(sample_index, "sample_index", _UINT32_MAX),
             tune_cents=_finite(tune_cents, "tune_cents"),
             gain=_finite(gain, "gain"),
@@ -712,7 +724,8 @@ class SampleBank:
                 self._require_handle(),
                 ctypes.c_uint32(_unsigned(set_index, "set_index", _UINT32_MAX)),
                 ctypes.byref(zone),
-            )
+            ),
+            flattened="zone",
         )
 
     @property

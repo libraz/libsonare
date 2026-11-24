@@ -147,6 +147,21 @@ describe('WASM note targets', () => {
       expectRefusalOf(() => runWith(note(0, 1).onsetSample, 1e300));
     });
 
+    it('uses core bounds for note sample spans and camel-cases indexed subjects', () => {
+      const withNote = (onsetSample: number, offsetSample: number) =>
+        assignNoteTargets({
+          notes: [{ ...note(0, 1), onsetSample, offsetSample }],
+          sampleRate,
+          targets: [],
+        });
+      expect(expectRefusalOf(() => withNote(-1, 10), RangeError).message).toBe(
+        'assignNoteTargets: notes[0].onsetSample must be an integer of at least 0',
+      );
+      expect(expectRefusalOf(() => withNote(10, 10), RangeError).message).toBe(
+        'assignNoteTargets: notes[0].offsetSample must be greater than notes[0].onsetSample',
+      );
+    });
+
     it('saturates the shift at maxCorrectionSemitones, and an explicit 0 survives', () => {
       // 84 - 69 = +15, past the default bound of 12.
       const targets = [{ startSec: 0, endSec: 1, targetMidi: 84 }];
@@ -171,6 +186,23 @@ describe('WASM note targets', () => {
         bounded.notes[0].edit.pitchSemitones,
         4,
       );
+    });
+
+    it('uses the core domain for maxCorrectionSemitones', () => {
+      for (const maxCorrectionSemitones of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(
+          expectRefusalOf(
+            () =>
+              assignNoteTargets({
+                notes: [note(0, 1)],
+                sampleRate,
+                targets: [],
+                maxCorrectionSemitones,
+              }),
+            RangeError,
+          ).message,
+        ).toBe('assignNoteTargets: maxCorrectionSemitones must be finite and at least 0');
+      }
     });
 
     it('refuses a negative maxCorrectionSemitones', () => {
@@ -200,6 +232,21 @@ describe('WASM note targets', () => {
       expect(any).toBe(1);
       expect(any).not.toBe(defaulted);
       expect(any).not.toBe(strict);
+    });
+
+    it('uses the core domain for minOverlapRatio', () => {
+      for (const minOverlapRatio of [-0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(
+          expectRefusalOf(
+            () =>
+              assignNoteTargets({ notes: [note(0, 1)], sampleRate, targets: [], minOverlapRatio }),
+            RangeError,
+          ).message,
+        ).toBe('assignNoteTargets: minOverlapRatio must be finite and in [0, 1]');
+      }
+      expect(
+        assignNoteTargets({ notes: [], sampleRate, targets: [], minOverlapRatio: 1 }).assignedCount,
+      ).toBe(0);
     });
 
     it('refuses a minOverlapRatio outside [0, 1]', () => {

@@ -193,15 +193,13 @@ export interface AssignNoteTargetsRequest {
   /** What to do with a note that has a pitch and no target. Default `'leave'`. */
   unmatchedPolicy?: NoteTargetUnmatchedPolicy;
   /**
-   * Fraction of the note that must overlap a target for it to count. Default
-   * 0.5; 0 is its own meaning — any overlap at all counts — not a request for
-   * the default.
+   * Fraction of the note that must overlap a target for it to count, finite in
+   * [0, 1]. Default 0.5; 0 means any overlap at all.
    */
   minOverlapRatio?: number;
   /**
-   * The assigned shift saturates here rather than being refused: a reference an
-   * octave out is a wrong reference, and a rejected call says less than a bounded
-   * correction does. Default 12; 0 is its own meaning, as above.
+   * The assigned shift is capped at this finite, non-negative value. Default 12;
+   * a negative or non-finite value is refused.
    */
   maxCorrectionSemitones?: number;
 }
@@ -805,8 +803,9 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  *   string.
  * @throws {RangeError} `sampleRate` is out of the supported range, or
  *   `unmatchedPolicy` is not one of the three spellings.
- * @throws {SonareError} `minOverlapRatio` is outside `[0, 1]`,
- *   `maxCorrectionSemitones` is negative, or a target carries a non-finite value.
+ * @throws {RangeError} `minOverlapRatio` is outside `[0, 1]`,
+ *   `maxCorrectionSemitones` is negative or non-finite, or a note has invalid sample bounds.
+ * @throws {SonareError} a target carries a non-finite value.
  *
  * @example
  * ```ts

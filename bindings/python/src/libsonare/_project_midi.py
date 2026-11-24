@@ -357,6 +357,7 @@ def midi_cc_to_breakpoint(
 
     Returns ``None`` when the event does not match any binding (native
     ``SONARE_ERROR_INVALID_STATE``).
+    The C call refuses a valid SysEx event as NotSupported.
     """
     lib = _get_lib()
     rows = list(bindings)

@@ -4,9 +4,35 @@
 #include <numeric>
 #include <optional>
 
+#include "c_api/mel_refusal_names.h"
 #include "sonare_cli.h"
 #include "util/constants.h"
 #include "util/exception.h"
+
+namespace {
+
+template <typename Call>
+auto with_mel_cli_subjects(Call&& call) -> decltype(call()) {
+  try {
+    return call();
+  } catch (const SonareParameterRefusal& refusal) {
+    throw refusal.respelled(
+        refusal.code(),
+        [](const std::string& subject) {
+          for (const auto& [core, field] : sonare_c_detail::kMelRangeNames) {
+            if (subject == core) {
+              std::string flag = "--" + std::string(field);
+              std::replace(flag.begin(), flag.end(), '_', '-');
+              return flag;
+            }
+          }
+          return subject;
+        },
+        true);
+  }
+}
+
+}  // namespace
 
 int cmd_mel(const CliArgs& args, const Audio& audio) {
   MelConfig config;
@@ -17,7 +43,8 @@ int cmd_mel(const CliArgs& args, const Audio& audio) {
   config.fmin = args.get_float("fmin-hz", config.fmin);
   config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
-  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  MelSpectrogram mel =
+      with_mel_cli_subjects([&] { return MelSpectrogram::compute(audio, config); });
   const float* data = mel.power_data();
   size_t total = static_cast<size_t>(mel.n_mels()) * static_cast<size_t>(mel.n_frames());
 
@@ -427,7 +454,8 @@ int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
   config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   const int n_iter = args.get_int("n-iter", sonare::constants::kDefaultGriffinLimIterations);
-  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  MelSpectrogram mel =
+      with_mel_cli_subjects([&] { return MelSpectrogram::compute(audio, config); });
   Audio out = mel_to_audio(mel.power_data(), mel.n_mels(), mel.n_frames(), config, n_iter,
                            audio.sample_rate());
   const OutputFit fit = OutputFit().include(out.data(), out.size());
@@ -461,7 +489,8 @@ int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
 
   const int n_mfcc = args.get_int("n-mfcc", kMfccDefaultCount);
   const int n_iter = args.get_int("n-iter", sonare::constants::kDefaultGriffinLimIterations);
-  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  MelSpectrogram mel =
+      with_mel_cli_subjects([&] { return MelSpectrogram::compute(audio, config); });
   std::vector<float> mfcc = mel.mfcc(n_mfcc);
   Audio out =
       mfcc_to_audio(mfcc.data(), n_mfcc, mel.n_frames(), config, n_iter, audio.sample_rate());

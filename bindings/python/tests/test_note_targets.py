@@ -417,13 +417,59 @@ def test_a_non_finite_target_is_refused_naming_which_one(field: str) -> None:
         libsonare.assign_note_targets(notes, SR, targets)
 
 
-def test_an_out_of_domain_configuration_value_is_rejected_by_the_c_call() -> None:
+@pytest.mark.parametrize(
+    ("option", "value", "message"),
+    [
+        ("min_overlap_ratio", -0.01, "min_overlap_ratio must be finite and in [0, 1]"),
+        ("min_overlap_ratio", 1.01, "min_overlap_ratio must be finite and in [0, 1]"),
+        (
+            "max_correction_semitones",
+            -0.01,
+            "max_correction_semitones must be finite and at least 0",
+        ),
+    ],
+)
+def test_out_of_domain_configuration_values_are_refused_by_the_core(
+    option: str, value: float, message: str
+) -> None:
     notes = [_note(0, HALF_SECOND)]
     targets = [NoteTarget(0.0, 0.5, 60.0)]
 
-    with pytest.raises(SonareError):
-        libsonare.assign_note_targets(notes, SR, targets, min_overlap_ratio=1.5)
-    with pytest.raises(SonareError):
-        libsonare.assign_note_targets(notes, SR, targets, max_correction_semitones=-1.0)
-    with pytest.raises(SonareError):
-        libsonare.assign_note_targets(notes, 0, targets)
+    with pytest.raises(SonareError) as caught:
+        libsonare.assign_note_targets(notes, SR, targets, **{option: value})
+    assert caught.value.code == ErrorCode.INVALID_PARAMETER
+    assert str(caught.value) == f"assign_note_targets: {message}"
+
+
+def test_configuration_domain_endpoints_are_accepted() -> None:
+    result = libsonare.assign_note_targets(
+        [_note(0, HALF_SECOND)],
+        SR,
+        [NoteTarget(0.0, 0.5, 60.0)],
+        min_overlap_ratio=1.0,
+        max_correction_semitones=0.0,
+    )
+    assert result.assigned_count == 1
+    assert result.notes[0].edit.pitch_semitones == 0.0
+
+
+@pytest.mark.parametrize(
+    ("note", "message"),
+    [
+        (_note(-1, HALF_SECOND), "notes[0].onset_sample must be an integer of at least 0"),
+        (
+            _note(100, 100),
+            "notes[0].offset_sample must be greater than notes[0].onset_sample",
+        ),
+        (
+            _note(101, 100),
+            "notes[0].offset_sample must be greater than notes[0].onset_sample",
+        ),
+    ],
+    ids=["negative-onset", "zero-length-span", "reversed-span"],
+)
+def test_invalid_note_spans_are_refused_by_the_core(note: NoteObject, message: str) -> None:
+    with pytest.raises(SonareError) as caught:
+        libsonare.assign_note_targets([note], SR, [NoteTarget(0.0, 0.5, 60.0)])
+    assert caught.value.code == ErrorCode.INVALID_PARAMETER
+    assert str(caught.value) == f"assign_note_targets: {message}"

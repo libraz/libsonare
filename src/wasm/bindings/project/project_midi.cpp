@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "analysis/music_analyzer.h"
 #include "c_api/midi_input_domains.h"
@@ -801,11 +802,21 @@ val js_midi_bank_program(const val& ppq_val, const val& group_val, const val& ch
   return out;
 }
 
-SonareMidiEventPod js_midi_event_from_val(val event) {
+SonareMidiEventPod js_midi_event_from_val(val event, std::vector<uint8_t>& sysex_storage,
+                                          const std::string& sysex_subject) {
   SonareMidiEventPod out{};
   out.ppq = numberFromVal(event["ppq"], "ppq");
   out.word0 = checkedWordFromVal(event["word0"], "word0");
   out.word1 = wordProperty(event, "word1", out.word1);
+  val sysex = event["sysex"];
+  if (!sysex.isUndefined() && !sysex.isNull()) {
+    if (!sysex.instanceof (val::global("Uint8Array"))) {
+      throw WasmTypeError(sysex_subject + " must be a Uint8Array");
+    }
+    sysex_storage = uint8ArrayToVector(sysex, sysex_subject.c_str());
+    out.sysex = nonNullBytes(sysex_storage);
+    out.sysex_size = sysex_storage.size();
+  }
   return out;
 }
 
@@ -872,8 +883,10 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
                                                             sonare_c_detail::kMidiDataByteDomain);
   const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
+  std::vector<std::vector<uint8_t>> sysex_storage(count);
   for (size_t i = 0; i < count; ++i) {
-    pods[i] = js_midi_event_from_val(events[i]);
+    pods[i] = js_midi_event_from_val(events[i], sysex_storage[i],
+                                     "events[" + std::to_string(i) + "].sysex");
   }
   SonareMidiCcBinding learned{};
   const SonareError err =
@@ -888,7 +901,8 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
 
 val js_midi_cc_to_breakpoint(val bindings, val event) {
   std::vector<SonareMidiCcBinding> cc_bindings = js_cc_bindings_from_val(bindings);
-  SonareMidiEventPod pod = js_midi_event_from_val(event);
+  std::vector<uint8_t> sysex_storage;
+  SonareMidiEventPod pod = js_midi_event_from_val(event, sysex_storage, "event.sysex");
   SonareAutomationPoint point{};
   const SonareError err = sonare_midi_cc_to_breakpoint(
       cc_bindings.empty() ? nullptr : cc_bindings.data(), cc_bindings.size(), &pod, &point);

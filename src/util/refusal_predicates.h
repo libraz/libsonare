@@ -116,6 +116,8 @@ inline constexpr const char* kFloatRangePredicate =
 
 /// @brief The domain of a value held as a double, for one with no narrower declared range.
 inline constexpr const char* kFiniteDoublePredicate = "must be finite";
+inline constexpr const char* kOmitForPositiveDefaultPredicate =
+    "must be greater than 0; omit it for the default";
 
 /// @brief An integer bound in plain digits; a bound past the 64-bit range keeps bound_text.
 inline std::string integer_bound_text(double value) {

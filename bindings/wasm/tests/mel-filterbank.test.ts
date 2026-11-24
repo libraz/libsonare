@@ -128,6 +128,9 @@ describe('the filterbank and its mel points', () => {
     const omitted = melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32 });
     const nyquist = melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32, fmaxHz: 22050 });
     expect(nyquist.data).toEqual(omitted.data);
+    expect(() => melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32, fmaxHz: 0 })).toThrow(
+      new RangeError('melFilterbank: fmaxHz must be greater than 0; omit it for the default'),
+    );
     expect(() =>
       melFilterbank({ sampleRate: 44100, nFft: 1024, nMels: 32, fmaxHz: 22051 }),
     ).toThrow(new RangeError('melFilterbank: fmaxHz must be finite and at most 22050'));

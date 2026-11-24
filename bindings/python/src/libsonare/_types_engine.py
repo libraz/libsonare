@@ -317,6 +317,7 @@ class EngineMarker:
 
     ``kind`` is a :data:`MarkerKind` token; ``key_fifths`` (-7..7, sharps
     positive) and ``key_minor`` apply only to the ``"keySignature"`` kind.
+    Nonzero values on other kinds are refused.
     Every field after ``ppq`` is keyword-only. A marker to store whose id the
     engine should allocate is an :class:`EngineMarkerInput`.
     """
@@ -331,9 +332,9 @@ class EngineMarker:
     kind: MarkerKind = "marker"
     """Marker kind (:data:`MarkerKind`)."""
     key_fifths: int = 0
-    """Key signature in sharps (positive) or flats (negative), -7..7."""
+    """Key-signature accidentals, -7..7. Zero represents C major or A minor."""
     key_minor: bool = False
-    """Whether the key is minor."""
+    """Whether the key is minor. Only key-signature markers read this field."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,9 +355,9 @@ class EngineMarkerInput:
     kind: MarkerKind = "marker"
     """Marker kind (:data:`MarkerKind`)."""
     key_fifths: int = 0
-    """Key signature in sharps (positive) or flats (negative), -7..7."""
+    """Key-signature accidentals, -7..7. Zero represents C major or A minor."""
     key_minor: bool = False
-    """Whether the key is minor."""
+    """Whether the key is minor. Only key-signature markers read this field."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,7 +366,8 @@ class ProjectMarker:
 
     Same shape as :class:`EngineMarker`: ``kind`` is a :data:`MarkerKind`
     token and ``key_fifths`` / ``key_minor`` apply only to the
-    ``"keySignature"`` kind. Every field after ``ppq`` is keyword-only.
+    ``"keySignature"`` kind. Nonzero values on other kinds are refused.
+    Every field after ``ppq`` is keyword-only.
     """
 
     ppq: float
@@ -378,9 +380,9 @@ class ProjectMarker:
     kind: MarkerKind = "marker"
     """Marker kind (:data:`MarkerKind`)."""
     key_fifths: int = 0
-    """Key signature in sharps (positive) or flats (negative), -7..7."""
+    """Key-signature accidentals, -7..7. Zero represents C major or A minor."""
     key_minor: bool = False
-    """Whether the key is minor."""
+    """Whether the key is minor. Only key-signature markers read this field."""
 
 
 @dataclass(frozen=True, slots=True)

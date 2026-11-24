@@ -262,4 +262,7 @@ def surface_spelling(entry: str, subject: str) -> str:
     return OVERRIDES.get((entry, subject), subject)
 
 
+OMIT_FOR_POSITIVE_DEFAULT = "must be greater than 0; omit it for the default"
+
+
 MASTER_AUDIO_SELECTOR_REFUSAL = "give preset or overrides"

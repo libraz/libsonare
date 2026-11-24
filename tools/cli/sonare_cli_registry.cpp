@@ -1531,7 +1531,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 
     // Feature leaves.
     // A lower band edge of 0 Hz is a real edge, so `fmin-hz` refuses only a negative;
-    // an omitted `fmax-hz` is the Nyquist frequency, so a spelled one must be above 0.
+    // an omitted `fmax-hz` is the Nyquist frequency, so a spelled one must be above 0. Its
+    // upper edge depends on the decoded input rate and is refused by the shared Mel validator.
     // `n-mels` needs none -- the filterbank's own ceiling refuses an oversized band
     // count for every command and every surface at once.
     add_command(

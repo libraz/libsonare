@@ -1,5 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, midiCc, midiCcToBreakpoint, midiParamToCc, RealtimeEngine } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  midiCc,
+  midiCcLearn,
+  midiCcToBreakpoint,
+  midiParamToCc,
+  RealtimeEngine,
+} from '../dist/index.js';
 
 beforeAll(async () => {
   await init();
@@ -32,6 +40,29 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
         event: makeEvent(),
       }),
     ).toThrow(/^midiCcToBreakpoint: bindings\[0\]\.ccNumber must be an integer in \[0, 127\]$/);
+  });
+
+  it('reports a valid SysEx event as unsupported by CC conversion', () => {
+    expect(() =>
+      midiCcToBreakpoint({
+        bindings: [good],
+        event: { ppq: 0, word0: 0x30000000, word1: 0, sysex: new Uint8Array([0xf0, 0xf7]) },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.NotSupported,
+        message: 'midiCcToBreakpoint: MIDI CC conversion does not support SysEx events',
+      }),
+    );
+  });
+
+  it('requires SysEx payloads to be Uint8Array', () => {
+    expect(() =>
+      midiCcToBreakpoint({
+        bindings: [good],
+        event: { ppq: 0, word0: 0x30000000, sysex: [0xf0, 0xf7] as never },
+      }),
+    ).toThrow(new TypeError('midiCcToBreakpoint: event.sysex must be a Uint8Array'));
   });
 
   it('validates and ignores consume in CC conversion inputs', () => {
@@ -128,4 +159,17 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
       );
     },
   );
+});
+
+it('learn ignores valid SysEx and names a payload on a channel event', () => {
+  const bytes = Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]);
+  const start = midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 32 });
+  const end = midiCc({ ppq: 1, group: 0, channel: 0, controller: 7, value: 96 });
+  const sysex = { ppq: 0, word0: 0x30000000, word1: 0, sysex: bytes };
+  const binding = midiCcLearn({ events: [start, end], paramId: 1 });
+  expect(binding).not.toBeNull();
+  expect(midiCcLearn({ events: [sysex, start, end], paramId: 1 })).toEqual(binding);
+  const invalid = () => midiCcLearn({ events: [{ ...start, sysex: bytes }, end], paramId: 1 });
+  expect(invalid).toThrow(RangeError);
+  expect(invalid).toThrow(/events\[0\]\.sysex/);
 });

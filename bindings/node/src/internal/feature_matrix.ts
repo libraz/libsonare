@@ -19,19 +19,24 @@ export function toMatrix2D(data: Float32Array, rows: number, cols: number): Matr
  * Checks a caller-supplied {@link Matrix2D}: `TypeError` unless an object whose
  * `data` is a `Float32Array`, `RangeError` unless `rows` and `cols` are positive
  * integers and `data.length === rows * cols`. The NaN/Inf scan runs unless
- * `validate` is `false`.
+ * `validate` is `false`. With `dimensionsInNative`, this checks only the object
+ * and data shape. Native code validates the dimensions and their product.
  */
 export function assertMatrix2D(
   value: unknown,
   argName: string,
   validate: boolean | null | undefined = true,
+  dimensionsInNative = false,
 ): asserts value is Matrix2D {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null || (dimensionsInNative && Array.isArray(value))) {
     throw refuseType(`${argName} must be a Matrix2D`);
   }
   const { data, rows, cols } = value as Record<string, unknown>;
   if (!(data instanceof Float32Array)) {
     throw refuseType(`${argName}.data must be a Float32Array`);
+  }
+  if (dimensionsInNative) {
+    return;
   }
   if (typeof rows !== 'number' || typeof cols !== 'number') {
     throw refuseType(`${argName}.rows and ${argName}.cols must be numbers`);

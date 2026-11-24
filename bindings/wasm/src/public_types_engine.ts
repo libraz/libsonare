@@ -170,9 +170,9 @@ export interface EngineMarker {
   name?: string;
   /** Default `'marker'`. */
   kind?: MarkerKind;
-  /** Key signature only: -7..7, sharps positive. */
+  /** Key-signature field: -7..7, sharps positive; other kinds require `0`. */
   keyFifths?: number;
-  /** Key signature only: `true` for minor. */
+  /** Key-signature field: `true` for minor; other kinds require `false`. */
   keyMinor?: boolean;
 }
 

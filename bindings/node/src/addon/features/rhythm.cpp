@@ -97,30 +97,29 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   if (!RequireFloat32Array(info, 0, "onsetEnvelope must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kRhythmCountDomain, &sr)) {
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) {
     return env.Undefined();
   }
   int hop{};
-  if (!OptionalDomainArg(env, info, 2, "hopLength", sonare::constants::kDefaultHopLength,
-                         sonare::kRhythmCountDomain, &hop)) {
+  if (!OptionalIntArg(env, info, 2, "hopLength", sonare::constants::kDefaultHopLength, &hop)) {
     return env.Undefined();
   }
   int win{};
-  if (!OptionalDomainArg(env, info, 3, "winLength", 384, sonare::kTempogramWinLengthDomain, &win)) {
+  if (!OptionalIntArg(env, info, 3, "winLength", 384, &win)) {
     return env.Undefined();
   }
   float bpm_min = sonare::kCyclicTempogramBpmMin;
-  if (!OptionalFloatArg(env, info, 4, "bpmMin", bpm_min, &bpm_min)) return env.Undefined();
+  if (!OptionalDomainFloatArg(env, info, 4, "bpmMin", bpm_min, &bpm_min)) return env.Undefined();
   int n_bins{};
-  if (!OptionalDomainArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins,
-                         sonare::kRhythmCountDomain, &n_bins)) {
+  if (!OptionalIntArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins, &n_bins)) {
     return env.Undefined();
   }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
   SonareError err = sonare_cyclic_tempogram(sonare_node::ElementData(arr), arr.ElementLength(), sr,
-                                            hop, win, bpm_min, n_bins, &out, &count, &n_frames);
+                                            static_cast<size_t>(hop), static_cast<size_t>(win),
+                                            bpm_min, n_bins, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);

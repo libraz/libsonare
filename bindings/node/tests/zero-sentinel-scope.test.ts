@@ -162,6 +162,10 @@ const UNTAGGED_SENTINEL_READS: ReadonlyMap<string, string> = new Map<string, str
  * name fails until someone either teaches the scan or records why it is exempt.
  */
 const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
+  [
+    'OptionalDomainProperty',
+    'Keeps the caller-initialized value on absence; supplied numbers go through a named domain before narrowing.',
+  ],
   ['BoolProperty', 'Reads a boolean, so it has no integer zero to land on.'],
   [
     'Uint64Property',

@@ -364,11 +364,11 @@ test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_do
 [[entry]]
 kind = "flag"
 old = "mel --fmax"
-changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3)"
 to = "mel --fmax-hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "tests/conformance/cli_contract_v2.json::mel_reject_zero_fmax_hz"
+test = "bindings/python/tests/test_cli_transform_commands.py::test_mel_band_above_nyquist_names_the_flag"
 
 [[entry]]
 kind = "flag"
@@ -446,11 +446,11 @@ test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain befor
 kind = "flag"
 old = "mel-to-audio --fmax"
 frontend = "native"
-changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3)"
 to = "mel-to-audio --fmax-hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+test = "tests/cli/cli_analysis_test.cpp::CLI refuses Mel bands above input Nyquist under the flag spelling"
 
 [[entry]]
 kind = "flag"
@@ -466,11 +466,11 @@ test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain befor
 kind = "flag"
 old = "mfcc-to-audio --fmax"
 frontend = "native"
-changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3)"
 to = "mfcc-to-audio --fmax-hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+test = "tests/cli/cli_analysis_test.cpp::CLI refuses Mel bands above input Nyquist under the flag spelling"
 
 [[entry]]
 kind = "flag"

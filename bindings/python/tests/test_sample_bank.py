@@ -4,6 +4,8 @@ RealtimeEngine.set_synth_instrument."""
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pytest
 
@@ -133,8 +135,11 @@ def test_add_sample_rejects_bad_buffers_and_out_of_range_fields() -> None:
             bank.add_sample(np.array([0.0, np.nan], dtype=np.float32))
         with pytest.raises(ValueError, match="1-D buffer"):
             bank.add_sample(np.zeros((4, 2), dtype=np.float32))
-        # ctypes would truncate these into the field silently.
-        with pytest.raises(ValueError, match=r"root_key must be in \[0, 127\]"):
+        # The facade checks representability; the C entry checks the narrower MIDI domain.
+        with pytest.raises(
+            ValueError,
+            match=r"^SampleBank\.add_sample: root_key must be an integer in \[1, 127\]$",
+        ):
             bank.add_sample(_tone(), root_key=300)
         with pytest.raises(ValueError, match=r"loop_start must be in \[0, "):
             bank.add_sample(_tone(), loop_start=-1)
@@ -150,10 +155,23 @@ def test_add_sample_rejects_bad_buffers_and_out_of_range_fields() -> None:
         assert bank.sample_count == 0
 
 
+def test_add_sample_core_midi_bound_is_named_and_accepts_its_upper_edge() -> None:
+    with SampleBank() as bank:
+        with pytest.raises(
+            ValueError,
+            match=r"^SampleBank\.add_sample: root_key must be an integer in \[1, 127\]$",
+        ):
+            bank.add_sample(_tone(), root_key=128)
+        assert bank.sample_count == 0
+
+        assert bank.add_sample(_tone(), root_key=127) == 0
+        assert bank.sample_count == 1
+
+
 def test_add_zone_rejects_what_the_binding_and_the_core_each_reject() -> None:
     with SampleBank() as bank:
         index = bank.add_sample(_tone())
-        with pytest.raises(ValueError, match=r"key_hi must be in \[0, 255\]"):
+        with pytest.raises(ValueError, match=r"key_hi must be an integer in \[1, 127\]"):
             bank.add_zone(0, sample_index=index, key_hi=256)
         with pytest.raises(ValueError, match="pan_units must be finite"):
             bank.add_zone(0, sample_index=index, pan_units=float("nan"))
@@ -169,6 +187,67 @@ def test_add_zone_rejects_what_the_binding_and_the_core_each_reject() -> None:
         with pytest.raises(SonareError):
             bank.add_zone(4096, sample_index=index)
         assert bank.set_count == 0
+
+
+def test_add_zone_core_midi_bounds_are_named_and_accept_their_upper_edge() -> None:
+    with SampleBank() as bank:
+        index = bank.add_sample(_tone())
+        for field, expected in (
+            ("key_lo", r"key_lo"),
+            ("key_hi", r"key_hi"),
+            ("vel_lo", r"vel_lo"),
+            ("vel_hi", r"vel_hi"),
+        ):
+            with pytest.raises(
+                ValueError,
+                match=(
+                    rf"^SampleBank\.add_zone: {expected} "
+                    rf"must be an integer in \[{0 if field == 'key_lo' else 1}, 127\]$"
+                ),
+            ):
+                bank.add_zone(0, sample_index=index, **{field: 128})
+            assert bank.set_count == 0
+            assert bank.sample_count == 1
+
+        bank.add_zone(0, sample_index=index, key_lo=0)
+        bank.add_zone(0, sample_index=index, key_lo=127)
+        bank.add_zone(0, sample_index=index, key_hi=127)
+        bank.add_zone(0, sample_index=index, vel_lo=127)
+        bank.add_zone(0, sample_index=index, vel_hi=127)
+        assert bank.set_count == 1
+        assert bank.sample_count == 1
+
+
+def test_optional_bank_bounds_use_none_for_absence_and_refuse_explicit_zero() -> None:
+    with SampleBank() as bank:
+        assert bank.add_sample(_tone()) == 0
+        assert bank.add_sample(_tone(220.0), root_key=None) == 1
+        invalid = (0, 128, 1.5, 1e100)
+        for value in invalid:
+            with pytest.raises(
+                ValueError,
+                match=r"^SampleBank\.add_sample: root_key must be an integer in \[1, 127\]$",
+            ):
+                bank.add_sample(_tone(), root_key=cast(int, value))
+        assert bank.sample_count == 2
+
+        bank.add_zone(
+            0,
+            sample_index=0,
+            key_lo=0,
+            key_hi=None,
+            vel_lo=None,
+            vel_hi=None,
+        )
+        assert bank.set_count == 1
+        for field in ("key_hi", "vel_lo", "vel_hi"):
+            for value in invalid:
+                with pytest.raises(
+                    ValueError,
+                    match=rf"^SampleBank\.add_zone: {field} must be an integer in \[1, 127\]$",
+                ):
+                    bank.add_zone(1, sample_index=0, **{field: cast(int, value)})
+        assert bank.set_count == 1
 
 
 def test_patch_sample_enums_reject_unknown_spellings() -> None:
@@ -288,20 +367,16 @@ def test_each_binding_carries_its_own_bank() -> None:
         project.close()
 
 
-def test_an_all_zero_zone_covers_the_whole_keyboard() -> None:
-    """The C ABI's promise for an untouched rectangle: every key, every velocity.
-
-    Velocity is the half that cannot be inferred -- a literal reading of
-    ``vel_lo == vel_hi == 0`` would cover no playable velocity at all.
-    """
+def test_an_all_absent_zone_covers_the_whole_keyboard() -> None:
+    """An untouched rectangle covers every key and velocity."""
     with SampleBank() as whole:
         whole.add_zone(
             0,
             sample_index=whole.add_sample(_tone()),
             key_lo=0,
-            key_hi=0,
-            vel_lo=0,
-            vel_hi=0,
+            key_hi=None,
+            vel_lo=None,
+            vel_hi=None,
         )
         for note in (24, 60, 96):
             assert _peak(_render(note, _sample_patch(whole))) > 0.0
@@ -315,7 +390,7 @@ def test_an_all_zero_zone_covers_the_whole_keyboard() -> None:
         assert _is_silent(_render(96, _sample_patch(narrow)))
 
 
-def _sounds(note: int, **zone: int) -> bool:
+def _sounds(note: int, **zone: int | None) -> bool:
     """Whether a one-zone bank built from ``zone`` sounds for ``note`` at velocity 100."""
     with SampleBank() as bank:
         bank.add_zone(0, sample_index=bank.add_sample(_tone()), **zone)
@@ -325,11 +400,8 @@ def _sounds(note: int, **zone: int) -> bool:
 def test_narrowing_one_bound_leaves_every_other_bound_whole() -> None:
     """Each bound stands alone: setting one must not collapse any of the rest.
 
-    This is the FACADE's contract. Every bound has an explicit non-sentinel
-    default here (``key_hi=127`` / ``vel_lo=1`` / ``vel_hi=127``), so what it
-    pins is that those defaults reach the core intact -- it would catch someone
-    "simplifying" them to 0 and leaving the behaviour to the C sentinels. The
-    sentinels themselves are the next test.
+    Each bound is represented independently: omitting an edge leaves its C
+    absence sentinel in place, and setting one edge does not collapse the others.
     """
     # Notes render at velocity 100, so a velocity range that lost either end
     # shows up as silence.
@@ -339,22 +411,12 @@ def test_narrowing_one_bound_leaves_every_other_bound_whole() -> None:
     assert not _sounds(60, vel_hi=64)  # 100 is above the ceiling
 
 
-def test_a_zero_bound_reads_as_that_bound_being_unset() -> None:
-    """The C ABI's per-bound sentinels, reached by passing 0 explicitly.
-
-    An upper bound of zero reads as 127 and ``vel_lo`` of zero as 1; ``key_lo``
-    of zero is simply the lowest key and needs no rule. Unlike the test above,
-    these values do go through the core's defaulting, because the facade passes
-    a zero straight down.
-    """
-    # key_hi=0 with a raised floor: the case an all-or-nothing rule rejected as
-    # inverted instead of reading as 48..127.
-    assert _sounds(60, key_lo=48, key_hi=0) and not _sounds(24, key_lo=48, key_hi=0)
-    # vel_lo=0 reads as 1, so the ceiling still decides: 100 is above 64.
-    assert not _sounds(60, vel_lo=0, vel_hi=64)
-    assert _sounds(60, vel_lo=0, vel_hi=127)
-    # vel_hi=0 reads as 127, so a velocity-100 note is inside 64..127.
-    assert _sounds(60, vel_lo=64, vel_hi=0)
+def test_none_zone_bounds_keep_their_absence_defaults() -> None:
+    """None leaves sentinel-backed bounds absent while preserving their defaults."""
+    assert _sounds(60, key_lo=48, key_hi=None) and not _sounds(24, key_lo=48, key_hi=None)
+    assert not _sounds(60, vel_lo=None, vel_hi=64)
+    assert _sounds(60, vel_lo=None, vel_hi=127)
+    assert _sounds(60, vel_lo=64, vel_hi=None)
 
 
 def test_zone_gain_and_patch_level_change_what_is_heard() -> None:

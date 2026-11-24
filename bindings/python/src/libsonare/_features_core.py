@@ -25,6 +25,7 @@ from ._ffi import (
     SonareStftResult,
 )
 from ._field_spelling import surface_spelling
+from ._narrowing import _optional_nonzero_domain_float
 from ._runtime import (
     _C_INT_MAX,
     _call_float_array_transform,
@@ -273,7 +274,7 @@ def mel_spectrogram(
         fmin_hz: Lower Mel band edge in Hz (default 0.0). Set together with
             ``fmax_hz`` to round-trip with ``mel_to_stft`` / ``mel_to_audio``.
         fmax_hz: Upper Mel band edge in Hz; None (default) is the Nyquist.
-            Must be greater than 0 when given.
+            Must be greater than 0 and no higher than Nyquist when given.
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
@@ -286,7 +287,7 @@ def mel_spectrogram(
     out = SonareMelResult()
     options = SonareMelSpectrogramOptions._given(
         fmin_hz=_to_c_float(fmin_hz, "fmin_hz"),
-        fmax_hz=_to_c_float(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz"),
+        fmax_hz=_optional_nonzero_domain_float(fmax_hz, "fmax_hz"),
         htk=1 if htk else 0,
     )
     rc = lib.sonare_mel_spectrogram(
@@ -338,7 +339,8 @@ def mfcc(
         n_mels: Number of Mel bands (default 128).
         n_mfcc: Number of MFCC coefficients (default 20).
         fmin: Minimum Mel frequency in Hz (default 0.0 = librosa default).
-        fmax: Maximum Mel frequency in Hz (default None = sr / 2).
+        fmax: Maximum Mel frequency in Hz (default None = sr / 2); values above Nyquist are
+            refused; an explicit 0 is not absence.
         htk: Use the HTK Mel formula instead of Slaney (default False).
         lifter: Cepstral liftering coefficient (default 0.0 = no liftering).
 
@@ -351,7 +353,7 @@ def mfcc(
     out = SonareMfccResult()
     options = SonareMfccOptions._given(
         fmin_hz=_to_c_float(fmin, "fmin"),
-        fmax_hz=_to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+        fmax_hz=_optional_nonzero_domain_float(fmax, "fmax"),
         htk=1 if htk else 0,
         lifter=_to_c_float(lifter, "lifter"),
     )

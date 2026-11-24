@@ -20,6 +20,7 @@ from ._cli_common import (
     _fmt_optional,
     _format_time,
     _measured_pairs,
+    _mel_flag_refusals,
     _parse_key_profile,
     _parse_meter_candidates,
     _parse_mode,
@@ -451,13 +452,14 @@ def cmd_mel(args: argparse.Namespace) -> int:
     from . import mel_spectrogram
 
     samples, sr = _load_audio(args.file)
-    result = mel_spectrogram(
-        samples,
-        sample_rate=sr,
-        fmax_hz=args.fmax_hz,
-        htk=args.htk,
-        **_given(args, "n_fft", "hop_length", "n_mels", "fmin_hz"),
-    )
+    with _mel_flag_refusals():
+        result = mel_spectrogram(
+            samples,
+            sample_rate=sr,
+            fmax_hz=args.fmax_hz,
+            htk=args.htk,
+            **_given(args, "n_fft", "hop_length", "n_mels", "fmin_hz"),
+        )
     n_mels, n_frames = result.power.shape
     power = result.power.ravel().tolist()
     if args.json:

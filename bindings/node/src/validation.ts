@@ -1,3 +1,4 @@
+import { OMIT_FOR_POSITIVE_DEFAULT } from './internal/default_refusal.js';
 import {
   assertDeclaredKeys,
   type Respelled,
@@ -125,6 +126,13 @@ export function assertNonNegativeScalar(value: number, argName: string): void {
   }
   if (!(Number.isFinite(value) && value >= 0)) {
     throw refuse(`${argName} must be finite and at least 0`);
+  }
+}
+
+/** The mel core uses 0 as Nyquist, so callers must omit the option instead. */
+export function assertMelFmaxOmitted(value: unknown): void {
+  if (typeof value === 'number' && Math.fround(value) === 0) {
+    throw refuse(`fmaxHz ${OMIT_FOR_POSITIVE_DEFAULT}`);
   }
 }
 

@@ -12,7 +12,6 @@ import {
   withHeapNeedWhen,
   withMonoHeap,
 } from './internal/memory_budget.js';
-import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   ChromaResult,
@@ -30,10 +29,10 @@ import {
   assertClosedToken,
   assertFiniteScalar,
   assertFloat32Array,
-  assertFloatFields,
   assertMatrix2D,
   assertNonNegativeScalar,
-  assertPositiveFloatValue,
+  assertNumber,
+  assertOptionalFmaxNotZero,
   assertSampleRate,
   optionalBoolean,
   requestOnly,
@@ -151,7 +150,7 @@ export interface MelSpectrogramRequest {
   nMels?: number;
   /** Lowest band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Highest band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Highest band edge in Hz. Omit to use Nyquist; a supplied value must be positive and at most Nyquist. */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -171,7 +170,7 @@ export interface MfccRequest {
   nMels?: number;
   /** Lowest band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Highest band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Highest band edge in Hz. Omit to use Nyquist; a supplied value must be positive and at most Nyquist. */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -557,23 +556,17 @@ const MEL_NORMS: readonly MelNorm[] = ['none', 'slaney'];
  * `melFrequencies({ nMels: nMels + 2, fminHz, fmaxHz, htk })` to its peak at point `m + 1`
  * and falling to point `m + 2`.
  *
- * A wrong type is a `TypeError`; a value outside its domain, or an upper edge that, resolved
- * to the Nyquist, is not above `fminHz`, is a `RangeError`.
+ * A wrong type is a `TypeError`; a supplied `fmaxHz` must be positive and no greater than
+ * Nyquist, and the resolved upper edge must be above `fminHz`.
  */
 export function melFilterbank(request: MelFilterbankRequest): Matrix2D;
 export function melFilterbank(...args: unknown[]): Matrix2D {
   return withEntry('melFilterbank', () => {
     const r = requestOnly<MelFilterbankRequest>('melFilterbank', args);
     const htk = optionalBoolean(r.htk, 'htk', false);
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (!isAbsent(r.fmaxHz)) {
-      assertFiniteScalar(r.fmaxHz, 'fmaxHz');
-      if (r.fmaxHz <= 0) {
-        throw refuse('fmaxHz must be greater than 0; omit it for the default');
-      }
-    }
     const norm = r.norm ?? 'slaney';
     assertClosedToken(norm, MEL_NORMS, 'norm');
+    assertOptionalFmaxNotZero(r.fmaxHz);
     const native = getSonareModule().melFilterbank(
       r.sampleRate,
       r.nFft,
@@ -628,11 +621,8 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
     const nMels = r.nMels ?? 128;
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertNumber(fminHz, 'fminHz');
+    assertOptionalFmaxNotZero(r.fmaxHz);
     const { samples, sampleRate } = r;
     const bins = stftBins(fft.nFft, fft.hopLength);
     const native = withHeapNeedWhen(
@@ -688,11 +678,8 @@ export function mfcc(...args: unknown[]): MfccResult {
     const nMfcc = r.nMfcc ?? 20;
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertNumber(fminHz, 'fminHz');
+    assertOptionalFmaxNotZero(r.fmaxHz);
     const { samples, sampleRate } = r;
     const bins = stftBins(fft.nFft, fft.hopLength);
     const native = withHeapNeedWhen(

@@ -540,6 +540,32 @@ def test_midi_route_preserves_sysex_and_absent_payloads() -> None:
     assert result.overflow_count == 0
 
 
+def test_midi_cc_to_breakpoint_reports_valid_sysex_as_not_supported() -> None:
+    binding = MidiCcBinding(
+        cc_number=1,
+        channel=None,
+        kind="controlChange7",
+        cc_lsb_number=0,
+        selector_msb=0,
+        selector_lsb=0,
+        param_id=5,
+        min_value=0.0,
+        max_value=1.0,
+    )
+    event = ProjectMidiEvent(
+        0.0,
+        0x33000000,
+        sysex=bytes([0xF0, 0x00, 0x7D, 0xF7]),
+    )
+
+    with pytest.raises(SonareError) as caught:
+        ls.midi_cc_to_breakpoint([binding], event)
+    assert caught.value.code == ErrorCode.NOT_SUPPORTED
+    assert str(caught.value) == (
+        "[6] midi_cc_to_breakpoint: MIDI CC conversion does not support SysEx events"
+    )
+
+
 def test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused() -> None:
     event = ls.midi_cc(0.0, 0, 9, 1, 100)
     any_channel = MidiCcBinding(

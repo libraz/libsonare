@@ -58,6 +58,24 @@ class DeriveTest(unittest.TestCase):
         self.assertEqual([(u.surface, u.c_subject) for u in unbound], [("python", "params_json")])
 
 
+class MemberPathTest(unittest.TestCase):
+    def test_matrix_dimension_maps_to_the_caller_member_only_on_its_entry(self) -> None:
+        fields = {
+            "wasm": [
+                {"entry": entry, "param": "request", "fields": ["values"]}
+                for entry in ("pcen", "mfcc")
+            ]
+        }
+        renames = {"wasm": {"members_of": {"pcen.n_bins": "values.rows"}}}
+        facts = [Fact("mfcc", "n_bins", "param", "wasm", None)]
+        rows, unbound, idle = gen.derive(
+            facts, fields, renames, {"pcen": {"n_bins"}, "mfcc": {"n_bins"}}
+        )
+        self.assertEqual(rows["wasm"], [gen.Row("pcen", "n_bins", "values.rows")])
+        self.assertEqual([(u.c_key, u.c_subject) for u in unbound], [("mfcc", "n_bins")])
+        self.assertEqual(idle, [])
+
+
 class RequestFieldTest(unittest.TestCase):
     def test_a_subject_folded_into_a_request_binds_to_its_field(self) -> None:
         facts = [Fact("detect_boundaries", "reference_window_sec", "param", "node", None)]

@@ -1903,19 +1903,19 @@ test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_
 kind = "function"
 old = "recurrence_to_lag"
 to = "segment_recurrence_to_lag"
-changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
+changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+test = "bindings/python/tests/test_surface_analysis.py::test_segment_matrix_transforms_carry_non_finite_cells"
 
 [[entry]]
 kind = "function"
 old = "lag_to_recurrence"
 to = "segment_lag_to_recurrence"
-changed = "takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix"
+changed = "takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+test = "bindings/python/tests/test_surface_analysis.py::test_segment_matrix_transforms_carry_non_finite_cells"
 
 [[entry]]
 kind = "function"
@@ -1939,10 +1939,10 @@ test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_i
 kind = "function"
 old = "path_enhance"
 to = "segment_path_enhance"
-changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
+changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+test = "bindings/python/tests/test_surface_analysis.py::test_segment_matrix_transforms_carry_non_finite_cells"
 
 [[entry]]
 kind = "option"
@@ -4393,6 +4393,7 @@ changed = "replaced by KeyMode, a Literal of the lowercase mode tokens (\"major\
 domain = "core"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_a_non_string_mode_is_a_type_error"
+
 [[entry]]
 kind = "value"
 old = "Mode.DORIAN"
@@ -4450,6 +4451,7 @@ changed = "a Literal of lowerCamel tokens (\"krumhanslSchmuckler\", \"faraldoEdm
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_an_unknown_or_legacy_profile_names_the_accepted_tokens"
+
 [[entry]]
 kind = "value"
 old = "KeyProfile.BELLMAN_BUDGE"
@@ -4507,6 +4509,7 @@ changed = "a Literal of lowerCamel tokens (\"intro\", \"preChorus\", ...) instea
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_section_types_are_tokens"
+
 [[entry]]
 kind = "value"
 old = "SectionType.BRIDGE"
@@ -5596,6 +5599,7 @@ changed = "Literal['auto', 'blind', 'impulseResponse']"
 domain = "effects"
 rule = "token-case"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_room_estimate_mode_is_impulse_response_in_lower_camel"
+
 [[entry]]
 kind = "value"
 old = "AcousticModeName='impulse_response'"
@@ -5936,10 +5940,10 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.magnitude_response"
-changed = "returns float32 ndarrays instead of list[float]"
+changed = "returns float32 ndarrays instead of list[float]. An out-of-domain frequency raises SonareValueError naming frequencies_hz."
 domain = "mastering"
 rule = "array-results"
-test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+test = "bindings/python/tests/test_empty_nan_guards.py::test_magnitude_response_refuses_frequencies_outside_its_domain"
 
 [[entry]]
 kind = "option"
@@ -6245,6 +6249,7 @@ changed = "Literal['const3Db', 'const4.5Db', 'const6Db', 'linear0Db']; the IntEn
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_closed_sets_are_literal_types_in_ordinal_order"
+
 [[entry]]
 kind = "value"
 old = "PanLaw.CONST_3DB"
@@ -6281,6 +6286,7 @@ changed = "Literal['linear', 'exponential', 'hold', 'sCurve']; the IntEnum and i
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_closed_sets_are_literal_types_in_ordinal_order"
+
 [[entry]]
 kind = "value"
 old = "AutomationCurve.EXPONENTIAL"
@@ -6432,6 +6438,7 @@ changed = "Literal['preFader', 'postFader']; the IntEnum and its members are rem
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
 [[entry]]
 kind = "value"
 old = "MeterTap.POST_FADER"
@@ -6454,6 +6461,7 @@ changed = "Literal['postFader', 'preFader']; the IntEnum and its members are rem
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
 [[entry]]
 kind = "value"
 old = "SendTiming.POST_FADER"
@@ -6476,6 +6484,7 @@ changed = "Literal['track', 'bus']; the IntEnum and its members are removed"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
 [[entry]]
 kind = "value"
 old = "SidechainSourceKind.BUS"
@@ -6498,6 +6507,7 @@ changed = "Literal['mono', 'stereo', '5.1', '7.1']; the IntEnum and its members 
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
 [[entry]]
 kind = "value"
 old = "ChannelLayout.FIVE_POINT_ONE"
@@ -6781,6 +6791,7 @@ changed = "Literal['processBlock', 'error']; the IntEnum and its members are rem
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
 [[entry]]
 kind = "value"
 old = "EngineTelemetryType.ERROR"
@@ -6803,6 +6814,7 @@ changed = "Literal of the lowerCamel error tokens in ordinal order, 'invalidComm
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_engine_telemetry_error_parameter_base_overflow_ordinal"
+
 [[entry]]
 kind = "value"
 old = "EngineTelemetryError.AUTOMATION_BIND_TARGET_OVERFLOW"
@@ -6958,6 +6970,7 @@ changed = "Literal['off', 'pfl', 'afl']; the IntEnum and its members are removed
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_imports.py::test_track_monitor_mode_is_a_public_literal"
+
 [[entry]]
 kind = "value"
 old = "EngineTrackMonitorMode.AFL"
@@ -6995,6 +7008,7 @@ changed = "Literal['marker', 'text', 'lyric', 'cuePoint', 'keySignature']; the I
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_integer_narrowing.py::test_a_marker_kind_is_an_exact_token"
+
 [[entry]]
 kind = "value"
 old = "MarkerKind.CUE_POINT"
@@ -7054,6 +7068,7 @@ changed = "Literal['passThrough', 'gain']; the IntEnum and its members are remov
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
 [[entry]]
 kind = "value"
 old = "EngineGraphNodeType.GAIN"
@@ -7076,6 +7091,7 @@ changed = "Literal['replace', 'add']; the IntEnum and its members are removed"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_graph_connection_mix_is_replace_or_add_only"
+
 [[entry]]
 kind = "value"
 old = "EngineGraphMix.ADD"
@@ -7221,6 +7237,7 @@ changed = "Literal['none', 'center', 'curve']; the IntEnum and its members are r
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+
 [[entry]]
 kind = "value"
 old = "VocalTargetMode.CENTER"
@@ -7250,6 +7267,7 @@ changed = "Literal['preserve', 'shift']; the IntEnum and its members are removed
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+
 [[entry]]
 kind = "value"
 old = "VocalFormantMode.PRESERVE"
@@ -7272,6 +7290,7 @@ changed = "Literal['preserve', 'reset']; the IntEnum and its members are removed
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_merge_policy_is_an_exact_token"
+
 [[entry]]
 kind = "value"
 old = "VocalMergePolicy.PRESERVE"
@@ -7308,6 +7327,7 @@ changed = "Literal['rehydrated', 'alreadyReady', 'unresolved']; the IntEnum and 
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
 [[entry]]
 kind = "value"
 old = "ProjectVocalRehydrateStatus.ALREADY_READY"
@@ -11264,9 +11284,11 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_to_breakpoint"
-removed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None, in which a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)"
+changed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None. A valid SysEx event raises coded NotSupported. A nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)."
 domain = "project"
 rule = "midi-module-functions"
+test = "bindings/python/tests/test_project_midi.py::test_midi_cc_to_breakpoint_reports_valid_sysex_as_not_supported"
+to = "midi_cc_to_breakpoint"
 
 [[entry]]
 kind = "option"
@@ -11393,9 +11415,18 @@ rule = "collections"
 [[entry]]
 kind = "method"
 old = "Project.set_marker_ex"
-removed = "project.set_marker(ppq, marker_id=..., name=..., kind=..., key_fifths=..., key_minor=...)"
+changed = "project.set_marker(ppq, marker_id=..., name=..., kind=..., key_fifths=..., key_minor=...). Nonzero key_fifths and true key_minor are refused unless kind is keySignature."
 domain = "project"
 rule = "input-types"
+test = "bindings/python/tests/test_project.py::test_project_markers_refuse_inactive_key_signature_fields"
+to = "Project.set_marker"
+
+[[entry]]
+kind = "option"
+old = "Project.set_marker_ex(marker)"
+removed = "pass ppq and the marker's fields directly to Project.set_marker"
+domain = "project"
+rule = "individual"
 
 [[entry]]
 kind = "option"
@@ -14167,6 +14198,7 @@ changed = "holds only the bands an analysis bin lands in, so it can be shorter t
 domain = "effects"
 rule = "silence-is-infinite"
 test = "bindings/python/tests/test_level_silence.py::test_a_noise_floor_lists_only_the_bands_a_bin_lands_in"
+
 [[entry]]
 kind = "field"
 old = "DynamicsResult.dynamic_range_db"
@@ -15172,6 +15204,46 @@ changed = "Returns VocalNotesResult. Read notes and transitions instead of unpac
 domain = "project"
 rule = "individual"
 test = "bindings/python/tests/test_vocal_edit.py::test_draft_edit_evaluate_commit_and_restore"
+
+[[entry]]
+kind = "option"
+old = "SampleBank.add_sample(root_key)"
+changed = "None selects the C default; an explicit zero is refused rather than selecting middle C"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_sample_bank.py::test_optional_bank_bounds_use_none_for_absence_and_refuse_explicit_zero"
+
+[[entry]]
+kind = "option"
+old = "SampleBank.add_zone(key_hi)"
+changed = "None selects the C default; an explicit zero is refused rather than selecting the highest key"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_sample_bank.py::test_optional_bank_bounds_use_none_for_absence_and_refuse_explicit_zero"
+
+[[entry]]
+kind = "option"
+old = "SampleBank.add_zone(vel_lo)"
+changed = "None selects the C default; an explicit zero is refused rather than selecting velocity 1"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_sample_bank.py::test_optional_bank_bounds_use_none_for_absence_and_refuse_explicit_zero"
+
+[[entry]]
+kind = "option"
+old = "SampleBank.add_zone(vel_hi)"
+changed = "None selects the C default; an explicit zero is refused rather than selecting velocity 127"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_sample_bank.py::test_optional_bank_bounds_use_none_for_absence_and_refuse_explicit_zero"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_markers(markers)"
+changed = "a nonzero key_fifths or true key_minor is refused unless kind is keySignature. A key-signature marker outside [-7, 7] raises SonareValueError."
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_engine.py::test_engine_key_signature_marker_refuses_out_of_domain_fifths"
 
 [[entry]]
 kind = "method"

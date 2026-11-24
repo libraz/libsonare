@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "c_api/feature_admission.h"
 #include "c_api/inverse_input_domains.h"
 #include "core/audio.h"
 #include "core/convert.h"
@@ -20,6 +21,7 @@
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 using namespace sonare_node::features;
@@ -267,24 +269,18 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "nMels", &n_mels)) return env.Undefined();
   int n_frames{};
   if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
-  if (!ValidateMatrixDims(env, n_mels, n_frames, typed.ElementLength())) {
-    return env.Undefined();
-  }
   int sr{};
-  if (!OptionalDomainArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate,
-                         sonare::kInverseSampleRateDomain, &sr)) {
+  if (!OptionalIntArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate, &sr)) {
     return env.Undefined();
   }
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 4, "nFft", sonare::constants::kDefaultNFft,
-                         sonare::kMelToStftFftSizeDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 4, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
     return env.Undefined();
   }
   float fmin{};
-  if (!OptionalFloatArg(env, info, 5, "fmin", 0.0f, &fmin)) return env.Undefined();
+  if (!OptionalDomainFloatArg(env, info, 5, "fminHz", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
-  if (!OptionalFloatArg(env, info, 6, "fmax", 0.0f, &fmax)) return env.Undefined();
-  sonare::validate_mel_bounds(fmin, fmax);
+  if (!OptionalDomainFloatArg(env, info, 6, "fmaxHz", 0.0f, &fmax)) return env.Undefined();
   bool htk = false;
   if (!OptionalBoolArg(env, info, 7, "htk", false, &htk)) {
     return env.Undefined();
@@ -298,7 +294,11 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   config.htk = htk;
 
   std::vector<float> stft =
-      sonare::mel_to_stft(sonare_node::ElementData(typed), n_mels, n_frames, config, sr);
+      WithMelRefusalNames("mel_to_stft", sonare_c_detail::kMelInverseNames, [&] {
+        sonare_c_detail::admit_inverse_mel(sonare_c_detail::MelInverseKind::kStft,
+                                           typed.ElementLength(), n_mels, n_frames, sr, config);
+        return sonare::mel_to_stft(sonare_node::ElementData(typed), n_mels, n_frames, config, sr);
+      });
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, n_fft / 2 + 1));
@@ -321,12 +321,8 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "nMels", &n_mels)) return env.Undefined();
   int n_frames{};
   if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
-  if (!ValidateMatrixDims(env, n_mels, n_frames, typed.ElementLength())) {
-    return env.Undefined();
-  }
   int sr{};
-  if (!OptionalDomainArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate,
-                         sonare::kInverseAudioSampleRateDomain, &sr)) {
+  if (!OptionalIntArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate, &sr)) {
     return env.Undefined();
   }
   int n_fft{};
@@ -334,12 +330,12 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalResynthesisHopArg(env, info, 5, &hop_length)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 5, "hopLength", kZeroIsSentinel, &hop_length))
+    return env.Undefined();
   float fmin{};
-  if (!OptionalFloatArg(env, info, 6, "fmin", 0.0f, &fmin)) return env.Undefined();
+  if (!OptionalDomainFloatArg(env, info, 6, "fminHz", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
-  if (!OptionalFloatArg(env, info, 7, "fmax", 0.0f, &fmax)) return env.Undefined();
-  sonare::validate_mel_bounds(fmin, fmax);
+  if (!OptionalDomainFloatArg(env, info, 7, "fmaxHz", 0.0f, &fmax)) return env.Undefined();
   int n_iter{};
   if (!OptionalIntArg(env, info, 8, "nIter", sonare::constants::kDefaultGriffinLimIterations,
                       &n_iter))
@@ -358,7 +354,13 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   config.htk = htk;
 
   sonare::Audio result =
-      sonare::mel_to_audio(sonare_node::ElementData(typed), n_mels, n_frames, config, n_iter, sr);
+      WithMelRefusalNames("mel_to_audio", sonare_c_detail::kMelInverseNames, [&] {
+        sonare_c_detail::admit_inverse_mel(sonare_c_detail::MelInverseKind::kMelAudio,
+                                           typed.ElementLength(), n_mels, n_frames, sr, config,
+                                           n_iter);
+        return sonare::mel_to_audio(sonare_node::ElementData(typed), n_mels, n_frames, config,
+                                    n_iter, sr);
+      });
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
@@ -444,14 +446,10 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "nMfcc", &n_mfcc)) return env.Undefined();
   int n_frames{};
   if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
-  if (!ValidateMatrixDims(env, n_mfcc, n_frames, typed.ElementLength())) {
-    return env.Undefined();
-  }
   int n_mels{};
   if (!OptionalIntArg(env, info, 3, "nMels", 128, &n_mels)) return env.Undefined();
   int sr{};
-  if (!OptionalDomainArg(env, info, 4, "sampleRate", sonare::constants::kDefaultSampleRate,
-                         sonare::kInverseAudioSampleRateDomain, &sr)) {
+  if (!OptionalIntArg(env, info, 4, "sampleRate", sonare::constants::kDefaultSampleRate, &sr)) {
     return env.Undefined();
   }
   int n_fft{};
@@ -459,12 +457,12 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalResynthesisHopArg(env, info, 6, &hop_length)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 6, "hopLength", kZeroIsSentinel, &hop_length))
+    return env.Undefined();
   float fmin{};
-  if (!OptionalFloatArg(env, info, 7, "fmin", 0.0f, &fmin)) return env.Undefined();
+  if (!OptionalDomainFloatArg(env, info, 7, "fminHz", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
-  if (!OptionalFloatArg(env, info, 8, "fmax", 0.0f, &fmax)) return env.Undefined();
-  sonare::validate_mel_bounds(fmin, fmax);
+  if (!OptionalDomainFloatArg(env, info, 8, "fmaxHz", 0.0f, &fmax)) return env.Undefined();
   int n_iter{};
   if (!OptionalIntArg(env, info, 9, "nIter", sonare::constants::kDefaultGriffinLimIterations,
                       &n_iter))
@@ -484,8 +482,17 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   config.fmax = fmax;
   config.htk = htk;
 
-  sonare::Audio result = sonare::mfcc_to_audio(sonare_node::ElementData(typed), n_mfcc, n_frames,
-                                               config, n_iter, sr, lifter);
+  sonare::Audio result =
+      WithMelRefusalNames("mfcc_to_audio", sonare_c_detail::kMelInverseNames, [&] {
+        sonare_c_detail::admit_inverse_mel(
+            sonare_c_detail::MelInverseKind::kMfccAudio, typed.ElementLength(), n_mfcc, n_frames,
+            sr, config, n_iter, lifter, [&] {
+              sonare::validate_offline_audio_samples(
+                  "coefficients", sonare_node::ElementData(typed), typed.ElementLength(), 0);
+            });
+        return sonare::mfcc_to_audio(sonare_node::ElementData(typed), n_mfcc, n_frames, config,
+                                     n_iter, sr, lifter);
+      });
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }

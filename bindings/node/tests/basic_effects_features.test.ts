@@ -180,12 +180,35 @@ describe('effects', () => {
     const accepted = segmentRecurrenceMatrix({ data: cleanMatrix });
     expect(accepted.data).toHaveLength(cols * cols);
     expect(accepted.data.every((v) => Number.isFinite(v))).toBe(true);
+  });
 
-    // The reshaping entries scan their matrix too, so a poisoned cell is refused
-    // there as well instead of being carried into the result.
-    expect(() =>
-      segmentRecurrenceToLag({ recurrence: matrix(poisoned, 16, 16), pad: false }),
-    ).toThrow(/recurrence\.data contains a non-finite sample at index 30/);
+  it('carries non-finite cells through the three segment matrix transforms', () => {
+    const clean = { data: Float32Array.from({ length: 16 }, (_, i) => i + 1), rows: 4, cols: 4 };
+    const matrix = { ...clean, data: Float32Array.from(clean.data) };
+    matrix.data[6] = Number.NaN;
+
+    for (const [convert, nanIndices] of [
+      [(input: typeof matrix) => segmentRecurrenceToLag({ recurrence: input, pad: false }), [14]],
+      [(input: typeof matrix) => segmentLagToRecurrence({ lag: input }), [14]],
+      [
+        (input: typeof matrix) => segmentPathEnhance({ recurrence: input, win: 3, nFilters: 1 }),
+        [1, 6, 11],
+      ],
+    ] as const) {
+      const expected = convert(clean);
+      const actual = convert(matrix);
+      expect(actual.data).toBeInstanceOf(Float32Array);
+      expect([actual.rows, actual.cols]).toEqual([expected.rows, expected.cols]);
+      const nanCells: readonly number[] = nanIndices;
+      for (const [i, value] of actual.data.entries()) {
+        if (nanCells.includes(i)) {
+          expect(expected.data[i]).toBeGreaterThan(0);
+          expect(value).toBeNaN();
+        } else {
+          expect(value).toBe(expected.data[i]);
+        }
+      }
+    }
   });
 
   it('hpss returns harmonic and percussive', () => {
@@ -567,16 +590,16 @@ describe('features', () => {
   });
 
   it('inverse feature wrappers reject non-finite matrices and a validate key', () => {
-    // The facade scan names the function and the offending index.
+    // The refusals name the function and the offending index.
     const melData = new Float32Array(8 * 4).fill(0.1);
     melData[3] = Number.NaN;
     const mel = matrix(melData, 8, 4);
     expect(() => melToStft({ power: mel, sampleRate: SR, nFft: 256 })).toThrow(
-      /melToStft: power\.data contains a non-finite sample at index 3/,
+      /melToStft: power contains a non-finite sample at index 3/,
     );
     expect(() =>
       melToAudio({ power: mel, sampleRate: SR, nFft: 256, hopLength: 64, nIter: 2 }),
-    ).toThrow(/melToAudio: power\.data contains a non-finite sample at index 3/);
+    ).toThrow(/melToAudio: power contains a non-finite sample at index 3/);
     expect(() =>
       melToStft({ power: mel, sampleRate: SR, nFft: 256, validate: false } as never),
     ).toThrow(unknownKeyText('melToStft: unknown key validate'));
@@ -596,7 +619,7 @@ describe('features', () => {
         hopLength: 64,
         nIter: 2,
       }),
-    ).toThrow(/mfccToAudio: coefficients\.data contains a non-finite sample at index 7/);
+    ).toThrow(/mfccToAudio: coefficients contains a non-finite sample at index 7/);
     expect(() =>
       mfccToMel({ coefficients: mfccCoeffs, nMels: 8, validate: false } as never),
     ).toThrow(unknownKeyText('mfccToMel: unknown key validate'));

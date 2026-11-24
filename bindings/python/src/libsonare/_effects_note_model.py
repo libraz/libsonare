@@ -641,15 +641,18 @@ def _notes_to_c(
     sample_rate: int,
     *,
     require_span: bool,
+    allow_invalid_span: bool = False,
 ) -> tuple[object, int, object, int, dict[str, _Respelling]]:
     """Marshal a note list into the C note array plus its shared envelope pool.
 
     The one reader for every note record: a field a record does not define is
     the C default (0), as on the other surfaces. ``require_span`` is set by
-    :func:`render_notes`, the only door that reads the sample span. The C ABI
+    :func:`render_notes` and
+    :func:`assign_note_targets`, which require the sample span. The C ABI
     carries every envelope in one array the edits index into, so the pool is
-    packed here and the offsets derived. The last element is the respelling of
-    the bounds given in seconds, for :func:`_check`.
+    packed here and the offsets derived. ``allow_invalid_span`` passes signed
+    positions through for an entry whose C contract owns their domain. The last
+    element is the respelling of bounds given in seconds, for :func:`_check`.
     """
     note_count = len(notes)
     if note_count == 0:
@@ -667,12 +670,14 @@ def _notes_to_c(
             sample_rate,
             f"notes[{i}].onset_sample",
             f"notes[{i}].onset_sec",
+            signed=allow_invalid_span,
         )
         offset = _resolve_sample_bound(
             *_note_bound(note, "offset"),
             sample_rate,
             f"notes[{i}].offset_sample",
             f"notes[{i}].offset_sec",
+            signed=allow_invalid_span,
         )
         if require_span and (onset.value is None or offset.value is None):
             missing = "onset" if onset.value is None else "offset"

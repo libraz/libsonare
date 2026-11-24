@@ -17,11 +17,11 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
-  assertFloatFields,
   assertInt32,
   assertIntegerValue,
   assertMatrix2D,
   assertNumber,
+  assertOptionalFmaxNotZero,
   assertPositiveFloatValue,
   assertSampleRate,
   requestOnly,
@@ -61,7 +61,7 @@ export interface MelToStftRequest {
   nFft?: number;
   /** Lower mel band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Upper mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper mel band edge in Hz. Omit to use Nyquist; a supplied value must be positive and at most Nyquist. */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -79,7 +79,7 @@ export interface MelToAudioRequest {
   hopLength?: number;
   /** Lower mel band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Upper mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper mel band edge in Hz. Omit to use Nyquist; a supplied value must be positive and at most Nyquist. */
   fmaxHz?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -113,7 +113,7 @@ export interface MfccToAudioRequest {
   hopLength?: number;
   /** Lower mel band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Upper mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper mel band edge in Hz. Omit to use Nyquist; a supplied value must be positive and at most Nyquist. */
   fmaxHz?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -162,18 +162,15 @@ export function melToStft(...args: unknown[]): Matrix2D {
   return withEntry('melToStft', () => {
     const r = requestOnly<MelToStftRequest>('melToStft', args);
     const sampleRate = r.sampleRate ?? 22050;
-    const power = assertMatrix2D(r.power, 'power');
+    const power = assertMatrix2D(r.power, 'power', false);
     // Not on the shared FFT rule: this inverts a filterbank rather than running a
     // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
     // size is accepted by the core and by the Node surface alike.
     const nFft = r.nFft ?? 2048;
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertNumber(fminHz, 'fminHz');
+    assertOptionalFmaxNotZero(r.fmaxHz);
     const call = () =>
       getSonareModule().melToStft(
         power.data,
@@ -216,17 +213,14 @@ export function melToAudio(...args: unknown[]): Float32Array {
   return withEntry('melToAudio', () => {
     const r = requestOnly<MelToAudioRequest>('melToAudio', args);
     const sampleRate = r.sampleRate ?? 22050;
-    const power = assertMatrix2D(r.power, 'power');
+    const power = assertMatrix2D(r.power, 'power', false);
     const fft = resolveInverseFftOptions(r.nFft ?? 2048, r.hopLength);
     const nIter = r.nIter ?? 32;
     assertInt32(nIter, 'nIter');
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertNumber(fminHz, 'fminHz');
+    assertOptionalFmaxNotZero(r.fmaxHz);
     const call = () =>
       getSonareModule().melToAudio(
         power.data,
@@ -410,7 +404,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   return withEntry('mfccToAudio', () => {
     const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
     const sampleRate = r.sampleRate ?? 22050;
-    const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
+    const coefficients = assertMatrix2D(r.coefficients, 'coefficients', false);
     const fft = resolveInverseFftOptions(r.nFft ?? 2048, r.hopLength);
     const nMels = r.nMels ?? 128;
     const nIter = r.nIter ?? 32;
@@ -418,11 +412,8 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
     assertInt32(nIter, 'nIter');
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertNumber(fminHz, 'fminHz');
+    assertOptionalFmaxNotZero(r.fmaxHz);
     const call = () =>
       getSonareModule().mfccToAudio(
         coefficients.data,

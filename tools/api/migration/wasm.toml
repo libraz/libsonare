@@ -348,6 +348,7 @@ changed = "constructor without a Worker throws SonareError NotSupported instead 
 domain = "project"
 rule = "error-class-by-cause"
 test = "bindings/wasm/tests/vocal_edit_worker_client_node.test.ts::has no global Worker"
+
 [[entry]]
 kind = "method"
 old = "VocalEditSession.constructor"
@@ -1628,36 +1629,36 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "segmentLagToRecurrence"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
 old = "segmentLagToRecurrence"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
 old = "segmentPathEnhance"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
 old = "segmentPathEnhance"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
@@ -1679,19 +1680,19 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "segmentRecurrenceToLag"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
 old = "segmentRecurrenceToLag"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them"
 domain = "analysis"
 rule = "matrix-2d"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
@@ -14903,10 +14904,10 @@ rule = "collections"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMarkers"
-changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given"
+changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given; nonzero key-signature fields on another marker kind are refused by the core. A key-signature marker outside [-7, 7] raises RangeError."
 domain = "engine"
 rule = "engine-vocabulary"
-test = "bindings/wasm/tests/surface/engine.test.ts::assigns an id-less marker the lowest free id and never reuses one"
+test = "bindings/wasm/tests/new-apis.test.ts::refuses out-of-domain fifths on a key signature without replacing the snapshot"
 
 [[entry]]
 kind = "method"
@@ -16304,11 +16305,11 @@ entry = "./worklet"
 [[entry]]
 kind = "method"
 old = "SonareEngine.setMarkers"
-changed = "entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]"
+changed = "entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]. Nonzero keyFifths and true keyMinor are refused on markers of other kinds."
 domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
-test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads markers as a collection and returns the stored markers from setMarkers"
+test = "bindings/wasm/tests/new-apis.test.ts::refuses inactive key-signature fields and accepts them on a key signature"
 
 [[entry]]
 kind = "method"
@@ -20851,10 +20852,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.setMarker"
-changed = "setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError"
+changed = "setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError; nonzero key-signature fields on another marker kind are refused by the core"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/project.test.ts::sets a marker from one input object and reads every field back"
+test = "bindings/wasm/tests/project-mixer-counts.test.ts::refuses inactive key-signature fields and accepts them on a key signature"
 
 [[entry]]
 kind = "method"
@@ -22120,16 +22121,20 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midiCcLearn"
-removed = "call the module function midiCcLearn"
+to = "midiCcLearn"
+changed = "Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field."
+test = "bindings/wasm/tests/midi-cc-binding-paths.test.ts::learn ignores valid SysEx and names a payload on a channel event"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCcToBreakpoint"
-removed = "call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
+changed = "use the standalone midiCcToBreakpoint function; a valid SysEx event is refused as NotSupported (1.x rejected a Data64 word as InvalidParameter). A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)."
 domain = "project"
 rule = "midi-module-functions"
+to = "midiCcToBreakpoint"
+test = "bindings/wasm/tests/midi-cc-binding-paths.test.ts::reports a valid SysEx event as unsupported by CC conversion"
 
 [[entry]]
 kind = "method"
@@ -22189,6 +22194,7 @@ changed = "an unknown key at the top level, or inside a node, a connection or a 
 domain = "engine"
 rule = "individual"
 test = "bindings/wasm/tests/request-unknown-keys.test.ts::setGraph refuses an undeclared key by name before reading the graph"
+
 [[entry]]
 kind = "method"
 old = "SonareEngine.setMidiFx"
@@ -29664,7 +29670,7 @@ old = "CyclicTempogramRequest.sampleRate"
 changed = "required (was optional with a 22050 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be an integer"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be a number"
 
 [[entry]]
 kind = "field"
@@ -29673,7 +29679,7 @@ changed = "required (was optional with a 22050 default)"
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be an integer"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be a number"
 
 [[entry]]
 kind = "field"
@@ -30170,6 +30176,7 @@ old = "ValidateOptions"
 removed = "no call takes a validate option, and every call scans its input for NaN and infinity"
 domain = "core"
 rule = "input-always-scanned"
+
 [[entry]]
 kind = "field"
 old = "SurroundPan.distance"
@@ -37445,10 +37452,10 @@ test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::takes a Streami
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.magnitudeResponse"
-changed = "Pass lower-camel-case placement tokens such as stereo in place of Stereo."
+changed = "Pass lower-camel-case placement tokens such as stereo in place of Stereo.; frequencies outside [0, Nyquist] are refused by index instead of clamped"
 domain = "mastering"
 rule = "input-types"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.magnitudeResponse takes the current placement token"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::magnitudeResponse refuses invalid frequencies by index without clamping"
 
 [[entry]]
 kind = "function"
@@ -37798,3 +37805,19 @@ changed = "Omitted receiverSpacingM is up to 0.5 m, reduced when necessary to ke
 domain = "effects"
 rule = "individual"
 test = "bindings/wasm/tests/acoustic.test.ts::renders with an omitted spacing where the default pair would leave the room"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.addSample"
+changed = "Omit rootKey for MIDI 60. A written zero now raises RangeError."
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/sample-bank.test.ts::omits defaulted MIDI bytes and refuses explicit zero"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.addZone"
+changed = "Omit keyHi, velLo and velHi to use the default edge. A written zero on these fields raises RangeError. Zero keyLo is still a valid lower edge."
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/sample-bank.test.ts::omits defaulted MIDI bytes and refuses explicit zero"

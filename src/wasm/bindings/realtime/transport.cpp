@@ -4,10 +4,13 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 #include "c_api/engine_config_domains.h"
+#include "c_api/marker_input_validation.h"
 #include "c_api/ppq_domains.h"
 #include "realtime_engine_wasm.h"
 #include "util/parameter_checks.h"
@@ -222,12 +225,25 @@ void RealtimeEngineWasm::setMarkers(val markers) {
     const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
     sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
                                   ("markers[" + std::to_string(i) + "].ppq").c_str());
+    const uint8_t kind = byteProperty(marker, "kind", 0, "marker");
+    const int key_fifths_value = intProperty(marker, "keyFifths", 0);
+    if (key_fifths_value < std::numeric_limits<int8_t>::min() ||
+        key_fifths_value > std::numeric_limits<int8_t>::max()) {
+      throw WasmRangeError("keyFifths must be an integer in [-128, 127]");
+    }
+    const int8_t key_fifths = static_cast<int8_t>(key_fifths_value);
+    const uint8_t key_minor =
+        boolProperty(marker, "keyMinor", sonare::transport::Marker{}.key_minor) ? 1 : 0;
+    const std::string prefix = "markers[" + std::to_string(i) + "].";
+    sonare::util::check::with_camel_paths(
+        [&] {
+          sonare_c_detail::check_marker_key_signature_fields(kind, key_fifths, key_minor, prefix);
+        },
+        std::array<sonare::util::check::MemberKey, 0>{});
     ids.push_back(id);
     staged_strings.push_back(stringProperty(marker, "name", ""));
-    prepared.push_back({ppq, id, wasmCString(staged_strings.back(), "name"),
-                        static_cast<uint8_t>(intProperty(marker, "kind", 0)),
-                        static_cast<int8_t>(intProperty(marker, "keyFifths", 0)),
-                        boolProperty(marker, "keyMinor", sonare::transport::Marker{}.key_minor)});
+    prepared.push_back(
+        {ppq, id, wasmCString(staged_strings.back(), "name"), kind, key_fifths, key_minor != 0});
   }
   // Publish while both the old backing store and the staged strings are alive.
   // If snapshot allocation throws, the engine still references the untouched

@@ -213,6 +213,53 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
         assert minor.key_minor is True
 
 
+@pytest.mark.parametrize("kind", ["marker", "text", "lyric", "cuePoint"])
+@pytest.mark.parametrize(
+    ("key_fifths", "key_minor", "field"),
+    [(1, False, "key_fifths"), (0, True, "key_minor")],
+)
+def test_engine_markers_refuse_inactive_key_signature_fields(
+    kind: str, key_fifths: int, key_minor: bool, field: str
+) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        marker = EngineMarker(1.0, id=1, kind=kind, key_fifths=key_fifths, key_minor=key_minor)
+        with pytest.raises(SonareError) as caught:
+            engine.set_markers([marker])
+        assert caught.value.code == ErrorCode.INVALID_PARAMETER
+        assert str(caught.value) == (
+            f"RealtimeEngine.set_markers: markers[0].{field} must be 0 unless "
+            "markers[0].kind is key signature"
+        )
+        assert engine.markers() == []
+
+
+@pytest.mark.parametrize("fifths", [-8, 8])
+def test_engine_key_signature_marker_refuses_out_of_domain_fifths(fifths: int) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        engine.set_markers([EngineMarker(1, id=1, kind="keySignature", key_fifths=7)])
+        with pytest.raises(
+            SonareValueError,
+            match=r"^RealtimeEngine\.set_markers: markers\[0\]\.key_fifths "
+            r"must be an integer in \[-7, 7\]$",
+        ):
+            engine.set_markers([EngineMarker(2, id=1, kind="keySignature", key_fifths=fifths)])
+        assert engine.marker(1).key_fifths == 7
+
+
+def test_engine_key_signature_marker_accepts_boundary_fifths() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        engine.set_markers(
+            [
+                EngineMarker(1.0, id=1, kind="keySignature", key_fifths=-7),
+                EngineMarker(2.0, id=2, kind="keySignature", key_fifths=7, key_minor=True),
+            ]
+        )
+        assert [(marker.key_fifths, marker.key_minor) for marker in engine.markers()] == [
+            (-7, False),
+            (7, True),
+        ]
+
+
 def test_engine_prepare_rejects_nonfinite_and_out_of_range_sample_rates() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         for sample_rate in (float("nan"), 7999, 384001):

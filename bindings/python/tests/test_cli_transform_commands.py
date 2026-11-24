@@ -143,6 +143,19 @@ def test_mfcc_to_audio_matches_library(source: Path, tmp_path: Path) -> None:
     _assert_close(written, expected)
 
 
+@pytest.mark.parametrize("command", ["mel", "mel-to-audio", "mfcc-to-audio"])
+def test_mel_band_above_nyquist_names_the_flag(command: str, source: Path, tmp_path: Path) -> None:
+    output = tmp_path / f"{command}.wav"
+    args = [command, str(source), "--fmax-hz", "15000"]
+    if command != "mel":
+        args += ["--output", str(output)]
+    result = _run_cli(args)
+    assert result.returncode == EXIT_INVALID_PARAMETER
+    assert result.stderr.strip() == "Error: --fmax-hz must be finite and at most 11025"
+    assert result.stdout == ""
+    assert not output.exists()
+
+
 @pytest.mark.parametrize("command", ["preemphasis", "deemphasis", "mel-to-audio", "mfcc-to-audio"])
 def test_missing_output_is_a_usage_refusal(command: str, source: Path) -> None:
     result = _run_cli([command, str(source)])

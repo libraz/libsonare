@@ -634,6 +634,75 @@ def test_matrix_inputs_refuse_non_finite_values(name: str) -> None:
         call(bad)
 
 
+@pytest.mark.parametrize(("shape", "subject"), [((0, 1), "n_bins"), ((1, 0), "n_frames")])
+def test_pcen_refuses_empty_matrix_dimensions(shape: tuple[int, int], subject: str) -> None:
+    with pytest.raises(
+        SonareValueError, match=rf"^pcen: {subject} must be an integer in \[1, 2147483647\]$"
+    ):
+        libsonare.pcen(np.empty(shape, dtype=np.float32))
+
+
+@pytest.mark.parametrize(
+    ("entry", "shape", "message"),
+    [
+        ("pcen", (4, 6), "contains a non-finite sample at index 8"),
+    ],
+)
+def test_array_domains_name_the_bad_matrix_element(
+    entry: str, shape: tuple[int, int], message: str
+) -> None:
+    call, subject = MATRIX_INPUT_CALLS[entry]
+    values = np.ones(shape, dtype=np.float32)
+    values[1, 2] = np.nan
+    with pytest.raises(SonareValueError, match=rf"^{entry}: {subject} {message}$"):
+        call(values)
+
+
+@pytest.mark.parametrize(
+    ("entry", "offsets", "options"),
+    [
+        ("segment_recurrence_to_lag", ((3, 2),), {"pad": False}),
+        ("segment_lag_to_recurrence", ((3, 2),), {}),
+        ("segment_path_enhance", ((0, 1), (1, 2), (2, 3)), {"win": 3, "n_filters": 1}),
+    ],
+)
+def test_segment_matrix_transforms_carry_non_finite_cells(entry, offsets, options) -> None:
+    clean = np.arange(1, 17, dtype=np.float32).reshape(4, 4)
+    bad = clean.copy()
+    bad[1, 2] = np.nan
+    call = getattr(libsonare, entry)
+    expected = call(clean, **options)
+    actual = call(bad, **options)
+    assert actual.shape == expected.shape
+    assert actual.dtype == np.float32
+    for offset in offsets:
+        assert expected[offset] > 0
+        assert np.isnan(actual[offset])
+        expected[offset] = np.nan
+    np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize("entry", ["cyclic_tempogram", "tempogram", "plp"])
+def test_rhythm_envelopes_name_the_bad_sample(entry: str) -> None:
+    envelope = np.ones(8, dtype=np.float32)
+    envelope[1] = np.nan
+    with pytest.raises(
+        SonareValueError,
+        match=rf"^{entry}: onset_envelope contains a non-finite sample at index 1$",
+    ):
+        getattr(libsonare, entry)(envelope, SR, win_length=4)
+
+
+def test_cyclic_tempogram_refuses_envelope_before_window_and_bpm() -> None:
+    envelope = np.ones(4200, dtype=np.float32)
+    envelope[-1] = np.nan
+    with pytest.raises(
+        SonareValueError,
+        match=r"^cyclic_tempogram: onset_envelope contains a non-finite sample at index 4199$",
+    ):
+        libsonare.cyclic_tempogram(envelope, SR, win_length=0, bpm_min=np.nan)
+
+
 def test_segment_inputs_that_must_be_square_are_refused() -> None:
     with pytest.raises(SonareValueError, match="recurrence must be square"):
         libsonare.segment_path_enhance(np.ones((4, 5), dtype=np.float32), 3)
@@ -1222,3 +1291,10 @@ _INT_MAX = "2147483647"
 def test_a_library_refusal_states_its_cause(call: Callable[[], object], text: str) -> None:
     with pytest.raises(SonareValueError, match=f"^{re.escape(text)}$"):
         call()
+
+
+@pytest.mark.parametrize("edge", [1e-50, -1e-50])
+def test_mel_refuses_a_supplied_edge_that_rounds_to_zero(edge: float) -> None:
+    samples = np.full(2048, 0.1, dtype=np.float32)
+    with pytest.raises(libsonare.SonareValueError, match="omit it for the default"):
+        libsonare.mel_spectrogram(samples, sample_rate=22050, fmax_hz=edge)

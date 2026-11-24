@@ -453,26 +453,21 @@ class TestZeroCrossingsInput:
 class TestNonFiniteInputYieldsNoPlausibleResult:
     """Input with no usable data must fail rather than resolve to a normal answer."""
 
-    def test_magnitude_response_separates_an_empty_curve_from_a_non_finite_frequency(self):
-        # The two halves of the buffer rule part company here, so the derived
-        # coverage module cannot pin it: an empty frequency list is a defined
-        # empty curve, which exempts the method there and takes the non-finite
-        # half out of its reach with it. A NaN frequency is not a curve anyone
-        # can draw, and it would otherwise clamp to [0, Nyquist] and come back
-        # as a plausible dB value.
+    @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf, -1.0, SR / 2 + 1])
+    def test_magnitude_response_refuses_frequencies_outside_its_domain(self, value):
         from libsonare import StreamingEqualizer
 
         with StreamingEqualizer(sample_rate=SR, max_block_size=512) as eq:
             assert eq.magnitude_response([]).size == 0
-            assert len(eq.magnitude_response([100.0, 1000.0])) == 2
+            assert np.isfinite(eq.magnitude_response([0.0, SR / 2])).all()
             with pytest.raises(
                 SonareValueError,
                 match=(
                     r"^StreamingEqualizer\.magnitude_response: "
-                    r"frequencies_hz contains a non-finite sample at index 1$"
+                    rf"frequencies_hz\[1\] must be finite and in \[0, {SR // 2}\]$"
                 ),
             ):
-                eq.magnitude_response([100.0, math.nan, 1000.0])
+                eq.magnitude_response([100.0, value, 1000.0])
 
 
 class TestPositiveSmoke:

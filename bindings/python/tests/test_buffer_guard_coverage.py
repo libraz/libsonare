@@ -64,12 +64,9 @@ _BUFFER_TYPES = frozenset(
 # function of this shape must preflight.
 #
 # Exempt is exempt from the *empty* half only. Non-finite input still has to be
-# refused; what differs is where. Most of these leave it to the C ABI, which
-# answers with its own generic code; `StreamingEqualizer.magnitude_response`
-# scans for it in the facade and names the argument, which is strictly better
-# and is pinned in `test_empty_nan_guards.py` rather than here — this module's
-# two guard tests skip an exemption entirely, so an exemption silently drops the
-# non-finite half of the rule along with the empty half.
+# refused unless it marks an unvoiced frame. The empty-input exemptions skip
+# this module's non-finite test too; `test_empty_nan_guards.py` pins the
+# equalizer's indexed refusal separately.
 #
 # Each entry was decided by calling the function with an empty buffer and
 # keeping whatever it already did, not by assumption; `test_exemptions_accept_
@@ -388,7 +385,12 @@ def _guard_parameters(known: dict[str, str]) -> list[Any]:
 
 
 _GUARD_PARAMETERS = _guard_parameters(_REALTIME_BLOCK_PATH)
-_EMPTY_GUARD_PARAMETERS = _guard_parameters(_REALTIME_BLOCK_PATH | _EMPTY_BLOCK_ACCEPTED)
+_EMPTY_ARRAY_RESULTS = {"resample", "zero_crossings"}
+_EMPTY_GUARD_PARAMETERS = [
+    parameter
+    for parameter in _guard_parameters(_REALTIME_BLOCK_PATH | _EMPTY_BLOCK_ACCEPTED)
+    if not (isinstance(parameter, str) and parameter in _EMPTY_ARRAY_RESULTS)
+]
 
 
 def _invoke(name: str, entry: _EntryPoint, args: list[Any], kwargs: dict[str, Any]) -> Any:
@@ -583,6 +585,15 @@ def _assert_names_the_entry_point(name: str, message: str) -> None:
     assert invoked in message, f"{name}: message does not name the entry point"
 
 
+@pytest.mark.parametrize("name", sorted(_EMPTY_ARRAY_RESULTS))
+def test_empty_buffer_returns_empty_for_defined_transforms(name: str) -> None:
+    entry = _ENTRY_POINTS[name]
+    args, kwargs = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
+    result = _invoke(name, entry, args, kwargs)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == (0,)
+
+
 @pytest.mark.parametrize("name", _EMPTY_GUARD_PARAMETERS)
 def test_empty_buffer_is_rejected(name: str) -> None:
     entry = _ENTRY_POINTS[name]
@@ -595,7 +606,8 @@ def test_empty_buffer_is_rejected(name: str) -> None:
 @pytest.mark.parametrize("name", _GUARD_PARAMETERS)
 def test_non_finite_buffer_is_rejected(name: str) -> None:
     entry = _ENTRY_POINTS[name]
-    args, kwargs = _call_arguments(name, entry.signature, np.full(64, np.nan, dtype=np.float32))
+    value = np.inf if name == "pitch_tuning" else np.nan
+    args, kwargs = _call_arguments(name, entry.signature, np.full(64, value, dtype=np.float32))
     with pytest.raises(SonareValueError) as excinfo:
         _invoke(name, entry, args, kwargs)
     _assert_names_the_entry_point(name, str(excinfo.value))

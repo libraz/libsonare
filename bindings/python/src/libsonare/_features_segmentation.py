@@ -35,7 +35,7 @@ _SEGMENT_LINKAGES: tuple[str, ...] = get_args(Literal["average", "single", "comp
 def _square_input(
     name: str, matrix: npt.ArrayLike, *, arg_name: str
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
-    c_matrix, rows, cols = _to_c_float_matrix(matrix, arg_name=arg_name)
+    c_matrix, rows, cols = _to_c_float_matrix(matrix, arg_name=arg_name, scan=False)
     if rows != cols:
         raise _refuse(f"{arg_name} must be square")
     return c_matrix, rows
@@ -130,7 +130,7 @@ def segment_recurrence_to_lag(
 
     Matches ``librosa.segment.recurrence_to_lag``: ``lag[l, i] = rec[(i + l) % n_lags, i]``
     with ``n_lags = 2n`` when ``pad`` (negative lags wrapped into the lower half) and ``n``
-    otherwise. ``recurrence`` is a 2-D array of shape ``(n, n)``.
+    otherwise. The input has shape ``(n, n)``. Non-finite cells are carried to their lag positions.
     """
     c_recurrence, n = _square_input("segment_recurrence_to_lag", recurrence, arg_name="recurrence")
     lib = _get_lib()
@@ -148,9 +148,10 @@ def segment_lag_to_recurrence(lag: npt.ArrayLike) -> np.ndarray:
     """Convert a lag matrix back to an ``(n, n)`` recurrence matrix.
 
     ``lag`` is a 2-D array of shape ``(n_lags, n)``, where ``n_lags`` is ``n`` for the
-    unpadded layout and ``2 * n`` for the padded one.
+    unpadded layout and ``2 * n`` for the padded one. Non-finite cells are carried to their
+    recurrence positions.
     """
-    c_lag, n_lags, n_rows = _to_c_float_matrix(lag, arg_name="lag")
+    c_lag, n_lags, n_rows = _to_c_float_matrix(lag, arg_name="lag", scan=False)
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(
@@ -229,6 +230,7 @@ def segment_path_enhance(
 ) -> np.ndarray:
     """Enhance diagonal paths in a square recurrence matrix of shape ``(n, n)``.
 
+    Non-finite cells propagate through the filter window.
     ``min_ratio`` is the slowest tempo ratio; ``None`` is ``1 / max_ratio``.
     """
     c_recurrence, n = _square_input("segment_path_enhance", recurrence, arg_name="recurrence")

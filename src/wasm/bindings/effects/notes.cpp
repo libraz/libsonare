@@ -446,15 +446,10 @@ UnmatchedTargetPolicy unmatchedTargetPolicyFromVal(const val& request) {
 NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
   NoteTargetAssignConfig config;
   config.unmatched_policy = unmatchedTargetPolicyFromVal(request);
-  config.min_overlap_ratio = floatProperty(request, "minOverlapRatio", config.min_overlap_ratio);
+  config.min_overlap_ratio =
+      domainFloatProperty(request, "minOverlapRatio", config.min_overlap_ratio);
   config.max_correction_semitones =
-      floatProperty(request, "maxCorrectionSemitones", config.max_correction_semitones);
-  // Refused rather than left to the core, which reads a bad ratio as the
-  // strictest one and saturates a bad bound to zero -- both in-domain values
-  // nothing downstream can tell from a deliberate one. This is the C ABI's
-  // resolve_note_target_config, which this surface does not go through.
-  sonare::util::check::in_range(config.min_overlap_ratio, 0.0, 1.0, "minOverlapRatio");
-  sonare::util::check::at_least(config.max_correction_semitones, 0.0, "maxCorrectionSemitones");
+      domainFloatProperty(request, "maxCorrectionSemitones", config.max_correction_semitones);
   return config;
 }
 
@@ -541,8 +536,14 @@ val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, v
     core_notes.push_back(assignableNoteFromVal(notes[i], "notes[" + std::to_string(i) + "]"));
   }
 
-  const std::size_t assigned =
-      editing::note_model::assign_note_targets(core_notes, sample_rate, core_targets, config);
+  const std::size_t assigned = [&] {
+    try {
+      return editing::note_model::assign_note_targets(core_notes, sample_rate, core_targets,
+                                                      config);
+    } catch (const sonare::SonareParameterRefusal& refusal) {
+      throw sonare_field_spelling::wasm::Spelled(refusal, "assign_note_targets", "config");
+    }
+  }();
 
   val out_notes = val::array();
   for (std::size_t i = 0; i < count; ++i) {

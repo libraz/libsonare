@@ -896,6 +896,27 @@ TEST_CASE("CLI band bounds leave an omitted edge to the library and refuse 0", "
   std::remove(out.c_str());
 }
 
+TEST_CASE("CLI refuses Mel bands above input Nyquist under the flag spelling", "[cli][mel]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_mel_above_nyquist.wav");
+  for (const std::string& invocation :
+       {" mel " + TEST_WAV + " --fmax-hz 15000 --json -q",
+        " mel-to-audio " + TEST_WAV + " -o " + out + " --fmax-hz 15000 -q",
+        " mfcc-to-audio " + TEST_WAV + " -o " + out + " --fmax-hz 15000 -q"}) {
+    CAPTURE(invocation);
+    const auto result = exec_command_split(CLI + invocation);
+    CAPTURE(result.err);
+    REQUIRE(result.exit_code == 3);
+    REQUIRE(result.out.empty());
+    const auto start = result.err.find_first_not_of("\r\n ");
+    const auto end = result.err.find_last_not_of("\r\n ");
+    REQUIRE(start != std::string::npos);
+    REQUIRE(result.err.substr(start, end - start + 1) ==
+            "Error: --fmax-hz must be finite and at most 11025");
+  }
+  std::remove(out.c_str());
+}
+
 TEST_CASE("CLI generator and edit flags carry their unit", "[cli]") {
   create_test_wav(TEST_WAV);
   const std::string out = unique_temp_path("_unit_flags.wav");

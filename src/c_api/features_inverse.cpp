@@ -15,10 +15,6 @@
 
 namespace {
 
-// The core's names for the inverse transforms' inputs, as the C entries spell them.
-const std::array<CName, 4> kInverseNames{
-    {{"M", "mel"}, {"mfcc", "coefficients"}, {"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
-
 // The CQT-family core names, as the CQT and VQT inverse entries spell them.
 const std::array<CName, 1> kCqtInverseNames{{{"fmin", "fmin_hz"}}};
 
@@ -166,7 +162,7 @@ SonareError sonare_mel_to_stft(const float* mel, size_t input_length, int n_mels
   });
   SONARE_C_REQUIRE_NONNULL(out);
   std::vector<float> stft = with_c_names(
-      kInverseNames, [&] { return mel_to_stft(mel, n_mels, n_frames, config, sample_rate); });
+      kMelInverseNames, [&] { return mel_to_stft(mel, n_mels, n_frames, config, sample_rate); });
   return fill_inverse_result(stft, n_fft / 2 + 1, n_frames, out);
   SONARE_C_CATCH
 }
@@ -204,7 +200,7 @@ SonareError sonare_mel_to_audio(const float* mel, size_t input_length, int n_mel
   });
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  Audio audio = with_c_names(kInverseNames, [&] {
+  Audio audio = with_c_names(kMelInverseNames, [&] {
     return mel_to_audio(mel, n_mels, n_frames, config, n_iter, sample_rate);
   });
   return fill_audio_samples(audio, out, out_length);
@@ -352,7 +348,7 @@ SonareError sonare_mfcc_to_mel(const float* coefficients, size_t input_length, i
       validate_offline_audio_samples("coefficients", coefficients, input_length, 0);
     });
   });
-  std::vector<float> mel = with_c_names(kInverseNames, [&] {
+  std::vector<float> mel = with_c_names(kMelInverseNames, [&] {
     return mfcc_to_mel(coefficients, n_mfcc, n_frames, n_mels, resolved.lifter);
   });
   SonareInverseResult result{};
@@ -391,7 +387,7 @@ SonareError sonare_mfcc_to_audio(const float* coefficients, size_t input_length,
   config.fmax = fmax_hz;
   config.htk = resolved.htk != 0;
   with_c_names(kMfccLifterOptionName, [&] {
-    with_c_names(kInverseNames, [&] {
+    with_c_names(kMelInverseNames, [&] {
       admit_inverse_mel(MelInverseKind::kMfccAudio, input_length, n_mfcc, n_frames, sample_rate,
                         config, n_iter, resolved.lifter, [&] {
                           validate_offline_audio_samples("mfcc", coefficients, input_length, 0);
@@ -400,7 +396,7 @@ SonareError sonare_mfcc_to_audio(const float* coefficients, size_t input_length,
   });
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  Audio audio = with_c_names(kInverseNames, [&] {
+  Audio audio = with_c_names(kMelInverseNames, [&] {
     return mfcc_to_audio(coefficients, n_mfcc, n_frames, config, n_iter, sample_rate,
                          resolved.lifter);
   });

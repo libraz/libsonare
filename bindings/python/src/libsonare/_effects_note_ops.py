@@ -9,6 +9,7 @@ from typing import Literal, cast
 
 import numpy as np
 
+from . import _narrowing
 from ._effects_note_model import (
     NoteObject,
     NoteObjectInput,
@@ -60,7 +61,6 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _validate_samples,
-    _validate_scalar,
 )
 
 # The policy is published as a name, so the ordinals live here and go no further
@@ -934,14 +934,14 @@ def assign_note_targets(
     config = SonareNoteTargetAssignConfig()
     config.unmatched_policy = policy
     if min_overlap_ratio is not None:
-        config.min_overlap_ratio = _validate_scalar(min_overlap_ratio, "min_overlap_ratio")
+        config.min_overlap_ratio = _narrowing._domain_float(min_overlap_ratio, "min_overlap_ratio")
     if max_correction_semitones is not None:
-        config.max_correction_semitones = _validate_scalar(
+        config.max_correction_semitones = _narrowing._domain_float(
             max_correction_semitones, "max_correction_semitones"
         )
 
     c_notes, note_count, _envelopes, _envelope_count, respelled = _notes_to_c(
-        notes, sample_rate, require_span=True
+        notes, sample_rate, require_span=True, allow_invalid_span=True
     )
     c_targets, target_count = _note_targets_to_c(targets)
     assigned = ctypes.c_size_t()

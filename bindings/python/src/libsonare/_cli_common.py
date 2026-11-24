@@ -423,6 +423,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 # The librosa keyword for the rate, as a word of a refusal; the CLI has no such option.
 _LIBROSA_RATE_WORD = re.compile(r"(?<![\w.-])sr(?![\w(])")
 
+_MEL_FLAG_SUBJECTS = {
+    subject: f"--{edge}-hz"
+    for edge in ("fmin", "fmax")
+    for subject in (edge, f"{edge}_hz", f"options.{edge}_hz")
+}
+
+
+def _mel_flag_refusals() -> contextlib.AbstractContextManager[None]:
+    return _cli_refusal_subjects(_MEL_FLAG_SUBJECTS, bare=True)
+
 
 def _error_message(exc: BaseException) -> str:
     """The one-line text reported for ``exc``.

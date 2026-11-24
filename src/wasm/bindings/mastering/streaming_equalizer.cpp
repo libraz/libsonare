@@ -242,8 +242,12 @@ class EqualizerWrapper {
     const int placement_id = checkedIntFromVal(placement, "placement");
     std::vector<float> frequencies = float32ArrayToVector(frequencies_hz, "frequenciesHz");
     std::vector<float> out(frequencies.size(), 0.0f);
-    processor_.magnitude_response_db(eqPlacementFromInt(placement_id), frequencies.data(),
-                                     frequencies.size(), out.data());
+    sonare::util::check::with_camel_paths(
+        [&] {
+          processor_.magnitude_response_db(eqPlacementFromInt(placement_id), frequencies.data(),
+                                           frequencies.size(), out.data());
+        },
+        std::array<sonare::util::check::MemberKey, 0>{});
     return vectorToFloat32Array(out);
   }
 

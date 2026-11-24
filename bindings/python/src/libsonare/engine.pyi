@@ -172,7 +172,8 @@ class RealtimeEngine:
 
         An :class:`EngineMarkerInput` whose ``id`` is ``None`` is allocated the lowest
         id above every id this engine has stored or assigned that the list does not
-        carry.
+        carry. A nonzero key_fifths or true key_minor is refused unless the marker
+        kind is keySignature.
         """
         ...
     def markers(self) -> list[EngineMarker]: ...

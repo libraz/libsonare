@@ -506,3 +506,54 @@ describe('the whole chain, on a segmented take', () => {
     expect(maxDifference(samples, rendered)).toBeGreaterThan(0.05);
   });
 });
+
+describe('assignNoteTargets uses the library domains', () => {
+  const run = (notes: readonly NoteObject[], options: Record<string, unknown> = {}) =>
+    assignNoteTargets({ notes, sampleRate: SR, targets: [], ...options });
+
+  it('refuses both config domains by their caller names and accepts their boundaries', () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ minOverlapRatio: -0.1 }, 'minOverlapRatio must be finite and in [0, 1]'],
+      [{ minOverlapRatio: 1.1 }, 'minOverlapRatio must be finite and in [0, 1]'],
+      [{ minOverlapRatio: Number.NaN }, 'minOverlapRatio must be finite and in [0, 1]'],
+      [
+        { minOverlapRatio: Number.POSITIVE_INFINITY },
+        'minOverlapRatio must be finite and in [0, 1]',
+      ],
+      [{ maxCorrectionSemitones: -1 }, 'maxCorrectionSemitones must be finite and at least 0'],
+      [
+        { maxCorrectionSemitones: Number.NaN },
+        'maxCorrectionSemitones must be finite and at least 0',
+      ],
+      [
+        { maxCorrectionSemitones: Number.POSITIVE_INFINITY },
+        'maxCorrectionSemitones must be finite and at least 0',
+      ],
+    ];
+    for (const [options, message] of cases) {
+      expect(() => run([noteAt(0, 1, A4_HZ)], options)).toThrow(
+        new RangeError(`assignNoteTargets: ${message}`),
+      );
+    }
+    expect(
+      run([noteAt(0, 1, A4_HZ)], { minOverlapRatio: 0, maxCorrectionSemitones: 0 }),
+    ).toHaveProperty('assignedCount', 0);
+    expect(
+      run([noteAt(0, 1, A4_HZ)], { minOverlapRatio: 1, maxCorrectionSemitones: 0 }),
+    ).toHaveProperty('assignedCount', 0);
+  });
+
+  it('refuses invalid note spans and accepts a zero onset with a positive offset', () => {
+    expectRefusal(
+      () => run([noteAt(-1, 1, A4_HZ)]),
+      RangeError,
+      /^assignNoteTargets: notes\[0\]\.onsetSample must be an integer of at least 0$/,
+    );
+    expectRefusal(
+      () => run([noteAt(0, 0, A4_HZ)]),
+      RangeError,
+      /^assignNoteTargets: notes\[0\]\.offsetSample must be greater than notes\[0\]\.onsetSample$/,
+    );
+    expect(run([noteAt(0, 1, A4_HZ)])).toHaveProperty('assignedCount', 0);
+  });
+});

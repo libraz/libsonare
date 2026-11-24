@@ -204,7 +204,7 @@ export interface NoteSegmentsRequest {
 
 /** Request for {@link pitchTuning}. */
 export interface PitchTuningRequest {
-  /** Frequencies in Hz to estimate the tuning offset from. */
+  /** Frequencies in Hz; NaN marks an unvoiced value, while either infinity is refused by index. */
   frequencies: Float32Array;
   /** Search resolution as a fraction of a bin. Default 0.01. */
   resolution?: number;

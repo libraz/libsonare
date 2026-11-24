@@ -287,7 +287,7 @@ export const ROWS: Row[] = [
       },
       {
         fields: ['sampleRate'],
-        error: 'TypeError: cyclicTempogram: sampleRate must be an integer',
+        error: 'TypeError: cyclicTempogram: sampleRate must be a number',
       },
     ],
   },

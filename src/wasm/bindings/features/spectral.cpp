@@ -12,7 +12,8 @@
 
 namespace {
 
-std::vector<float> load_segment_matrix(val input, int rows, int cols, const char* data_name) {
+std::vector<float> load_segment_matrix(val input, int rows, int cols, const char* data_name,
+                                       bool validate_finite = true) {
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(cols),
@@ -21,7 +22,7 @@ std::vector<float> load_segment_matrix(val input, int rows, int cols, const char
     throw WasmRangeError(std::string(data_name) + " length must equal rows * cols");
   }
   std::vector<float> data = float32ArrayToVector(input, data_name);
-  for (std::size_t i = 0; i < data.size(); ++i) {
+  for (std::size_t i = 0; validate_finite && i < data.size(); ++i) {
     if (!std::isfinite(data[i])) {
       throw WasmRangeError(std::string(data_name) + " contains a non-finite value at index " +
                            std::to_string(i));
@@ -272,7 +273,7 @@ val js_segment_recurrence_matrix(val data, const val& rows_val, const val& cols_
 
 val js_segment_recurrence_to_lag(val recurrence, const val& n_val, bool pad) {
   const int n = domainNumberFromVal<int>(n_val, "n", sonare_c_detail::kSegmentMatrixExtentDomain);
-  std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence");
+  std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence", false);
   return segment_matrix_result(recurrence_to_lag(values.data(), n, pad), pad ? 2 * n : n, n);
 }
 
@@ -281,7 +282,7 @@ val js_segment_lag_to_recurrence(val lag, const val& rows_val, const val& lags_v
       domainNumberFromVal<int>(rows_val, "rows", sonare_c_detail::kSegmentMatrixExtentDomain);
   const int lags =
       domainNumberFromVal<int>(lags_val, "lags", sonare_c_detail::kSegmentMatrixExtentDomain);
-  std::vector<float> values = load_segment_matrix(lag, lags, rows, "lag");
+  std::vector<float> values = load_segment_matrix(lag, lags, rows, "lag", false);
   return segment_matrix_result(lag_to_recurrence(values.data(), rows, lags), rows, rows);
 }
 
@@ -323,7 +324,7 @@ val js_segment_path_enhance(val recurrence, const val& n_val, const val& win_val
                                                  sonare_c_detail::kPathEnhanceMinRatioDomain);
   const int n_filters = domainNumberFromVal<int>(n_filters_val, "nFilters",
                                                  sonare_c_detail::kPathEnhanceFilterCountDomain);
-  std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence");
+  std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence", false);
   return segment_matrix_result(path_enhance(values.data(), n, win, max_ratio, min_ratio, n_filters),
                                n, n);
 }

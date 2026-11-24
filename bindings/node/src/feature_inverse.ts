@@ -13,6 +13,7 @@ import {
   assertFloat32Array,
   assertFloatFields,
   assertInt32,
+  assertMelFmaxOmitted,
   assertPositiveFloatValue,
   assertSafeInteger,
   assertSampleRate,
@@ -52,7 +53,7 @@ export interface MelToStftRequest {
   nFft?: number;
   /** Lower band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Upper band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper edge in Hz. Omit it for Nyquist; explicit 0 is refused; otherwise it must be above fminHz and at most Nyquist. */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -116,7 +117,7 @@ export interface MfccToAudioRequest extends MfccToMelRequest {
   hopLength?: number;
   /** Lower mel band edge in Hz. Default `0`. */
   fminHz?: number;
-  /** Upper mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  /** Upper edge in Hz. Omit it for Nyquist; explicit 0 is refused; otherwise it must be above fminHz and at most Nyquist. */
   fmaxHz?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -243,16 +244,12 @@ export function melToStft(request: MelToStftRequest): Matrix2D;
 export function melToStft(...args: unknown[]): Matrix2D {
   return withEntry('melToStft', () => {
     const r = requestOnly<MelToStftRequest>('melToStft', args);
-    assertMatrix2D(r.power, 'power');
+    assertMatrix2D(r.power, 'power', false);
     const sampleRate = r.sampleRate ?? 22050;
     const nFft = r.nFft ?? 2048;
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertMelFmaxOmitted(r.fmaxHz);
     const out = addon.melToStft(
       r.power.data,
       r.power.rows,
@@ -272,18 +269,14 @@ export function melToAudio(request: MelToAudioRequest): Float32Array;
 export function melToAudio(...args: unknown[]): Float32Array {
   return withEntry('melToAudio', () => {
     const r = requestOnly<MelToAudioRequest>('melToAudio', args);
-    assertMatrix2D(r.power, 'power');
+    assertMatrix2D(r.power, 'power', false);
     const sampleRate = r.sampleRate ?? 22050;
     const nFft = r.nFft ?? 2048;
     const hopLength = resolveResynthesisHop(r.hopLength);
     const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertMelFmaxOmitted(r.fmaxHz);
     return addon.melToAudio(
       r.power.data,
       r.power.rows,
@@ -400,18 +393,14 @@ export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
 export function mfccToAudio(...args: unknown[]): Float32Array {
   return withEntry('mfccToAudio', () => {
     const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
-    assertMatrix2D(r.coefficients, 'coefficients');
+    assertMatrix2D(r.coefficients, 'coefficients', false);
     const sampleRate = r.sampleRate ?? 22050;
     const nFft = r.nFft ?? 2048;
     const hopLength = resolveResynthesisHop(r.hopLength);
     const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
-    assertFloatFields({ fminHz, fmaxHz });
-    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined) {
-      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
-    }
+    assertMelFmaxOmitted(r.fmaxHz);
     return addon.mfccToAudio(
       r.coefficients.data,
       r.coefficients.rows,

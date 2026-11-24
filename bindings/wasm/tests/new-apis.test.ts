@@ -1549,6 +1549,52 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('refuses out-of-domain fifths on a key signature without replacing the snapshot', () => {
+      const check = (engine: RealtimeEngine) => {
+        engine.setMarkers([{ id: 1, ppq: 1, kind: 'keySignature', keyFifths: 7 }]);
+        const before = engine.markers();
+        for (const keyFifths of [-8, 8]) {
+          expect(() =>
+            engine.setMarkers([{ id: 1, ppq: 2, kind: 'keySignature', keyFifths }]),
+          ).toThrow(
+            new RangeError(
+              'RealtimeEngine.setMarkers: markers[0].keyFifths must be an integer in [-7, 7]',
+            ),
+          );
+          expect(engine.markers()).toEqual(before);
+        }
+      };
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        check(engine);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('refuses inactive key-signature fields and accepts them on a key signature', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      for (const [field, value] of [
+        ['keyFifths', 1],
+        ['keyMinor', true],
+      ] as const) {
+        expect(() =>
+          engine.setMarkers([{ id: 1, ppq: 0, kind: 'marker', [field]: value } as never]),
+        ).toThrow(
+          new RangeError(
+            `RealtimeEngine.setMarkers: markers[0].${field} must be 0 unless markers[0].kind is key signature`,
+          ),
+        );
+      }
+      for (const keyFifths of [-7, 7]) {
+        engine.setMarkers([{ id: 1, ppq: 0, kind: 'keySignature', keyFifths, keyMinor: false }]);
+        expect(engine.markers()[0]).toMatchObject({ keyFifths, keyMinor: false });
+      }
+      engine.setMarkers([{ id: 1, ppq: 0, kind: 'keySignature', keyFifths: 0, keyMinor: true }]);
+      expect(engine.markers()[0]).toMatchObject({ keyFifths: 0, keyMinor: true });
+      engine.destroy();
+    });
+
     it('round-trips marker kind and key signature through setMarkers/markers', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setMarkers([

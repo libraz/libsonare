@@ -1090,7 +1090,7 @@ export function pcen(request: PcenRequest): Matrix2D;
 export function pcen(...args: unknown[]): Matrix2D {
   return withEntry('pcen', () => {
     const r = requestOnly<PcenRequest>('pcen', args);
-    const values = assertMatrix2D(r.values, 'values');
+    const values = assertMatrix2D(r.values, 'values', false, true);
     const options: Record<string, number> = {};
     for (const key of PCEN_OPTION_KEYS) {
       if (!isAbsent(r[key])) {

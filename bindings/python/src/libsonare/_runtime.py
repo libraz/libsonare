@@ -77,14 +77,14 @@ _ERROR_REASON_TOKENS = frozenset(get_args(ErrorReason))
 # Python API's normal C-to-Python spelling. The scope is one synchronous call.
 _CliRefusalSubjects = Mapping[str, str] | Callable[[str], str | None]
 
-_CLI_REFUSAL_SUBJECTS: contextvars.ContextVar[_CliRefusalSubjects | None] = contextvars.ContextVar(
-    "sonare_cli_refusal_subjects", default=None
+_CLI_REFUSAL_SUBJECTS: contextvars.ContextVar[tuple[_CliRefusalSubjects, bool] | None] = (
+    contextvars.ContextVar("sonare_cli_refusal_subjects", default=None)
 )
 
 
 @contextlib.contextmanager
-def _cli_refusal_subjects(subjects: _CliRefusalSubjects) -> Iterator[None]:
-    token = _CLI_REFUSAL_SUBJECTS.set(subjects)
+def _cli_refusal_subjects(subjects: _CliRefusalSubjects, *, bare: bool = False) -> Iterator[None]:
+    token = _CLI_REFUSAL_SUBJECTS.set((subjects, bare))
     try:
         yield
     finally:
@@ -180,7 +180,7 @@ def _render_as_given(
     root: str | None,
     respelled: Mapping[str, _Respelling] | None,
     document_root: str | None = None,
-) -> tuple[str, bool] | None:
+) -> tuple[str, bool, bool] | None:
     """Render the last parameter refusal under the names, units and None the caller wrote.
 
     ``root.`` is dropped from each subject under it. A subject ``respelled`` names is then
@@ -198,6 +198,8 @@ def _render_as_given(
     subjects = []
     scales = []
     in_argument = False
+    cli_mapped = False
+    cli_subjects, cli_bare = _CLI_REFUSAL_SUBJECTS.get() or ({}, False)
     for index in range(count):
         raw = lib.sonare_last_refusal_subject(_to_c_size_t(index, "index"))
         recorded = (raw or b"").decode("utf-8")
@@ -206,7 +208,6 @@ def _render_as_given(
             head, dot, rest = subject.partition(".")
             if dot and head == root:
                 subject = rest
-        cli_subjects = _CLI_REFUSAL_SUBJECTS.get()
         if isinstance(cli_subjects, Mapping):
             cli_subject = cli_subjects.get(recorded) or cli_subjects.get(subject)
         elif cli_subjects is not None:
@@ -217,6 +218,7 @@ def _render_as_given(
         scale = 1.0
         if cli_subject is not None:
             subject = cli_subject
+            cli_mapped = cli_bare
             if cli_subjects is not None and not isinstance(cli_subjects, Mapping):
                 in_argument = True
         elif given is not None:
@@ -248,7 +250,7 @@ def _render_as_given(
     ):
         return None
     try:
-        return ctypes.string_at(out).decode("utf-8"), in_argument
+        return ctypes.string_at(out).decode("utf-8"), in_argument, cli_mapped
     finally:
         lib.sonare_free_string(out)
 
@@ -291,7 +293,10 @@ def _check(
         argument = rendered is not None and rendered[1]
         detail_str = (rendered[0] if rendered is not None else "") or detail_str
         if detail_str:
-            raise _coded_error(rc, detail_str, argument=argument, native_reason=True)
+            error = _coded_error(rc, detail_str, argument=argument, native_reason=True)
+            if rendered is not None and rendered[2]:
+                vars(error)["_cli_error_message"] = detail_str
+            raise error
         raise _generic_error(rc, native_reason=True)
 
 

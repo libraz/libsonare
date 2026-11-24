@@ -85,6 +85,7 @@ export const READER_FAMILIES: Readonly<
     DomainDoubleProperty: 'refuse',
     DomainFloatProperty: 'refuse',
     DomainProperty: 'refuse',
+    OptionalDomainProperty: 'refuse',
     DoubleProperty: 'refuse',
     AutoFiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
@@ -436,6 +437,7 @@ export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string
     'IntInRangeOrAbsentValue',
     'FloatValue',
     'DomainDoubleValue',
+    'RequiredDomainValue',
     'NamedSelectorValue',
   ],
   wasm: [

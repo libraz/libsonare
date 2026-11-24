@@ -83,6 +83,33 @@ def test_mel_filterbank_omitted_fmax_is_the_nyquist_and_above_it_is_refused() ->
         libsonare.mel_filterbank(44100, 1024, n_mels=32, fmax_hz=22051.0)
 
 
+@pytest.mark.parametrize(
+    ("entry", "edge", "options"),
+    [
+        ("mel_spectrogram", "fmax_hz", {"sample_rate": 22050, "n_fft": 3}),
+        ("mfcc", "fmax", {"n_fft": 3}),
+        ("mel_to_audio", "fmax", {"n_iter": 0}),
+        ("mfcc_to_audio", "fmax", {"n_iter": 0}),
+    ],
+)
+def test_mel_edge_is_refused_before_geometry_or_iterations(entry, edge, options) -> None:
+    shape = (4, 4) if entry.endswith("_to_audio") else 2048
+    data = np.ones(shape, dtype=np.float32)
+    with pytest.raises(
+        SonareValueError, match=rf"^{entry}: {edge} must be finite and at most 11025$"
+    ):
+        getattr(libsonare, entry)(data, **options, **{edge: 12000.0})
+
+
+def test_inverse_mel_refuses_edge_before_scanning_matrix() -> None:
+    mel = np.ones((4, 4), dtype=np.float32)
+    mel[0, 1] = np.nan
+    with pytest.raises(
+        SonareValueError, match=r"^mel_to_audio: fmax must be finite and at most 11025$"
+    ):
+        libsonare.mel_to_audio(mel, fmax=12000.0)
+
+
 def test_mel_filterbank_slaney_divides_each_band_by_its_width() -> None:
     slaney = libsonare.mel_filterbank(22050, 1024, n_mels=16)
     none = libsonare.mel_filterbank(22050, 1024, n_mels=16, norm="none")
@@ -210,5 +237,8 @@ def test_mel_family_refuses_an_fmax_of_zero_or_above_the_nyquist(name) -> None:
     call(_SR / 2)
     with pytest.raises(libsonare.SonareValueError):
         call(0.0)
-    with pytest.raises(libsonare.SonareValueError, match=r"must be finite and at most 11025$"):
+    edge = "fmax_hz" if name == "mel_spectrogram" else "fmax"
+    with pytest.raises(
+        libsonare.SonareValueError, match=rf"^{name}: {edge} must be finite and at most 11025$"
+    ):
         call(_SR / 2 + 1)

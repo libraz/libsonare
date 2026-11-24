@@ -588,10 +588,10 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request a
 [[entry]]
 kind = "function"
 old = "pcen"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D; the core refuses zero dimensions and non-finite values by their named fields"
 domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+rule = "finite-or-refused"
+test = "bindings/node/tests/surface/analysis-features.test.ts::lets PCEN own zero dimensions and keeps the matrix shape checks"
 
 [[entry]]
 kind = "function"
@@ -716,18 +716,18 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D 
 [[entry]]
 kind = "function"
 old = "segmentLagToRecurrence"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+test = "bindings/node/tests/basic_effects_features.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
 old = "segmentPathEnhance"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+test = "bindings/node/tests/basic_effects_features.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
@@ -740,10 +740,10 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D 
 [[entry]]
 kind = "function"
 old = "segmentRecurrenceToLag"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D. Non-finite cells are carried through"
 domain = "analysis"
 rule = "matrix-2d"
-test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+test = "bindings/node/tests/basic_effects_features.test.ts::carries non-finite cells through the three segment matrix transforms"
 
 [[entry]]
 kind = "function"
@@ -7818,10 +7818,10 @@ test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as get
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMarkers"
-changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void)"
+changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void). Nonzero keyFifths and true keyMinor are refused on markers of other kinds. A key-signature marker outside [-7, 7] raises RangeError."
 domain = "engine"
 rule = "engine-vocabulary"
-test = "bindings/node/tests/surface/engine.test.ts::assigns an id-less marker the lowest free id and never reuses one"
+test = "bindings/node/tests/surface/engine.test.ts::refuses out-of-domain fifths on a key signature without replacing the snapshot"
 
 [[entry]]
 kind = "method"
@@ -9560,18 +9560,18 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note type
 [[entry]]
 kind = "field"
 old = "NoteObject.offsetSample"
-changed = "readonly"
+changed = "readonly; when assigned, offsetSample must be an integer greater than onsetSample"
 domain = "effects"
 rule = "individual"
-test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+test = "bindings/node/tests/note-targets.test.ts::refuses invalid note spans and accepts a zero onset with a positive offset"
 
 [[entry]]
 kind = "field"
 old = "NoteObject.onsetSample"
-changed = "readonly"
+changed = "readonly; when assigned, onsetSample must be a non-negative integer"
 domain = "effects"
 rule = "individual"
-test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+test = "bindings/node/tests/note-targets.test.ts::refuses invalid note spans and accepts a zero onset with a positive offset"
 
 [[entry]]
 kind = "field"
@@ -11286,10 +11286,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.setMarker"
-changed = "takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError"
+changed = "takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError; nonzero keyFifths or true keyMinor is refused unless kind is keySignature"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/node/tests/surface/project.test.ts::sets a marker from one input object"
+test = "bindings/node/tests/surface/project.test.ts::refuses key-signature fields on a non-key marker"
 
 [[entry]]
 kind = "method"
@@ -12319,16 +12319,20 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midiCcLearn"
-removed = "call the module function midiCcLearn"
+to = "midiCcLearn"
+changed = "Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field."
+test = "bindings/node/tests/midi-cc-binding-paths.test.ts::learn ignores valid SysEx and names a payload on a channel event"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCcToBreakpoint"
-removed = "call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
 domain = "project"
 rule = "midi-module-functions"
+to = "midiCcToBreakpoint"
+changed = "call the module function midiCcToBreakpoint; a valid SysEx event now reaches the core and raises coded NotSupported. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)."
+test = "bindings/node/tests/midi-cc-binding-paths.test.ts::midiCcToBreakpoint forwards SysEx to the C refusal"
 
 [[entry]]
 kind = "field"
@@ -12383,6 +12387,7 @@ changed = "an unknown key at the top level, or inside a node, a connection or a 
 domain = "engine"
 rule = "individual"
 test = "bindings/node/tests/request-unknown-keys.test.ts::setGraph refuses an undeclared key by name before reading the graph"
+
 [[entry]]
 kind = "type"
 old = "JsonResult"
@@ -13860,10 +13865,10 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.magnitudeResponse"
-changed = "Pass lowerCamel placement tokens such as left in place of Left."
+changed = "Pass lowerCamel placement tokens such as left in place of Left; frequencies are finite and in [0, Nyquist], with NaN, infinity and out-of-band values refused by index instead of clamped"
 domain = "mastering"
-rule = "input-types"
-test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.magnitudeResponse takes an optional named placement token"
+rule = "frequency-bounds"
+test = "bindings/node/tests/surface/mastering-streaming.test.ts::accepts both inclusive boundaries and refuses non-finite or out-of-band values by index"
 
 [[entry]]
 kind = "method"
@@ -16657,7 +16662,7 @@ old = "CyclicTempogramRequest.sampleRate"
 changed = "required (was optional with a 22050 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: cyclicTempogram: sampleRate must be an integer"
+test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: cyclicTempogram: sampleRate must be a number"
 
 [[entry]]
 kind = "field"
@@ -16745,6 +16750,7 @@ old = "ValidateOptions"
 removed = "no call takes a validate option, and every call scans its input for NaN and infinity"
 domain = "core"
 rule = "input-always-scanned"
+
 [[entry]]
 kind = "field"
 old = "SurroundPan.distance"
@@ -20240,3 +20246,83 @@ changed = "An unread insert params key in a stored scene is refused as InvalidFo
 domain = "project"
 rule = "individual"
 test = "bindings/node/tests/scene-warnings.test.ts::names unread insert params in typed scenes and loaded documents"
+
+[[entry]]
+kind = "function"
+old = "assignNoteTargets"
+changed = "minOverlapRatio must be finite in [0, 1], maxCorrectionSemitones finite and non-negative, and each note span must have a non-negative onset and a greater offset; the ratio and correction already had native bounds. Refusals now name the offending field or indexed note span"
+domain = "effects"
+rule = "finite-or-refused"
+test = "bindings/node/tests/note-targets.test.ts::assignNoteTargets uses the library domains"
+
+[[entry]]
+kind = "field"
+old = "AssignNoteTargetsRequest.minOverlapRatio"
+changed = "finite in [0, 1]; out-of-domain values are refused by the core"
+domain = "effects"
+rule = "finite-or-refused"
+test = "bindings/node/tests/note-targets.test.ts::assignNoteTargets uses the library domains"
+
+[[entry]]
+kind = "field"
+old = "AssignNoteTargetsRequest.maxCorrectionSemitones"
+changed = "finite and non-negative; out-of-domain values are refused by the core"
+domain = "effects"
+rule = "finite-or-refused"
+test = "bindings/node/tests/note-targets.test.ts::assignNoteTargets uses the library domains"
+
+[[entry]]
+kind = "field"
+old = "SampleDesc.rootKey"
+changed = "an integer in [1, 127]; 128..255, previously accepted as a byte, is refused"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/sample-bank.test.ts::refuses a rootKey above the MIDI domain and accepts its upper bound"
+
+[[entry]]
+kind = "field"
+old = "SampleZoneDesc.keyLo"
+changed = "an integer in [0, 127]; an out-of-domain bound is refused before the zone is added"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/sample-bank.test.ts::rejects a zone the bank cannot honour, adding nothing"
+
+[[entry]]
+kind = "field"
+old = "SampleZoneDesc.keyHi"
+changed = "an integer in [1, 127]; an out-of-domain bound is refused before the zone is added"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/sample-bank.test.ts::rejects a zone the bank cannot honour, adding nothing"
+
+[[entry]]
+kind = "field"
+old = "SampleZoneDesc.velLo"
+changed = "an integer in [1, 127]; an out-of-domain bound is refused before the zone is added"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/sample-bank.test.ts::rejects a zone the bank cannot honour, adding nothing"
+
+[[entry]]
+kind = "field"
+old = "SampleZoneDesc.velHi"
+changed = "an integer in [1, 127]; an out-of-domain bound is refused before the zone is added"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/sample-bank.test.ts::rejects a zone the bank cannot honour, adding nothing"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.addSample"
+changed = "Omit rootKey for MIDI 60. A written zero now raises RangeError."
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/sample-bank.test.ts::omits defaulted MIDI bytes and refuses explicit zero"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.addZone"
+changed = "Omit keyHi, velLo and velHi to use the default edge. A written zero on these fields raises RangeError. Zero keyLo is still a valid lower edge."
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/sample-bank.test.ts::omits defaulted MIDI bytes and refuses explicit zero"

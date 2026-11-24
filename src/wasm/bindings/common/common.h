@@ -469,6 +469,9 @@ std::vector<float> float32ArrayToVector(val arr, const char* subject);
 /// @p count must already be clamped to the source's length.
 std::vector<float> float32ArrayWindowToVector(val arr, const char* subject, std::size_t start,
                                               std::size_t count);
+/// Checks samples in stack-sized chunks before allocating the native input buffer.
+void validateWasmAudioSamples(const val& samples, const char* subject, std::size_t length);
+
 /// @brief Loads a JS Float32Array into an Audio after the shared offline-input
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized
 /// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params

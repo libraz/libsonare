@@ -269,6 +269,44 @@ describe('edits', () => {
     });
   });
 
+  it('refuses key-signature fields on a non-key marker', () => {
+    withProject((project) => {
+      project.setMarker({ ppq: 1, name: 'cue', kind: 'cuePoint' });
+      const before = project.markers();
+
+      const fifthsError = caught(() =>
+        project.setMarker({ ppq: 2, name: 'invalid', kind: 'cuePoint', keyFifths: 1 }),
+      );
+      expect(fifthsError).toBeInstanceOf(RangeError);
+      expect((fifthsError as Error).message).toBe(
+        'Project.setMarker: keyFifths must be 0 unless kind is key signature',
+      );
+      expect(project.markers()).toEqual(before);
+
+      const minorError = caught(() =>
+        project.setMarker({ ppq: 2, name: 'invalid', kind: 'cuePoint', keyMinor: true }),
+      );
+      expect(minorError).toBeInstanceOf(RangeError);
+      expect((minorError as Error).message).toBe(
+        'Project.setMarker: keyMinor must be 0 unless kind is key signature',
+      );
+      expect(project.markers()).toEqual(before);
+
+      const keyId = project.setMarker({
+        ppq: 3,
+        name: 'key',
+        kind: 'keySignature',
+        keyFifths: 2,
+        keyMinor: true,
+      });
+      expect(project.markers().find((marker) => marker.id === keyId)).toMatchObject({
+        kind: 'keySignature',
+        keyFifths: 2,
+        keyMinor: true,
+      });
+    });
+  });
+
   it('takes optional ids in an options object and refuses an explicit zero', () => {
     withProject((project) => {
       const { trackId, clipId } = addUriClip(project);

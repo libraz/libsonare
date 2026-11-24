@@ -1,15 +1,29 @@
 #pragma once
 
+#include <array>
 #include <cstring>
 #include <string>
 #include <vector>
 
+#include "c_api/mel_refusal_names.h"
 #include "core/spectrum.h"
+#include "field_spelling.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 namespace sonare_node::features {
+
+template <std::size_t N, typename Call>
+auto WithMelRefusalNames(std::string_view entry, const std::array<sonare_c_detail::CName, N>& names,
+                         Call&& call) -> decltype(call()) {
+  try {
+    return sonare_c_detail::with_c_names(names, call);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    throw sonare_field_spelling::node::Spelled(refusal, entry);
+  }
+}
 
 /// @brief The common sample-rate and frame geometry arguments used by feature calls.
 struct FrameAnalysisArgs {

@@ -23,6 +23,9 @@ import {
   realtimeVoiceChangerRender,
   resample,
   StreamingEqualizer,
+  segmentLagToRecurrence,
+  segmentPathEnhance,
+  segmentRecurrenceToLag,
   tempogram,
   tempogramRatio,
   voiceChange,
@@ -139,7 +142,7 @@ describe('NaN/Inf guards (WASM)', () => {
         () => pcen({ values: { data: new Float32Array([1, Number.NaN, 3, 4]), rows: 2, cols: 2 } }),
         RangeError,
       ).message,
-    ).toBe('pcen: values.data contains a non-finite sample at index 1');
+    ).toBe('pcen: values contains a non-finite sample at index 1');
     expect(
       expectRefusalOf(
         () => pcen({ values: { data: new Float32Array([1, 2, 3]), rows: 2, cols: 2 } }),
@@ -147,20 +150,66 @@ describe('NaN/Inf guards (WASM)', () => {
       ).message,
     ).toBe('pcen: values.data length must equal rows * cols');
     expect(
+      expectRefusalOf(
+        () => pcen({ values: { data: new Float32Array(0), rows: 0, cols: 1 } }),
+        RangeError,
+      ).message,
+    ).toBe('pcen: values.rows must be an integer in [1, 2147483647]');
+    expect(
+      expectRefusalOf(
+        () => pcen({ values: { data: new Float32Array(0), rows: 1, cols: 0 } }),
+        RangeError,
+      ).message,
+    ).toBe('pcen: values.cols must be an integer in [1, 2147483647]');
+    expect(() => pcen({ values: { data: new Float32Array(0), rows: -1, cols: 1 } })).toThrow(
+      new RangeError('pcen: values.rows must be an integer in [1, 2147483647]'),
+    );
+    for (const rows of [0.5, 2 ** 32]) {
+      expect(() => pcen({ values: { data: new Float32Array(0), rows, cols: 1 } })).toThrow(
+        new RangeError('pcen: values.rows must be an integer in [1, 2147483647]'),
+      );
+    }
+    expect(
       expectRefusalOf(() => tempogram({ onsetEnvelope: withNaN(), sampleRate: SR }), RangeError)
         .message,
-    ).toBe('tempogram: onsetEnvelope contains a non-finite value at index 100');
+    ).toBe('tempogram: onsetEnvelope contains a non-finite sample at index 100');
     expect(
       expectRefusalOf(() => plp({ onsetEnvelope: withNaN(), sampleRate: SR }), RangeError).message,
-    ).toBe('plp: onsetEnvelope contains a non-finite value at index 100');
-    // The cyclic and ratio tempogram wrappers previously skipped finiteness
-    // validation and silently returned NaN-filled arrays (unlike the C ABI).
-    expect(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow(
-      /^cyclicTempogram: onsetEnvelope contains a non-finite value at index \d+$/,
-    );
+    ).toBe('plp: onsetEnvelope contains a non-finite sample at index 100');
+    expect(
+      expectRefusalOf(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).message,
+    ).toBe('cyclicTempogram: onsetEnvelope contains a non-finite sample at index 100');
     expect(() =>
       tempogramRatio({ tempogram: { data: withNaN(), rows: 64, cols: 16 }, sampleRate: SR }),
     ).toThrow(/non-finite/);
+  });
+  it('carries non-finite cells through the three segment matrix transforms', () => {
+    const clean = { data: Float32Array.from({ length: 16 }, (_, i) => i + 1), rows: 4, cols: 4 };
+    const matrix = { ...clean, data: Float32Array.from(clean.data) };
+    matrix.data[6] = Number.NaN;
+
+    for (const [convert, nanIndices] of [
+      [(input: typeof matrix) => segmentRecurrenceToLag({ recurrence: input, pad: false }), [14]],
+      [(input: typeof matrix) => segmentLagToRecurrence({ lag: input }), [14]],
+      [
+        (input: typeof matrix) => segmentPathEnhance({ recurrence: input, win: 3, nFilters: 1 }),
+        [1, 6, 11],
+      ],
+    ] as const) {
+      const expected = convert(clean);
+      const actual = convert(matrix);
+      expect(actual.data).toBeInstanceOf(Float32Array);
+      expect([actual.rows, actual.cols]).toEqual([expected.rows, expected.cols]);
+      const nanCells: readonly number[] = nanIndices;
+      for (const [i, value] of actual.data.entries()) {
+        if (nanCells.includes(i)) {
+          expect(expected.data[i]).toBeGreaterThan(0);
+          expect(value).toBeNaN();
+        } else {
+          expect(value).toBe(expected.data[i]);
+        }
+      }
+    }
   });
   it('StreamingEqualizer.match rejects non-finite reference audio', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });

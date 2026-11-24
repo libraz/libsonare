@@ -85,6 +85,7 @@ class SonareError(RuntimeError):
     """The public entry the caller invoked."""
     reason: ErrorReason | None
     """Machine-readable cause of this error, when available."""
+    _cli_error_message: str
 
     def __init__(self, code: int, message: str) -> None:
         self.code = _error_code(code)

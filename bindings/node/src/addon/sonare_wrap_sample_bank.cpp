@@ -4,13 +4,13 @@
 #include <cstdint>
 #include <string>
 
+#include "c_api/daw_config_domains.h"
 #include "c_api/synth_enum_names.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
-using sonare_node::MidiByteProperty;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::ThrowIfError;
 using sonare_node::ThrowIfErrorFlattening;
@@ -141,7 +141,11 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   Napi::Object obj;
   if (!ReadOptionsBag(env, info[1], "desc", &obj)) return env.Undefined();
   if (!obj.IsEmpty()) {
-    desc.root_key = MidiByteProperty(env, obj, "rootKey", desc.root_key);
+    if (!sonare_node::OptionalDomainProperty(env, obj, "rootKey", "rootKey",
+                                             sonare_c_detail::kSampleBankDefaultedMidiByteDomain,
+                                             &desc.root_key)) {
+      return env.Undefined();
+    }
     desc.fine_tune_cents = FloatProperty(obj, "fineTuneCents", 0.0f);
     desc.source_rate = DoubleProperty(obj, "sourceRate", 0.0);
     desc.loop_start = Uint32Property(obj, "loopStart", 0u);
@@ -177,10 +181,17 @@ Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
   Napi::Object obj;
   if (!ReadOptionsBag(env, info[1], "zone", &obj)) return env.Undefined();
   if (!obj.IsEmpty()) {
-    zone.key_lo = MidiByteProperty(env, obj, "keyLo", 0);
-    zone.key_hi = MidiByteProperty(env, obj, "keyHi", zone.key_hi);
-    zone.vel_lo = MidiByteProperty(env, obj, "velLo", zone.vel_lo);
-    zone.vel_hi = MidiByteProperty(env, obj, "velHi", zone.vel_hi);
+    const auto& defaulted = sonare_c_detail::kSampleBankDefaultedMidiByteDomain;
+    if (!sonare_node::OptionalDomainProperty(env, obj, "keyLo", "zone.keyLo",
+                                             sonare_c_detail::kMidiDataByteDomain, &zone.key_lo) ||
+        !sonare_node::OptionalDomainProperty(env, obj, "keyHi", "zone.keyHi", defaulted,
+                                             &zone.key_hi) ||
+        !sonare_node::OptionalDomainProperty(env, obj, "velLo", "zone.velLo", defaulted,
+                                             &zone.vel_lo) ||
+        !sonare_node::OptionalDomainProperty(env, obj, "velHi", "zone.velHi", defaulted,
+                                             &zone.vel_hi)) {
+      return env.Undefined();
+    }
     zone.sample_index = Uint32Property(obj, "sampleIndex", 0u);
     zone.tune_cents = FloatProperty(obj, "tuneCents", 0.0f);
     zone.gain = FloatProperty(obj, "gain", zone.gain);

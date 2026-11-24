@@ -9,6 +9,7 @@
 #include <sonare/sonare_c_project_instruments.h>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <limits>
@@ -258,6 +259,19 @@ std::vector<float> float32ArrayToVector(val arr, const char* subject) {
   val view = val(typed_memory_view(n, result.data()));
   view.call<void>("set", arr);
   return result;
+}
+
+void validateWasmAudioSamples(const val& samples, const char* subject, std::size_t length) {
+  constexpr std::size_t kScanBlock = 4096;
+  std::array<float, kScanBlock> block;
+  const char* range_method = isTypedArray(samples) ? "subarray" : "slice";
+  for (std::size_t offset = 0; offset < length;) {
+    const std::size_t count = std::min(length - offset, block.size());
+    val view(typed_memory_view(count, block.data()));
+    view.call<void>("set", samples.call<val>(range_method, offset, offset + count));
+    validate_offline_audio_samples(subject, block.data(), count, offset);
+    offset += count;
+  }
 }
 
 static Audio validatedAudioFromVector(const char* name, std::vector<float> data, int sample_rate) {

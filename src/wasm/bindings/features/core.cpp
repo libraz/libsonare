@@ -3,7 +3,11 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <array>
+
+#include "c_api/feature_admission.h"
 #include "core/convert.h"
+#include "core/pcen.h"
 #include "core/spectrum.h"
 #include "core/synthesis.h"
 #include "feature/onset.h"
@@ -343,10 +347,15 @@ val js_vector_normalize(val values, const val& norm_type_val, const val& thresho
 }
 
 val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val options) {
-  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const auto rows = sonare_field_spelling::wasm::SurfaceSpelling("pcen", "n_bins");
+  const auto cols = sonare_field_spelling::wasm::SurfaceSpelling("pcen", "n_frames");
+  const auto& domain = sonare::kPcenMatrixDimensionDomain;
+  const int n_bins = domainNumberFromVal<int>(n_bins_val, rows.data(), domain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, cols.data(), domain);
+  if (static_cast<uint64_t>(n_bins) * n_frames != wasmFloat32ArrayLength(values, "values.data")) {
+    throw WasmRangeError("values.data length must equal rows * cols");
+  }
   std::vector<float> data = float32ArrayToVector(values, "values");
-  validateMatrix(data, "values", n_bins, n_frames);
   PcenConfig config;
   if (!options.isUndefined() && !options.isNull()) {
     config.sr = intProperty(options, "sampleRate", config.sr);
@@ -357,7 +366,9 @@ val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val opti
     config.power = floatProperty(options, "power", config.power);
     config.eps = floatProperty(options, "eps", config.eps);
   }
-  return vectorToFloat32Array(pcen(data, n_bins, n_frames, config));
+  const std::array<sonare::util::check::MemberKey, 0> keys{};
+  return vectorToFloat32Array(sonare::util::check::with_camel_paths(
+      [&] { return pcen(data, n_bins, n_frames, config); }, keys));
 }
 
 val js_tonnetz(val chromagram, const val& n_chroma_val, const val& n_frames_val) {
@@ -394,14 +405,15 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
   const int win_length =
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
-  validateFiniteVector(data, "onsetEnvelope");
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
   config.mode = tempogramModeFromValue(mode);
   config.center = center;
   config.norm = norm;
-  auto result = tempogram(data, sample_rate, config);
+  auto result =
+      sonare::util::check::with_camel_paths([&] { return tempogram(data, sample_rate, config); },
+                                            std::array<sonare::util::check::MemberKey, 0>{});
   val out = val::object();
   out.set("nFrames", static_cast<int>(data.size()));
   out.set("winLength", win_length);
@@ -411,26 +423,32 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
 
 val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
                         const val& win_length_val, const val& bpm_min_val, const val& n_bins_val) {
-  const int sample_rate =
-      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kRhythmCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
-  const int win_length =
-      domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
-  float bpm_min = kCyclicTempogramBpmMin;
-  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) bpm_min = *v;
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const float bpm_min = bpm_min_val.isUndefined() || bpm_min_val.isNull()
+                            ? kCyclicTempogramBpmMin
+                            : domainFloatFromVal(bpm_min_val, "bpmMin");
   const int n_bins = n_bins_val.isUndefined() || n_bins_val.isNull()
                          ? kCyclicTempogramBins
-                         : domainNumberFromVal<int>(n_bins_val, "nBins", kRhythmCountDomain);
-  std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
-  validateFiniteVector(data, "onsetEnvelope");
+                         : checkedIntFromVal(n_bins_val, "nBins");
+  const auto length = wasmFloat32ArrayLength(onset_envelope, "onsetEnvelope");
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
   config.center = true;
   config.norm = false;
-  auto result = cyclic_tempogram(data, sample_rate, config, bpm_min, n_bins);
+  auto result = sonare::util::check::with_camel_paths(
+      [&] {
+        sonare_c_detail::admit_cyclic_tempogram(
+            sample_rate, hop_length, win_length, bpm_min, n_bins,
+            [&] { validateWasmAudioSamples(onset_envelope, "onset_envelope", length); });
+        const auto data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
+        return cyclic_tempogram(data, sample_rate, config, bpm_min, n_bins);
+      },
+      std::array<sonare::util::check::MemberKey, 0>{});
   val out = val::object();
-  out.set("nFrames", static_cast<int>(data.size()));
+  out.set("nFrames", static_cast<int>(length));
   out.set("nBins", n_bins);
   out.set("data", vectorToFloat32Array(result));
   return out;
@@ -447,11 +465,11 @@ val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length
   const int win_length =
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
-  validateFiniteVector(data, "onsetEnvelope");
   config.sr = sample_rate;
   config.hop_length = hop_length;
   config.win_length = win_length;
-  return vectorToFloat32Array(plp(data, config));
+  return vectorToFloat32Array(sonare::util::check::with_camel_paths(
+      [&] { return plp(data, config); }, std::array<sonare::util::check::MemberKey, 0>{}));
 }
 
 val js_onset_envelope(val samples, const val& sample_rate_val, const val& n_fft_val,

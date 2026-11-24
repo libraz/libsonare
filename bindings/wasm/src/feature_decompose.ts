@@ -641,13 +641,14 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
  * Convert a square recurrence matrix to a lag-by-time matrix, as librosa does.
  *
  * @returns {@link Matrix2D} whose rows are lags and cols are frames.
+ * Non-finite cells are carried to their lag positions.
  */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): Matrix2D;
 export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceToLag', () => {
     const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
     const pad = optionalBoolean(r.pad, 'pad', true);
-    const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
+    const recurrence = assertMatrix2D(r.recurrence, 'recurrence', false);
     assertSquare(recurrence, 'recurrence');
     const native = withHeapNeed(
       {
@@ -666,12 +667,13 @@ export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
  * Convert a lag matrix (lags = frames, or twice as many padded) to a recurrence.
  *
  * @returns Square {@link Matrix2D}: rows = cols = frames.
+ * Non-finite cells are carried to their recurrence positions.
  */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): Matrix2D;
 export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
   return withEntry('segmentLagToRecurrence', () => {
     const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
-    const lag = assertMatrix2D(r.lag, 'lag');
+    const lag = assertMatrix2D(r.lag, 'lag', false);
     const native = withHeapNeed(
       {
         subject: 'lag.cols',
@@ -747,12 +749,13 @@ export function segmentAgglomerative(...args: unknown[]): Int32Array {
  * Enhance diagonal paths in a square recurrence matrix.
  *
  * @returns Square {@link Matrix2D}: rows = cols = frames.
+ * Non-finite cells propagate through the filter window.
  */
 export function segmentPathEnhance(request: SegmentPathEnhanceRequest): Matrix2D;
 export function segmentPathEnhance(...args: unknown[]): Matrix2D {
   return withEntry('segmentPathEnhance', () => {
     const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
-    const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
+    const recurrence = assertMatrix2D(r.recurrence, 'recurrence', false);
     assertSquare(recurrence, 'recurrence');
     const native = withHeapNeed(
       {

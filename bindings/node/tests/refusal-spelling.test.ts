@@ -40,6 +40,7 @@ import {
   PlaybackLoudnessMeter,
   PlaybackRenderer,
   Project,
+  pcen,
   pitchCorrectTimevarying,
   RealtimeEngine,
   RealtimeVoiceChanger,
@@ -561,6 +562,10 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     withEngine((engine) => engine.setTrackOutputBus(1, v as number)),
   mel_to_audio: (s, v) => melToAudio(given({ sampleRate: SR }, s, v) as never),
   mel_to_stft: (s, v) => melToStft(given({ sampleRate: SR }, s, v) as never),
+  pcen: (spelling, value) =>
+    pcen({
+      values: { data: new Float32Array(0), rows: 1, cols: 1, [spelling.split('.')[1]]: value },
+    } as never),
   metering_spectrum_frame: (s, v) =>
     meteringSpectrumFrame(given({ samples: TONE, sampleRate: SR }, s, v) as never),
   mixer_add_strip: (s, v) => withMixer((mixer) => mixer.addStrip('strip', { [s]: v } as never)),

@@ -9,9 +9,13 @@
 #include <cstdint>
 #include <limits>
 
+#include "c_api/midi_input_domains.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
+
+inline constexpr auto kSampleBankDefaultedMidiByteDomain =
+    sonare::util::check::with_sentinel(kMidiDataByteDomain, 0);
 
 /// Keymap sets are dense, so an index also sizes the table it creates.
 inline constexpr uint32_t kMaxKeymapSets = 4096u;

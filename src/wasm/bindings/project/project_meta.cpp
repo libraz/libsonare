@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 
 #include "c_api/project_input_domains.h"
 #include "project_wasm.h"
@@ -498,10 +499,13 @@ val ProjectWasm::unresolvedSoundFontUris() const {
 uint32_t ProjectWasm::setMarker(val marker) {
   SonareProjectMarker desc{};
   desc.id = uintProperty(marker, "id", desc.id);
-  desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", desc.kind));
-  desc.key_fifths = optionalDomainValue<int8_t>(marker["keyFifths"], "keyFifths",
-                                                sonare_c_detail::kMarkerKeyFifthsDomain)
-                        .value_or(desc.key_fifths);
+  desc.kind = byteProperty(marker, "kind", desc.kind, "marker");
+  const int key_fifths = intProperty(marker, "keyFifths", desc.key_fifths);
+  if (key_fifths < std::numeric_limits<int8_t>::min() ||
+      key_fifths > std::numeric_limits<int8_t>::max()) {
+    throw WasmRangeError("keyFifths must be an integer in [-128, 127]");
+  }
+  desc.key_fifths = static_cast<int8_t>(key_fifths);
   desc.key_minor =
       static_cast<uint8_t>(boolProperty(marker, "keyMinor", desc.key_minor != 0) ? 1 : 0);
   desc.ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");

@@ -209,6 +209,34 @@ function requestOf(row: Row, specs: Spec[], values: Args): Args {
 
 type Outcome = { value: unknown; progressed: boolean } | { error: string };
 
+function expectBpmResultsAtSignalScale(actual: unknown, expected: unknown): void {
+  const {
+    autocorrelation: actualAcf,
+    tempogram: actualTempo,
+    ...actualEstimate
+  } = actual as sonare.BpmAnalysisResult;
+  const {
+    autocorrelation: expectedAcf,
+    tempogram: expectedTempo,
+    ...expectedEstimate
+  } = expected as sonare.BpmAnalysisResult;
+  expect(actualEstimate).toEqual(expectedEstimate);
+  for (const [observed, reference] of [
+    [actualAcf, expectedAcf],
+    [actualTempo, expectedTempo],
+  ] as const) {
+    expect(observed).toHaveLength(reference.length);
+    let scale = 0;
+    let error = 0;
+    for (let i = 0; i < reference.length; i++) {
+      scale = Math.max(scale, Math.abs(reference[i]), Math.abs(observed[i]));
+      error = Math.max(error, Math.abs(reference[i] - observed[i]));
+    }
+    // Allow float32 roundoff accumulated by the FFT autocorrelation and tempo transform.
+    expect(error).toBeLessThanOrEqual(scale * 16 * 2 ** -23);
+  }
+}
+
 /** Replace each PROGRESS slot (top level or one level into an object) with a recorder. */
 function materialize(values: Args): { values: Args; progressed: () => boolean } {
   let calls = 0;
@@ -1396,7 +1424,7 @@ const ROWS: Row[] = [
       },
       {
         fields: ['sampleRate'],
-        error: 'TypeError: cyclicTempogram: sampleRate must be an integer',
+        error: 'TypeError: cyclicTempogram: sampleRate must be a number',
       },
     ],
   },
@@ -2562,7 +2590,13 @@ describe('request-object equivalence', () => {
       const positional = await run(row, specs, row.values, 'positional');
       expect(positional).not.toHaveProperty('error');
       if (row.requestOnly !== true) {
-        expect(await run(row, specs, row.values, 'request')).toEqual(positional);
+        const request = await run(row, specs, row.values, 'request');
+        if (row.name === 'analyzeBpm' && 'value' in request && 'value' in positional) {
+          expect(request.progressed).toBe(positional.progressed);
+          expectBpmResultsAtSignalScale(request.value, positional.value);
+        } else {
+          expect(request).toEqual(positional);
+        }
       }
     });
 

@@ -342,9 +342,9 @@ export interface EngineMarker {
   name?: string;
   /** Marker kind; defaults to `'marker'`. A number is refused. */
   kind?: MarkerKind;
-  /** Key signature only: -7..7 (sharps positive). */
+  /** For keySignature, the fifths in [-7, 7] (sharps positive); otherwise omit or pass 0. */
   keyFifths?: number;
-  /** Key signature only: false = major, true = minor. */
+  /** For keySignature, false = major and true = minor; otherwise omit or pass false. */
   keyMinor?: boolean;
 }
 

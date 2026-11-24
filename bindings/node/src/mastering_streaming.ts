@@ -1069,7 +1069,7 @@ export class StreamingEqualizer {
    * `placement` selects which signal path the curve is for. A band placed on
    * `'stereo'` is on every path; one placed elsewhere appears only on its own,
    * a mid band having no per-channel magnitude to fold into a left or right
-   * curve. Frequencies are clamped to [0 Hz, Nyquist].
+   * curve. Every frequency must be finite and in [0 Hz, Nyquist]; an out-of-band value is refused.
    *
    * @example
    * ```ts

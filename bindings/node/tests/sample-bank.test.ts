@@ -146,9 +146,46 @@ describe('SampleBank', () => {
     });
   });
 
+  it('refuses a rootKey above the MIDI domain and accepts its upper bound', () => {
+    withBank((bank) => {
+      expect(() => bank.addSample(sampleSine(64), { rootKey: 128 })).toThrow(
+        new RangeError('SampleBank.addSample: rootKey must be an integer in [1, 127]'),
+      );
+      expect(bank.sampleCount).toBe(0);
+      expect(bank.addSample(sampleSine(64), { rootKey: 127 })).toBe(0);
+      expect(bank.sampleCount).toBe(1);
+    });
+  });
+
+  it('omits defaulted MIDI bytes and refuses explicit zero', () => {
+    const bank = new SampleBank();
+    try {
+      const samples = sampleSine(64);
+      const invalid = [0, 128, 1.5, 1e100];
+      for (const rootKey of invalid) {
+        expect(() => bank.addSample(samples, { rootKey })).toThrow(
+          new RangeError('SampleBank.addSample: rootKey must be an integer in [1, 127]'),
+        );
+      }
+      expect(bank.sampleCount).toBe(0);
+      const sampleIndex = bank.addSample(samples);
+      for (const field of ['keyHi', 'velLo', 'velHi'] as const) {
+        for (const value of invalid) {
+          expect(() => bank.addZone({ sampleIndex, [field]: value })).toThrow(
+            new RangeError(`SampleBank.addZone: zone.${field} must be an integer in [1, 127]`),
+          );
+        }
+      }
+      expect(bank.setCount).toBe(0);
+      bank.addZone({ sampleIndex, keyLo: 0 });
+      expect(bank.setCount).toBe(1);
+    } finally {
+      bank.destroy();
+    }
+  });
+
   it('rejects a rootKey the narrowing cast would wrap', () => {
     withBank((bank) => {
-      // 256 would arrive at the C ABI as 0, which its own check accepts.
       expect(() => bank.addSample(sampleSine(64), { rootKey: 256 })).toThrow(RangeError);
       expect(bank.sampleCount).toBe(0);
     });
@@ -203,11 +240,31 @@ describe('SampleBank', () => {
       expect(() => bank.addZone({ sampleIndex: 0 })).toThrow();
       bank.addSample(sampleSine(64));
 
+      expect(() => bank.addZone({ sampleIndex: 0, keyLo: 128 })).toThrow(
+        new RangeError('SampleBank.addZone: zone.keyLo must be an integer in [0, 127]'),
+      );
+      expect(() => bank.addZone({ sampleIndex: 0, keyHi: 128 })).toThrow(
+        new RangeError('SampleBank.addZone: zone.keyHi must be an integer in [1, 127]'),
+      );
+      expect(() => bank.addZone({ sampleIndex: 0, velLo: 128 })).toThrow(
+        new RangeError('SampleBank.addZone: zone.velLo must be an integer in [1, 127]'),
+      );
+      expect(() => bank.addZone({ sampleIndex: 0, velHi: 128 })).toThrow(
+        new RangeError('SampleBank.addZone: zone.velHi must be an integer in [1, 127]'),
+      );
+      expect(bank.setCount).toBe(0);
+
       expect(() => bank.addZone({ sampleIndex: 7 })).toThrow();
       expect(() => bank.addZone({ sampleIndex: 0, keyLo: 90, keyHi: 30 })).toThrow();
       expect(() => bank.addZone({ sampleIndex: 0, velLo: 100, velHi: 20 })).toThrow();
       expect(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 })).toThrow();
       expect(bank.setCount).toBe(0);
+
+      expect(() => bank.addZone({ sampleIndex: 0, keyLo: 127 })).not.toThrow();
+      expect(() => bank.addZone({ sampleIndex: 0, keyHi: 127 })).not.toThrow();
+      expect(() => bank.addZone({ sampleIndex: 0, velLo: 127 })).not.toThrow();
+      expect(() => bank.addZone({ sampleIndex: 0, velHi: 127 })).not.toThrow();
+      expect(bank.setCount).toBe(1);
     });
   });
 

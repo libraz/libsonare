@@ -1124,3 +1124,39 @@ describe('tempogram family on an empty onset envelope', () => {
     expect(shape(sonare.fourierTempogram({ onsetEnvelope, sampleRate }))).toEqual([193, 0, 0]);
   });
 });
+
+describe('library-owned feature input domains', () => {
+  it('lets PCEN own zero dimensions and keeps the matrix shape checks', () => {
+    for (const [rows, cols, name] of [
+      [0, 1, 'values.rows'],
+      [-1, 1, 'values.rows'],
+      [1, 0, 'values.cols'],
+    ] as const) {
+      const error = errorOf(() =>
+        sonare.pcen({ values: { data: new Float32Array(0), rows, cols } }),
+      );
+      expect(error).toBeInstanceOf(RangeError);
+      expect((error as Error).message).toBe(`pcen: ${name} must be an integer in [1, 2147483647]`);
+    }
+    expect(() =>
+      sonare.pcen({ values: { data: new Float32Array([1]), rows: 1, cols: 2 } }),
+    ).toThrow(new RangeError('pcen: values.data length must equal rows * cols'));
+    expect(() => sonare.pcen({ values: [] as never })).toThrow(
+      new TypeError('pcen: values must be a Matrix2D'),
+    );
+    for (const rows of [0.5, 2 ** 32]) {
+      expect(() => sonare.pcen({ values: { data: new Float32Array(0), rows, cols: 1 } })).toThrow(
+        new RangeError('pcen: values.rows must be an integer in [1, 2147483647]'),
+      );
+    }
+    const accepted = sonare.pcen({ values: { data: new Float32Array([1, 1]), rows: 1, cols: 2 } });
+    expect([accepted.rows, accepted.cols]).toEqual([1, 2]);
+    const nonFinite = errorOf(() =>
+      sonare.pcen({ values: { data: new Float32Array([1, Number.NaN]), rows: 1, cols: 2 } }),
+    );
+    expect(nonFinite).toBeInstanceOf(RangeError);
+    expect((nonFinite as Error).message).toBe(
+      'pcen: values contains a non-finite sample at index 1',
+    );
+  });
+});

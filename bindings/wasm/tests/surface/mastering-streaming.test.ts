@@ -323,6 +323,28 @@ describe('EqStereoPlacement', () => {
     }
   });
 
+  it('magnitudeResponse refuses invalid frequencies by index without clamping', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      for (const frequency of [
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        -1,
+        sampleRate / 2 + 1,
+      ]) {
+        const error = errorOf(() => eq.magnitudeResponse(new Float32Array([frequency])));
+        expect(error).toBeInstanceOf(RangeError);
+        expect((error as Error).message).toMatch(
+          /^StreamingEqualizer\.magnitudeResponse: frequenciesHz\[0\] must be finite and in \[0, 24000\]$/,
+        );
+      }
+      expect(eq.magnitudeResponse(new Float32Array([0, sampleRate / 2]))).toHaveLength(2);
+    } finally {
+      eq.destroy();
+    }
+  });
+
   it('StreamingEqualizer.magnitudeResponse takes the current placement token', () => {
     expectTypeOf<Parameters<StreamingEqualizer['magnitudeResponse']>[1]>().toEqualTypeOf<
       EqStereoPlacement | undefined

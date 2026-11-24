@@ -429,3 +429,27 @@ describe('native still uses the old spelling', () => {
     }
   });
 });
+
+describe('StreamingEqualizer.magnitudeResponse frequency domain', () => {
+  it('accepts both inclusive boundaries and refuses non-finite or out-of-band values by index', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      expect(eq.magnitudeResponse(new Float32Array([0, sampleRate / 2]))).toHaveLength(2);
+      for (const value of [
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        -1,
+        sampleRate / 2 + 1,
+      ]) {
+        const error = errorOf(() => eq.magnitudeResponse(new Float32Array([value])));
+        expect(error).toBeInstanceOf(RangeError);
+        expect((error as Error).message).toBe(
+          'StreamingEqualizer.magnitudeResponse: frequenciesHz[0] must be finite and in [0, 24000]',
+        );
+      }
+    } finally {
+      eq.destroy();
+    }
+  });
+});

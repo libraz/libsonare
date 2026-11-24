@@ -762,18 +762,20 @@ class StreamingEqualizer:
         ``placement`` names the signal path the curve is for: ``"stereo"``,
         ``"left"``, ``"right"``, ``"mid"`` or ``"side"``. A band placed on
         stereo is on every path; one placed elsewhere appears only on its own.
-        Each frequency is clamped to [0 Hz, Nyquist].
+        Each frequency must be finite and in [0 Hz, Nyquist].
 
         An empty array is a defined request and comes back as an empty curve:
         the mapping is per frequency, so there is nothing to ask about.
 
         Raises:
-            SonareValueError: If ``frequencies_hz`` holds a NaN or Inf value.
+            SonareValueError: If a frequency is non-finite or outside [0 Hz, Nyquist].
         """
         self._ensure_open()
         ordinal = _token_ordinal(placement, _EQ_STEREO_PLACEMENTS, "placement")
-        # Non-finite only: an empty curve is a result, a NaN frequency is not.
-        frequencies = _validate_samples(frequencies_hz, arg_name="frequencies_hz", allow_empty=True)
+        # The core owns the frequency domain; keep only buffer shape and type here.
+        frequencies = _validate_samples(
+            frequencies_hz, arg_name="frequencies_hz", scan=False, allow_empty=True
+        )
         c_frequencies, count = _to_c_float_array(frequencies)
         out = (ctypes.c_float * count)()
         _check(

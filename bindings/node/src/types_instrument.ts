@@ -372,7 +372,7 @@ export type SampleDescLoopMode = 'none' | 'continuous' | 'keyDown';
  * render's own rate.
  */
 export interface SampleDesc {
-  /** MIDI key at which the sample sounds at its recorded pitch. Defaults to 60. */
+  /** MIDI root key, 1–127. Omit it for 60. */
   rootKey?: number;
   /** Fine tuning applied on top of {@link rootKey}. */
   fineTuneCents?: number;
@@ -408,13 +408,13 @@ export interface SampleZoneDesc {
   setIndex?: number;
   /** Sample the zone plays, as returned by {@link SampleBank.addSample}. */
   sampleIndex?: number;
-  /** Lowest key of the rectangle. Defaults to `0`, the lowest key. */
+  /** Lowest key in [0, 127]. Defaults to `0`, the lowest key. Must not exceed `keyHi`. */
   keyLo?: number;
-  /** Highest key of the rectangle. Defaults to `127`. */
+  /** Maximum MIDI key, 1–127. Omit it for 127. */
   keyHi?: number;
-  /** Lowest velocity of the rectangle. Defaults to `1`, since velocity 0 is a note-off. */
+  /** Minimum MIDI velocity, 1–127. Omit it for 1. */
   velLo?: number;
-  /** Highest velocity of the rectangle. Defaults to `127`. */
+  /** Maximum MIDI velocity, 1–127. Omit it for 127. */
   velHi?: number;
   /** Added to the sample's own fine tuning. */
   tuneCents?: number;

@@ -9,6 +9,7 @@ from typing import Any
 
 from ._cli_common import (
     _absent_if_none,
+    _mel_flag_refusals,
     _note_output_fit,
     _OutputFit,
     _strict_json_dumps,
@@ -172,15 +173,16 @@ def cmd_mel_to_audio(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     geometry = _mel_geometry(args)
     edges = _given(args, "fmin_hz", "fmax_hz")
-    mel = mel_spectrogram(samples, sr, **geometry, **edges)
-    n_iter = _effective(args, mel_to_audio, "n_iter")
-    result = mel_to_audio(
-        mel.power,
-        sr=sr,
-        n_fft=geometry["n_fft"],
-        hop_length=geometry["hop_length"],
-        **_given(args, n_iter="n_iter", fmin="fmin_hz", fmax="fmax_hz"),
-    )
+    with _mel_flag_refusals():
+        mel = mel_spectrogram(samples, sr, **geometry, **edges)
+        n_iter = _effective(args, mel_to_audio, "n_iter")
+        result = mel_to_audio(
+            mel.power,
+            sr=sr,
+            n_fft=geometry["n_fft"],
+            hop_length=geometry["hop_length"],
+            **_given(args, n_iter="n_iter", fmin="fmin_hz", fmax="fmax_hz"),
+        )
     n_mels, n_frames = mel.power.shape
     fit = _OutputFit().include(result)
     _write_wav(args.output, result, sr, fit=fit)
@@ -201,16 +203,17 @@ def cmd_mfcc_to_audio(args: argparse.Namespace) -> int:
     n_mfcc = _effective(args, mfcc, "n_mfcc")
     n_iter = _effective(args, mfcc_to_audio, "n_iter")
     edges = _given(args, fmin="fmin_hz", fmax="fmax_hz")
-    coefficients = mfcc(samples, sr, **geometry, n_mfcc=n_mfcc, **edges).coefficients
-    result = mfcc_to_audio(
-        coefficients,
-        n_mels=geometry["n_mels"],
-        sr=sr,
-        n_fft=geometry["n_fft"],
-        hop_length=geometry["hop_length"],
-        n_iter=n_iter,
-        **edges,
-    )
+    with _mel_flag_refusals():
+        coefficients = mfcc(samples, sr, **geometry, n_mfcc=n_mfcc, **edges).coefficients
+        result = mfcc_to_audio(
+            coefficients,
+            n_mels=geometry["n_mels"],
+            sr=sr,
+            n_fft=geometry["n_fft"],
+            hop_length=geometry["hop_length"],
+            n_iter=n_iter,
+            **edges,
+        )
     fit = _OutputFit().include(result)
     _write_wav(args.output, result, sr, fit=fit)
     _note_output_fit(fit)

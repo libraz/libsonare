@@ -686,6 +686,7 @@ class _ProjectInspectionMixin:
         ``marker_id`` names the marker to replace; omitted, a new id is
         allocated. A field left as ``None`` takes the library default.
         ``key_fifths`` (-7..7) and ``key_minor`` describe the key-signature kind.
+        Nonzero or true values on other kinds are refused.
 
         Raises:
             SonareValueError: If ``marker_id`` is 0 (omit it to allocate) or a
@@ -712,7 +713,8 @@ class _ProjectInspectionMixin:
                 ctypes.byref(raw),
                 None if name is None else _utf8_arg(_marker_name_arg(name), "name"),
                 ctypes.byref(out_id),
-            )
+            ),
+            flattened="marker",
         )
         return int(out_id.value)
 

@@ -1406,6 +1406,17 @@ inline bool RequiredDomainValue(Napi::Env env, const Napi::Value& value, const c
   return true;
 }
 
+/// @brief Read an optional numeric object field, keeping the initialized value on absence.
+template <typename T>
+inline bool OptionalDomainProperty(Napi::Env env, const Napi::Object& object, const char* key,
+                                   const std::string& subject,
+                                   const sonare::util::check::NumericDomain& domain, T* out) {
+  if (env.IsExceptionPending()) return false;
+  const auto value = object.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return true;
+  return RequiredDomainValue(env, value, subject.c_str(), domain, out);
+}
+
 template <typename T>
 inline bool RequiredDomainArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                               const char* name, const sonare::util::check::NumericDomain& domain,
@@ -1544,6 +1555,18 @@ inline bool OptionalFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size
     return true;
   }
   return RequiredFloatValue(env, value, name, out);
+}
+
+/// @brief Read an optional float whose domain the core states.
+inline bool OptionalDomainFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                   const char* name, float fallback, float* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredDomainFloatValue(env, value, name, out);
 }
 
 /// @brief Optional finite-float positional argument where only `undefined` reads as

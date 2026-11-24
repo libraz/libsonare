@@ -14,7 +14,7 @@ import numpy.typing as npt
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._errors import _BARE_TEXT, _entry, _refuse
 from ._ffi import SonareMelFilterbankOptions, SonareNnlsChromaOptions, SonareSilenceCommonReport
-from ._narrowing import _domain_float, _narrow_double, _resolve_zero_default
+from ._narrowing import _domain_float, _narrow_double, _optional_nonzero_domain_float
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -129,16 +129,16 @@ def mel_filterbank(
             same area; ``"none"`` leaves each at unit peak.
 
     Raises:
-        SonareValueError: If ``sample_rate`` or ``n_fft`` is outside its domain, ``n_mels``
-            is outside [1, 4096], ``fmin_hz`` is not finite or is negative, ``fmax_hz`` is
-            given as a value that is not finite or not above 0, ``norm`` is not a known
-            token, or the upper edge, after resolving to the Nyquist, is not above ``fmin_hz``.
+        SonareValueError: If sample_rate or n_fft is outside its domain, n_mels
+            is outside [1, 4096], fmin_hz is not finite or is negative, fmax_hz
+            is non-finite, negative or above Nyquist, an explicit zero is given,
+            norm is unknown, or the resolved upper edge is not above fmin_hz.
     """
     norm_id = _token_ordinal(norm, _MEL_NORMS, "norm")
     lib = _get_lib()
     options = SonareMelFilterbankOptions._given(
         fmin_hz=_domain_float(fmin_hz, "fmin_hz"),
-        fmax_hz=_domain_float(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz"),
+        fmax_hz=_optional_nonzero_domain_float(fmax_hz, "fmax_hz"),
         htk=1 if htk else 0,
         norm=norm_id,
     )
@@ -780,7 +780,9 @@ def pcen(
     float32 array of the same shape.
     """
     lib = _get_lib()
-    c_array, n_bins, n_frames = _to_c_float_matrix(values, arg_name="values")
+    c_array, n_bins, n_frames = _to_c_float_matrix(
+        values, arg_name="values", scan=False, allow_empty=True
+    )
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_pcen(
             c_array,
@@ -879,7 +881,7 @@ def cyclic_tempogram(
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_size_t(hop_length, "hop_length"),
             _to_c_size_t(win_length, "win_length"),
-            _to_c_float(bpm_min, "bpm_min"),
+            _domain_float(bpm_min, "bpm_min"),
             _to_c_int(n_bins, "n_bins"),
             ctypes.byref(out),
             ctypes.byref(out_length),

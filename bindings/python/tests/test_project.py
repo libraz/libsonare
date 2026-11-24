@@ -1216,6 +1216,44 @@ def test_project_marker_round_trips_kind_and_key() -> None:
         project.close()
 
 
+@pytest.mark.parametrize("kind", ["marker", "text", "lyric", "cuePoint"])
+@pytest.mark.parametrize(
+    ("key_fifths", "key_minor", "field"),
+    [(1, None, "key_fifths"), (0, True, "key_minor")],
+)
+def test_project_markers_refuse_inactive_key_signature_fields(
+    kind: str, key_fifths: int, key_minor: bool | None, field: str
+) -> None:
+    with Project() as project:
+        with pytest.raises(SonareError) as caught:
+            project.set_marker(1.0, kind=kind, key_fifths=key_fifths, key_minor=key_minor)
+        assert caught.value.code == ErrorCode.INVALID_PARAMETER
+        assert str(caught.value) == (
+            f"Project.set_marker: {field} must be 0 unless kind is key signature"
+        )
+        assert project.markers() == []
+
+
+@pytest.mark.parametrize("key_fifths", [-8, 8])
+def test_project_key_signature_marker_core_checks_fifths_domain(key_fifths: int) -> None:
+    with Project() as project:
+        with pytest.raises(SonareError) as caught:
+            project.set_marker(1.0, kind="keySignature", key_fifths=key_fifths)
+        assert caught.value.code == ErrorCode.INVALID_PARAMETER
+        assert "key_fifths" in str(caught.value)
+
+
+def test_project_key_signature_marker_accepts_boundary_fifths() -> None:
+    with Project() as project:
+        low = project.set_marker(1.0, kind="keySignature", key_fifths=-7)
+        high = project.set_marker(2.0, kind="keySignature", key_fifths=7, key_minor=True)
+        assert [(marker.key_fifths, marker.key_minor) for marker in project.markers()] == [
+            (-7, False),
+            (7, True),
+        ]
+        assert low != high
+
+
 def test_project_marker_refuses_an_explicit_zero_id_and_a_numeric_kind() -> None:
     with Project() as project:
         with pytest.raises(SonareValueError, match="marker_id"):

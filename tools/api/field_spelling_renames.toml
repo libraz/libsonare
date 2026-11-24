@@ -116,6 +116,14 @@ base_sample_offset = "start_sample"
 param_name = ["name", "kind"]
 offset_samples = "record_offset_samples"
 
+[node.members_of]
+"pcen.n_bins" = "values.rows"
+"pcen.n_frames" = "values.cols"
+
+[wasm.members_of]
+"pcen.n_bins" = "values.rows"
+"pcen.n_frames" = "values.cols"
+
 [python.length_of]
 "cqt_to_audio.n_frames" = "magnitude"
 "mastering_analyze_pair_stereo.reference_length" = "reference"

@@ -11,6 +11,7 @@
 #include <climits>
 #include <unordered_map>
 
+#include "c_api/daw_config_domains.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -274,6 +275,15 @@ SonareSampleBank* SampleBankWasm::lookup(uint32_t id) {
 
 bool SampleBankWasm::issued(uint32_t id) { return id != 0 && id < g_next_sample_bank_id; }
 
+namespace {
+
+uint8_t bankMidiByte(const val& object, const char* key, const char* subject,
+                     const sonare::util::check::NumericDomain& domain) {
+  return optionalDomainValue<uint8_t>(objectProperty(object, key), subject, domain).value_or(0);
+}
+
+}  // namespace
+
 uint32_t SampleBankWasm::addSample(val data, val desc) {
   if (wasmFloat32ArrayLength(data, "data") == 0) {
     throw WasmRangeError("sample data must not be empty");
@@ -281,7 +291,8 @@ uint32_t SampleBankWasm::addSample(val data, val desc) {
   const std::vector<float> frames = float32ArrayToVector(data, "data");
 
   SonareSampleDesc c{};
-  c.root_key = static_cast<uint8_t>(integerField(desc, "rootKey", "sample descriptor", 127.0));
+  c.root_key =
+      bankMidiByte(desc, "rootKey", "rootKey", sonare_c_detail::kSampleBankDefaultedMidiByteDomain);
   c.fine_tune_cents =
       static_cast<float>(numberField(desc, "fineTuneCents", "sample descriptor", 0.0));
   c.source_rate = numberField(desc, "sourceRate", "sample descriptor", 0.0);
@@ -313,10 +324,11 @@ void SampleBankWasm::addZone(const val& set_index_val, val zone) {
       static_cast<uint32_t>(integerField(zone, "sampleIndex", "sample zone", 4294967295.0));
   // An absent bound stays zero, which the C ABI defaults per bound: 127 for an
   // upper edge, 1 for vel_lo, the lowest key for key_lo.
-  c.key_lo = static_cast<uint8_t>(integerField(zone, "keyLo", "sample zone", 127.0));
-  c.key_hi = static_cast<uint8_t>(integerField(zone, "keyHi", "sample zone", 127.0));
-  c.vel_lo = static_cast<uint8_t>(integerField(zone, "velLo", "sample zone", 127.0));
-  c.vel_hi = static_cast<uint8_t>(integerField(zone, "velHi", "sample zone", 127.0));
+  const auto& defaulted = sonare_c_detail::kSampleBankDefaultedMidiByteDomain;
+  c.key_lo = bankMidiByte(zone, "keyLo", "zone.keyLo", sonare_c_detail::kMidiDataByteDomain);
+  c.key_hi = bankMidiByte(zone, "keyHi", "zone.keyHi", defaulted);
+  c.vel_lo = bankMidiByte(zone, "velLo", "zone.velLo", defaulted);
+  c.vel_hi = bankMidiByte(zone, "velHi", "zone.velHi", defaulted);
   c.tune_cents = static_cast<float>(numberField(zone, "tuneCents", "sample zone", 0.0));
   c.gain = static_cast<float>(numberField(zone, "gain", "sample zone", 0.0));
   c.pan_units = static_cast<float>(numberField(zone, "panUnits", "sample zone", 0.0));

@@ -156,6 +156,40 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
+  it('refuses inactive key-signature fields and accepts them on a key signature', () => {
+    const project = new Project();
+    try {
+      for (const [field, value] of [
+        ['keyFifths', 1],
+        ['keyMinor', true],
+      ] as const) {
+        expect(() =>
+          project.setMarker({ ppq: 1, kind: 'marker', [field]: value } as never),
+        ).toThrow(
+          new RangeError(`Project.setMarker: ${field} must be 0 unless kind is key signature`),
+        );
+      }
+      for (const keyFifths of [-8, 8]) {
+        expect(() => project.setMarker({ ppq: 1, kind: 'keySignature', keyFifths })).toThrow(
+          new RangeError('Project.setMarker: keyFifths must be an integer in [-7, 7]'),
+        );
+      }
+      for (const [keyFifths, keyMinor] of [
+        [-7, false],
+        [7, false],
+        [0, true],
+      ] as const) {
+        const id = project.setMarker({ ppq: 1, kind: 'keySignature', keyFifths, keyMinor });
+        expect(project.markers().find((marker) => marker.id === id)).toMatchObject({
+          keyFifths,
+          keyMinor,
+        });
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('sets a marker and returns its id', () => {
     const project = new Project();
     try {

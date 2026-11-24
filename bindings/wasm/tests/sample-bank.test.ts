@@ -81,8 +81,10 @@ function expectRangeRefusal(action: () => void): void {
  * binding's field readers: both are a RangeError, and only the core's refusal
  * carries the add-zone context from the C-ABI call.
  */
-function expectCoreRefusal(action: () => void): void {
-  expect(expectRefusalOf(action).message).toMatch(/^SampleBank\.addZone: /);
+function expectCoreRefusal(action: () => void): Error {
+  const error = expectRefusalOf(action);
+  expect(error.message).toMatch(/^SampleBank\.addZone: /);
+  return error;
 }
 
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */
@@ -91,6 +93,33 @@ function expectTypeRefusal(action: () => void): void {
 }
 
 describe('Sonare WASM sample bank', () => {
+  it('omits defaulted MIDI bytes and refuses explicit zero', () => {
+    const bank = new SampleBank();
+    try {
+      const samples = tone(261.6256, 0.2);
+      const invalid = [0, 128, 1.5, 1e100];
+      for (const rootKey of invalid) {
+        expect(() => bank.addSample(samples, { rootKey })).toThrow(
+          new RangeError('SampleBank.addSample: rootKey must be an integer in [1, 127]'),
+        );
+      }
+      expect(bank.sampleCount).toBe(0);
+      const sampleIndex = bank.addSample(samples);
+      for (const field of ['keyHi', 'velLo', 'velHi'] as const) {
+        for (const value of invalid) {
+          expect(() => bank.addZone({ sampleIndex, [field]: value })).toThrow(
+            new RangeError(`SampleBank.addZone: zone.${field} must be an integer in [1, 127]`),
+          );
+        }
+      }
+      expect(bank.setCount).toBe(0);
+      bank.addZone({ sampleIndex, keyLo: 0 });
+      expect(bank.setCount).toBe(1);
+    } finally {
+      bank.destroy();
+    }
+  });
+
   it('reads the counts as getters', () => {
     for (const name of ['sampleCount', 'setCount']) {
       expect(typeof Object.getOwnPropertyDescriptor(SampleBank.prototype, name)?.get).toBe(
@@ -130,7 +159,9 @@ describe('Sonare WASM sample bank', () => {
 
       // Descriptor fields are range- and type-checked before they are narrowed:
       // a bare cast would wrap 200 into a valid-looking MIDI key.
-      expectRangeRefusal(() => bank.addSample(pcm, { rootKey: 200 }));
+      expect(expectRefusalOf(() => bank.addSample(pcm, { rootKey: 200 })).message).toMatch(
+        /rootKey must be an integer in \[1, 127\]/,
+      );
       expectRangeRefusal(() => bank.addSample(pcm, { rootKey: 60.5 }));
       expectRangeRefusal(() => bank.addSample(pcm, { rootKey: -1 }));
       expectTypeRefusal(() => bank.addSample(pcm, { fineTuneCents: 'flat' as unknown as number }));
@@ -152,7 +183,9 @@ describe('Sonare WASM sample bank', () => {
       expectCoreRefusal(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
       expectCoreRefusal(() => bank.addZone({ velLo: 100, velHi: 10 }));
       expectRangeRefusal(() => bank.addZone({ setIndex: -1 }));
-      expectRangeRefusal(() => bank.addZone({ keyLo: 200 }));
+      expect(expectCoreRefusal(() => bank.addZone({ keyLo: 200 })).message).toMatch(
+        /keyLo must be an integer in \[0, 127\]/,
+      );
       expect(bank.setCount).toBe(0);
 
       bank.addZone({ sampleIndex: 0 });
@@ -161,6 +194,35 @@ describe('Sonare WASM sample bank', () => {
       // A set index creates the sets below it, so the count follows the highest.
       bank.addZone({ setIndex: 3, sampleIndex: 0 });
       expect(bank.setCount).toBe(4);
+    } finally {
+      bank.destroy();
+    }
+  });
+
+  it('lets the core refuse MIDI key bounds after preserving their byte representation', () => {
+    const bank = new SampleBank();
+    try {
+      const index = bank.addSample(tone(261.6256, 0.2), { rootKey: 127 });
+      expect(index).toBe(0);
+      expect(() => bank.addSample(tone(261.6256, 0.2), { rootKey: 128 })).toThrow(
+        expect.objectContaining({
+          message: expect.stringMatching(/rootKey must be an integer in \[1, 127\]/),
+        }),
+      );
+      for (const [field, value] of [
+        ['keyLo', 128],
+        ['keyHi', 128],
+        ['velLo', 128],
+        ['velHi', 128],
+      ] as const) {
+        const error = expectCoreRefusal(() => bank.addZone({ sampleIndex: index, [field]: value }));
+        expect(error.message).toContain(
+          `${field} must be an integer in [${field === 'keyLo' ? 0 : 1}, 127]`,
+        );
+      }
+      expect(() =>
+        bank.addZone({ sampleIndex: index, keyLo: 0, keyHi: 127, velHi: 127 }),
+      ).not.toThrow();
     } finally {
       bank.destroy();
     }

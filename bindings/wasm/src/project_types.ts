@@ -197,9 +197,9 @@ export interface ProjectMarker {
   readonly name?: string;
   /** Marker kind. */
   readonly kind: ProjectMarkerKind;
-  /** Key signature only: -7..7 (sharps positive); `0` for other kinds. */
+  /** Key-signature field: -7..7 (sharps positive); other kinds require `0`. */
   readonly keyFifths: number;
-  /** Key signature only: `false` = major, `true` = minor; `false` for other kinds. */
+  /** Key-signature field: `false` = major, `true` = minor; other kinds require `false`. */
   readonly keyMinor: boolean;
 }
 
@@ -213,9 +213,9 @@ export interface ProjectMarkerInput {
   name?: string;
   /** Marker kind. Defaults to `'marker'`. */
   kind?: ProjectMarkerKind;
-  /** Key signature only: -7..7 (sharps positive). Defaults to `0`. */
+  /** Key-signature field: -7..7 (sharps positive); other kinds require `0`. Defaults to `0`. */
   keyFifths?: number;
-  /** Key signature only: `false` = major (default), `true` = minor. */
+  /** Key-signature field: `false` = major (default), `true` = minor; other kinds require `false`. */
   keyMinor?: boolean;
 }
 

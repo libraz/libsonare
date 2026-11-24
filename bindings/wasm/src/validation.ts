@@ -1,3 +1,4 @@
+import { OMIT_FOR_POSITIVE_DEFAULT } from './internal/default_refusal.js';
 import {
   assertDeclaredKeys,
   type Respelled,
@@ -121,6 +122,17 @@ export function assertNonNegativeScalar(value: number, argName: string): void {
 export function assertNumber(value: unknown, argName: string): void {
   if (typeof value !== 'number') {
     throw refuseType(`${argName} must be a number`);
+  }
+}
+
+/** Keep the C zero sentinel for an omitted Nyquist edge from accepting a written zero. */
+export function assertOptionalFmaxNotZero(value: unknown): void {
+  if (isAbsent(value)) {
+    return;
+  }
+  assertNumber(value, 'fmaxHz');
+  if (typeof value === 'number' && Math.fround(value) === 0) {
+    throw refuse(`fmaxHz ${OMIT_FOR_POSITIVE_DEFAULT}`);
   }
 }
 
@@ -761,9 +773,15 @@ export function toMatrix2DByRows(data: Float32Array, rows: number): Matrix2D {
  * Checks a caller-supplied {@link Matrix2D}: `TypeError` unless an object with a
  * `Float32Array` `data` and integer `rows` / `cols`, `RangeError` for a
  * non-positive dimension, a `data` length other than `rows * cols`, or (unless
- * `validate` is `false`) a NaN or infinity.
+ * `validate` is `false`) a NaN or infinity. With `dimensionsInNative`, this checks
+ * only the object and data shape. Native code validates the dimensions and their product.
  */
-export function assertMatrix2D(value: unknown, argName: string, validate = true): Matrix2D {
+export function assertMatrix2D(
+  value: unknown,
+  argName: string,
+  validate = true,
+  dimensionsInNative = false,
+): Matrix2D {
   if (!isNonArrayObject(value)) {
     throw refuseType(`${argName} must be a Matrix2D`);
   }
@@ -771,10 +789,13 @@ export function assertMatrix2D(value: unknown, argName: string, validate = true)
   if (!(m.data instanceof Float32Array)) {
     throw refuseType(`${argName}.data must be a Float32Array`);
   }
+  if (dimensionsInNative) {
+    return m as Matrix2D;
+  }
   assertPositiveInteger(m.rows as number, `${argName}.rows`);
   assertPositiveInteger(m.cols as number, `${argName}.cols`);
   const expected = (m.rows as number) * (m.cols as number);
-  if (!Number.isSafeInteger(expected) || m.data.length !== expected) {
+  if (m.data.length !== expected) {
     throw refuse(`${argName}.data length must equal rows * cols`);
   }
   if (validate) {

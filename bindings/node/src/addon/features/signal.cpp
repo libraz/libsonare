@@ -4,6 +4,7 @@
 
 #include "core/audio.h"
 #include "core/convert.h"
+#include "core/pcen.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
 #include "core/synthesis.h"
@@ -14,6 +15,7 @@
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "features/common.h"
+#include "field_spelling.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -386,12 +388,12 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) return env.Undefined();
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "nBins must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
+  const auto rows = sonare_field_spelling::node::SurfaceSpelling("pcen", "n_bins");
+  const auto cols = sonare_field_spelling::node::SurfaceSpelling("pcen", "n_frames");
+  int n_bins{}, n_frames{};
+  const auto& domain = sonare::kPcenMatrixDimensionDomain;
+  if (!RequiredDomainArg(env, info, 1, rows.c_str(), domain, &n_bins) ||
+      !RequiredDomainArg(env, info, 2, cols.c_str(), domain, &n_frames)) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -407,10 +409,8 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
     power = FloatProperty(opts, "power", power);
     eps = FloatProperty(opts, "eps", eps);
   }
-  const int n_bins = node_narrow_int(env, info[1], "nBins");
-  const int n_frames = node_narrow_int(env, info[2], "nFrames");
-  if (!ValidateMatrixDims(env, n_bins, n_frames, arr.ElementLength())) {
-    return env.Undefined();
+  if (static_cast<uint64_t>(n_bins) * n_frames != arr.ElementLength()) {
+    sonare::util::check::refuse("values.data", "length must equal rows * cols");
   }
   float* out = nullptr;
   size_t count = 0;

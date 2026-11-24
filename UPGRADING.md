@@ -2172,7 +2172,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `griffin_lim` | takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray |
 | `lag_to_recurrence(n_lags)` | removed: read from the 2-D array's shape |
 | `lag_to_recurrence(n_rows)` | removed: read from the 2-D array's shape |
-| `lag_to_recurrence` | `segment_lag_to_recurrence`: takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix |
+| `lag_to_recurrence` | `segment_lag_to_recurrence`: takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix. Non-finite cells are carried through. The 1.x facade refused them |
 | `mel_delta(n_features)` | removed: taken from the 2-D array's shape |
 | `mel_delta(n_frames)` | removed: taken from the 2-D array's shape |
 | `mel_delta` | takes one 2-D (n_features, n_frames) array and returns a float32 ndarray of the same shape |
@@ -2191,7 +2191,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `nnls_chroma` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
 | `onset_strength_multi` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
 | `path_enhance(n)` | removed: read from the 2-D array's shape |
-| `path_enhance` | `segment_path_enhance`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix |
+| `path_enhance` | `segment_path_enhance`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix. Non-finite cells are carried through. The 1.x facade refused them |
 | `pcen(n_bins)` | removed: taken from the 2-D array's shape |
 | `pcen(n_frames)` | removed: taken from the 2-D array's shape |
 | `pcen` | takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray of the same shape |
@@ -2199,7 +2199,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `recurrence_matrix(rows)` | removed: read from the 2-D array's shape |
 | `recurrence_matrix` | `segment_recurrence_matrix`: takes one 2-D (features, frames) array and returns a float32 (frames, frames) ndarray instead of SegmentMatrix |
 | `recurrence_to_lag(n)` | removed: read from the 2-D array's shape |
-| `recurrence_to_lag` | `segment_recurrence_to_lag`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix |
+| `recurrence_to_lag` | `segment_recurrence_to_lag`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix. Non-finite cells are carried through. The 1.x facade refused them |
 | `subsegment(cols)` | removed: read from the 2-D array's shape |
 | `subsegment(rows)` | removed: read from the 2-D array's shape |
 | `subsegment` | `segment_subsegment`: takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int] |
@@ -3274,7 +3274,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringStereoResult` | left, right are float32 ndarrays instead of list[float]; the record compares by identity |
 | `MixResult` | left, right are float32 ndarrays instead of list[float]; the record compares by identity |
 | `MixerStereoResult` | a frozen dataclass instead of a NamedTuple, so it no longer unpacks; left and right are float32 ndarrays |
-| `StreamingEqualizer.magnitude_response` | returns float32 ndarrays instead of list[float] |
+| `StreamingEqualizer.magnitude_response` | returns float32 ndarrays instead of list[float]. An out-of-domain frequency raises SonareValueError naming frequencies_hz. |
 | `StreamingEqualizer.process_mono` | returns float32 ndarrays instead of list[float] |
 | `StreamingMasteringChain.flush_mono` | returns a float32 ndarray instead of list[float]; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_mono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_mono instead |
 | `StreamingMasteringChain.process_mono` | returns a float32 ndarray instead of list[float] |
@@ -3502,7 +3502,11 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_lane_sidechain(source_track_id)` | `RealtimeEngine.set_strip_sidechain(source)`: the source is one SidechainSource('track', id) record or None; None removes the binding, source.id 0 raises SonareValueError, and a track strip refuses a source of kind 'bus' with SonareValueError |
 | `RealtimeEngine.set_master_sidechain(source_id)` | `RealtimeEngine.set_strip_sidechain(source)`: the source is one SidechainSource(kind, id) record or None; None removes the binding and source.id 0 raises SonareValueError |
 | `RealtimeEngine.set_track_output_bus(bus_id)` | None returns the lane to the master mix; bus_id 0 raises SonareValueError |
+| `SampleBank.add_sample(root_key)` | None selects the C default; an explicit zero is refused rather than selecting middle C |
 | `SampleBank.add_sample(source_rate)` | float \| None, default None: None plays at the render's own rate and an explicit 0 raises SonareValueError |
+| `SampleBank.add_zone(key_hi)` | None selects the C default; an explicit zero is refused rather than selecting the highest key |
+| `SampleBank.add_zone(vel_hi)` | None selects the C default; an explicit zero is refused rather than selecting velocity 127 |
+| `SampleBank.add_zone(vel_lo)` | None selects the C default; an explicit zero is refused rather than selecting velocity 1 |
 | `SynthPatch.preset` | None (the default) is the init patch, which an empty string used to mean; an empty name now raises SonareValueError, a name longer than 31 UTF-8 bytes raises instead of being truncated, and a patch read back with no preset has None |
 
 #### An option left out takes the library's default
@@ -3939,6 +3943,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.set_vca_group_members(group_id)` | `Mixer.set_vca_group_members(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.strip_by_id(strip_id)` | `Mixer.strip_by_id(id)`: renamed id, the name the Node and WASM mixers use |
 | `RealtimeEngine.load_soundfont` | `RealtimeEngine.load_sound_font`: renamed; the data must be bytes, bytearray or memoryview |
+| `RealtimeEngine.set_markers(markers)` | a nonzero key_fifths or true key_minor is refused unless kind is keySignature. A key-signature marker outside [-7, 7] raises SonareValueError. |
 | `RealtimeEngine.set_markers` | returns the stored markers in the order given (was None); a refused list leaves the stored markers and the allocation counter unchanged |
 | `RealtimeEngine.set_track_strip_surround_pan(distance)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `RealtimeEngine.set_track_strip_surround_pan(elevation)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
@@ -4124,7 +4129,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.midi_cc_index_for_name` | removed: call the module function midi_cc_index_for_name |
 | `Project.midi_cc_learn` | removed: call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError) |
 | `Project.midi_cc_name` | removed: call the module function midi_cc_name |
-| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None, in which a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them) |
+| `Project.midi_cc_to_breakpoint` | `midi_cc_to_breakpoint`: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None. A valid SysEx event raises coded NotSupported. A nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them). |
 | `Project.midi_cc` | removed: call the module function midi_cc, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_channel_pressure` | removed: call the module function midi_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_note_off` | removed: call the module function midi_note_off, which returns a frozen ProjectMidiEvent instead of a tuple |
@@ -4221,7 +4226,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.set_marker_ex` | removed: project.set_marker(ppq, marker_id=..., name=..., kind=..., key_fifths=..., key_minor=...) |
+| `Project.set_marker_ex` | `Project.set_marker`: project.set_marker(ppq, marker_id=..., name=..., kind=..., key_fifths=..., key_minor=...). Nonzero key_fifths and true key_minor are refused unless kind is keySignature. |
 
 #### Each list input takes one item form
 
@@ -4301,6 +4306,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.last_bounce_compile_result` | Returns None before any bounce has produced a compile result. Check for None before accessing ProjectCompileResult fields. |
 | `Project.load_soundfont` | `Project.load_sound_font`: takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode |
 | `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
+| `Project.set_marker_ex(marker)` | removed: pass ppq and the marker's fields directly to Project.set_marker |
 | `Project.set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now raises SonareValueError. Use set_max_history_bytes(0) to disable undo retention. |
 | `Project.soundfont_manifest` | `Project.sound_font_manifest`: takes keyword-only uri=None to read the manifest for the named URI; None selects the default SoundFont and an empty URI is refused |
 | `Project.soundfont_preset_count` | `Project.sound_font_preset_count`: a method with keyword-only uri=None, which selects the default SoundFont; an empty URI is refused |
@@ -4910,6 +4916,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `LufsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `pcen` | returns Matrix2D; the core refuses zero dimensions and non-finite values by their named fields |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -5145,12 +5157,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `melToStft` | returns Matrix2D |
 | `mfccToMel` | returns Matrix2D |
 | `onsetStrengthMulti` | returns Matrix2D |
-| `pcen` | returns Matrix2D |
 | `segmentCrossSimilarity` | returns Matrix2D |
-| `segmentLagToRecurrence` | returns Matrix2D |
-| `segmentPathEnhance` | returns Matrix2D |
+| `segmentLagToRecurrence` | returns Matrix2D. Non-finite cells are carried through |
+| `segmentPathEnhance` | returns Matrix2D. Non-finite cells are carried through |
 | `segmentRecurrenceMatrix` | returns Matrix2D |
-| `segmentRecurrenceToLag` | returns Matrix2D |
+| `segmentRecurrenceToLag` | returns Matrix2D. Non-finite cells are carried through |
 | `tonnetz` | returns Matrix2D |
 
 #### Public types never expose Wasm* names
@@ -5932,6 +5943,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `VoiceChangeRealtimeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `VoiceChangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AssignNoteTargetsRequest.maxCorrectionSemitones` | finite and non-negative; out-of-domain values are refused by the core |
+| `AssignNoteTargetsRequest.minOverlapRatio` | finite in [0, 1]; out-of-domain values are refused by the core |
+| `assignNoteTargets` | minOverlapRatio must be finite in [0, 1], maxCorrectionSemitones finite and non-negative, and each note span must have a non-negative onset and a greater offset; the ratio and correction already had native bounds. Refusals now name the offending field or indexed note span |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -6207,8 +6226,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `NoteObject.frameStart` | readonly |
 | `NoteObject.medianCents` | readonly |
 | `NoteObject.medianHz` | readonly |
-| `NoteObject.offsetSample` | readonly |
-| `NoteObject.onsetSample` | readonly |
+| `NoteObject.offsetSample` | readonly; when assigned, offsetSample must be an integer greater than onsetSample |
+| `NoteObject.onsetSample` | readonly; when assigned, onsetSample must be a non-negative integer |
 | `NoteStretchOptions.stretchRatio` | optional -> required |
 | `PhaseVocoderRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down, like the other resynthesizing effects (was a fixed 512); nFft is refused outside the even integers in [4, 2147483646] with 'nFft must be an even integer in [4, 2147483646]' before the core |
 | `PitchCorrectOptions.mode` | `PitchCorrectOptions.targetMode`: mode -> targetMode (type PitchTargetMode = 'midi'\|'scale') |
@@ -6790,6 +6809,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MultibandCompressorBand.sidechainHpfEnabled` | `MultibandCompressorBand.sidechainHighPassHz`: sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off) |
 | `MultibandCompressorBand.sidechainHpfHz` | `MultibandCompressorBand.sidechainHighPassHz`: sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off) |
 
+#### Frequency bounds are f0MinHz/f0MaxHz and fminHz/fmaxHz
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingEqualizer.magnitudeResponse` | Pass lowerCamel placement tokens such as left in place of Left; frequencies are finite and in [0, Nyquist], with NaN, infinity and out-of-band values refused by index instead of clamped |
+
 #### One type name per record on every surface
 
 | 1.x | 2.0.0 |
@@ -6855,7 +6880,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingEqualizer.magnitudeResponse` | Pass lowerCamel placement tokens such as left in place of Left. |
 | `StreamingMasteringChain` | Pass an explicit StreamingMasteringChainConfig to the constructor. |
 
 #### Historical aliases are removed
@@ -6979,6 +7003,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.primeOfflineParameters` | blockSize is optional: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null); null is the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `SampleBank.addSample` | Omit rootKey for MIDI 60. A written zero now raises RangeError. |
+| `SampleBank.addZone` | Omit keyHi, velLo and velHi to use the default edge. A written zero on these fields raises RangeError. Zero keyLo is still a valid lower edge. |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'mod source must be a number or string' (1.x read each as its default) |
 
@@ -7400,7 +7426,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
-| `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void) |
+| `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void). Nonzero keyFifths and true keyMinor are refused on markers of other kinds. A key-signature marker outside [-7, 7] raises RangeError. |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Keep recordOffsetSamples within one loop pass while capture is armed with punch on. A shorter loop or faster tempo that would exceed that limit is refused with RangeError. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
 | `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); the destination id leads (absent or null is destination 0) and patch.destinationId is refused; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
@@ -7444,6 +7470,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `ClipPageRequest` | `ClipPageSampleRequest` |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
+| `SampleDesc.rootKey` | an integer in [1, 127]; 128..255, previously accepted as a byte, is refused |
+| `SampleZoneDesc.keyHi` | an integer in [1, 127]; an out-of-domain bound is refused before the zone is added |
+| `SampleZoneDesc.keyLo` | an integer in [0, 127]; an out-of-domain bound is refused before the zone is added |
+| `SampleZoneDesc.velHi` | an integer in [1, 127]; an out-of-domain bound is refused before the zone is added |
+| `SampleZoneDesc.velLo` | an integer in [1, 127]; an out-of-domain bound is refused before the zone is added |
 
 ### Node: Projects, arrangement and vocal editing
 
@@ -7480,7 +7511,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.setMarker(markerId)` | removed: pass it as id in ProjectMarkerInput |
 | `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
 | `Project.setMarker(ppq)` | removed: pass ppq as a field of ProjectMarkerInput |
-| `Project.setMarker` | takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError |
+| `Project.setMarker` | takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError; nonzero keyFifths or true keyMinor is refused unless kind is keySignature |
 | `Project.setTrackRoute` | Omit a route field to clear it. An explicit empty channelStripRef or outputTarget is a RangeError naming the field. trackId is required and an omitted trackId is a TypeError. |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
@@ -7639,9 +7670,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
 | `Project.midiBankProgram` | removed: call the module function midiBankProgram |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
-| `Project.midiCcLearn` | removed: call the module function midiCcLearn |
+| `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. |
 | `Project.midiCcName` | removed: call the module function midiCcName |
-| `Project.midiCcToBreakpoint` | removed: call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
+| `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: call the module function midiCcToBreakpoint; a valid SysEx event now reaches the core and raises coded NotSupported. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
 | `Project.midiCc` | removed: call the module function midiCc |
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |
@@ -9256,14 +9287,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `pcen` | returns Matrix2D |
 | `segmentCrossSimilarity` (`./analysis`) | returns Matrix2D |
 | `segmentCrossSimilarity` | returns Matrix2D |
-| `segmentLagToRecurrence` (`./analysis`) | returns Matrix2D |
-| `segmentLagToRecurrence` | returns Matrix2D |
-| `segmentPathEnhance` (`./analysis`) | returns Matrix2D |
-| `segmentPathEnhance` | returns Matrix2D |
+| `segmentLagToRecurrence` (`./analysis`) | returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them |
+| `segmentLagToRecurrence` | returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them |
+| `segmentPathEnhance` (`./analysis`) | returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them |
+| `segmentPathEnhance` | returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them |
 | `segmentRecurrenceMatrix` (`./analysis`) | returns Matrix2D |
 | `segmentRecurrenceMatrix` | returns Matrix2D |
-| `segmentRecurrenceToLag` (`./analysis`) | returns Matrix2D |
-| `segmentRecurrenceToLag` | returns Matrix2D |
+| `segmentRecurrenceToLag` (`./analysis`) | returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them |
+| `segmentRecurrenceToLag` | returns Matrix2D. Non-finite cells are carried through. The 1.x facade refused them |
 | `tonnetz` (`./analysis`) | returns Matrix2D |
 | `tonnetz` | returns Matrix2D |
 
@@ -11986,7 +12017,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingEqualizer.magnitudeResponse` | Pass lower-camel-case placement tokens such as stereo in place of Stereo. |
+| `StreamingEqualizer.magnitudeResponse` | Pass lower-camel-case placement tokens such as stereo in place of Stereo.; frequencies outside [0, Nyquist] are refused by index instead of clamped |
 | `StreamingEqualizer` | Pass an explicit StreamingEqualizerConfig to the constructor. |
 
 #### Historical aliases are removed
@@ -12271,6 +12302,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setMidiClips` | a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number); a supplied nonzero loop period on a one-shot clip is refused instead of ignored |
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null): null routes to the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `SampleBank.addSample` | Omit rootKey for MIDI 60. A written zero now raises RangeError. |
+| `SampleBank.addZone` | Omit keyHi, velLo and velHi to use the default edge. A written zero on these fields raises RangeError. Zero keyLo is still a valid lower edge. |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SonareEngine.setTrackOutputBus` (`./worklet`) | setTrackOutputBus(target, busId: number \| null): null routes to the master, 0 is a RangeError |
 | `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'Expected mod source to be a number or string' (1.x read each as its default) |
@@ -12955,7 +12988,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
-| `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given |
+| `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given; nonzero key-signature fields on another marker kind are refused by the core. A key-signature marker outside [-7, 7] raises RangeError. |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
 | `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); absent or null is destination 0; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
@@ -12968,7 +13001,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngine.seekMarker` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false; an unknown marker id is a RangeError |
 | `SonareEngine.setBuiltinInstrument` (`./worklet`) | setBuiltinInstrument(trackId, config?: Omit<BuiltinSynthConfig, 'destinationId'>) takes no destinationId in the config |
 | `SonareEngine.setLoopFromMarkers` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
-| `SonareEngine.setMarkers` (`./worklet`) | entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[] |
+| `SonareEngine.setMarkers` (`./worklet`) | entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]. Nonzero keyFifths and true keyMinor are refused on markers of other kinds. |
 | `SonareEngine.setMetronome` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.setParam` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.setSf2Instrument` (`./worklet`) | setSf2Instrument(trackId, config?: Omit<Sf2InstrumentConfig, 'destinationId'>) takes no destinationId in the config |
@@ -13158,7 +13191,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setMarker(markerId)` | removed: pass it as id in ProjectMarkerInput |
 | `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
 | `Project.setMarker(ppq)` | removed: pass ppq as a field of ProjectMarkerInput |
-| `Project.setMarker` | setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError |
+| `Project.setMarker` | setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError; nonzero key-signature fields on another marker kind are refused by the core |
 | `Project.setWarpMap` | an anchor that is not an object is refused with TypeError 'anchors[i] must be an object' (1.x read it as an anchor at 0, 0) |
 | `ProjectAutomationPoint.ppq` | required: an absent ppq is refused with TypeError naming points[i].ppq (1.x read it as 0) |
 | `ProjectAutomationPoint.value` | required: an absent value is refused with TypeError naming points[i].value (1.x read it as 0) |
@@ -13389,9 +13422,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
 | `Project.midiBankProgram` | removed: call the module function midiBankProgram, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
-| `Project.midiCcLearn` | removed: call the module function midiCcLearn |
+| `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. |
 | `Project.midiCcName` | removed: call the module function midiCcName |
-| `Project.midiCcToBreakpoint` | removed: call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
+| `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: use the standalone midiCcToBreakpoint function; a valid SysEx event is refused as NotSupported (1.x rejected a Data64 word as InvalidParameter). A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
 | `Project.midiCc` | removed: call the module function midiCc |
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |
@@ -13797,11 +13830,11 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 |---|---|
 | `cqt --fmin` (native CLI only) | `cqt --fmin-hz`: renamed --fmin-hz; omitted, the library default (C1, 32.7 Hz) applies (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2) |
 | `cqt` (native CLI only) | the JSON fmin key is fmin_hz, named as the flag is |
-| `mel --fmax` | `mel --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2) |
+| `mel --fmax` | `mel --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3) |
 | `mel --fmin` | `mel --fmin-hz`: renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `mel-to-audio --fmax` (native CLI only) | `mel-to-audio --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2) |
+| `mel-to-audio --fmax` (native CLI only) | `mel-to-audio --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3) |
 | `mel-to-audio --fmin` (native CLI only) | `mel-to-audio --fmin-hz`: renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `mfcc-to-audio --fmax` (native CLI only) | `mfcc-to-audio --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2) |
+| `mfcc-to-audio --fmax` (native CLI only) | `mfcc-to-audio --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3) |
 | `mfcc-to-audio --fmin` (native CLI only) | `mfcc-to-audio --fmin-hz`: renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `pitch --fmax` | `pitch --f0-max-hz` |
 | `pitch --fmin` | `pitch --f0-min-hz` |

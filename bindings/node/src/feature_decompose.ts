@@ -233,12 +233,15 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   });
 }
 
-/** Convert a square recurrence matrix to a lag-by-time matrix, as librosa does. Returns rows = lags, cols = frames. */
+/**
+ * Convert a square recurrence matrix to a lag-by-time matrix, as librosa does. Returns rows = lags, cols = frames.
+ * Non-finite cells are carried to their lag positions.
+ */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): Matrix2D;
 export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceToLag', () => {
     const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
-    assertMatrix2D(r.recurrence, 'recurrence');
+    assertMatrix2D(r.recurrence, 'recurrence', false);
     assertSquareMatrix(r.recurrence, 'recurrence');
     return toSegmentMatrix(
       addon.segmentRecurrenceToLag(r.recurrence.data, r.recurrence.rows, r.pad ?? true),
@@ -246,12 +249,15 @@ export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
   });
 }
 
-/** Convert a lag matrix (lags = frames, or 2 × frames padded) to a recurrence. Returns square, rows = cols = frames. */
+/**
+ * Convert a lag matrix (lags = frames, or 2 × frames padded) to a recurrence. Returns square, rows = cols = frames.
+ * Non-finite cells are carried to their recurrence positions.
+ */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): Matrix2D;
 export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
   return withEntry('segmentLagToRecurrence', () => {
     const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
-    assertMatrix2D(r.lag, 'lag');
+    assertMatrix2D(r.lag, 'lag', false);
     return toSegmentMatrix(addon.segmentLagToRecurrence(r.lag.data, r.lag.cols, r.lag.rows));
   });
 }
@@ -288,12 +294,15 @@ export function segmentAgglomerative(...args: unknown[]): Int32Array {
   });
 }
 
-/** Enhance diagonal paths in a square recurrence matrix. Returns square, rows = cols = frames. */
+/**
+ * Enhance diagonal paths in a square recurrence matrix. Returns square, rows = cols = frames.
+ * Non-finite cells propagate through the filter window.
+ */
 export function segmentPathEnhance(request: SegmentPathEnhanceRequest): Matrix2D;
 export function segmentPathEnhance(...args: unknown[]): Matrix2D {
   return withEntry('segmentPathEnhance', () => {
     const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
-    assertMatrix2D(r.recurrence, 'recurrence');
+    assertMatrix2D(r.recurrence, 'recurrence', false);
     assertSquareMatrix(r.recurrence, 'recurrence');
     return toSegmentMatrix(
       addon.segmentPathEnhance(

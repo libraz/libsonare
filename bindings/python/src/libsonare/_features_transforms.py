@@ -19,7 +19,7 @@ from ._ffi import (
     SonareMfccToMelOptions,
 )
 from ._field_spelling import surface_spelling
-from ._narrowing import _domain_float, _narrow_float
+from ._narrowing import _domain_float, _narrow_float, _optional_nonzero_domain_float
 from ._runtime import (
     _check,
     _effect_hop,
@@ -29,7 +29,6 @@ from ._runtime import (
     _guard_buffer,
     _narrow_int,
     _out_float_array,
-    _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
     _to_c_float_matrix,
@@ -245,7 +244,8 @@ def mel_to_stft(
         n_fft: FFT size of the source STFT; sets output bins to ``n_fft/2 + 1``
             (default 2048).
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
-        fmax: Maximum Mel frequency in Hz (default None = sr/2).
+        fmax: Maximum Mel frequency in Hz (default None = sr/2); values above Nyquist are
+            refused; an explicit 0 is not absence.
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
@@ -253,7 +253,7 @@ def mel_to_stft(
         reconstructed STFT magnitude (not squared).
     """
     lib = _get_lib()
-    c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel")
+    c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel", scan=False)
     out = SonareInverseResult()
     options = SonareMelToStftOptions._given(htk=1 if htk else 0)
     rc = lib.sonare_mel_to_stft(
@@ -264,7 +264,7 @@ def mel_to_stft(
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_float(fmin, "fmin"),
-        _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+        _optional_nonzero_domain_float(fmax, "fmax"),
         ctypes.byref(options),
         ctypes.byref(out),
     )
@@ -320,7 +320,8 @@ def mel_to_audio(
         hop_length: Hop length used for reconstruction. Default: ``n_fft / 4``,
             derived by the library.
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
-        fmax: Maximum Mel frequency in Hz (default None = sr/2).
+        fmax: Maximum Mel frequency in Hz (default None = sr/2); values above Nyquist are
+            refused; an explicit 0 is not absence.
         n_iter: Griffin-Lim iterations (default 32).
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
@@ -328,7 +329,7 @@ def mel_to_audio(
         The reconstructed audio samples as a float32 array.
     """
     lib = _get_lib()
-    c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel")
+    c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel", scan=False)
     return _inverse_audio(
         lib,
         "sonare_mel_to_audio",
@@ -341,7 +342,7 @@ def mel_to_audio(
             _to_c_int(n_fft, "n_fft"),
             _to_c_size_t(_effect_hop(hop_length), "hop_length"),
             _to_c_float(fmin, "fmin"),
-            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+            _optional_nonzero_domain_float(fmax, "fmax"),
         ),
         n_iter,
         SonareMelToAudioOptions._given(htk=1 if htk else 0),
@@ -448,7 +449,8 @@ def mfcc_to_audio(
         hop_length: Hop length used for reconstruction. Default: ``n_fft / 4``,
             derived by the library.
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
-        fmax: Maximum Mel frequency in Hz (default None = sr/2).
+        fmax: Maximum Mel frequency in Hz (default None = sr/2); values above Nyquist are
+            refused; an explicit 0 is not absence.
         n_iter: Griffin-Lim iterations (default 32).
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
@@ -456,7 +458,9 @@ def mfcc_to_audio(
         The reconstructed audio samples as a float32 array.
     """
     lib = _get_lib()
-    c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
+    c_array, n_mfcc, n_frames = _to_c_float_matrix(
+        coefficients, arg_name="coefficients", scan=False
+    )
     hop_length = _effect_hop(hop_length)
     options = SonareMfccToAudioOptions._given(
         htk=1 if htk else 0, lifter=_to_c_float(lifter, "lifter")
@@ -474,7 +478,7 @@ def mfcc_to_audio(
             _to_c_int(n_fft, "n_fft"),
             _to_c_size_t(hop_length, "hop_length"),
             _to_c_float(fmin, "fmin"),
-            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+            _optional_nonzero_domain_float(fmax, "fmax"),
         ),
         n_iter,
         options,

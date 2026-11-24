@@ -14,6 +14,7 @@ import operator
 from typing import NamedTuple, SupportsFloat, SupportsIndex
 
 from ._errors import SonareValueError, _refuse, _refuse_integer, _refuse_type
+from ._field_spelling import OMIT_FOR_POSITIVE_DEFAULT
 
 
 def _narrow_int(value: object, name: str, low: int, high: int) -> int:
@@ -142,6 +143,16 @@ def _domain_float(value: object, name: str) -> ctypes.c_float:
         except (TypeError, ValueError):
             pass
     raise _refuse_type(f"{name} must be a number")
+
+
+def _optional_nonzero_domain_float(value: object, name: str) -> ctypes.c_float:
+    """Map absence to C zero while leaving a supplied float domain to the core."""
+    if value is None:
+        return ctypes.c_float(0.0)
+    narrowed = _domain_float(value, name)
+    if narrowed.value == 0.0:
+        raise _refuse(f"{name} {OMIT_FOR_POSITIVE_DEFAULT}")
+    return narrowed
 
 
 def _float_data(value: object, name: str) -> ctypes.c_float:
@@ -385,7 +396,7 @@ def _resolve_absent_positive(value: object, name: str) -> int | float:
         return _C_ABSENT
     number = _finite_or_domain(value, name)
     if number <= 0:
-        raise _refuse_integer(name, f"{name} must be greater than 0; omit it for the default")
+        raise _refuse_integer(name, f"{name} {OMIT_FOR_POSITIVE_DEFAULT}")
     return value  # type: ignore[return-value]
 
 
@@ -403,7 +414,7 @@ def _resolve_zero_default(value: object, name: str) -> int | float:
         return 0
     number = _finite_or_domain(value, name)
     if number <= 0:
-        raise _refuse_integer(name, f"{name} must be greater than 0; omit it for the default")
+        raise _refuse_integer(name, f"{name} {OMIT_FOR_POSITIVE_DEFAULT}")
     return value  # type: ignore[return-value]
 
 

@@ -203,6 +203,51 @@ describe('RealtimeEngine transport and state reads', () => {
     });
   });
 
+  it('refuses out-of-domain fifths on a key signature without replacing the snapshot', () => {
+    const check = (engine: RealtimeEngine) => {
+      engine.setMarkers([{ id: 1, ppq: 1, kind: 'keySignature', keyFifths: 7 }]);
+      const before = engine.markers();
+      for (const keyFifths of [-8, 8]) {
+        expect(() =>
+          engine.setMarkers([{ id: 1, ppq: 2, kind: 'keySignature', keyFifths }]),
+        ).toThrow(
+          new RangeError(
+            'RealtimeEngine.setMarkers: markers[0].keyFifths must be an integer in [-7, 7]',
+          ),
+        );
+        expect(engine.markers()).toEqual(before);
+      }
+    };
+    withEngine(check);
+  });
+
+  it('refuses key-signature fields on a non-key marker', () => {
+    withEngine((engine) => {
+      engine.setMarkers([
+        { id: 1, ppq: 0, name: 'key', kind: 'keySignature', keyFifths: 2, keyMinor: true },
+      ]);
+      const before = engine.markers();
+
+      const fifthsError = caught(() =>
+        engine.setMarkers([{ id: 2, ppq: 1, name: 'invalid', kind: 'cuePoint', keyFifths: 1 }]),
+      );
+      expect(fifthsError).toBeInstanceOf(RangeError);
+      expect((fifthsError as Error).message).toBe(
+        'RealtimeEngine.setMarkers: markers[0].keyFifths must be 0 unless markers[0].kind is key signature',
+      );
+      expect(engine.markers()).toEqual(before);
+
+      const minorError = caught(() =>
+        engine.setMarkers([{ id: 2, ppq: 1, name: 'invalid', kind: 'cuePoint', keyMinor: true }]),
+      );
+      expect(minorError).toBeInstanceOf(RangeError);
+      expect((minorError as Error).message).toBe(
+        'RealtimeEngine.setMarkers: markers[0].keyMinor must be 0 unless markers[0].kind is key signature',
+      );
+      expect(engine.markers()).toEqual(before);
+    });
+  });
+
   it('assigns an id-less marker the lowest free id and never reuses one', () => {
     expect(MARKER_ID_CASES.length).toBeGreaterThan(0);
     for (const { name, steps } of MARKER_ID_CASES) {
