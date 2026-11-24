@@ -205,7 +205,8 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info) {
       c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);
   if (err != SONARE_OK) {
     sonare_free_string(json);
-    ThrowSonareError(env, err);
+    // The request carries the params as its own fields, so a refusal names nFft, not params.nFft.
+    ThrowSonareErrorFlattening(env, err, "params");
     return env.Undefined();
   }
   std::string result = json != nullptr ? json : "";

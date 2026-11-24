@@ -413,6 +413,19 @@ describe('mixing assistant (WASM)', () => {
       ).toThrow();
     });
 
+    it.each([
+      ['nFft', 524288, 'nFft rescaled to sampleRate must fit the largest FFT size'],
+      [
+        'hopLength',
+        2 ** 31 - 1,
+        'hopLength rescaled to sampleRate must fit the largest hop length',
+      ],
+    ])('names %s, not params, when its rescale outgrows the reader', (key, value, text) => {
+      expect(() =>
+        mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: 96000, [key]: value }),
+      ).toThrow(new RangeError(`mixingAssistantSuggest: ${text}`));
+    });
+
     it('rejects an option value that is neither a number nor a boolean', () => {
       expect(() =>
         mixingAssistantSuggest({

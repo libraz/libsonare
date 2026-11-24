@@ -937,8 +937,11 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `sonare_mastering_apply_processor(params)` | final.bitDepth and final.outputChain take no clamp param and refuse it with SONARE_ERROR_INVALID_PARAMETER as an unknown key naming the keys they read, since the code range holds a sample past full scale on its own |
+| `sonare_mastering_audio_profile(params)` | a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size') |
+| `sonare_mastering_audio_profile_stereo(params)` | a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size') |
 | `sonare_mastering_insert_param_names` | Pass a declared insert name. An undeclared name no longer returns an empty success. sonare_mastering_insert_param_names returns NULL and sets SONARE_ERROR_INVALID_PARAMETER. sonare_mastering_insert_param_info returns that error and leaves out_json NULL. Both report "unknown insert processor: <id>", with " (renamed to <current id>)" appended for a retired id. |
 | `sonare_mastering_insert_timing` | a sample_rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range'); a params key the insert does not read names params.<key> |
+| `sonare_mixing_assistant_suggest(params)` | a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.hopLength rescaled to sample_rate must fit the largest hop length') |
 | `sonare_streaming_mastering_chain_flush_mono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_mono instead |
 | `sonare_streaming_mastering_chain_flush_stereo` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) returns SONARE_ERROR_NOT_SUPPORTED 'cannot automatically flush a chain with an unbounded tail' and writes nothing; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to sonare_streaming_mastering_chain_process_stereo instead |
 
@@ -3288,6 +3291,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
+| `mastering_audio_profile(params)` | a refused nFft or hopLength raises SonareValueError naming the key under the mapping the caller passed: 'mastering_audio_profile: params.nFft must be an integer in [1, 524288]', 'mastering_audio_profile: params.nFft rescaled to sample_rate must fit the largest FFT size' |
 | `mastering_insert_param_info(name)` | `mastering_insert_param_info(insert)` |
 | `mastering_insert_timing(name)` | `mastering_insert_timing(insert)` |
 | `mastering_pair_analyze(analysis_name)` | `mastering_analyze_pair(analysis)`: pass the analysis name with the analysis keyword |

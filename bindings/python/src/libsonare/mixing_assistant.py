@@ -271,7 +271,7 @@ def _suggest(
         _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
-    _check(rc, respelled=_STFT_RESPELLED)
+    _check(rc, flattened="params", respelled=_STFT_RESPELLED)
     try:
         return json.loads(ctypes.string_at(json_ptr).decode("utf-8")) if json_ptr.value else {}
     finally:

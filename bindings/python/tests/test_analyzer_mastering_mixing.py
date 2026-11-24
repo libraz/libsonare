@@ -499,6 +499,33 @@ def test_mastering_audio_profile_returns_its_record() -> None:
     assert not hasattr(profile, "genre_candidates")
 
 
+@pytest.mark.parametrize(
+    ("params", "sr", "text"),
+    [
+        ({"nFft": 0}, 48000, "params.nFft must be an integer in [1, 524288]"),
+        (
+            {"nFft": 524288},
+            96000,
+            "params.nFft rescaled to sample_rate must fit the largest FFT size",
+        ),
+        (
+            {"hopLength": 2**30},
+            96000,
+            "params.hopLength rescaled to sample_rate must fit the largest hop length",
+        ),
+    ],
+)
+def test_mastering_audio_profile_names_the_params_key_it_refuses(params, sr, text) -> None:
+    """A refused profile param is named under the params mapping the caller passed."""
+    import libsonare
+
+    samples = np.zeros(4800, dtype=np.float32)
+    with pytest.raises(
+        libsonare.SonareValueError, match=rf"^mastering_audio_profile: {re.escape(text)}$"
+    ):
+        libsonare.mastering_audio_profile(samples, sample_rate=sr, params=params)
+
+
 def _decorrelated_pair(sr: int, seconds: int) -> tuple[list[float], list[float], list[float]]:
     n = sr * seconds
     left = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(n)]

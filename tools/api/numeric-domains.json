@@ -2642,7 +2642,7 @@
     },
     {
       "entry": "mastering_audio_profile",
-      "param": "hop_length",
+      "param": "params.hopLength",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -2653,7 +2653,7 @@
     },
     {
       "entry": "mastering_audio_profile",
-      "param": "n_fft",
+      "param": "params.nFft",
       "kind": "integer",
       "lo": 1,
       "hi": 524288,
@@ -2664,7 +2664,7 @@
     },
     {
       "entry": "mastering_audio_profile_stereo",
-      "param": "hop_length",
+      "param": "params.hopLength",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -2675,7 +2675,7 @@
     },
     {
       "entry": "mastering_audio_profile_stereo",
-      "param": "n_fft",
+      "param": "params.nFft",
       "kind": "integer",
       "lo": 1,
       "hi": 524288,

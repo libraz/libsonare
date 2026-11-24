@@ -347,6 +347,15 @@ describe('mixing assistant STFT sizes', () => {
     );
   });
 
+  it.each([
+    ['nFft', 524288, 'nFft rescaled to sampleRate must fit the largest FFT size'],
+    ['hopLength', 2 ** 31 - 1, 'hopLength rescaled to sampleRate must fit the largest hop length'],
+  ])('names %s, not params, when its rescale outgrows the reader', (key, value, text) => {
+    expect(() =>
+      mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: 96000, [key]: value } as never),
+    ).toThrow(new RangeError(`mixingAssistantSuggest: ${text}`));
+  });
+
   it.each(['nFft', 'hopLength'])('refuses a %s that is not a number', (key) => {
     for (const value of [true, '1024']) {
       expect(() => suggest({ [key]: value })).toThrow(

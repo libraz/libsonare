@@ -240,16 +240,21 @@ inline std::optional<std::string> DocumentRooted(std::string_view entry, std::st
   return std::nullopt;
 }
 
-// @p subject without a leading object-argument root, or without "<c_root>." when given.
-inline std::string_view Unrooted(std::string_view subject, std::string_view c_root) {
-  for (const std::string_view root : kObjectRoots) {
-    if (subject.substr(0, root.size()) == root) return subject.substr(root.size());
-  }
+// @p subject without "<c_root>." when given and it leads.
+inline std::string_view WithoutRoot(std::string_view subject, std::string_view c_root) {
   if (!c_root.empty() && subject.size() > c_root.size() && subject[c_root.size()] == '.' &&
       subject.substr(0, c_root.size()) == c_root) {
     return subject.substr(c_root.size() + 1);
   }
   return subject;
+}
+
+// @p subject without a leading object-argument root, or without "<c_root>." when given.
+inline std::string_view Unrooted(std::string_view subject, std::string_view c_root) {
+  for (const std::string_view root : kObjectRoots) {
+    if (subject.substr(0, root.size()) == root) return subject.substr(root.size());
+  }
+  return WithoutRoot(subject, c_root);
 }
 
 // @p refusal with each subject in the node caller's spelling, looked up under @p entry (the
@@ -258,12 +263,13 @@ inline std::string_view Unrooted(std::string_view subject, std::string_view c_ro
 inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefusal& refusal,
                                               std::string_view entry,
                                               std::string_view c_root = {}) {
-  // A document path is already the caller's spelling; only its slot prefix is re-rooted.
+  // A caller-spelled path keeps its spelling; only its slot prefix and "<c_root>." are re-rooted.
   if (refusal.caller_spelled()) {
     return refusal.respelled(
         refusal.code(),
-        [entry](const std::string& subject) {
-          return DocumentRooted(entry, subject).value_or(subject);
+        [entry, c_root](const std::string& subject) {
+          if (std::optional<std::string> rooted = DocumentRooted(entry, subject)) return *rooted;
+          return std::string(WithoutRoot(subject, c_root));
         },
         true);
   }

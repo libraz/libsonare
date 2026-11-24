@@ -6439,3 +6439,27 @@ changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate
 domain = "mastering"
 rule = "options-struct"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics configs are refused until their init sets struct_size"
+
+[[entry]]
+kind = "option"
+old = "sonare_mastering_audio_profile(params)"
+changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size')"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering profile rescale relations use C caller names"
+
+[[entry]]
+kind = "option"
+old = "sonare_mastering_audio_profile_stereo(params)"
+changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size')"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering profile rescale relations use C caller names"
+
+[[entry]]
+kind = "option"
+old = "sonare_mixing_assistant_suggest(params)"
+changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.hopLength rescaled to sample_rate must fit the largest hop length')"
+domain = "mastering"
+rule = "individual"
+test = "tests/mixing/assistant/track_profile_test.cpp::the mixing-assistant C entry roots a params refusal at params"

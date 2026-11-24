@@ -792,6 +792,20 @@ describe('results: unit-named fields and objects', () => {
     expectTypeOf(profile).toEqualTypeOf<MasteringAudioProfile>();
   });
 
+  it.each([
+    [{ nFft: 0 }, 48000, 'nFft must be an integer in [1, 524288]'],
+    [{ nFft: 524288 }, 96000, 'nFft rescaled to sampleRate must fit the largest FFT size'],
+    [
+      { hopLength: 2 ** 30 },
+      96000,
+      'hopLength rescaled to sampleRate must fit the largest hop length',
+    ],
+  ])('the audio profile names its own field when refusing %o at %d Hz', (fields, rate, text) => {
+    expect(() =>
+      sonare.masteringAudioProfile({ samples: left, sampleRate: rate, ...fields }),
+    ).toThrow(new RangeError(`masteringAudioProfile: ${text}`));
+  });
+
   it.each([0, 1.5, -1])('the audio profile refuses nFft %s', (nFft) => {
     expectThrows(
       () => sonare.masteringAudioProfile({ samples: left, sampleRate, nFft }),
