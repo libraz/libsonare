@@ -76,11 +76,11 @@ def _run_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
         ),
         (
             ["polyphonic-render", MISSING, "--edit", "0.gain_db=abc", *OUT],
-            "argument --edit: gain_db must be a number",
+            "--edit 0.gain_db must be a number",
         ),
         (
             ["polyphonic-render", MISSING, "--edit", "x.gain_db=1", *OUT],
-            "argument --edit: NOTE must be an integer",
+            "--edit x.gain_db must be an integer",
         ),
         (
             ["transcribe", MISSING, "--reattack-ratio", "0.5", "-o", "out.mid"],
