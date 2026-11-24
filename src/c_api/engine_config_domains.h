@@ -80,6 +80,12 @@ inline constexpr sonare::util::check::NumericDomain kEngineMidiChannelDomain =
 /// @brief What a UMP group accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineUmpGroupDomain =
     sonare::util::check::integer_domain(0, 15);
+/// @brief What a MIDI clip event's word_count accepts; zero asks the reader to infer.
+inline constexpr sonare::util::check::NumericDomain kEngineUmpWordCountDomain =
+    sonare::util::check::integer_domain(0, 4);
+/// @brief A scheduled render frame, with -1 selecting the next block head.
+inline constexpr sonare::util::check::NumericDomain kEngineScheduledRenderFrameDomain =
+    sonare::util::check::integer_domain_of<int64_t>(-1);
 /// @brief What a MIDI clip's loop count accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineMidiClipLoopDomain =
     sonare::util::check::integer_domain_of<int>(0);
@@ -113,6 +119,13 @@ inline constexpr sonare::util::check::NumericDomain kEngineAlignmentDelayDomain 
 inline constexpr sonare::util::check::NumericDomain kEngineRenderChannelsDomain =
     sonare::util::check::integer_domain(
         1, static_cast<long long>(sonare::engine::RealtimeEngine::kMaxAudioChannels));
+/// @brief The minimum gap between scope records, or zero to disable them.
+inline constexpr sonare::util::check::NumericDomain kEngineScopeIntervalDomain =
+    sonare::util::check::integer_domain_of<int>(0);
+/// @brief The number of spectrum bands carried by each scope record.
+inline constexpr sonare::util::check::NumericDomain kEngineScopeBandCountDomain =
+    sonare::util::check::integer_domain(1, SONARE_SCOPE_MAX_BANDS);
+
 /// @brief What the total_frames argument of a render accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineRenderFramesDomain =
     sonare::util::check::integer_domain_of<int64_t>(0);

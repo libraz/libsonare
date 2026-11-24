@@ -51,6 +51,30 @@ TEST_CASE("device-driven C engine refuses manual processing without changing las
   CHECK(std::string(sonare_last_error_reason()) == "engineDeviceDriven");
 }
 
+TEST_CASE("offline bounce refuses an engine owned by a live driver", "[c_api][live]") {
+  SonareEngine* raw = nullptr;
+  REQUIRE(sonare_engine_create(&raw) == SONARE_OK);
+  const std::unique_ptr<SonareEngine, decltype(&sonare_engine_destroy)> engine(
+      raw, sonare_engine_destroy);
+  REQUIRE(sonare_engine_prepare(raw, 48000, 128, 16, 16, 2) == SONARE_OK);
+  Driver driver(engine->engine);
+  const std::unique_ptr<Driver, void (*)(Driver*)> attachment(&driver,
+                                                              [](Driver* d) { d->stop(); });
+  REQUIRE(engine->engine.try_attach_live_driver(&driver));
+
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
+  options.num_channels = 2;
+  options.total_frames = 64;
+  SonareEngineBounceResult result{};
+  result.frames = 99;
+  CHECK(sonare_engine_bounce_offline(raw, &options, &result) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_last_error_reason() != nullptr);
+  CHECK(std::string(sonare_last_error_reason()) == "engineDeviceDriven");
+  CHECK(result.frames == 0);
+  CHECK(result.interleaved == nullptr);
+}
+
 TEST_CASE("destroying a device-driven C engine stops its driver", "[c_api][live]") {
   SonareEngine* raw = nullptr;
   REQUIRE(sonare_engine_create(&raw) == SONARE_OK);

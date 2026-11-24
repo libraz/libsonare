@@ -465,13 +465,24 @@ TEST_CASE("engine MIDI entries refuse a NULL argument by name", "[c_api][engine_
   CHECK(last_error() == "out_articulation must not be NULL");
   CHECK(sonare_engine_articulation(nullptr, 7, 0, &articulation) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "engine must not be NULL");
+  size_t legato = 99;
+  CHECK(sonare_engine_legato_fallback_count(nullptr, 7, &legato) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "engine must not be NULL");
+  CHECK(legato == 0);
   CHECK(sonare_engine_legato_fallback_count(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
 
   SonareExternalMidiEvent events[8] = {};
+  count = 99;
+  CHECK(sonare_engine_drain_external_midi(nullptr, events, 8, &count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "engine must not be NULL");
+  CHECK(count == 0);
+  count = 99;
   CHECK(sonare_engine_drain_external_midi(engine, nullptr, 8, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out must not be NULL when max_events is not 0");
+  CHECK(count == 0);
   CHECK(sonare_engine_drain_external_midi(engine, events, 8, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
@@ -521,13 +532,21 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
         }) == "binding.cc_lsb_number must be binding.cc_number + 32");
 
   // Instrument parameter name and soundfont size.
-  uint32_t id = 0;
+  uint32_t id = 99;
+  CHECK(sonare_engine_resolve_instrument_automation_id(nullptr, 7, "gain", &id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "engine must not be NULL");
+  CHECK(id == 0);
+  id = 99;
   CHECK(sonare_engine_resolve_instrument_automation_id(engine, 7, nullptr, &id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "param_name must not be NULL");
+  CHECK(id == 0);
+  id = 99;
   CHECK(sonare_engine_resolve_instrument_automation_id(engine, 7, "", &id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "param_name must not be empty");
+  CHECK(id == 0);
   CHECK(sonare_engine_resolve_instrument_automation_id(engine, 7, "gain", nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_id must not be NULL");
@@ -560,10 +579,12 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
   SonareExternalMidiEvent events[8] = {};
   size_t count = 0;
   if (kLowered > 1) {
+    count = 99;
     CHECK(sonare_engine_drain_external_midi(engine, events, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_error() ==
           "max_events must be 0 or an integer of at least " + std::to_string(kLowered));
+    CHECK(count == 0);
   }
 
   sonare_engine_destroy(engine);
@@ -829,6 +850,87 @@ TEST_CASE("engine live MIDI pushes record the shared argument rule's text",
   CHECK(sonare_engine_push_midi_ump(engine, 7, &word, 0, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "words do not form a pushable UMP message");
 
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine MIDI instrument binding reports a full rack", "[c_api][engine_refusal][midi]") {
+  SonareEngine* engine = prepared_engine();
+  SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
+  for (uint32_t id = 1; id <= 16; ++id) {
+    REQUIRE(sonare_engine_set_builtin_instrument(engine, id, &synth) == SONARE_OK);
+  }
+  CHECK(sonare_engine_set_builtin_instrument(engine, 17, &synth) == SONARE_ERROR_INVALID_STATE);
+  CHECK(last_error() == "the instrument rack is full");
+  CHECK(sonare_engine_set_builtin_instrument(engine, 1, &synth) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("scheduled MIDI C entries accept only the documented immediate sentinel",
+          "[c_api][engine_refusal][midi]") {
+  SonareEngine* engine = prepared_engine();
+  const std::string refused_text = "render_frame must be an integer of at least -1";
+  const auto refused = [&](SonareError status) {
+    CHECK(status == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error() == refused_text);
+  };
+
+  const auto argument_refused = [](SonareError status, const char* expected) {
+    CHECK(status == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error() == expected);
+  };
+
+  // An invalid preceding argument wins over an invalid render frame.
+  argument_refused(sonare_engine_push_midi_note_on(engine, 7, 0, 16, 60, 100, -2),
+                   "channel must be an integer in [0, 15]");
+  argument_refused(sonare_engine_push_midi_note_off(engine, 7, 0, 0, 128, 0, -2),
+                   "note must be an integer in [0, 127]");
+  argument_refused(sonare_engine_push_midi_cc(engine, 7, 0, 0, 128, 1, -2),
+                   "controller must be an integer in [0, 127]");
+  argument_refused(sonare_engine_push_midi_pitch_bend(engine, 7, 0, 0, 16384, -2),
+                   "bend14 must be an integer in [0, 16383]");
+  argument_refused(sonare_engine_push_midi_channel_pressure(engine, 7, 0, 0, 128, -2),
+                   "pressure must be an integer in [0, 127]");
+  argument_refused(sonare_engine_push_midi_poly_pressure(engine, 7, 0, 0, 60, 128, -2),
+                   "pressure must be an integer in [0, 127]");
+  argument_refused(sonare_engine_push_midi_panic(nullptr, -2), "engine must not be NULL");
+  argument_refused(sonare_engine_push_midi_sysex(engine, 7, nullptr, 2, -2),
+                   "data must not be NULL");
+  argument_refused(sonare_engine_push_midi_ump(engine, 7, nullptr, 1, -2),
+                   "words do not form a pushable UMP message");
+  argument_refused(sonare_engine_push_midi_program(engine, 7, 0, 0, 1, 0, 1, 0, -2),
+                   "bank_msb and bank_lsb must be 0 when bank_valid is false");
+
+  refused(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -2));
+  refused(sonare_engine_push_midi_note_off(engine, 7, 0, 0, 60, 0, -2));
+  refused(sonare_engine_push_midi_cc(engine, 7, 0, 0, 74, 1, -2));
+  refused(sonare_engine_push_midi_pitch_bend(engine, 7, 0, 0, 0, -2));
+  refused(sonare_engine_push_midi_channel_pressure(engine, 7, 0, 0, 1, -2));
+  refused(sonare_engine_push_midi_poly_pressure(engine, 7, 0, 0, 60, 1, -2));
+  refused(sonare_engine_push_midi_panic(engine, -2));
+  const uint8_t sysex[] = {0xF0, 0xF7};
+  argument_refused(sonare_engine_push_midi_sysex(engine, 7, sysex, 0, -2),
+                   "size must be an integer in [1, 512]");
+  refused(sonare_engine_push_midi_sysex(engine, 7, sysex, sizeof(sysex), -2));
+  const uint32_t ump = midi1_word(0x9, 0, 60, 100);
+  refused(sonare_engine_push_midi_ump(engine, 7, &ump, 1, -2));
+  refused(sonare_engine_push_midi_program(engine, 7, 0, 0, 1, 0, 0, 0, -2));
+
+  SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
+  synth.gain = 0.5f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
+  CHECK(peak_abs(left) == 0.0f);
+  REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) == SONARE_OK);
+  CHECK(sonare_engine_push_midi_cc(engine, 7, 0, 0, 74, 1, 0) == SONARE_OK);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
+  CHECK(peak_abs(left) > 0.0f);
   sonare_engine_destroy(engine);
 }
 

@@ -989,6 +989,28 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareEngineMidiEvent.word_count` | Only 0 infers the count. An explicit count above 4 returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].events[j].word_count and leaves the previous schedule installed. |
+| `sonare_engine_configure_scope_telemetry(interval_frames)` | A negative interval is refused instead of selecting 0 (disabled). The active configuration is unchanged on refusal. |
+| `sonare_engine_play(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_cc(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_channel_pressure(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_note_off(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_note_on(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_panic(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_pitch_bend(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_poly_pressure(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_program(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_sysex(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_push_midi_ump(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_reset_master_loudness_meter(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_reset_processor_state(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_seek_marker(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_seek_ppq(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_seek_sample(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_set_parameter(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_set_solo_mute(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_set_track_monitor_mode(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_stop(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
 | `sonare_sample_bank_add_sample` | desc.root_key above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being clamped; pass a MIDI key in [0, 127], where 0 keeps the default |
 | `sonare_sample_bank_add_zone` | zone.key_lo, zone.key_hi, zone.vel_lo or zone.vel_hi above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being stored; pass ordered MIDI keys and velocities in [0, 127] |
 
@@ -999,6 +1021,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_synth_enum_names` | lists every NativeSynth enum token in lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...); the moog-ladder input spelling is gone |
 | `sonare_synth_preset_names` | lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) |
 | `sonare_synth_preset_patch` | accepts only the lowerCamel preset names that sonare_synth_preset_names lists |
+
+#### Results are typed values, not JSON strings
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_engine_drain_external_midi` | A supplied out_count is cleared before validating the engine and buffer. max_events = 0 is accepted with a NULL out buffer and drains nothing, writing zero to out_count. |
+| `sonare_engine_resolve_instrument_automation_id(out_id)` | A supplied id is zero on refusal, including a NULL engine or a NULL or empty param_name. |
 
 #### C extends an operation through an Options struct
 
@@ -1038,10 +1067,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareTransportState.sample_rate` | the sample rate is an int instead of a double |
 | `sonare_engine_clip_page_request_overflow_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
-| `sonare_engine_configure_scope_telemetry(band_count)` | the count is a size_t instead of an unsigned int |
+| `sonare_engine_configure_scope_telemetry(band_count)` | the count is a size_t instead of an unsigned int. A count outside [1, SONARE_SCOPE_MAX_BANDS] is refused instead of clamped, and the active configuration is unchanged. |
 | `sonare_engine_configure_scope_telemetry(out_band_count)` | the count is a size_t instead of an unsigned int |
 | `sonare_engine_external_midi_dropped_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
-| `sonare_engine_legato_fallback_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_legato_fallback_count(out_count)` | the count is a size_t instead of a uint32_t. A supplied count is cleared even when the engine is NULL. |
 | `sonare_engine_prepare(sample_rate)` | the sample rate is an int instead of a double |
 | `sonare_engine_warp_stretch_overflow_count(out_count)` | receives a uint64_t running tally instead of a uint32_t |
 | `sonare_midi_route_events(out_overflow_count)` | the count is a size_t instead of a uint32_t |
@@ -1051,10 +1080,26 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_engine_clear_midi_cc_bindings` | Returns SONARE_ERROR_OUT_OF_MEMORY and keeps the previous bindings if allocating the empty table fails. In 1.x this returned success without clearing the table. |
 | `sonare_engine_set_midi_fx` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
+| `sonare_engine_set_track_lanes` | A declared non-stereo source_channel_layout returns SONARE_ERROR_NOT_SUPPORTED instead of SONARE_ERROR_INVALID_PARAMETER. An undeclared layout value still returns SONARE_ERROR_INVALID_PARAMETER. |
 | `sonare_midi_cc_name` | a controller outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming controller (1.x: NULL with no error); an unnamed controller in range stays NULL with SONARE_OK |
 | `sonare_midi_cc_to_breakpoint` | a SysEx event returns SONARE_ERROR_NOT_SUPPORTED with the message 'MIDI CC conversion does not support SysEx events' (1.x refused it with SONARE_ERROR_INVALID_PARAMETER before the binding lookup); an unmatched channel-voice event still returns SONARE_ERROR_INVALID_STATE; a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind (1.x ignored it) |
+
+#### A refusal names the public entry the caller invoked
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_engine_push_midi_input_cc` | A refused argument's diagnostic has no function-name prefix. |
+| `sonare_engine_push_midi_input_channel_pressure` | A refused argument's diagnostic has no function-name prefix. |
+| `sonare_engine_push_midi_input_note_off` | A refused argument's diagnostic has no function-name prefix. |
+| `sonare_engine_push_midi_input_note_on` | A refused argument's diagnostic has no function-name prefix. |
+| `sonare_engine_push_midi_input_pitch_bend` | A refused argument's diagnostic has no function-name prefix. |
+| `sonare_engine_push_midi_input_poly_pressure` | A refused argument's diagnostic has no function-name prefix. |
+| `sonare_engine_push_midi_input_ump` | A malformed message is refused as 'words do not form a pushable UMP message', without a function-name prefix. |
+| `sonare_engine_set_track_output_bus` | An unknown track is refused as 'track_id must be the id of a track in this engine'; the diagnostic does not include the given id. |
+| `sonare_engine_set_track_sends` | An unknown track is refused as 'track_id must be the id of a track in this engine'; the diagnostic does not include the given id. |
 
 #### Each operation has exactly one entry point
 
@@ -1074,7 +1119,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_prepare` | takes int max_channels after telemetry_capacity (0 selects 64, negative is refused); pass 0 for the former five-argument call |
 | `sonare_engine_process_with_monitor` | removed: call sonare_engine_process with a non-NULL monitor_out |
 | `sonare_engine_process` | takes float* const* monitor_out after channels: NULL folds the cue bus into channels as before, non-NULL receives it separately |
-| `sonare_engine_set_parameter_smoothed` | removed: call sonare_engine_set_parameter with smoothed non-zero |
+| `sonare_engine_set_parameter_smoothed` | removed: call sonare_engine_set_parameter with smoothed non-zero. Use -1 for the next block head: values below -1 are refused. |
 | `sonare_engine_set_parameter` | takes int smoothed after render_frame: 0 steps to the value as before, non-zero ramps to it |
 | `sonare_engine_set_synth_instrument_binding` | removed: call sonare_engine_set_synth_instrument, which takes the SonareSynthInstrumentBinding |
 | `sonare_engine_set_synth_instrument_with_bank` | removed: call sonare_engine_set_synth_instrument with the bank in SonareSynthInstrumentBinding.sample_bank |

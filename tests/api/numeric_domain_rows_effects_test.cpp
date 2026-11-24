@@ -387,9 +387,12 @@ SonareError probe_engine_load_sound_font(const std::string&, double value) {
   return sonare_engine_load_sound_font(engine.get(), data.data(), as_size(value));
 }
 
-SonareError probe_engine_push_midi_sysex(const std::string&, double value) {
+SonareError probe_engine_push_midi_sysex(const std::string& param, double value) {
   PreparedEngine engine;
-  const std::array<std::uint8_t, 1> data{0x7E};
+  const std::array<std::uint8_t, 512> data{0xF0, 0xF7};
+  if (is_param(param, "render_frame")) {
+    return sonare_engine_push_midi_sysex(engine.get(), 1, data.data(), 2, as_i64(value));
+  }
   return sonare_engine_push_midi_sysex(engine.get(), 1, data.data(), as_size(value), 0);
 }
 
@@ -417,6 +420,15 @@ SonareError probe_engine_bind_midi_cc(const std::string& param, double value) {
   if (is_param(param, "binding.param_id")) binding.param_id = as_u32(value);
   return sonare_engine_bind_midi_cc(engine.get(), &binding);
 }
+
+#if defined(SONARE_WITH_MIXING)
+SonareError probe_engine_configure_scope_telemetry(const std::string& param, double value) {
+  PreparedEngine engine;
+  const int interval = is_param(param, "interval_frames") ? static_cast<int>(value) : 0;
+  const size_t bands = is_param(param, "band_count") ? as_size(value) : 16;
+  return sonare_engine_configure_scope_telemetry(engine.get(), interval, bands, nullptr);
+}
+#endif
 
 SonareError probe_engine_render_offline(const std::string& param, double value) {
   PreparedEngine engine;
@@ -495,8 +507,11 @@ SonareError probe_engine_prepare(const std::string& param, double value) {
   return err;
 }
 
-SonareError probe_engine_seek_ppq(const std::string&, double value) {
+SonareError probe_engine_seek_ppq(const std::string& param, double value) {
   PreparedEngine engine;
+  if (is_param(param, "render_frame")) {
+    return sonare_engine_seek_ppq(engine.get(), 0.0, as_i64(value));
+  }
   return sonare_engine_seek_ppq(engine.get(), value, 0);
 }
 
@@ -513,8 +528,11 @@ SonareError probe_engine_set_loop(const std::string& param, double value) {
   return sonare_engine_set_loop(engine.get(), start, end, 0);
 }
 
-SonareError probe_engine_seek_sample(const std::string&, double value) {
+SonareError probe_engine_seek_sample(const std::string& param, double value) {
   PreparedEngine engine;
+  if (is_param(param, "render_frame")) {
+    return sonare_engine_seek_sample(engine.get(), 0, as_i64(value));
+  }
   return sonare_engine_seek_sample(engine.get(), as_i64(value), 0);
 }
 
@@ -655,6 +673,7 @@ SonareError probe_engine_set_midi_clips(const std::string& param, double value) 
   clip.event_count = 1;
   const std::string field = field_of(param);
   if (field == "group") event.group = as_u8(value);
+  if (field == "word_count") event.word_count = as_u8(value);
   if (field == "length_samples") clip.length_samples = as_i64(value);
   if (field == "loop") clip.loop = static_cast<int>(value);
   if (field == "loop_length_samples") {
@@ -1010,6 +1029,29 @@ SonareError probe_playback_renderer_render_offline(const std::string&, double va
 }
 #endif
 
+template <typename Enqueue>
+SonareError probe_scheduled_frame(double value, Enqueue enqueue) {
+  PreparedEngine engine;
+  return enqueue(engine.get(), as_i64(value));
+}
+
+template <SonareError (*Enqueue)(SonareEngine*, int64_t)>
+SonareError probe_engine_frame(const std::string&, double value) {
+  return probe_scheduled_frame(value, Enqueue);
+}
+
+SonareError probe_engine_set_parameter(const std::string&, double value) {
+  PreparedEngine engine;
+  SonareParameterInfo info{};
+  info.id = 7;
+  std::strcpy(info.name, "p");
+  info.min_value = 0.0f;
+  info.max_value = 1.0f;
+  info.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine.get(), &info) == SONARE_OK);
+  return sonare_engine_set_parameter(engine.get(), info.id, 0.5f, as_i64(value), 0);
+}
+
 const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"biquad_filter", probe_biquad_filter},
@@ -1022,9 +1064,91 @@ const std::map<std::string, Probe>& probes() {
       {"engine_articulation", probe_engine_articulation},
       {"engine_bind_midi_cc", probe_engine_bind_midi_cc},
       {"engine_bounce_offline", probe_engine_bounce_offline},
+#if defined(SONARE_WITH_MIXING)
+      {"engine_configure_scope_telemetry", probe_engine_configure_scope_telemetry},
+#endif
       {"engine_count_in_end_sample", probe_engine_count_in_end_sample},
       {"engine_freeze_offline", probe_engine_freeze_offline},
       {"engine_load_sound_font", probe_engine_load_sound_font},
+      {"engine_play", probe_engine_frame<sonare_engine_play>},
+      {"engine_reset_processor_state", probe_engine_frame<sonare_engine_reset_processor_state>},
+      {"engine_seek_marker",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_seek_marker(engine, 1, frame);
+         });
+       }},
+      {"engine_set_parameter", probe_engine_set_parameter},
+      {"engine_stop", probe_engine_frame<sonare_engine_stop>},
+#if defined(SONARE_WITH_MIXING)
+      {"engine_reset_master_loudness_meter",
+       probe_engine_frame<sonare_engine_reset_master_loudness_meter>},
+      {"engine_set_solo_mute",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_set_solo_mute(engine, 0, 0, 0, frame);
+         });
+       }},
+      {"engine_set_track_monitor_mode",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_set_track_monitor_mode(engine, 0,
+                                                       SONARE_ENGINE_TRACK_MONITOR_MODE_OFF, frame);
+         });
+       }},
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+      {"engine_push_midi_note_on",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_note_on(engine, 1, 0, 0, 60, 100, frame);
+         });
+       }},
+      {"engine_push_midi_note_off",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_note_off(engine, 1, 0, 0, 60, 0, frame);
+         });
+       }},
+      {"engine_push_midi_cc",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_cc(engine, 1, 0, 0, 74, 1, frame);
+         });
+       }},
+      {"engine_push_midi_pitch_bend",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_pitch_bend(engine, 1, 0, 0, 0, frame);
+         });
+       }},
+      {"engine_push_midi_channel_pressure",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_channel_pressure(engine, 1, 0, 0, 1, frame);
+         });
+       }},
+      {"engine_push_midi_poly_pressure",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_poly_pressure(engine, 1, 0, 0, 60, 1, frame);
+         });
+       }},
+      {"engine_push_midi_panic", probe_engine_frame<sonare_engine_push_midi_panic>},
+      {"engine_push_midi_ump",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           const uint32_t word = 0x20903C64;
+           return sonare_engine_push_midi_ump(engine, 1, &word, 1, frame);
+         });
+       }},
+      {"engine_push_midi_program",
+       [](const std::string&, double value) {
+         return probe_scheduled_frame(value, [](SonareEngine* engine, int64_t frame) {
+           return sonare_engine_push_midi_program(engine, 1, 0, 0, 1, 0, 0, 0, frame);
+         });
+       }},
+#endif
       {"engine_prepare", probe_engine_prepare},
       {"engine_prime_offline_parameters", probe_engine_prime_offline_parameters},
       {"engine_push_midi_sysex", probe_engine_push_midi_sysex},
@@ -1104,6 +1228,11 @@ const std::map<std::string, Probe>& probes() {
 /// length is read only where mastering is.
 bool row_is_built(const NumericDomainRow& row) {
   if (probes().count(row.entry) == 0) return false;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  if (std::string(row.entry) == "engine_push_midi_sysex" &&
+      std::string(row.param) == "render_frame")
+    return false;
+#endif
 #if !defined(SONARE_WITH_MASTERING)
   if (std::string(row.param) == "options.dither_bits") return false;
 #endif

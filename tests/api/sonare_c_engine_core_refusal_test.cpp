@@ -149,6 +149,58 @@ TEST_CASE("engine transport refusals name the parameter", "[c_api][engine_refusa
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("engine scheduled commands refuse render frames below the immediate sentinel",
+          "[c_api][engine_scheduling]") {
+  SonareEngine* engine = make_engine();
+  constexpr uint32_t kParameterId = 77;
+  const auto parameter = valid_parameter(kParameterId);
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+
+  struct Entry {
+    const char* name;
+    SonareError (*enqueue)(SonareEngine*, int64_t);
+  };
+  const Entry entries[] = {
+      {"play", sonare_engine_play},
+      {"stop", sonare_engine_stop},
+      {"seek_sample",
+       [](SonareEngine* e, int64_t t) { return sonare_engine_seek_sample(e, 0, t); }},
+      {"seek_ppq", [](SonareEngine* e, int64_t t) { return sonare_engine_seek_ppq(e, 0.0, t); }},
+      {"seek_marker",
+       [](SonareEngine* e, int64_t t) { return sonare_engine_seek_marker(e, 1, t); }},
+      {"reset_processor_state", sonare_engine_reset_processor_state},
+      {"set_parameter",
+       [](SonareEngine* e, int64_t t) {
+         return sonare_engine_set_parameter(e, kParameterId, 0.5f, t, 0);
+       }},
+#if defined(SONARE_WITH_MIXING)
+      {"reset_master_loudness_meter", sonare_engine_reset_master_loudness_meter},
+      {"set_solo_mute",
+       [](SonareEngine* e, int64_t t) { return sonare_engine_set_solo_mute(e, 0, 0, 0, t); }},
+      {"set_track_monitor_mode",
+       [](SonareEngine* e, int64_t t) {
+         return sonare_engine_set_track_monitor_mode(e, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_OFF, t);
+       }},
+#endif
+  };
+  for (const auto& entry : entries) {
+    CAPTURE(entry.name);
+    CHECK(entry.enqueue(engine, -2) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "render_frame must be an integer of at least -1");
+  }
+  CHECK(sonare_engine_seek_sample(engine, -1, -2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("timeline_sample ") == 0);
+  CHECK(sonare_engine_seek_ppq(engine, -1.0, -2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("ppq ") == 0);
+
+  // A refused command does not occupy a slot. Fill the queue with accepted commands.
+  for (int command = 0; command < 16; ++command) {
+    CHECK(sonare_engine_play(engine, command % 2 == 0 ? -1 : 0) == SONARE_OK);
+  }
+  CHECK(sonare_engine_play(engine, 0) == SONARE_ERROR_OUT_OF_MEMORY);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("engine tempo and signature segment refusals", "[c_api][engine_refusal]") {
   SonareEngine* engine = make_engine();
 

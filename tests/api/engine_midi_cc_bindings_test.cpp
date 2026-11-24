@@ -3,9 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <tuple>
+
+#include "support/alloc_guard.h"
 
 namespace {
 
@@ -275,6 +278,100 @@ TEST_CASE("MIDI CC binding kinds accept zero inactive fields and populated activ
 #endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_GRAPH)
+TEST_CASE("failed CC clear retains the audible map and repeated clears publish",
+          "[c_api][engine][midi_cc]") {
+  const auto engine = make_engine();
+  REQUIRE(sonare_engine_prepare(engine.get(), 48000, 64, 32, 16, 0) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 7;
+  std::strncpy(parameter.name, "gain", sizeof(parameter.name) - 1);
+  parameter.min_value = -60.0f;
+  parameter.max_value = 0.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine.get(), &parameter) == SONARE_OK);
+
+  SonareEngineGraphNode nodes[3];
+  for (auto& node : nodes) sonare_engine_graph_node_init(&node);
+  std::strncpy(nodes[0].id, "in", sizeof(nodes[0].id) - 1);
+  nodes[0].type = 0;
+  nodes[0].num_ports = 1;
+  std::strncpy(nodes[1].id, "gain", sizeof(nodes[1].id) - 1);
+  nodes[1].type = 1;
+  nodes[1].gain_db = 0.0f;
+  nodes[1].num_ports = 1;
+  std::strncpy(nodes[2].id, "out", sizeof(nodes[2].id) - 1);
+  nodes[2].type = 0;
+  nodes[2].num_ports = 1;
+
+  SonareEngineGraphConnection connections[2]{};
+  std::strncpy(connections[0].source_node, "in", sizeof(connections[0].source_node) - 1);
+  std::strncpy(connections[0].dest_node, "gain", sizeof(connections[0].dest_node) - 1);
+  connections[0].mix = 1.0f;
+  std::strncpy(connections[1].source_node, "gain", sizeof(connections[1].source_node) - 1);
+  std::strncpy(connections[1].dest_node, "out", sizeof(connections[1].dest_node) - 1);
+  connections[1].mix = 1.0f;
+
+  SonareEngineGraphParameterBinding parameter_binding{};
+  parameter_binding.param_id = 7;
+  std::strncpy(parameter_binding.node_id, "gain", sizeof(parameter_binding.node_id) - 1);
+
+  SonareEngineGraphSpec graph{};
+  graph.nodes = nodes;
+  graph.node_count = 3;
+  graph.connections = connections;
+  graph.connection_count = 2;
+  graph.parameter_bindings = &parameter_binding;
+  graph.parameter_binding_count = 1;
+  std::strncpy(graph.input_node, "in", sizeof(graph.input_node) - 1);
+  std::strncpy(graph.output_node, "out", sizeof(graph.output_node) - 1);
+  graph.num_channels = 1;
+  REQUIRE(sonare_engine_set_graph(engine.get(), &graph) == SONARE_OK);
+
+  SonareMidiCcBinding binding = binding_for(0, 74, 7);
+  binding.min_value = -60.0f;
+  binding.max_value = 0.0f;
+  binding.consume = 1;
+  REQUIRE(sonare_engine_bind_midi_cc(engine.get(), &binding) == SONARE_OK);
+
+  SonareError status = SONARE_OK;
+  {
+    sonare::test::AllocationFailureAtGuard fail_first(1);
+    status = sonare_engine_clear_midi_cc_bindings(engine.get());
+  }
+  CHECK(status == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_OUT_OF_MEMORY);
+  SonareMidiCcBindingList bindings{};
+  REQUIRE(sonare_engine_midi_cc_bindings(engine.get(), &bindings) == SONARE_OK);
+  REQUIRE(bindings.count == 1);
+  CHECK(bindings.items[0].consume == 1);
+  sonare_free_midi_cc_binding_list(&bindings);
+
+  std::array<float, 64> audio{};
+  audio.fill(1.0f);
+  float* channels[] = {audio.data()};
+  REQUIRE(sonare_engine_push_midi_cc(engine.get(), 0, 0, 0, 74, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, 64) == SONARE_OK);
+  CHECK(audio[0] < 0.01f);
+
+  REQUIRE(sonare_engine_set_parameter(engine.get(), 7, 0.0f, -1, 0) == SONARE_OK);
+  for (int i = 0; i < 70; ++i) {
+    REQUIRE(sonare_engine_clear_midi_cc_bindings(engine.get()) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_midi_cc_bindings(engine.get(), &bindings) == SONARE_OK);
+  CHECK(bindings.count == 0);
+  sonare_free_midi_cc_binding_list(&bindings);
+
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_push_midi_cc(engine.get(), 0, 0, 0, 74, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine.get(), channels, nullptr, 1, 64) == SONARE_OK);
+  CHECK(audio[0] > 0.99f);
+}
+#endif
+
 TEST_CASE("C MIDI CC conversions ignore consume and learning clears it", "[c_api][midi_cc]") {
   auto binding = binding_for(3, 74, 77);
   binding.consume = 1;

@@ -1874,4 +1874,47 @@ TEST_CASE("sonare_sample_bank_add_sample refuses a loop_mode outside SoundFont s
   REQUIRE(count == 4);
   sonare_sample_bank_destroy(bank);
 }
+
+TEST_CASE("MIDI clip UMP count zero infers and positive overflow refuses without replacing clips",
+          "[c_api][engine][midi]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
+  SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
+  synth.gain = 0.5f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 1, &synth) == SONARE_OK);
+
+  SonareEngineMidiEvent event{};
+  event.word0 = midi1_word(0x9, 0, 60, 100);
+  event.word_count = 0;
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
+  clip.gain = 1.0f;
+  clip.id = 1;
+  clip.track_id = 1;
+  clip.length_samples = 128;
+  clip.destination_id = 1;
+  clip.events = &event;
+  clip.event_count = 1;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineMidiEvent invalid_event = event;
+  invalid_event.word0 = midi1_word(0x8, 0, 60, 0);
+  invalid_event.word_count = 5;
+  SonareEngineMidiClipSchedule invalid_clip = clip;
+  invalid_clip.events = &invalid_event;
+  CHECK(sonare_engine_set_midi_clips(engine, &invalid_clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "clips[0].events[0].word_count must be an integer in [0, 4]");
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
+  CHECK(peak_abs(left) > 0.0f);
+  sonare_engine_destroy(engine);
+}
+
 #endif

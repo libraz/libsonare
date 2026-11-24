@@ -12,6 +12,7 @@
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/midi_cc_binding_check.h"
+#include "c_api/sonare_c_engine_internal.h"
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
 #include "midi/live_push_args.h"
@@ -48,9 +49,8 @@ static_assert(sonare::midi::kArticulationModeCount == SONARE_ARTICULATION_COUNT,
 
 namespace {
 
-// Maps a refused set_midi_instrument() to its C status: a refused instrument is
-// an invalid parameter; a full rack, or a scheduled or queued SysEx the new
-// instrument refuses, is invalid state; a failed allocation is out of memory.
+// An instrument that cannot prepare for the engine is an invalid parameter.
+// A full rack or incompatible pending SysEx is invalid state.
 SonareError midi_instrument_bind_error(const sonare::engine::RealtimeEngine& engine) noexcept {
   switch (engine.last_midi_instrument_bind_status()) {
     case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
@@ -63,9 +63,15 @@ SonareError midi_instrument_bind_error(const sonare::engine::RealtimeEngine& eng
                             "must be preparable at the engine's sample rate and block size");
       });
     case sonare::engine::MidiInstrumentBindStatus::kRackFull:
+      set_last_error_static(SONARE_ERROR_INVALID_STATE, "the instrument rack is full");
+      return SONARE_ERROR_INVALID_STATE;
     case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
+      set_last_error_static(SONARE_ERROR_INVALID_STATE,
+                            "the instrument could not prepare scheduled or queued SysEx");
       return SONARE_ERROR_INVALID_STATE;
     default:
+      set_last_error_static(SONARE_ERROR_OUT_OF_MEMORY,
+                            "out of memory while binding the instrument");
       return SONARE_ERROR_OUT_OF_MEMORY;
   }
 }
@@ -170,7 +176,7 @@ SonareError push_ump_command(SonareEngine* engine, uint32_t destination_id, cons
 }
 
 uint8_t infer_ump_word_count(const SonareEngineMidiEvent& event) noexcept {
-  if (event.word_count >= 1 && event.word_count <= 4) return event.word_count;
+  if (event.word_count != 0) return event.word_count;
   if (event.word3 != 0) return 4;
   if (event.word2 != 0) return 3;
   if (event.word1 != 0) return 2;
@@ -190,6 +196,8 @@ void midi_event_from_c(const SonareEngineMidiEvent& src, const std::string& pref
   // assignment is kept so this boundary conversion yields a self-consistent Ump
   // on its own terms, not because anything downstream depends on it. Anyone
   // changing the sequencer's derivation must not read this line as coverage.
+  util::check::integer_within(src.word_count, kEngineUmpWordCountDomain,
+                              (prefix + "word_count").c_str());
   util::check::integer_within(src.group, kEngineUmpGroupDomain, (prefix + "group").c_str());
   if (src.reserved != 0) util::check::refuse((prefix + "reserved").c_str(), "must be 0");
   midi::Ump ump{};
@@ -397,15 +405,13 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
                                                            const char* param_name,
                                                            uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(param_name);
   if (param_name[0] == '\0') {
     return run_validation([&] { util::check::non_empty(param_name, "param_name"); });
   }
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, so an unresolved name and a feature-disabled
-  // build both leave the caller a readable id rather than uninitialised memory.
-  *out_id = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
@@ -577,9 +583,9 @@ SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destinatio
 SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t destination_id,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  *out_count = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
@@ -696,8 +702,10 @@ SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine) {
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement);
 #else
+  SONARE_C_TRY
   engine->engine.clear_midi_cc_bindings();
   return SONARE_OK;
+  SONARE_C_CATCH
 #endif
 }
 
@@ -946,6 +954,11 @@ SonareError sonare_engine_push_midi_note_on(SonareEngine* engine, uint32_t desti
       refused != SONARE_OK) {
     return refused;
   }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kMidiNoteOnImmediate;
   command.target_id = destination_id;
@@ -969,6 +982,11 @@ SonareError sonare_engine_push_midi_note_off(SonareEngine* engine, uint32_t dest
       refused != SONARE_OK) {
     return refused;
   }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kMidiNoteOffImmediate;
   command.target_id = destination_id;
@@ -989,6 +1007,11 @@ SonareError sonare_engine_push_midi_cc(SonareEngine* engine, uint32_t destinatio
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_cc_error(group, channel, controller, value));
+      refused != SONARE_OK) {
+    return refused;
+  }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
       refused != SONARE_OK) {
     return refused;
   }
@@ -1020,6 +1043,11 @@ SonareError sonare_engine_push_midi_pitch_bend(SonareEngine* engine, uint32_t de
       refused != SONARE_OK) {
     return refused;
   }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   return push_ump_command(engine, destination_id,
                           midi::make_midi1_pitch_bend(group, channel, bend14), render_frame);
 #endif
@@ -1036,6 +1064,11 @@ SonareError sonare_engine_push_midi_channel_pressure(SonareEngine* engine, uint3
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_channel_pressure_error(group, channel, pressure));
+      refused != SONARE_OK) {
+    return refused;
+  }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
       refused != SONARE_OK) {
     return refused;
   }
@@ -1059,6 +1092,11 @@ SonareError sonare_engine_push_midi_poly_pressure(SonareEngine* engine, uint32_t
       refused != SONARE_OK) {
     return refused;
   }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   return push_ump_command(engine, destination_id,
                           midi::make_midi1_poly_pressure(group, channel, note, pressure),
                           render_frame);
@@ -1071,6 +1109,11 @@ SonareError sonare_engine_push_midi_panic(SonareEngine* engine, int64_t render_f
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement, render_frame);
 #else
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kMidiAllNotesOff;
   command.target_id = 0;
@@ -1092,6 +1135,11 @@ SonareError sonare_engine_push_midi_sysex(SonareEngine* engine, uint32_t destina
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement, destination_id, render_frame);
 #else
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   // Preparation precedes publication into the bounded payload/command stores.
   if (!engine->engine.push_midi_sysex(destination_id, data, size, render_frame)) {
     switch (engine->engine.last_midi_sysex_push_status()) {
@@ -1127,6 +1175,14 @@ SonareError sonare_engine_push_midi_ump(SonareEngine* engine, uint32_t destinati
   return refuse_not_compiled_in(Feature::kArrangement, destination_id, words, word_count,
                                 render_frame);
 #else
+  if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, word_count)) {
+    return refuse_live_push_arg(midi::kLivePushUmpShapeError);
+  }
+  if (const SonareError refused =
+          sonare_c_engine_detail::check_scheduled_render_frame(render_frame);
+      refused != SONARE_OK) {
+    return refused;
+  }
   switch (engine->engine.push_midi_ump(destination_id, words, word_count, render_frame)) {
     case sonare::engine::MidiUmpPushResult::kQueued:
       return SONARE_OK;
@@ -1256,12 +1312,10 @@ SonareError sonare_engine_external_midi_dropped_count(const SonareEngine* engine
 SonareError sonare_engine_drain_external_midi(SonareEngine* engine, SonareExternalMidiEvent* out,
                                               size_t max_events, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_events);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  // Initialise the count before any early error return so a defensive consumer
-  // never reads an uninitialised value on the rejected-buffer path.
-  *out_count = 0;
   if (max_events == 0) return SONARE_OK;
   // A single queue record lowers to at most this many MIDI-1 messages, so the
   // buffer must hold that many to guarantee forward progress without losing a

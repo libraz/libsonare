@@ -295,6 +295,9 @@ TEST_CASE("mixing strip entries refuse NULL, id and domain by name", "[c_api][en
   CHECK(sonare_engine_set_track_strip_channel_delay_samples(engine, 1, -1) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "delay_samples must be an integer in [0, 192000]");
+  CHECK(sonare_engine_set_track_strip_channel_delay_samples(engine, 1, 192001) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "delay_samples must be an integer in [0, 192000]");
   sonare_engine_destroy(engine);
 }
 

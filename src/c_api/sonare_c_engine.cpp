@@ -195,6 +195,9 @@ SonareError sonare_engine_prepare(SonareEngine* engine, int sample_rate, int max
 SonareError sonare_engine_play(SonareEngine* engine, int64_t render_frame) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kTransportPlay;
   command.sample_time = render_frame;
@@ -204,6 +207,9 @@ SonareError sonare_engine_play(SonareEngine* engine, int64_t render_frame) {
 SonareError sonare_engine_stop(SonareEngine* engine, int64_t render_frame) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kTransportStop;
   command.sample_time = render_frame;
@@ -222,6 +228,9 @@ SonareError sonare_engine_seek_sample(SonareEngine* engine, int64_t timeline_sam
       err != SONARE_OK) {
     return err;
   }
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekSample;
   command.sample_time = render_frame;
@@ -237,6 +246,9 @@ SonareError sonare_engine_seek_ppq(SonareEngine* engine, double ppq, int64_t ren
       err != SONARE_OK) {
     return err;
   }
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekPpq;
   command.sample_time = render_frame;
@@ -248,6 +260,9 @@ SonareError sonare_engine_reset_master_loudness_meter(SonareEngine* engine, int6
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if defined(SONARE_WITH_MIXING)
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   return engine->engine.reset_master_meter_integrated(render_frame) ? SONARE_OK
                                                                     : SONARE_ERROR_OUT_OF_MEMORY;
 #else
@@ -681,6 +696,9 @@ SonareError sonare_engine_seek_marker(SonareEngine* engine, uint32_t marker_id,
                                       int64_t render_frame) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kSeekMarker;
   command.target_id = marker_id;
@@ -780,6 +798,9 @@ SonareError sonare_engine_set_parameter(SonareEngine* engine, uint32_t param_id,
       err != SONARE_OK) {
     return err;
   }
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = smoothed != 0 ? rt::CommandType::kSetParamSmoothed : rt::CommandType::kSetParam;
   command.target_id = param_id;
@@ -807,6 +828,9 @@ SonareError sonare_engine_set_solo_mute(SonareEngine* engine, uint32_t lane_inde
 #if !defined(SONARE_WITH_MIXING)
   return refuse_not_compiled_in(Feature::kMixing, lane_index, solo, mute, render_frame);
 #else
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kSetSoloMute;
   command.target_id = lane_index;
@@ -834,6 +858,9 @@ SonareError sonare_engine_set_track_monitor_mode(SonareEngine* engine, uint32_t 
 #if !defined(SONARE_WITH_MIXING)
   return refuse_not_compiled_in(Feature::kMixing, lane_index, mode, render_frame);
 #else
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kSetTrackMonitorMode;
   command.target_id = lane_index;
@@ -870,6 +897,9 @@ SonareError sonare_engine_get_transport_state(SonareEngine* engine, SonareTransp
 SonareError sonare_engine_reset_processor_state(SonareEngine* engine, int64_t render_frame) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = check_scheduled_render_frame(render_frame); err != SONARE_OK) {
+    return err;
+  }
   return engine->engine.reset_processor_state(render_frame) ? SONARE_OK
                                                             : SONARE_ERROR_OUT_OF_MEMORY;
 }

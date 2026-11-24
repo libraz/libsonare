@@ -1215,6 +1215,28 @@ TEST_CASE("insert ids fail once their slot holds another processor type", "[c_ap
     REQUIRE(id_alive(engine, compressor_ids[i]));
     REQUIRE(compressor_ids[i] != gain_ids[i]);
   }
+  set_all("repair.dehum");
+  for (const char* name : {"fundamentalHz", "unknownParameter"}) {
+    CAPTURE(name);
+    uint32_t id = 99;
+    CHECK(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, name, &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "param_name must be the name of a parameter of the insert that can be set while running");
+    CHECK(id == 0);
+    id = 99;
+    CHECK(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, name, &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "param_name must be the name of a parameter of the insert that can be set while running");
+    CHECK(id == 0);
+    id = 99;
+    CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 0, name, &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "param_name must be the name of a parameter of the insert that can be set while running");
+    CHECK(id == 0);
+  }
   // Returning to the first type does not revive the retired ids.
   set_all("utility.gain");
   for (const uint32_t id : gain_ids) REQUIRE_FALSE(id_alive(engine, id));
@@ -2269,6 +2291,8 @@ TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][
           SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_dual_pan(engine, 10, -1.0f, 1.0f) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_channel_delay_samples(engine, 10, 32) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_channel_delay_samples(
+              engine, 10, sonare::mixing::kMaxAlignmentDelaySamples) == SONARE_OK);
 #else
   REQUIRE(sonare_engine_set_track_strip_pan(engine, 10, -1.0f) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -2482,6 +2506,21 @@ TEST_CASE("sonare_engine scope telemetry reports a tone's spectrum and goniomete
   size_t applied = 0;
   REQUIRE(sonare_engine_configure_scope_telemetry(engine, kBlock, 32, &applied) == SONARE_OK);
   REQUIRE(applied == 32);
+  applied = 99;
+  CHECK(sonare_engine_configure_scope_telemetry(engine, -1, 16, &applied) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "interval_frames must be an integer in [0, 2147483647]");
+  CHECK(applied == 0);
+  for (const size_t count : {size_t{0}, size_t{SONARE_SCOPE_MAX_BANDS + 1}}) {
+    CAPTURE(count);
+    applied = 99;
+    CHECK(sonare_engine_configure_scope_telemetry(engine, 0, count, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "band_count must be an integer in [1, 64]");
+    CHECK(applied == 0);
+  }
+  // The still-active 32-band configuration supplies the records below.
 
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   std::array<float, kBlock> left{};
@@ -2546,6 +2585,10 @@ TEST_CASE("sonare_engine scope telemetry applies a pre-prepare band configuratio
   // allocation, and the return value must describe that requested resolution
   // rather than the tap's still-unprepared default.
   size_t applied = 0;
+  for (const size_t endpoint : {size_t{1}, size_t{SONARE_SCOPE_MAX_BANDS}}) {
+    REQUIRE(sonare_engine_configure_scope_telemetry(engine, 0, endpoint, &applied) == SONARE_OK);
+    CHECK(applied == endpoint);
+  }
   REQUIRE(sonare_engine_configure_scope_telemetry(engine, kBlock, kBands, &applied) == SONARE_OK);
   REQUIRE(applied == kBands);
 #else

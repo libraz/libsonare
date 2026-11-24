@@ -705,7 +705,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
                     float max_value) noexcept;
   bool bind_midi_cc(const midi::CcBinding& binding) noexcept;
-  void clear_midi_cc_bindings() noexcept;
+  void clear_midi_cc_bindings();
   /// Returns an owned snapshot in unspecified order. Control thread only.
   std::vector<midi::CcBinding> midi_cc_bindings() const;
   size_t midi_cc_binding_count() const noexcept;

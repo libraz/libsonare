@@ -1153,17 +1153,17 @@ TEST_CASE("ClipPlayer set_warp_voice_capacity governs the overflow threshold",
     REQUIRE(player.warp_stretch_overflow_count() == 0);
   }
 
-  SECTION("capacity 12 with 13 simultaneous clips overflows") {
+  SECTION("capacity 12 with 14 simultaneous clips counts both failed acquisitions") {
     sonare::engine::ClipPlayer player;
     player.prepare(kStretchSampleRate, kOutputSamples);
     player.set_warp_voice_capacity(12, kOutputSamples);
-    player.set_clips(stretched_clips(13, channels, kSourceSamples, kOutputSamples));
+    player.set_clips(stretched_clips(14, channels, kSourceSamples, kOutputSamples));
 
     std::vector<float> out(kOutputSamples, 0.0f);
     float* out_ptrs[] = {out.data()};
     player.process_at(out_ptrs, 1, kOutputSamples, 0);
 
-    REQUIRE(player.warp_stretch_overflow_count() >= 1);
+    REQUIRE(player.warp_stretch_overflow_count() == 2);
   }
 }
 

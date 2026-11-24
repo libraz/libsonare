@@ -3935,7 +3935,7 @@ test = "tests/api/sonare_c_engine_automation_test.cpp::engine degradation counte
 [[entry]]
 kind = "option"
 old = "sonare_engine_configure_scope_telemetry(band_count)"
-changed = "the count is a size_t instead of an unsigned int"
+changed = "the count is a size_t instead of an unsigned int. A count outside [1, SONARE_SCOPE_MAX_BANDS] is refused instead of clamped, and the active configuration is unchanged."
 domain = "engine"
 rule = "c-count-types"
 test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_engine scope telemetry reports a tone's spectrum and goniometer"
@@ -3959,10 +3959,10 @@ test = "tests/api/sonare_c_engine_contract_test.cpp::engine MIDI getters define 
 [[entry]]
 kind = "option"
 old = "sonare_engine_legato_fallback_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t"
+changed = "the count is a size_t instead of a uint32_t. A supplied count is cleared even when the engine is NULL."
 domain = "engine"
 rule = "c-count-types"
-test = "tests/api/sonare_c_engine_articulation_test.cpp::articulation round-trips per channel"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine MIDI entries refuse a NULL argument by name"
 
 [[entry]]
 kind = "option"
@@ -4567,7 +4567,7 @@ test = "tests/api/sonare_c_engine_voice_test.cpp::sonare_engine_set_parameter st
 [[entry]]
 kind = "function"
 old = "sonare_engine_set_parameter_smoothed"
-removed = "call sonare_engine_set_parameter with smoothed non-zero"
+removed = "call sonare_engine_set_parameter with smoothed non-zero. Use -1 for the next block head: values below -1 are refused."
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -6049,6 +6049,286 @@ changed = "NaN (not measured) for an event over a silent span, instead of 0; suc
 domain = "effects"
 rule = "silence-is-infinite"
 test = "tests/editing/percussive_event_test.cpp::extract_percussive_events holds its contract across its config space"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_play(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_cc(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_channel_pressure(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_note_off(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_note_on(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_panic(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_pitch_bend(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_poly_pressure(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_program(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_sysex(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_push_midi_ump(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::scheduled MIDI C entries accept only the documented immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_reset_master_loudness_meter(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_reset_processor_state(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_seek_marker(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_seek_ppq(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_seek_sample(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_set_parameter(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_set_solo_mute(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_set_track_monitor_mode(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_stop(render_frame)"
+changed = "Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine scheduled commands refuse render frames below the immediate sentinel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_configure_scope_telemetry(interval_frames)"
+changed = "A negative interval is refused instead of selecting 0 (disabled). The active configuration is unchanged on refusal."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_engine scope telemetry reports a tone's spectrum and goniometer"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_resolve_instrument_automation_id(out_id)"
+changed = "A supplied id is zero on refusal, including a NULL engine or a NULL or empty param_name."
+domain = "engine"
+rule = "typed-results"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine MIDI entries refuse an out-of-domain value by name"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineMidiEvent.word_count"
+changed = "Only 0 infers the count. An explicit count above 4 returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].events[j].word_count and leaves the previous schedule installed."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_midi_test.cpp::MIDI clip UMP count zero infers and positive overflow refuses without replacing clips"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_clear_midi_cc_bindings"
+changed = "Returns SONARE_ERROR_OUT_OF_MEMORY and keeps the previous bindings if allocating the empty table fails. In 1.x this returned success without clearing the table."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/engine_midi_cc_bindings_test.cpp::failed CC clear retains the audible map and repeated clears publish"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_drain_external_midi"
+changed = "A supplied out_count is cleared before validating the engine and buffer. max_events = 0 is accepted with a NULL out buffer and drains nothing, writing zero to out_count."
+domain = "engine"
+rule = "typed-results"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine MIDI entries refuse a NULL argument by name"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_track_lanes"
+changed = "A declared non-stereo source_channel_layout returns SONARE_ERROR_NOT_SUPPORTED instead of SONARE_ERROR_INVALID_PARAMETER. An undeclared layout value still returns SONARE_ERROR_INVALID_PARAMETER."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_engine_mixing_refusal_test.cpp::mixing routing entries refuse a count, a layout and an id by name"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_track_output_bus"
+changed = "An unknown track is refused as 'track_id must be the id of a track in this engine'; the diagnostic does not include the given id."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_mixing_refusal_test.cpp::mixing routing entries refuse a count, a layout and an id by name"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_track_sends"
+changed = "An unknown track is refused as 'track_id must be the id of a track in this engine'; the diagnostic does not include the given id."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_mixing_refusal_test.cpp::mixing routing entries refuse a count, a layout and an id by name"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_note_on"
+changed = "A refused argument's diagnostic has no function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_note_off"
+changed = "A refused argument's diagnostic has no function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_cc"
+changed = "A refused argument's diagnostic has no function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_pitch_bend"
+changed = "A refused argument's diagnostic has no function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_channel_pressure"
+changed = "A refused argument's diagnostic has no function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_poly_pressure"
+changed = "A refused argument's diagnostic has no function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_push_midi_input_ump"
+changed = "A malformed message is refused as 'words do not form a pushable UMP message', without a function-name prefix."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine live MIDI pushes record the shared argument rule's text"
 
 [[entry]]
 kind = "option"

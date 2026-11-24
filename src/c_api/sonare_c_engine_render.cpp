@@ -542,9 +542,11 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
   SONARE_C_REQUIRE_NONNULL(engine);
 #if defined(SONARE_WITH_MIXING)
   SONARE_C_TRY
+  util::check::integer_within(interval_frames, kEngineScopeIntervalDomain, "interval_frames");
+  util::check::integer_within(band_count, kEngineScopeBandCountDomain, "band_count");
   engine->engine.require_quiescent();
-  const uint32_t applied = engine->engine.configure_scope_telemetry(
-      interval_frames, static_cast<uint32_t>(std::min<size_t>(band_count, UINT32_MAX)));
+  const uint32_t applied =
+      engine->engine.configure_scope_telemetry(interval_frames, static_cast<uint32_t>(band_count));
   if (out_band_count) *out_band_count = applied;
   return SONARE_OK;
   SONARE_C_CATCH

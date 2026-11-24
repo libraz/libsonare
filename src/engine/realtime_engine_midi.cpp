@@ -47,13 +47,9 @@ bool RealtimeEngine::bind_midi_cc(const midi::CcBinding& binding) noexcept {
   }
 }
 
-void RealtimeEngine::clear_midi_cc_bindings() noexcept {
-  try {
-    auto next = std::make_shared<midi::CcMap>();
-    midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
-  } catch (...) {
-    // Preserve the current map if a new empty snapshot cannot be allocated.
-  }
+void RealtimeEngine::clear_midi_cc_bindings() {
+  auto next = std::make_shared<midi::CcMap>();
+  midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
 }
 
 size_t RealtimeEngine::midi_cc_binding_count() const noexcept {

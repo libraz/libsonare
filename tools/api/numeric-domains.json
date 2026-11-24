@@ -1354,6 +1354,28 @@
       "sentinel": null
     },
     {
+      "entry": "engine_configure_scope_telemetry",
+      "param": "band_count",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_configure_scope_telemetry",
+      "param": "interval_frames",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_count_in_end_sample",
       "param": "start_sample",
       "kind": "integer",
@@ -1413,6 +1435,17 @@
       "param": "size",
       "kind": "integer",
       "lo": 1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_play",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
       "hi": null,
       "lo_included": true,
       "hi_included": true,
@@ -1486,11 +1519,121 @@
       "sentinel": null
     },
     {
+      "entry": "engine_push_midi_cc",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_channel_pressure",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_note_off",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_note_on",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_panic",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_pitch_bend",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_poly_pressure",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_program",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_sysex",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_push_midi_sysex",
       "param": "size",
       "kind": "integer",
       "lo": 1,
       "hi": 512,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_push_midi_ump",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -1530,6 +1673,28 @@
       "sentinel": null
     },
     {
+      "entry": "engine_reset_master_loudness_meter",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_reset_processor_state",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_sample_at_ppq",
       "param": "ppq",
       "kind": "real",
@@ -1541,11 +1706,44 @@
       "sentinel": null
     },
     {
+      "entry": "engine_seek_marker",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_seek_ppq",
       "param": "ppq",
       "kind": "real",
       "lo": 0,
       "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_seek_ppq",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_seek_sample",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -1949,6 +2147,17 @@
     },
     {
       "entry": "engine_set_midi_clips",
+      "param": "clips[].events[].word_count",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 4,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_midi_clips",
       "param": "clips[].fade_in_samples",
       "kind": "integer",
       "lo": 0,
@@ -2014,6 +2223,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_parameter",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_sf2_instrument",
       "param": "config.clear_bank_rig",
       "kind": "integer",
@@ -2063,6 +2283,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_solo_mute",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -2256,6 +2487,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_track_monitor_mode",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_track_strip_channel_delay_samples",
       "param": "delay_samples",
       "kind": "integer",
@@ -2283,6 +2525,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_stop",
+      "param": "render_frame",
+      "kind": "integer",
+      "lo": -1,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

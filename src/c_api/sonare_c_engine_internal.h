@@ -20,6 +20,14 @@
 
 namespace sonare_c_engine_detail {
 
+/// Checks the immediate sentinel and scheduled frame range.
+inline SonareError check_scheduled_render_frame(int64_t render_frame) noexcept {
+  return sonare_c_detail::run_validation([&] {
+    sonare::util::check::integer_within(
+        render_frame, sonare_c_detail::kEngineScheduledRenderFrameDomain, "render_frame");
+  });
+}
+
 /// Resolves an offline block size: 0 is the library default, capped at the prepared block.
 inline int resolve_offline_block(const sonare::engine::RealtimeEngine& engine, int block_size) {
   return block_size == 0 ? std::min(sonare::engine::RealtimeEngine::kDefaultOfflineBlock,
