@@ -4827,7 +4827,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_midi_cc_to_breakpoint"
-changed = "a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE; a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind (1.x ignored it)"
+changed = "a SysEx event returns SONARE_ERROR_NOT_SUPPORTED with the message 'MIDI CC conversion does not support SysEx events' (1.x refused it with SONARE_ERROR_INVALID_PARAMETER before the binding lookup); an unmatched channel-voice event still returns SONARE_ERROR_INVALID_STATE; a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind (1.x ignored it)"
 domain = "engine"
 rule = "error-class-by-cause"
 test = "tests/api/project_readers_test.cpp::SysEx is not converted to a breakpoint"
