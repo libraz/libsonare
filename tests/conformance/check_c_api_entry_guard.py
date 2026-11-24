@@ -132,8 +132,6 @@ _EXEMPT = {
     "sonare_mel_to_hz": "float arithmetic in src/core/convert.cpp; no allocation, no throw",
     "sonare_hz_to_midi": "float arithmetic in src/core/convert.cpp; no allocation, no throw",
     "sonare_midi_to_hz": "float arithmetic in src/core/convert.cpp; no allocation, no throw",
-    "sonare_frames_to_samples": "saturating int arithmetic in src/core/convert.cpp; no throw",
-    "sonare_samples_to_frames": "saturating int arithmetic in src/core/convert.cpp; no throw",
 }
 
 _RELEASE = re.compile(r"^(?:sonare_)?free_\w+$|^sonare_\w+_destroy$|^sonare_free_\w+$")

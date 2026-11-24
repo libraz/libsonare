@@ -1397,6 +1397,43 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
   }
 }
 
+TEST_CASE("sonare_spectral_edit refuses negative region positions by indexed field",
+          "[c_api][effects][spectral-position]") {
+  constexpr int sr = 22050;
+  const auto samples = generate_sine(1000.0f, sr, 0.5f);
+  SonareSpectralRegionOp op;
+  sonare_spectral_region_op_init(&op);
+  op.end_sample = static_cast<int64_t>(samples.size());
+
+  SECTION("negative start") {
+    op.start_sample = -1;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 99;
+    const SonareError error = sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, &op,
+                                                   1, &out, &out_length);
+    CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+    CHECK(out_length == 0);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "ops[0].start_sample must be an integer of at least 0");
+    if (out != nullptr) sonare_free_floats(out);
+  }
+
+  SECTION("negative end") {
+    op.end_sample = -1;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 99;
+    const SonareError error = sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, &op,
+                                                   1, &out, &out_length);
+    CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+    CHECK(out_length == 0);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "ops[0].end_sample must be an integer of at least 0");
+    if (out != nullptr) sonare_free_floats(out);
+  }
+}
+
 TEST_CASE("C scalar guards reject every non-finite argument", "[c_api][validation]") {
   constexpr int sr = 22050;
   const auto samples = generate_sine(440.0f, sr, 0.25f);

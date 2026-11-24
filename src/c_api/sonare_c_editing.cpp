@@ -225,7 +225,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   // window_sec / hop_sec keep the "0 = library default" convention (a 0-second
-  // window is meaningless). The percentiles instead use a NEGATIVE sentinel for
+  // window is meaningless). The percentiles instead use the -1 sentinel for
   // "default" so that 0.0 is a real request for the 0th percentile (the true
   // minimum-RMS window); 0.0 previously meant "default" and made the 0th
   // percentile unreachable.

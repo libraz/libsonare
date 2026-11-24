@@ -1322,8 +1322,8 @@ void sonare_spectral_edit_config_init(SonareSpectralEditConfig* config);
 /// @details Prepare each op with @ref sonare_spectral_region_op_init, then set the fields.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareSpectralRegionOp); set by the init function.
-  int64_t start_sample;  ///< Region start in input samples; clamped to [0, length].
-  int64_t end_sample;    ///< Region end in input samples, exclusive; clamped to [0, length].
+  int64_t start_sample;  ///< Region start; nonnegative, then clamped to input length.
+  int64_t end_sample;    ///< Exclusive region end; nonnegative, then clamped to input length.
   float low_hz;          ///< Region low edge in Hz; clamped to [0, nyquist].
   /// Region high edge in Hz, finite and > 0, clamped to nyquist; NaN (the init value) means
   /// nyquist.

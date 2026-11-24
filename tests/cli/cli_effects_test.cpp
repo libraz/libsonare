@@ -1561,3 +1561,30 @@ TEST_CASE("CLI effect and note-editing refusals are decided from argv before the
   }
   REQUIRE_FALSE(std::ifstream(out).good());
 }
+
+TEST_CASE("CLI transcribe resolves omitted F0 bounds before reading input",
+          "[cli][transcribe][transcribe-config]") {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+  const std::string missing = "/nonexistent/transcribe-f0-range.wav";
+  const std::vector<std::pair<std::string, std::string>> rows = {
+      {"transcribe --f0-min-hz 2100 " + missing + " -o out.mid",
+       "--f0-max-hz must be greater than --f0-min-hz"},
+      {"transcribe --polyphonic --f0-min-hz 1800 " + missing + " -o out.mid",
+       "--f0-max-hz must be greater than --f0-min-hz"},
+      {"transcribe --f0-max-hz 64 " + missing + " -o out.mid",
+       "--f0-max-hz must be greater than --f0-min-hz"},
+      {"transcribe --polyphonic --f0-max-hz 54 " + missing + " -o out.mid",
+       "--f0-max-hz must be greater than --f0-min-hz"},
+      {"transcribe --f0-min-hz 1e-50 " + missing + " -o out.mid",
+       "argument --f0-min-hz: must be finite and greater than 0"},
+      {"transcribe --f0-min-hz 100.000001 --f0-max-hz 100.000002 " + missing + " -o out.mid",
+       "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 100, --f0-max-hz 100)"},
+  };
+  for (const auto& [argv, text] : rows) {
+    CAPTURE(argv);
+    const auto [code, output] = exec_command(CLI + " " + argv + " -q 2>&1");
+    CHECK(code == 2);
+    CHECK_THAT(output, ContainsSubstring(text));
+  }
+#endif
+}

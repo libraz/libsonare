@@ -134,11 +134,17 @@ static_assert(static_cast<int>(NormType::Inf) == 0 && static_cast<int>(NormType:
 }  // namespace
 
 int sonare_frames_to_samples(int frames, size_t hop_length, int n_fft) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return frames_to_samples(frames, core_length(hop_length), n_fft);
+  SONARE_C_CATCH_RETURN(0)
 }
 
 int sonare_samples_to_frames(int samples, size_t hop_length, int n_fft) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return samples_to_frames(samples, core_length(hop_length), n_fft);
+  SONARE_C_CATCH_RETURN(0)
 }
 
 SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,

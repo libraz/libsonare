@@ -252,6 +252,23 @@ void sonare_transcribe_config_init(SonareTranscribeConfig* config) {
 #endif
 }
 
+SonareError sonare_validate_transcribe_config(const SonareTranscribeConfig* config) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+  ntm::TranscribeConfig core_config;
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  bool reference_auto = false;
+  return sonare_c_detail::run_validation_under(
+      "config", [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kPitchEditor),
+      config);
+#endif
+}
+
 void sonare_free_transcribe_result(SonareTranscribeResult* result) {
   if (result == nullptr) return;
   delete[] result->events;

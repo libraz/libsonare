@@ -98,14 +98,13 @@ typedef struct {
 ///        for a mono buffer. Interleaved multichannel input is not supported.
 /// @param window_sec Analysis window length in seconds (0.0 = library default 3.0).
 /// @param hop_sec Hop between windows in seconds (0.0 = library default 1.0).
-/// @param low_percentile Lower percentile in [0,1]. Pass a NEGATIVE value (e.g.
-///        -1.0f) for the library default (0.10). 0.0f is a real request for the
-///        0th percentile (the minimum-RMS window), not the default.
-/// @param high_percentile Upper percentile in [0,1]. Pass a NEGATIVE value (e.g.
-///        -1.0f) for the library default (0.95). 0.0f is a real request for the
-///        0th percentile, not the default.
-/// @note low_percentile == high_percentile is accepted and yields a 0-LU range
-///       (dynamic_range_db == 0); only an inverted pair (low > high) is rejected.
+/// @param low_percentile Lower percentile in [0,1]. Pass -1.0f for the library default (0.10).
+///        0.0f is a real request for the 0th percentile (the minimum-RMS window), not the default.
+/// @param high_percentile Upper percentile in [0,1]. Pass -1.0f for the library default (0.95).
+///        0.0f is a real request for the 0th percentile, not the default.
+/// @note Other values outside [0,1] are refused. For values in range,
+///       low_percentile == high_percentile is accepted and yields a 0-LU range; an inverted pair
+///       (low > high) is rejected.
 SonareError sonare_metering_dynamic_range(const float* samples, size_t length, int sample_rate,
                                           float window_sec, float hop_sec, float low_percentile,
                                           float high_percentile, SonareDynamicRangeResult* out);

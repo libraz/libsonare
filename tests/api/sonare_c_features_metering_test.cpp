@@ -1000,8 +1000,8 @@ TEST_CASE("sonare_metering_dynamic_range", "[c_api]") {
       }
     }
     SonareDynamicRangeResult result = {};
-    // Negative percentiles select the library defaults (0.0 now means a literal
-    // 0th percentile, so the default sentinel is negative).
+    // The -1 percentile sentinel selects the library defaults (0.0 now means a
+    // literal 0th percentile).
     REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), sr, 0.0f, 0.0f, -1.0f,
                                           -1.0f, &result) == SONARE_OK);
     REQUIRE(result.window_count > 0);

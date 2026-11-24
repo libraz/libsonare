@@ -1116,8 +1116,12 @@ float sonare_frames_to_time(int frames, int sample_rate, size_t hop_length);
 int sonare_time_to_frames(float time_sec, int sample_rate, size_t hop_length);
 
 /// @brief Frame index to sample index; a positive @p n_fft is the offset of n_fft / 2 samples.
+/// @details A zero @p n_fft omits centring. For a negative @p n_fft or @p hop_length outside
+/// [1, INT_MAX], returns 0 and sets @ref sonare_last_error_code to SONARE_ERROR_INVALID_PARAMETER.
 int sonare_frames_to_samples(int frames, size_t hop_length, int n_fft);
 /// @brief Sample index to frame index (floor); a positive @p n_fft subtracts n_fft / 2 first.
+/// @details A zero @p n_fft omits centring. For a negative @p n_fft or @p hop_length outside
+/// [1, INT_MAX], returns 0 and sets @ref sonare_last_error_code to SONARE_ERROR_INVALID_PARAMETER.
 int sonare_samples_to_frames(int samples, size_t hop_length, int n_fft);
 
 /* INPUT-BUFFER POLICY for the compat / transform functions below

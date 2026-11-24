@@ -23,6 +23,7 @@
 #include "sonare_cli.h"
 #include "sonare_cli_project.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/resource_limits.h"
 
 #ifdef SONARE_WITH_ARRANGEMENT
@@ -587,15 +588,46 @@ CliValidationError validate_polyphonic_edits(const CliArgs& args) {
 // Each rule is one the Python facade states (_effects_note_model.py, _transcribe_config and
 // _transcribe_reattack) or the C ABI refuses (sonare_c_transcribe.cpp:128 and :157).
 CliValidationError validate_transcribe(const CliArgs& args) {
-  if (args.has("f0-min-hz") && args.has("f0-max-hz")) {
-    const double minimum = args.get_double("f0-min-hz", 0.0);
-    const double maximum = args.get_double("f0-max-hz", 0.0);
-    if (!(maximum > minimum)) {
+  if (args.has("f0-min-hz") || args.has("f0-max-hz")) {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
+    config.polyphonic = args.has("polyphonic") ? 1 : 0;
+    if (args.has("f0-min-hz")) config.f0_min_hz = args.get_float("f0-min-hz", 0.0f);
+    if (args.has("f0-max-hz")) config.f0_max_hz = args.get_float("f0-max-hz", 0.0f);
+    const SonareError validation = sonare_validate_transcribe_config(&config);
+    if (validation == SONARE_ERROR_INVALID_PARAMETER) {
+      const size_t count = sonare_last_refusal_subject_count();
+      if (count != 2) {
+        if (count == 1) {
+          const std::string_view field = sonare_last_refusal_subject(0);
+          const char* subject = field == "config.f0_min_hz"   ? "argument --f0-min-hz:"
+                                : field == "config.f0_max_hz" ? "argument --f0-max-hz:"
+                                                              : nullptr;
+          char* rendered = nullptr;
+          if (subject != nullptr &&
+              sonare_last_refusal_render(&subject, nullptr, 1, SONARE_PRESENCE_SPELLING_C,
+                                         &rendered) == SONARE_OK) {
+            std::string text(rendered);
+            sonare_free_string(rendered);
+            return {std::move(text)};
+          }
+        }
+        return {sonare_last_error_message()};
+      }
       std::ostringstream message;
-      message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
-              << ", --f0-max-hz " << maximum << ")";
+      message << "--f0-max-hz must be greater than --f0-min-hz";
+      if (args.has("f0-min-hz") && args.has("f0-max-hz")) {
+        message << " (--f0-min-hz " << config.f0_min_hz << ", --f0-max-hz " << config.f0_max_hz
+                << ")";
+      }
       return {message.str()};
     }
+    if (validation != SONARE_OK) {
+      throw sonare::SonareException(static_cast<sonare::ErrorCode>(validation),
+                                    sonare_last_error_message());
+    }
+#endif
   }
   // 0 is "no split"; a given ratio otherwise has to exceed 1 (the facade's reattack_ratio rule).
   if (args.has("reattack-ratio")) {

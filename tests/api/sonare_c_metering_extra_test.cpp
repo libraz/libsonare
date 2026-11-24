@@ -1181,9 +1181,7 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
   }
 
   SECTION(
-      "dynamic_range: low > high is refused, low == high is accepted, 0.0f is a real percentile, "
-      "and "
-      "a negative percentile selects the default") {
+      "dynamic_range validates present percentiles, preserves the -1 sentinel, and accepts 0.0f") {
     // A graded fixture, distinct from the outer scalar one: the two-cluster
     // loud/near-silent signal used elsewhere in this TEST_CASE puts every
     // window at one of two RMS levels, so the 0th and the default 10th
@@ -1266,6 +1264,44 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
                                      0.0f, 0.0f, &buffer_result) == SONARE_OK);
     sonare_free_spectrum_result(&handle_result);
     sonare_free_spectrum_result(&buffer_result);
+  }
+
+  sonare_audio_destroy(audio);
+}
+
+TEST_CASE("dynamic-range C readers refuse negative percentiles other than the -1 sentinel",
+          "[c_api][metering][dynamic-range-domain]") {
+  const std::vector<float> samples(4096, 0.25f);
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), kScalarSampleRate, &audio) ==
+          SONARE_OK);
+
+  auto check_refused = [&](bool handle_form, float low, float high, const std::string& expected) {
+    SonareDynamicRangeResult result{};
+    float marker = 1.0f;
+    result.dynamic_range_db = 99.0f;
+    result.low_percentile_db = 99.0f;
+    result.high_percentile_db = 99.0f;
+    result.window_rms_db = &marker;
+    result.window_count = 99;
+    const SonareError error =
+        handle_form
+            ? sonare_audio_dynamic_range(audio, 0.05f, 0.025f, low, high, &result)
+            : sonare_metering_dynamic_range(samples.data(), samples.size(), kScalarSampleRate,
+                                            0.05f, 0.025f, low, high, &result);
+    CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(result.dynamic_range_db == 0.0f);
+    CHECK(result.low_percentile_db == 0.0f);
+    CHECK(result.high_percentile_db == 0.0f);
+    CHECK(result.window_rms_db == nullptr);
+    CHECK(result.window_count == 0);
+    CHECK(std::string(sonare_last_error_message()) == expected);
+    if (result.window_rms_db != nullptr) sonare_free_dynamic_range_result(&result);
+  };
+
+  for (const bool handle_form : {false, true}) {
+    check_refused(handle_form, -2.0f, -1.0f, "low_percentile must be finite and in [0, 1]");
+    check_refused(handle_form, -1.0f, -2.0f, "high_percentile must be finite and in [0, 1]");
   }
 
   sonare_audio_destroy(audio);

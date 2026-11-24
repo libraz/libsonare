@@ -21,17 +21,22 @@ enum class SpectralEditMode : uint8_t {
 };
 
 /// @brief A single time x frequency rectangle edit op.
-/// @details Region edges are clamped to the valid sample/bin ranges. Ops apply
-/// sequentially over a single mutable STFT buffer, so a later op observes the
-/// result of earlier ops (e.g. attenuate-then-heal over overlapping regions).
+/// @details Negative sample positions are refused; nonnegative positions past the input length
+/// are clamped to that length. Frequency edges are clamped to the valid bin range. Ops apply
+/// sequentially over a single mutable STFT buffer, so a later op observes the result of earlier
+/// ops (e.g. attenuate-then-heal over overlapping regions).
 struct SpectralRegionOp {
-  int64_t start_sample = 0;  ///< Region time start (input sample domain). Clamped to [0, length].
-  int64_t end_sample = 0;    ///< Region time end, exclusive. Clamped to [0, length].
+  int64_t start_sample = 0;  ///< Region time start; nonnegative, then clamped to input length.
+  int64_t end_sample = 0;    ///< Exclusive region end; nonnegative, then clamped to input length.
   float low_hz = 0.0f;       ///< Region frequency low edge (Hz). Clamped to [0, nyquist].
   float high_hz = 0.0f;      ///< Region frequency high edge (Hz). <=0 or >= nyquist => nyquist.
   float gain_db = 0.0f;      ///< Linear gain in dB for Gain/Attenuate; ignored by Mute/Heal.
   SpectralEditMode mode = SpectralEditMode::Gain;  ///< Edit mode.
 };
+
+/// @brief The sample-position domain of a spectral region op; positions beyond input length clamp.
+inline constexpr util::check::NumericDomain kSpectralEditSamplePositionDomain =
+    util::check::integer_domain_of<int64_t>(0);
 
 /// @brief Refuses a region op whose fields cannot describe a rectangle or a gain.
 /// @throws SonareException(InvalidParameter) for a non-finite low_hz, high_hz or gain_db, or a

@@ -3,6 +3,8 @@
 
 #include "core/convert.h"
 
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -233,34 +235,46 @@ TEST_CASE("note_to_hz with non-ASCII input", "[convert]") {
   }
 }
 
-TEST_CASE("samples_to_frames guards against non-positive hop_length", "[convert]") {
-  // Dividing by hop_length without a guard is integer division-by-zero (UB) for
-  // hop_length == 0 and yields a meaningless sign-flipped index for a negative
-  // hop. A frame index is undefined without a positive hop, so the helper returns
-  // 0 frames (defined, non-throwing) rather than invoking UB.
-  SECTION("zero hop_length returns 0 instead of dividing by zero") {
-    REQUIRE(samples_to_frames(5120, 0, 0) == 0);
-    REQUIRE(samples_to_frames(5120, 0, 2048) == 0);
-    REQUIRE(samples_to_frames(0, 0, 0) == 0);
-  }
+TEST_CASE("Core frame conversions refuse invalid centring geometry",
+          "[convert][frame-conversion-domain]") {
+  const auto refuses = [](const auto& convert, const char* subject) {
+    try {
+      convert();
+      FAIL_CHECK("expected refusal of " << subject);
+    } catch (const SonareParameterRefusal& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(error.subject() == subject);
+      CHECK(std::string(error.what()) ==
+            std::string(subject) + " must be an integer in [1, 2147483647]");
+    }
+  };
+  refuses([] { (void)frames_to_samples(10, 0, 2048); }, "hop_length");
+  refuses([] { (void)frames_to_samples(10, 512, -1); }, "n_fft");
+  refuses([] { (void)samples_to_frames(5120, -512, 0); }, "hop_length");
+  refuses([] { (void)samples_to_frames(5120, 512, -1); }, "n_fft");
+  const std::vector<int> empty;
+  refuses([&] { (void)frames_to_samples(empty, 0, 0); }, "hop_length");
+  refuses([&] { (void)samples_to_frames(empty, 512, -1); }, "n_fft");
+  CHECK(frames_to_samples(10, 512, 0) == 5120);
+  CHECK(samples_to_frames(5120, 512, 0) == 10);
+  CHECK(samples_to_frames(5120 + 1024, 512, 2048) == 10);
+}
 
-  SECTION("negative hop_length returns 0") {
-    REQUIRE(samples_to_frames(5120, -512, 0) == 0);
-    REQUIRE(samples_to_frames(5120, -512, 2048) == 0);
-  }
-
-  SECTION("vector overload is also guarded element-wise") {
-    const std::vector<int> samples = {0, 1024, 5120};
-    const std::vector<int> framed = samples_to_frames(samples, 0, 2048);
-    REQUIRE(framed.size() == samples.size());
-    for (int f : framed) REQUIRE(f == 0);
-  }
-
-  SECTION("valid hop_length is unaffected") {
-    // 5120 samples, hop 512, no n_fft offset -> 10 frames (librosa-compatible).
-    REQUIRE(samples_to_frames(5120, 512, 0) == 10);
-    // With n_fft = 2048 the centering offset (1024) is subtracted first.
-    REQUIRE(samples_to_frames(5120 + 1024, 512, 2048) == 10);
+TEST_CASE("C frame conversions distinguish a refused geometry from a zero result",
+          "[convert][c_api][frame-conversion-domain]") {
+  for (const auto convert : {sonare_frames_to_samples, sonare_samples_to_frames}) {
+    const auto refuses = [&](size_t hop_length, int n_fft, const char* subject) {
+      CHECK(convert(16, hop_length, n_fft) == 0);
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+      const char* detail = sonare_last_error_message();
+      CHECK(std::string(detail ? detail : "") ==
+            std::string(subject) + " must be an integer in [1, 2147483647]");
+    };
+    refuses(0, 0, "hop_length");
+    refuses(static_cast<size_t>(std::numeric_limits<int>::max()) + 1, 0, "hop_length");
+    refuses(512, -1, "n_fft");
+    CHECK(convert(0, 1, 0) == 0);
+    CHECK(sonare_last_error_code() == SONARE_OK);
   }
 }
 

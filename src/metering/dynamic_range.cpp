@@ -26,8 +26,8 @@ void validate_dynamic_range_config(const DynamicRangeConfig& config) {
   namespace check = util::check;
   check::greater_than(config.window_sec, 0.0, "window_sec");
   check::greater_than(config.hop_sec, 0.0, "hop_sec");
-  check::in_range(config.low_percentile, 0.0, 1.0, "low_percentile");
-  check::in_range(config.high_percentile, 0.0, 1.0, "high_percentile");
+  check::within(config.low_percentile, kDynamicRangePercentileDomain, "low_percentile");
+  check::within(config.high_percentile, kDynamicRangePercentileDomain, "high_percentile");
   if (config.low_percentile > config.high_percentile) {
     check::refuse_relation({"low_percentile", "high_percentile"}, "{0} must be at most {1}");
   }
@@ -44,8 +44,12 @@ DynamicRangeConfig dynamic_range_config_from_public(float window_sec, float hop_
   DynamicRangeConfig config;
   if (window_sec > 0.0f) config.window_sec = window_sec;
   if (hop_sec > 0.0f) config.hop_sec = hop_sec;
-  if (low_percentile >= 0.0f) config.low_percentile = low_percentile;
-  if (high_percentile >= 0.0f) config.high_percentile = high_percentile;
+  if (low_percentile != kDynamicRangePercentileDefaultSentinel) {
+    config.low_percentile = low_percentile;
+  }
+  if (high_percentile != kDynamicRangePercentileDefaultSentinel) {
+    config.high_percentile = high_percentile;
+  }
   validate_dynamic_range_config(config);
   return config;
 }

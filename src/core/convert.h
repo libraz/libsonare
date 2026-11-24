@@ -62,7 +62,7 @@ float note_to_hz(const std::string& note);
 /// @brief What the sample rate of a frame/time conversion accepts.
 inline constexpr util::check::NumericDomain kFrameTimeSampleRateDomain =
     util::check::integer_domain_of<int>(1);
-/// @brief What the hop length of a frame/time conversion accepts.
+/// @brief What the hop length of a frame conversion accepts.
 inline constexpr util::check::NumericDomain kFrameTimeHopDomain =
     util::check::integer_domain_of<int>(1);
 
@@ -99,6 +99,10 @@ float samples_to_time(int samples, int sr);
 /// @return Number of samples
 int time_to_samples(float time, int sr);
 
+/// @brief FFT length for frame centring, with 0 selecting no centring.
+inline constexpr util::check::NumericDomain kFrameSampleFftDomain =
+    util::check::with_sentinel(util::check::integer_domain_of<int>(1), 0);
+
 /// @brief Converts a frame index to a sample index (librosa compatible).
 /// @param frames Frame index
 /// @param hop_length Hop length in samples
@@ -106,6 +110,7 @@ int time_to_samples(float time, int sr);
 ///        the result (mirrors librosa's `n_fft` argument, default behavior is
 ///        no centering offset).
 /// @return Sample index of the frame's hop start (+ n_fft/2 when applicable).
+/// @throws SonareException(InvalidParameter) for nonpositive @p hop_length or negative @p n_fft.
 int frames_to_samples(int frames, int hop_length, int n_fft = 0);
 
 /// @brief Vector variant of frames_to_samples.
@@ -116,8 +121,8 @@ std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_lengt
 /// @param hop_length Hop length in samples
 /// @param n_fft FFT size. If > 0, n_fft/2 is subtracted before dividing by
 ///        hop_length (mirrors librosa).
-/// @return Frame index. The result saturates to the int range; a non-positive
-///         @p hop_length returns 0.
+/// @return Frame index, saturated to the int range.
+/// @throws SonareException(InvalidParameter) for nonpositive @p hop_length or negative @p n_fft.
 int samples_to_frames(int samples, int hop_length, int n_fft = 0);
 
 /// @brief Vector variant of samples_to_frames.

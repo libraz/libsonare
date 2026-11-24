@@ -133,6 +133,11 @@ typedef struct {
 ///        ignored.
 void sonare_transcribe_config_init(SonareTranscribeConfig* config);
 
+/// @brief Validates @p config without reading or processing audio. NULL selects the defaults.
+/// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the pitch editor or
+///       arrangement subsystem.
+SonareError sonare_validate_transcribe_config(const SonareTranscribeConfig* config);
+
 /// @brief Heap-owned transcription output. Release with
 ///        @ref sonare_free_transcribe_result.
 typedef struct {

@@ -314,6 +314,36 @@ SonareError probe_audio_silence_ratio(const std::string& param, double value) {
   return err;
 }
 
+SonareError probe_dynamic_range(bool handle_form, const std::string& param, double value) {
+  float low_percentile = 0.1f;
+  float high_percentile = 0.95f;
+  if (is_param(param, "low_percentile")) low_percentile = static_cast<float>(value);
+  if (is_param(param, "high_percentile")) high_percentile = static_cast<float>(value);
+  SonareDynamicRangeResult out{};
+  SonareError err = SONARE_OK;
+  if (handle_form) {
+    SonareAudio* audio = nullptr;
+    REQUIRE(sonare_audio_from_buffer(analysis_samples().data(), analysis_samples().size(),
+                                     kAnalysisRate, &audio) == SONARE_OK);
+    err = sonare_audio_dynamic_range(audio, 0.05f, 0.025f, low_percentile, high_percentile, &out);
+    sonare_audio_destroy(audio);
+  } else {
+    err = sonare_metering_dynamic_range(analysis_samples().data(), analysis_samples().size(),
+                                        kAnalysisRate, 0.05f, 0.025f, low_percentile,
+                                        high_percentile, &out);
+  }
+  if (err == SONARE_OK) sonare_free_dynamic_range_result(&out);
+  return err;
+}
+
+SonareError probe_metering_dynamic_range(const std::string& param, double value) {
+  return probe_dynamic_range(false, param, value);
+}
+
+SonareError probe_audio_dynamic_range(const std::string& param, double value) {
+  return probe_dynamic_range(true, param, value);
+}
+
 /// Runs one spectrum entry with the row's member set and the other at its default (0).
 template <typename Call>
 SonareError probe_spectrum(const std::string& param, double value, Call call) {
@@ -912,6 +942,7 @@ SonareError probe_streaming_chain_prepare(const std::string& param, double value
 const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"audio_silence_ratio", probe_audio_silence_ratio},
+      {"audio_dynamic_range", probe_audio_dynamic_range},
       {"audio_detect_clipping", probe_audio_detect_clipping},
       {"audio_spectrum", probe_audio_spectrum},
       {"audio_spectrum_frame", probe_audio_spectrum_frame},
@@ -923,6 +954,7 @@ const std::map<std::string, Probe>& probes() {
       {"mel_to_audio", probe_mel_to_audio},
       {"mel_to_stft", probe_mel_to_stft},
       {"metering_silence_ratio", probe_metering_silence_ratio},
+      {"metering_dynamic_range", probe_metering_dynamic_range},
       {"metering_detect_clipping", probe_metering_detect_clipping},
       {"metering_spectrum", probe_metering_spectrum},
       {"metering_spectrum_frame", probe_metering_spectrum_frame},
@@ -1025,6 +1057,10 @@ NumericDomainTable built_table() {
 double mastering_inside_value(const NumericDomainRow& row) {
   const std::string entry = row.entry;
   const std::string param = row.param;
+  if ((entry == "audio_dynamic_range" || entry == "metering_dynamic_range") &&
+      param == "high_percentile") {
+    return 0.95;
+  }
   const bool integer_from_one = row.domain.kind == NumberKind::Integer && *row.domain.lo == 1.0;
   if (starts_with(entry, "segment_")) return integer_from_one ? 4.0 : lowest_inside_value(row);
   if (starts_with(entry, "mel_to_") || starts_with(entry, "mfcc_to_")) {
@@ -1068,6 +1104,22 @@ TEST_CASE("a mastering value outside its row's domain is refused under the row's
 TEST_CASE("a mastering value inside its row's domain is not refused under the row's subject",
           "[numeric_domains][c_api]") {
   require_inside_accepted(built_table(), probes(), mastering_inside_value);
+}
+
+TEST_CASE("dynamic-range percentile rows keep the sentinel and refuse outside [0, 1]",
+          "[numeric_domains][c_api][dynamic-range-domain]") {
+  std::vector<NumericDomainRow> rows;
+  for (const NumericDomainRow& row : kMasteringDomainRows) {
+    const std::string entry = row.entry;
+    if ((entry == "audio_dynamic_range" || entry == "metering_dynamic_range") &&
+        (std::string(row.param) == "low_percentile" ||
+         std::string(row.param) == "high_percentile")) {
+      rows.push_back(row);
+    }
+  }
+  const NumericDomainTable table{"mastering", rows.data(), rows.size()};
+  require_outside_refused(table, probes());
+  require_inside_accepted(table, probes(), mastering_inside_value);
 }
 
 TEST_CASE("a spectrum FFT size is accepted up to the meter's resource limit and refused past it",

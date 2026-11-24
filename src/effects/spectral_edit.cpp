@@ -184,6 +184,8 @@ void apply_op(std::vector<std::complex<float>>& buf, int n_frames, int n_fft, in
 }  // namespace
 
 void validate_spectral_region_op(const SpectralRegionOp& op) {
+  util::check::integer_within(op.start_sample, kSpectralEditSamplePositionDomain, "start_sample");
+  util::check::integer_within(op.end_sample, kSpectralEditSamplePositionDomain, "end_sample");
   util::check::finite(op.low_hz, "low_hz");
   util::check::finite(op.high_hz, "high_hz");
   util::check::finite(op.gain_db, "gain_db");

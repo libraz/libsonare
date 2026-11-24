@@ -948,6 +948,14 @@ SonareError probe_onset_strength(const std::string& param, double value) {
 }
 
 // The conversions return a value, so the refusal is read back from the last error.
+template <int (*Convert)(int, size_t, int)>
+SonareError probe_frame_sample_conversion(const std::string& param, double value) {
+  const size_t hop_length = is_param(param, "hop_length") ? as_size(value) : 512;
+  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 0;
+  (void)Convert(10, hop_length, n_fft);
+  return sonare_last_error_code();
+}
+
 SonareError probe_frames_to_time(const std::string& param, double value) {
   int sr = kAnalysisRate;
   size_t hop_length = 512;
@@ -1103,6 +1111,8 @@ const std::map<std::string, Probe>& probes() {
       {"zero_crossing_rate", probe_zero_crossing_rate},
       {"rms_energy", probe_rms_energy},
       {"onset_strength", probe_onset_strength},
+      {"frames_to_samples", probe_frame_sample_conversion<sonare_frames_to_samples>},
+      {"samples_to_frames", probe_frame_sample_conversion<sonare_samples_to_frames>},
       {"frames_to_time", probe_frames_to_time},
       {"time_to_frames", probe_time_to_frames},
 #if defined(SONARE_WITH_PITCH_EDITOR)

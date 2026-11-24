@@ -728,6 +728,79 @@ TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api
         "config.f0_max_hz must be finite and greater than config.f0_min_hz");
 }
 
+TEST_CASE("transcribe config preflight resolves the source's F0 defaults",
+          "[c_api][transcribe][transcribe-config]") {
+  const auto fresh = [] {
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
+    return config;
+  };
+  const auto require_relation_refusal = [](const SonareTranscribeConfig& config) {
+    const SonareTranscribeConfig before = config;
+    REQUIRE(sonare_validate_transcribe_config(&config) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.f0_max_hz must be finite and greater than config.f0_min_hz");
+    CHECK((config.f0_min_hz == before.f0_min_hz ||
+           (std::isnan(config.f0_min_hz) && std::isnan(before.f0_min_hz))));
+    CHECK((config.f0_max_hz == before.f0_max_hz ||
+           (std::isnan(config.f0_max_hz) && std::isnan(before.f0_max_hz))));
+    CHECK(config.polyphonic == before.polyphonic);
+  };
+
+  SECTION("monophonic maximum is used when the upper bound is absent") {
+    SonareTranscribeConfig config = fresh();
+    config.f0_min_hz = 2100.0f;
+    require_relation_refusal(config);
+  }
+  SECTION("polyphonic maximum is used when the upper bound is absent") {
+    SonareTranscribeConfig config = fresh();
+    config.polyphonic = 1;
+    config.f0_min_hz = 1800.0f;
+    require_relation_refusal(config);
+  }
+  SECTION("monophonic minimum is used when the lower bound is absent") {
+    SonareTranscribeConfig config = fresh();
+    config.f0_max_hz = 64.0f;
+    require_relation_refusal(config);
+  }
+  SECTION("polyphonic minimum is used when the lower bound is absent") {
+    SonareTranscribeConfig config = fresh();
+    config.polyphonic = 1;
+    config.f0_max_hz = 54.0f;
+    require_relation_refusal(config);
+  }
+  SECTION("C float32 narrowing happens before the relation check") {
+    SonareTranscribeConfig config = fresh();
+    config.f0_min_hz = 100.000001;
+    config.f0_max_hz = 100.000002;
+    REQUIRE(config.f0_min_hz == config.f0_max_hz);
+    require_relation_refusal(config);
+  }
+  SECTION("in-range partial bounds pass for both sources") {
+    SonareTranscribeConfig mono = fresh();
+    mono.f0_min_hz = 64.0f;
+    CHECK(sonare_validate_transcribe_config(&mono) == SONARE_OK);
+
+    SonareTranscribeConfig poly = fresh();
+    poly.polyphonic = 1;
+    poly.f0_min_hz = 54.0f;
+    CHECK(sonare_validate_transcribe_config(&poly) == SONARE_OK);
+  }
+}
+
+TEST_CASE("transcribe config preflight accepts NULL and refuses a short struct",
+          "[c_api][transcribe][transcribe-config]") {
+  CHECK(sonare_validate_transcribe_config(nullptr) == SONARE_OK);
+
+  SonareTranscribeConfig config{};
+  config.struct_size = 0;
+  CHECK(sonare_validate_transcribe_config(&config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "config.struct_size must be set by sonare_transcribe_config_init");
+}
+
 // --- The tuning reference --------------------------------------------------
 
 TEST_CASE("reference_auto measures the tuning and the result reports what was used",
@@ -1195,6 +1268,19 @@ TEST_CASE("monophonic_model is refused by name", "[c_api][transcribe]") {
     CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
                             polyphonic.out()) == SONARE_OK);
   }
+}
+
+#else
+
+TEST_CASE("transcribe config preflight reports a compiled-out feature",
+          "[c_api][transcribe][transcribe-config]") {
+  CHECK(sonare_validate_transcribe_config(nullptr) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_NOT_SUPPORTED);
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  CHECK(std::string(sonare_last_error_message()) == "arrangement support is not compiled in");
+#else
+  CHECK(std::string(sonare_last_error_message()) == "pitch editor support is not compiled in");
+#endif
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR

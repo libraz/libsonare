@@ -282,8 +282,10 @@ SonareError probe_spectral_edit(const std::string& param, double value) {
     config.heal_radius_frames = static_cast<int>(value);
   }
   if (is_param(param, "config.window")) config.window = static_cast<int>(value);
-  const bool with_op = is_param(param, "ops[].mode");
-  if (with_op) op.mode = static_cast<int>(value);
+  const bool with_op = param.rfind("ops[].", 0) == 0;
+  if (is_param(param, "ops[].mode")) op.mode = static_cast<int>(value);
+  if (is_param(param, "ops[].start_sample")) op.start_sample = as_i64(value);
+  if (is_param(param, "ops[].end_sample")) op.end_sample = as_i64(value);
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError err =
@@ -1105,4 +1107,19 @@ TEST_CASE("an effects value outside its row's domain is refused under the row's 
 TEST_CASE("an effects value inside its row's domain is not refused under the row's subject",
           "[numeric_domains][c_api]") {
   require_inside_accepted(built_table(), probes(), inside_value);
+}
+
+TEST_CASE("spectral region sample positions reject negatives but keep the zero boundary",
+          "[numeric_domains][c_api][spectral-position]") {
+  std::vector<NumericDomainRow> rows;
+  for (const NumericDomainRow& row : kEffectsDomainRows) {
+    if (std::string(row.entry) == "spectral_edit" &&
+        (std::string(row.param) == "ops[].start_sample" ||
+         std::string(row.param) == "ops[].end_sample")) {
+      rows.push_back(row);
+    }
+  }
+  const NumericDomainTable table{"effects", rows.data(), rows.size()};
+  require_outside_refused(table, probes());
+  require_inside_accepted(table, probes(), [](const NumericDomainRow&) { return 0.0; });
 }

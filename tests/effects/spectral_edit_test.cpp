@@ -300,6 +300,44 @@ TEST_CASE("spectral_edit clamps out-of-range regions without error", "[spectral_
   REQUIRE(out.size() == audio.size());
 }
 
+TEST_CASE("spectral_edit refuses negative region sample positions before clamping",
+          "[spectral_edit][spectral-position]") {
+  constexpr int samples = 4096;
+  Audio audio = Audio::from_vector(generate_sine(samples, 1000.0f, 0.3f), kSampleRate);
+  SpectralRegionOp op{0, samples, 0.0f, 0.0f, 0.0f, SpectralEditMode::Mute};
+
+  SECTION("zero is accepted and an end past the input is still clamped") {
+    op.start_sample = 0;
+    op.end_sample = samples + 100;
+    const Audio out = spectral_edit(audio, default_config(), &op, 1);
+    REQUIRE(out.size() == audio.size());
+  }
+
+  SECTION("negative start is refused by its indexed field name") {
+    op.start_sample = -1;
+    try {
+      static_cast<void>(spectral_edit(audio, default_config(), &op, 1));
+      FAIL("negative start sample was accepted");
+    } catch (const SonareParameterRefusal& refusal) {
+      CHECK(refusal.code() == ErrorCode::InvalidParameter);
+      CHECK(refusal.subject() == "ops[0].start_sample");
+      CHECK(std::string(refusal.what()) == "ops[0].start_sample must be an integer of at least 0");
+    }
+  }
+
+  SECTION("negative end is refused by its indexed field name") {
+    op.end_sample = -1;
+    try {
+      static_cast<void>(spectral_edit(audio, default_config(), &op, 1));
+      FAIL("negative end sample was accepted");
+    } catch (const SonareParameterRefusal& refusal) {
+      CHECK(refusal.code() == ErrorCode::InvalidParameter);
+      CHECK(refusal.subject() == "ops[0].end_sample");
+      CHECK(std::string(refusal.what()) == "ops[0].end_sample must be an integer of at least 0");
+    }
+  }
+}
+
 TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
   const int samples = kSampleRate / 2;
   std::vector<float> sine = generate_sine(samples, 1000.0f, 0.3f);

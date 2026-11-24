@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -26,9 +27,15 @@ struct DynamicRangeConfig {
   float high_percentile = 0.95f;
 };
 
+/// @brief Percentile rank accepted after the public default sentinel is resolved.
+inline constexpr util::check::NumericDomain kDynamicRangePercentileDomain =
+    util::check::real_domain(0.0, 1.0);
+/// @brief The C/JS value that means use the library's default percentile.
+inline constexpr float kDynamicRangePercentileDefaultSentinel = -1.0f;
+
 /// Decodes the public C/JS sentinel convention into a validated core config.
-/// Zero window/hop and negative percentiles retain library defaults. All
-/// supplied scalar values must be finite; percentiles must resolve into [0,1]
+/// Zero window/hop and a percentile of exactly -1 retain library defaults. All
+/// other supplied scalar values must be finite; percentiles must be in [0,1]
 /// and remain ordered.
 DynamicRangeConfig dynamic_range_config_from_public(float window_sec, float hop_sec,
                                                     float low_percentile, float high_percentile);

@@ -201,30 +201,18 @@ int frame_index_to_sample(int frame, int hop_length, int offset) noexcept {
   return static_cast<int>(
       std::clamp<int64_t>(value, std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
 }
-}  // namespace
 
-int frames_to_samples(int frames, int hop_length, int n_fft) {
-  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
-  return frame_index_to_sample(frames, hop_length, offset);
+// A zero FFT length is the omission signal shared by both conversions.
+int frame_centring_offset(int hop_length, int n_fft) {
+  namespace check = util::check;
+  check::integer_within(hop_length, kFrameTimeHopDomain, "hop_length");
+  if (n_fft != *kFrameSampleFftDomain.sentinel) {
+    check::integer_within(n_fft, check::given_domain(kFrameSampleFftDomain), "n_fft");
+  }
+  return n_fft / 2;
 }
 
-std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_length, int n_fft) {
-  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
-  std::vector<int> out;
-  out.reserve(frames.size());
-  for (int f : frames) out.push_back(frame_index_to_sample(f, hop_length, offset));
-  return out;
-}
-
-int samples_to_frames(int samples, int hop_length, int n_fft) {
-  // Guard against a non-positive hop_length: dividing by it below would be
-  // integer division-by-zero (UB) for hop_length == 0 and would produce a
-  // meaningless (sign-flipped) frame index for a negative hop. A frame index is
-  // undefined without a positive hop, so return 0 frames -- mirroring the
-  // saturating, non-throwing convention of the sibling frames_to_samples
-  // helpers (the throwing variants are frames_to_time / time_to_frames).
-  if (hop_length <= 0) return 0;
-  const std::int64_t offset = (n_fft > 0) ? (n_fft / 2) : 0;
+int sample_index_to_frame(int samples, int hop_length, int offset) noexcept {
   // Promote before subtracting: samples may be INT_MIN and the centering
   // offset can make the numerator smaller still.  C++ integer division
   // truncates toward zero, so adjust a negative remainder to obtain Python's
@@ -236,11 +224,29 @@ int samples_to_frames(int samples, int hop_length, int n_fft) {
   return static_cast<int>(std::clamp<std::int64_t>(frames, std::numeric_limits<int>::min(),
                                                    std::numeric_limits<int>::max()));
 }
+}  // namespace
+
+int frames_to_samples(int frames, int hop_length, int n_fft) {
+  return frame_index_to_sample(frames, hop_length, frame_centring_offset(hop_length, n_fft));
+}
+
+std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_length, int n_fft) {
+  const int offset = frame_centring_offset(hop_length, n_fft);
+  std::vector<int> out;
+  out.reserve(frames.size());
+  for (int f : frames) out.push_back(frame_index_to_sample(f, hop_length, offset));
+  return out;
+}
+
+int samples_to_frames(int samples, int hop_length, int n_fft) {
+  return sample_index_to_frame(samples, hop_length, frame_centring_offset(hop_length, n_fft));
+}
 
 std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_length, int n_fft) {
+  const int offset = frame_centring_offset(hop_length, n_fft);
   std::vector<int> out;
   out.reserve(samples.size());
-  for (int s : samples) out.push_back(samples_to_frames(s, hop_length, n_fft));
+  for (int s : samples) out.push_back(sample_index_to_frame(s, hop_length, offset));
   return out;
 }
 
