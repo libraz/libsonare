@@ -44,6 +44,31 @@ def test_an_earlier_key_spelling_is_refused_as_invalid_format() -> None:
         libsonare.mastering_chain_config_from_json(document)
 
 
+@pytest.mark.parametrize("value", ["{}", '"x"', "null", "[]"])
+@pytest.mark.parametrize(
+    ("template", "path"),
+    [
+        ('{{"params":{{"eq":{{"tilt":{{"undeclared":{}}}}}}}}}', "params.eq.tilt.undeclared"),
+        ('{{"params":{{"undeclared":{{"deeper":{}}}}}}}', "params.undeclared"),
+    ],
+)
+def test_an_undeclared_key_is_refused_at_its_first_undeclared_parent(
+    value: str, template: str, path: str
+) -> None:
+    with raises_coded(
+        ErrorCode.INVALID_FORMAT,
+        match=re.escape(chain_unknown_key_text(f"unknown key {path}")) + "$",
+    ):
+        libsonare.mastering_chain_config_from_json(template.format(value))
+
+
+def test_annotation_keys_are_accepted_whatever_they_hold() -> None:
+    document = '{"params":{"eq":{"tilt":{"$annotation":{"anything":null}}},"x-extra":[]}}'
+    assert libsonare.mastering_chain_config_from_json(
+        document
+    ) == libsonare.mastering_chain_config_from_json('{"params":{}}')
+
+
 def test_a_malformed_document_is_refused_as_invalid_format() -> None:
     with raises_coded(ErrorCode.INVALID_FORMAT):
         libsonare.mastering_chain_config_from_json("{")

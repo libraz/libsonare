@@ -116,6 +116,30 @@ describe('masteringChainConfigFromJson', () => {
     expect((error as Error).message).toBe(`masteringChainConfigFromJson: ${message}`);
   });
 
+  it.each(['{}', '"x"', 'null', '[]'])(
+    'refuses %s under an undeclared key as an unknown key at its first undeclared parent',
+    (value) => {
+      for (const [document, path] of [
+        [`{"params":{"eq":{"tilt":{"undeclared":${value}}}}}`, 'params.eq.tilt.undeclared'],
+        [`{"params":{"undeclared":{"deeper":${value}}}}`, 'params.undeclared'],
+      ]) {
+        const error = refusal(() => masteringChainConfigFromJson(document));
+        expect(isSonareError(error)).toBe(true);
+        expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
+        expect((error as Error).message).toBe(
+          `masteringChainConfigFromJson: ${chainUnknownKeyText(`unknown key ${path}`)}`,
+        );
+      }
+    },
+  );
+
+  it('accepts $- and x- annotation keys whatever they hold', () => {
+    const parsed = masteringChainConfigFromJson(
+      '{"params":{"eq":{"tilt":{"$annotation":{"anything":null}}},"x-extra":[]}}',
+    );
+    expect(parsed).toEqual(masteringChainConfigFromJson('{"params":{}}'));
+  });
+
   it('refuses a document that is not a string with a TypeError', () => {
     // @ts-expect-error the document is a JSON string
     expect(() => masteringChainConfigFromJson({ version: 2, params: {} })).toThrow(TypeError);

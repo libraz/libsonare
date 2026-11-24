@@ -220,7 +220,8 @@ def test_a_v2_document_refuses_a_number_for_a_token() -> None:
     [
         ({"lowCutoffHz": 200.0}, "lowCutoffHz"),
         ({"highCutoffHz": 5000.0}, "highCutoffHz"),
-        ({"band2": {"detector": "rms"}}, "band2.detector"),
+        # An undeclared parent is refused itself, before any key under it is read.
+        ({"band2": {"detector": "rms"}}, "band2"),
     ],
 )
 def test_multiband_shorthand_keys_are_refused_as_any_other_unknown_key(

@@ -423,6 +423,46 @@ def test_streaming_mastering_chain_refuses_a_whole_signal_repair_stage(stage: st
     assert not isinstance(refused.value, SonareValueError)
 
 
+@pytest.mark.parametrize("value", [{}, "x", None, []])
+def test_master_audio_refuses_any_value_under_an_undeclared_key(value: object) -> None:
+    from libsonare import ErrorCode, master_audio
+
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER,
+        match=re.escape(chain_unknown_key_text("unknown key overrides.eq.tilt.undeclared")) + "$",
+    ):
+        master_audio(
+            np.zeros(4800, dtype=np.float32),
+            48000,
+            overrides={"eq": {"tilt": {"undeclared": value}}},
+        )
+
+
+def test_master_audio_accepts_annotation_keys() -> None:
+    from libsonare import master_audio
+
+    samples = np.zeros(4800, dtype=np.float32)
+    annotated = master_audio(
+        samples, 48000, overrides={"x-note": [], "eq": {"tilt": {"$comment": {}}}}
+    )
+    assert np.array_equal(annotated.samples, master_audio(samples, 48000, overrides={}).samples)
+
+
+def test_streaming_set_parameter_refuses_an_undeclared_parameter() -> None:
+    from libsonare import ErrorCode, StreamingMasteringChain
+
+    with (
+        StreamingMasteringChain(
+            {"eq": {"tilt": {"enabled": True}}}, sample_rate=48000, num_channels=1
+        ) as chain,
+        raises_coded(
+            ErrorCode.INVALID_PARAMETER,
+            match=re.escape(chain_unknown_key_text("unknown key eq.tilt.undeclared")) + "$",
+        ),
+    ):
+        chain.set_parameter("eq.tilt.undeclared", 2.0)
+
+
 def test_streaming_mastering_chain_refuses_a_renamed_key_as_any_other_unknown_key() -> None:
     from libsonare import SonareError, StreamingMasteringChain
 

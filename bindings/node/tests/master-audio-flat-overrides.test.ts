@@ -129,6 +129,43 @@ describe('masterAudio overrides in nested, flat and mixed spelling', () => {
     );
   });
 
+  it.each([{}, 'x', null, []])(
+    'refuses %j under an undeclared key as an unknown key, overrides and setter alike',
+    (value) => {
+      const overrides = { eq: { tilt: { undeclared: value } } } as MasteringChainConfigInput;
+      expect(() => masterAudio({ samples, sampleRate, overrides })).toThrow(
+        new TypeError(chainUnknownKeyText('masterAudio: unknown key overrides.eq.tilt.undeclared')),
+      );
+    },
+  );
+
+  it('accepts $- and x- annotation keys in overrides', () => {
+    const overrides = { 'x-note': [], eq: { tilt: { $comment: {} } } } as MasteringChainConfigInput;
+    expectSameRender(
+      masterAudio({ samples, sampleRate, overrides }),
+      masterAudio({ samples, sampleRate, overrides: {} }),
+    );
+  });
+
+  it('refuses an undeclared streaming parameter as an unknown key', () => {
+    const chain = new StreamingMasteringChain({
+      sampleRate,
+      numChannels: 1,
+      eq: { tilt: { enabled: true } },
+    });
+    try {
+      expect(() => chain.setParameter('eq.tilt.undeclared', 2)).toThrow(
+        new TypeError(
+          chainUnknownKeyText(
+            'StreamingMasteringChain.setParameter: unknown key eq.tilt.undeclared',
+          ),
+        ),
+      );
+    } finally {
+      chain.destroy();
+    }
+  });
+
   it("takes a saved chain document's params as written, multibandComp object included", () => {
     const document = JSON.parse(addon.masteringPresetParams('pop')) as {
       params: MasteringChainConfigInput;
