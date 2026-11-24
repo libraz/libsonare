@@ -99,6 +99,8 @@ _EMPTY_INPUT_IS_DEFINED = frozenset(
         "pad_center",
         # Length-proportional output: zero samples in, zero out; both rates are still checked.
         "resample",
+        # Per sample, so an empty signal has no crossings to report.
+        "zero_crossings",
         # Tempogram family: an empty onset envelope yields an empty tempogram
         # plus its (input-independent) tempo axis.
         "cyclic_tempogram",

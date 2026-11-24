@@ -28,6 +28,7 @@ import {
   voiceChange,
   waveformPeakPyramid,
   waveformPeaks,
+  zeroCrossings,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import { expectRefusalOf, unknownKeyText } from './_helpers';
@@ -484,5 +485,17 @@ describe('positive smoke (WASM)', () => {
     const input = sine(SR);
     const r = masteringDynamicsCompressor(input, SR);
     expect(r.samples.length).toBe(input.length);
+  });
+});
+
+describe('zeroCrossings on an empty buffer (WASM)', () => {
+  it('returns no crossings and still checks the threshold', () => {
+    const out = zeroCrossings(new Float32Array(0), SR);
+    expect(out).toBeInstanceOf(Int32Array);
+    expect(out.length).toBe(0);
+    expect(
+      expectRefusalOf(() => zeroCrossings(new Float32Array(0), SR, { threshold: -1 }), RangeError)
+        .message,
+    ).toBe('zeroCrossings: threshold must be finite and at least 0');
   });
 });

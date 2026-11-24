@@ -19,6 +19,7 @@ import {
   voiceChange,
   waveformPeakPyramid,
   waveformPeaks,
+  zeroCrossings,
 } from '../src/index.js';
 import { unknownKeyText } from './_helpers.js';
 
@@ -242,5 +243,16 @@ describe('positive smoke (Node)', () => {
     const input = sine(SR);
     const r = masteringDynamicsCompressor(input, SR);
     expect(r.samples.length).toBe(input.length);
+  });
+});
+
+describe('zeroCrossings on an empty buffer (Node)', () => {
+  it('returns no crossings and still checks the threshold', () => {
+    const out = zeroCrossings(new Float32Array(0), SR);
+    expect(out).toBeInstanceOf(Int32Array);
+    expect(out.length).toBe(0);
+    const negative = () => zeroCrossings(new Float32Array(0), SR, { threshold: -1 });
+    expect(negative).toThrow(RangeError);
+    expect(negative).toThrow(/^zeroCrossings: threshold must be finite and at least 0$/);
   });
 });

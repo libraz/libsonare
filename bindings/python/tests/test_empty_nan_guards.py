@@ -443,6 +443,12 @@ class TestZeroCrossingsInput:
         assert result.dtype == np.int32
         assert result.shape == (0,)
 
+    def test_checks_the_threshold_on_empty_samples(self):
+        with pytest.raises(
+            SonareValueError, match=r"^zero_crossings: threshold must be finite and at least 0$"
+        ):
+            zero_crossings(np.empty(0, dtype=np.float32), threshold=-1.0)
+
     def test_rejects_nan_rather_than_fabricating_crossings(self):
         # A non-finite sample compares unequal to itself, so the sign test would
         # report crossings on both sides of it that the clean signal does not have.
