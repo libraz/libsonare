@@ -9286,7 +9286,7 @@
     },
     {
       "entry": "waveform_peak_pyramid",
-      "param": "samples_per_bucket",
+      "param": "samples_per_bucket_levels[]",
       "kind": "integer",
       "lo": 1,
       "hi": null,

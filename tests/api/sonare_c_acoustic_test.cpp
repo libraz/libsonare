@@ -109,11 +109,13 @@ TEST_CASE("sonare acoustic C API refuses invalid RIR geometry with its diagnosti
   SonareRirSynthConfig cfg = valid_rir_config();
   cfg.length_m = -1.0f;  // Finite ABI input; the acoustic validator diagnoses it.
   SonareRirSynthResult result{};
+  result.sample_rate = 48000;
 
   REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.rir == nullptr);
   REQUIRE(result.length == 0);
+  CHECK(result.sample_rate == 0);
   const std::string detail = sonare_last_error_message();
   REQUIRE(detail.find("length_m must be finite and in (0, 10000]") != std::string::npos);
   REQUIRE(detail.find("acoustic.") == std::string::npos);
@@ -1781,3 +1783,70 @@ TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",
   sonare_free_room_estimate(&estimate);
   sonare_free_rir_synth_result(&rir);
 }
+
+TEST_CASE("sonare synthesize RIR leaves its result empty on refusal", "[c_api][acoustic]") {
+  const auto check_empty = [](const SonareRirSynthConfig& cfg, int sample_rate) {
+    SonareRirSynthResult result{};
+    result.sample_rate = 22050;
+    result.length = 17;
+    const SonareError error = sonare_synthesize_rir(&cfg, sample_rate, &result);
+    CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(result.rir == nullptr);
+    CHECK(result.length == 0);
+    CHECK(result.sample_rate == 0);
+  };
+
+  SonareRirSynthConfig invalid_geometry = valid_rir_config();
+  invalid_geometry.length_m = 0.0f;
+  check_empty(invalid_geometry, 48000);
+  check_empty(valid_rir_config(), 7999);
+}
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
+TEST_CASE("sonare synthesize RIR publishes atomically on allocation failure",
+          "[c_api][acoustic][allocation]") {
+  const SonareRirSynthConfig cfg = valid_rir_config();
+  SonareRirSynthResult warm{};
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &warm) == SONARE_OK);
+  sonare_free_rir_synth_result(&warm);
+
+  std::size_t first_allocations = 0;
+  SonareRirSynthResult first{};
+  SonareError first_error = SONARE_ERROR_UNKNOWN;
+  {
+    sonare::test::AllocationGuard guard;
+    first_error = sonare_synthesize_rir(&cfg, 48000, &first);
+    first_allocations = guard.count();
+  }
+  REQUIRE(first_error == SONARE_OK);
+  REQUIRE(first_allocations > 0);
+  sonare_free_rir_synth_result(&first);
+
+  std::size_t second_allocations = 0;
+  SonareRirSynthResult second{};
+  SonareError second_error = SONARE_ERROR_UNKNOWN;
+  {
+    sonare::test::AllocationGuard guard;
+    second_error = sonare_synthesize_rir(&cfg, 48000, &second);
+    second_allocations = guard.count();
+  }
+  REQUIRE(second_error == SONARE_OK);
+  REQUIRE(second_allocations == first_allocations);
+  sonare_free_rir_synth_result(&second);
+
+  SonareRirSynthResult failed{};
+  failed.length = 19;
+  failed.sample_rate = 22050;
+  SonareError failed_error = SONARE_OK;
+  {
+    // The final allocation copies the synthesized samples into caller-owned storage.
+    sonare::test::AllocationFailureAtGuard fail(second_allocations);
+    failed_error = sonare_synthesize_rir(&cfg, 48000, &failed);
+  }
+  CHECK(failed_error == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(failed.rir == nullptr);
+  CHECK(failed.length == 0);
+  CHECK(failed.sample_rate == 0);
+  sonare_free_rir_synth_result(&failed);
+}
+#endif

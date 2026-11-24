@@ -195,11 +195,13 @@ inline void validate_stream_config_sizing(const StreamConfig& config) {
 ///          off, so refusing it would reject a default config round trip.
 /// @throws SonareException(NotSupported) when the config asks for a result
 ///         the caller's read paths could never return.
-inline void validate_soa_stream_config(const StreamConfig& config) {
+inline void validate_soa_stream_config(const StreamConfig& config,
+                                       const char* magnitude_subject = "computeMagnitude") {
   if (config.compute_magnitude) {
     throw SonareException(ErrorCode::NotSupported,
-                          "computeMagnitude is not supported because magnitude frames are not "
-                          "exposed by StreamAnalyzer read paths");
+                          std::string(magnitude_subject) +
+                              " is not supported because magnitude frames are not exposed by "
+                              "StreamAnalyzer read paths");
   }
 }
 

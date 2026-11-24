@@ -1195,6 +1195,22 @@ TEST_CASE("the SonareNoteRenderConfig vibrato cutoff decides which curve an edit
   const std::vector<float> samples = fm_tone(220.0, 30.0, 5.5, 0.4, kSamples);
   const std::vector<float> f0 = fm_track(220.0, 30.0, 5.5, kFrames);
 
+  SonarePitchDecompositionResult default_split{};
+  SonarePitchDecompositionResult explicit_split{};
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, 220.0f, 0.0f,
+                                      &default_split) == SONARE_OK);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, 220.0f, 3.0f,
+                                      &explicit_split) == SONARE_OK);
+  REQUIRE(default_split.count == f0.size());
+  REQUIRE(explicit_split.count == f0.size());
+  CHECK(default_split.center_hz == explicit_split.center_hz);
+  CHECK(std::equal(default_split.drift_cents, default_split.drift_cents + default_split.count,
+                   explicit_split.drift_cents));
+  CHECK(std::equal(default_split.vibrato_cents, default_split.vibrato_cents + default_split.count,
+                   explicit_split.vibrato_cents));
+  sonare_free_pitch_decomposition_result(&default_split);
+  sonare_free_pitch_decomposition_result(&explicit_split);
+
   SonareNoteObject note = hand_note(0, 6400, 220.0f);
   note.edit.vibrato_depth_change = -1.0f;
 
@@ -1240,7 +1256,7 @@ TEST_CASE("the SonareNoteRenderConfig vibrato cutoff decides which curve an edit
 
   float* out = nullptr;
   size_t out_length = 0;
-  for (const float bad : {kNaN, kInf, -kInf, -1.0f}) {
+  for (const float bad : {kNaN, kInf, -kInf, 0.0f, -1.0f}) {
     SonareNoteRenderConfig rejected;
     sonare_note_render_config_init(&rejected);
     rejected.vibrato_cutoff_hz = bad;

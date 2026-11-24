@@ -258,6 +258,8 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
 ///        frame count; one entry is a constant gain. Every value must be finite and
 ///        non-negative.
 /// @param amplitude_envelope_count Number of points, or 0 for no envelope.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an invalid input. A refused envelope
+///         point leaves the previously stored edit in place.
 SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, size_t note,
                                             const SonareNoteEdit* edit,
                                             const float* amplitude_envelope,

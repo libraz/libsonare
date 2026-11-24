@@ -8,6 +8,7 @@
 /// identity therefore reproduces the input bit for bit, which is the property
 /// the whole editing model rests on.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -49,6 +50,12 @@ void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, 
 ///          an operation-specific path. A C or JavaScript zero stretch sentinel
 ///          must be normalized to 1.0 before calling this function.
 bool is_valid_note_edit(const NoteEdit& edit) noexcept;
+
+/// @brief Refuses a non-finite or negative gain point under its indexed subject.
+/// @param values Gain points (may be null when @p count is zero).
+/// @param count Number of gain points.
+/// @param subject Path of the gain point array.
+void validate_amplitude_envelope(const float* values, std::size_t count, const char* subject);
 
 /// @brief Checks a note's physical sample span against an audio buffer.
 /// @details Ordering is checked before any length arithmetic, so malformed

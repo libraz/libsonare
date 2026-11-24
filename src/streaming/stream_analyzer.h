@@ -172,10 +172,10 @@ class StreamAnalyzer {
   void reset(size_t base_sample_offset = 0);
 
   /// @brief Sets expected total duration of the audio.
-  /// @param duration_seconds Total duration in seconds
+  /// @param duration_sec Total duration in seconds
   /// @details Used to calculate optimal pattern lock timing.
   ///          If not set, a default threshold is used.
-  void set_expected_duration(float duration_seconds);
+  void set_expected_duration(float duration_sec);
 
   /// @brief Sets normalization gain for loud audio.
   /// @param gain Gain factor to apply to input samples (e.g., 0.5 for -6dB),

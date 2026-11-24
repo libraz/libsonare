@@ -252,6 +252,15 @@ void validate_note_for_render_fields(const NoteObject& note, int64_t audio_sampl
 
 }  // namespace
 
+void validate_amplitude_envelope(const float* values, std::size_t count, const char* subject) {
+  for (std::size_t i = 0; i < count; ++i) {
+    const float value = values[i];
+    if (!numeric::finite_non_negative(value)) {
+      util::check::at_least(value, 0.0, util::check::indexed_subject(subject, i).c_str());
+    }
+  }
+}
+
 void validate_note_span_and_edit(const NoteObject& note, int64_t audio_samples,
                                  const std::string& subject_prefix) {
   const auto subject = [&subject_prefix](const char* field) { return subject_prefix + field; };

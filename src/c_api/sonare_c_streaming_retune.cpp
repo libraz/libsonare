@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "editing/voice_changer/streaming_retune.h"
@@ -105,14 +107,14 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, int s
 #if defined(SONARE_WITH_VOICE_CHANGER)
   SONARE_C_REQUIRE_NONNULL(retune);
   SONARE_C_TRY
-  retune->retune->prepare(sample_rate, max_block_size);
-  // Size the block scratch here, where allocation is allowed, so process_mono
-  // never has to. assign() also zeroes it, which keeps a stale tail from a
-  // larger previous prepare out of the buffer a debugger would show. It runs
-  // BEFORE max_block_size is published: that field is what admits a block into
-  // process_mono, so a throwing reallocation must not leave it authorizing a
-  // block the scratch cannot hold.
-  retune->scratch.assign(static_cast<size_t>(max_block_size), 0.0f);
+  // Prepare a complete replacement before publishing either the core state or
+  // the scratch bound. A failed re-prepare must leave the previous pair usable.
+  StreamingRetune candidate(retune->retune->config());
+  candidate.prepare(sample_rate, max_block_size);
+  std::vector<float> scratch(static_cast<size_t>(max_block_size), 0.0f);
+  static_assert(std::is_nothrow_move_assignable_v<StreamingRetune>);
+  *retune->retune = std::move(candidate);
+  retune->scratch.swap(scratch);
   retune->max_block_size = max_block_size;
   return SONARE_OK;
   SONARE_C_CATCH

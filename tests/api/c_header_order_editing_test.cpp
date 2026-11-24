@@ -124,16 +124,17 @@ TEST_CASE("acoustic entries refuse the config before the output", "[c_api][heade
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config must not be NULL");
 
-  // A rejected rate is reported before the NULL result slot; the rate asked for stays readable.
+  // A rejected rate is reported before the NULL result slot.
   SonareRirSynthConfig config;
   sonare_rir_synth_config_init(&config);
   SonareRirSynthResult result;
   result.rir = garbage_pointer<float>();
   result.length = 12;
+  result.sample_rate = kRate;
   REQUIRE(sonare_synthesize_rir(&config, -5, &result) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(result.rir == nullptr);
   CHECK(result.length == 0);
-  CHECK(result.sample_rate == -5);
+  CHECK(result.sample_rate == 0);
 
   REQUIRE(sonare_synthesize_rir(&config, -5, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message().rfind("sample_rate must be an integer in [", 0) == 0);

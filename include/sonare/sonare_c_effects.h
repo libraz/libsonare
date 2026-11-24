@@ -208,9 +208,8 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
 /// @brief Offline auto-tune: snaps the voiced pitch of a monophonic recording to
 ///        the scale of a key, detected or named.
 /// @details Chains key detection (when @p key is NULL), @ref sonare_scale_mask_for_mode,
-///          pYIN pitch tracking (2048-sample frames, 512-sample hop, the hop
-///          @ref sonare_pitch_correct_timevarying defaults to) and the
-///          time-varying scale corrector. The output has the input's length.
+///          pYIN pitch tracking (2048-sample frames and a 512-sample hop), and
+///          the time-varying scale corrector. The output has the input's length.
 ///          Key detection measures the recording's tuning and uses the default
 ///          major/minor candidates, exactly as @ref sonare_detect_key does; the
 ///          correction grid stays at concert A440.
@@ -230,9 +229,7 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length, SonareKey* out_key);
 /// @param stretch_ratio Duration multiplier for the region; 1 leaves it as it
 ///        is. Must be finite and > 0; there is no spelling of "unspecified".
-///        The refusal lives in the core rather than in this call, so an
-///        out-of-domain value comes back as SONARE_ERROR_INVALID_PARAMETER with
-///        the core's own text on sonare_last_error_message().
+///        An out-of-domain value is refused as SONARE_ERROR_INVALID_PARAMETER.
 /// @note Free @p out with @ref sonare_free_floats.
 /// @note A @p stretch_ratio that would make the stretched note pass 2147483647 samples is refused
 /// with @c SONARE_ERROR_INVALID_PARAMETER naming it.
@@ -287,9 +284,8 @@ typedef struct {
   /// Boundary between the drift and the vibrato that @c vibrato_depth_change
   /// and @c drift_change act on, in Hz; finite and > 0, default 3.
   ///
-  /// Pass whatever @ref sonare_decompose_note_pitch was called with. A host
-  /// that draws the vibrato at one cutoff and edits it at another edits a
-  /// curve it never showed anyone.
+  /// Use the effective cutoff passed to @ref sonare_decompose_note_pitch.
+  /// Its zero default is 3 Hz, so pass 3 here when decomposition used zero.
   float vibrato_cutoff_hz;
 } SonareNoteRenderConfig;
 
@@ -527,7 +523,8 @@ typedef struct {
 ///        A note with no pitch is spelled 0, so a negative or non-finite value
 ///        is a caller bug rather than a second way of saying that.
 /// @param vibrato_cutoff_hz Boundary between the two curves; must be finite and
-///        non-negative. 0 keeps the default 3 Hz. Hand the same value to
+///        non-negative. 0 selects the default 3 Hz. When rendering with the same
+///        split, pass the effective cutoff (3 Hz when this is 0) to
 ///        @ref sonare_render_notes.
 /// @param out Receives a heap-owned result, cleared before validation. A note
 ///        with no usable pitch is reported as a zero centre and NULL curves
@@ -680,6 +677,8 @@ void sonare_note_target_assign_config_init(SonareNoteTargetAssignConfig* config)
 /// @param out Receives a heap-owned array of @p out_count targets, sorted by
 ///        @c start_sec. A track with no closed note is reported as NULL and 0
 ///        rather than as an error.
+/// @param out_count Receives the number of returned targets. Both provided outputs
+///        are cleared before validation.
 /// @note The returned array MUST be released with @ref sonare_free_note_targets.
 SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int track_index,
                                          SonareNoteTarget** out, size_t* out_count);

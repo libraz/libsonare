@@ -196,9 +196,10 @@ SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOption
 ///          argument validation or file inspection. On @c SONARE_OK it receives
 ///          a positive channel count and is left at 0 on every failure. Both
 ///          @p path and @p out_channels must be non-NULL; either NULL argument
-///          returns @c SONARE_ERROR_INVALID_PARAMETER. A missing/unreadable file
-///          returns @c SONARE_ERROR_FILE_NOT_FOUND. A malformed recognized file
-///          or decoder/probe failure returns @c SONARE_ERROR_DECODE_FAILED.
+///          returns @c SONARE_ERROR_INVALID_PARAMETER. Failure to open @p path
+///          returns @c SONARE_ERROR_FILE_NOT_FOUND. A read failure after opening,
+///          a malformed recognized file or a decoder/probe failure returns
+///          @c SONARE_ERROR_DECODE_FAILED.
 ///          An unknown or unsupported format returns @c SONARE_ERROR_INVALID_FORMAT
 ///          when no FFmpeg decoder is enabled; with FFmpeg enabled, failures
 ///          while probing that format return @c SONARE_ERROR_DECODE_FAILED.

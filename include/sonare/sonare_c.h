@@ -81,9 +81,11 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask,
                                               float scale_reference_midi, float midi,
                                               float* out_semitones);
 
-/// @brief Returns 1 if @p pitch_class is enabled by @p mode_mask (relative to
-///        @p root), 0 otherwise. Returns @c SONARE_ERROR_INVALID_PARAMETER for
-///        out-of-range @p pitch_class.
+/// @brief Tests whether a pitch class belongs to the scale.
+/// @param out_enabled Receives 1 if @p pitch_class is enabled by @p mode_mask
+///        relative to @p root, otherwise 0. Cleared on entry.
+/// @return @c SONARE_OK on success, @c SONARE_ERROR_INVALID_PARAMETER for invalid input,
+///         or @c SONARE_ERROR_NOT_SUPPORTED when pitch editing is unavailable.
 SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int pitch_class,
                                              int* out_enabled);
 

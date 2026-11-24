@@ -20,9 +20,11 @@
 #include <thread>
 #include <vector>
 
+#include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
 #include "metering/spectrum.h"
 #include "sonare_c_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -1300,9 +1302,181 @@ TEST_CASE("dynamic-range C readers refuse negative percentiles other than the -1
   };
 
   for (const bool handle_form : {false, true}) {
-    check_refused(handle_form, -2.0f, -1.0f, "low_percentile must be finite and in [0, 1]");
-    check_refused(handle_form, -1.0f, -2.0f, "high_percentile must be finite and in [0, 1]");
+    for (const float value : {-0.5f, -2.0f}) {
+      CAPTURE(handle_form, value);
+      check_refused(handle_form, value, -1.0f, "low_percentile must be finite and in [0, 1]");
+      check_refused(handle_form, -1.0f, value, "high_percentile must be finite and in [0, 1]");
+    }
   }
 
+  sonare_audio_destroy(audio);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("waveform peak results publish atomically on allocation failure",
+          "[c_api][metering][allocation]") {
+  const std::vector<float> samples(64, 0.25f);
+  SonareWaveformPeaksResult warm{};
+  REQUIRE(sonare_waveform_peaks(samples.data(), samples.size(), 1, 1, &warm) == SONARE_OK);
+  sonare_free_waveform_peaks_result(&warm);
+
+  std::size_t single_allocations = 0;
+  SonareWaveformPeaksResult single{};
+  SonareError single_error = SONARE_ERROR_UNKNOWN;
+  {
+    sonare::test::AllocationGuard guard;
+    single_error = sonare_waveform_peaks(samples.data(), samples.size(), 1, 1, &single);
+    single_allocations = guard.count();
+  }
+  REQUIRE(single_error == SONARE_OK);
+  REQUIRE(single_allocations >= 2);
+  sonare_free_waveform_peaks_result(&single);
+
+  // Reserve the TLS error buffer before live-block accounting so the OOM
+  // diagnostic itself does not look like a result allocation leak.
+  const std::string error_capacity(512, 'x');
+  sonare_c_detail::set_last_error(SONARE_ERROR_UNKNOWN, error_capacity.c_str());
+  sonare_c_detail::clear_last_error();
+
+  SonareWaveformPeaksResult failed_single{};
+  failed_single.num_channels = 7;
+  failed_single.bucket_count = 8;
+  failed_single.samples_per_bucket = 9;
+  SonareError failed_single_error = SONARE_OK;
+  long long single_balance = 0;
+  {
+    sonare::test::LiveBlockGuard live;
+    {
+      // The final allocation is the max plane, after the min plane was staged.
+      sonare::test::AllocationFailureAtGuard fail(single_allocations);
+      failed_single_error =
+          sonare_waveform_peaks(samples.data(), samples.size(), 1, 1, &failed_single);
+    }
+    single_balance = live.balance();
+  }
+  CHECK(failed_single_error == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(failed_single.min == nullptr);
+  CHECK(failed_single.max == nullptr);
+  CHECK(failed_single.num_channels == 0);
+  CHECK(failed_single.bucket_count == 0);
+  CHECK(failed_single.samples_per_bucket == 0);
+  CHECK(single_balance == 0);
+
+  const size_t bucket_widths[] = {4, 2};
+  SonareWaveformPeakPyramidResult warm_pyramid{};
+  REQUIRE(sonare_waveform_peak_pyramid(samples.data(), samples.size(), 1, bucket_widths, 2,
+                                       &warm_pyramid) == SONARE_OK);
+  sonare_free_waveform_peak_pyramid_result(&warm_pyramid);
+
+  std::size_t pyramid_allocations = 0;
+  SonareWaveformPeakPyramidResult pyramid{};
+  SonareError pyramid_error = SONARE_ERROR_UNKNOWN;
+  {
+    sonare::test::AllocationGuard guard;
+    pyramid_error =
+        sonare_waveform_peak_pyramid(samples.data(), samples.size(), 1, bucket_widths, 2, &pyramid);
+    pyramid_allocations = guard.count();
+  }
+  REQUIRE(pyramid_error == SONARE_OK);
+  REQUIRE(pyramid_allocations >= 4);
+  sonare_free_waveform_peak_pyramid_result(&pyramid);
+
+  SonareWaveformPeakPyramidResult failed_pyramid{};
+  failed_pyramid.level_count = 9;
+  SonareError failed_pyramid_error = SONARE_OK;
+  long long pyramid_balance = 0;
+  {
+    sonare::test::LiveBlockGuard live;
+    {
+      // Fail the second row's max-plane allocation after its min plane succeeds.
+      sonare::test::AllocationFailureAtGuard fail(pyramid_allocations);
+      failed_pyramid_error = sonare_waveform_peak_pyramid(samples.data(), samples.size(), 1,
+                                                          bucket_widths, 2, &failed_pyramid);
+    }
+    pyramid_balance = live.balance();
+  }
+  CHECK(failed_pyramid_error == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(failed_pyramid.levels == nullptr);
+  CHECK(failed_pyramid.level_count == 0);
+  CHECK(pyramid_balance == 0);
+}
+#endif
+
+TEST_CASE("waveform peak pyramid refusals name the extent and indexed bucket width",
+          "[c_api][metering]") {
+  const float sample = 0.25f;
+  SonareWaveformPeakPyramidResult result{};
+  const size_t bucket_widths[] = {2, 0};
+  CHECK(sonare_waveform_peak_pyramid(&sample, 1, 1, bucket_widths, 2, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "samples_per_bucket_levels[1] must be an integer of at least 1");
+  CHECK(result.levels == nullptr);
+  CHECK(result.level_count == 0);
+
+  CHECK(sonare_waveform_peaks(nullptr, 1, 1, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("length") != std::string::npos);
+}
+
+TEST_CASE("multi-channel LUFS and EBU R128 require nonempty input but accept silence",
+          "[c_api][metering][lufs]") {
+  float sample = 0.0f;
+  SonareLufsResult lufs{};
+  CHECK(sonare_lufs_interleaved(nullptr, 0, 1, 48000, &lufs) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "samples must be a non-empty buffer");
+  CHECK(sonare_lufs_interleaved(&sample, 0, 1, 48000, &lufs) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_lufs_interleaved(nullptr, 1, 1, 48000, &lufs) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+  float loudness_range = 5.0f;
+  CHECK(sonare_ebur128_loudness_range_lu(nullptr, 0, 48000, &loudness_range) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(loudness_range == 0.0f);
+  CHECK(sonare_ebur128_loudness_range_lu(&sample, 0, 48000, &loudness_range) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_ebur128_loudness_range_lu(nullptr, 1, 48000, &loudness_range) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  const std::vector<float> silence(48000, 0.0f);
+  REQUIRE(sonare_lufs_interleaved(silence.data(), silence.size(), 1, 48000, &lufs) == SONARE_OK);
+  REQUIRE(sonare_ebur128_loudness_range_lu(silence.data(), silence.size(), 48000,
+                                           &loudness_range) == SONARE_OK);
+}
+
+TEST_CASE("equal dynamic-range percentiles on silence remain unmeasured",
+          "[c_api][metering][dynamic-range]") {
+  const std::vector<float> silence(48000, 0.0f);
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(silence.data(), silence.size(), 48000, &audio) == SONARE_OK);
+
+  SonareDynamicRangeResult buffer_result{};
+  SonareDynamicRangeResult handle_result{};
+  REQUIRE(sonare_metering_dynamic_range(silence.data(), silence.size(), 48000, 0.5f, 0.25f, 0.5f,
+                                        0.5f, &buffer_result) == SONARE_OK);
+  REQUIRE(sonare_audio_dynamic_range(audio, 0.5f, 0.25f, 0.5f, 0.5f, &handle_result) == SONARE_OK);
+  CHECK(buffer_result.window_count > 0);
+  CHECK(handle_result.window_count == buffer_result.window_count);
+  CHECK((std::isinf(buffer_result.low_percentile_db) &&
+         std::signbit(buffer_result.low_percentile_db)));
+  CHECK((std::isinf(buffer_result.high_percentile_db) &&
+         std::signbit(buffer_result.high_percentile_db)));
+  CHECK(std::isnan(buffer_result.dynamic_range_db));
+  CHECK(handle_result.low_percentile_db == buffer_result.low_percentile_db);
+  CHECK(handle_result.high_percentile_db == buffer_result.high_percentile_db);
+  CHECK(std::isnan(handle_result.dynamic_range_db));
+  sonare_free_dynamic_range_result(&handle_result);
+  sonare_free_dynamic_range_result(&buffer_result);
+
+  const float negative_infinity = -std::numeric_limits<float>::infinity();
+  CHECK(sonare_metering_dynamic_range(silence.data(), silence.size(), 48000, 0.5f, 0.25f,
+                                      negative_infinity, 0.5f,
+                                      &buffer_result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("low_percentile") != std::string::npos);
+  const auto measured = make_dynamic_range_fixture();
+  REQUIRE(sonare_metering_dynamic_range(measured.data(), measured.size(), kScalarSampleRate, 0.5f,
+                                        0.25f, 0.5f, 0.5f, &buffer_result) == SONARE_OK);
+  CHECK(std::isfinite(buffer_result.low_percentile_db));
+  CHECK(buffer_result.dynamic_range_db == 0.0f);
+  sonare_free_dynamic_range_result(&buffer_result);
   sonare_audio_destroy(audio);
 }

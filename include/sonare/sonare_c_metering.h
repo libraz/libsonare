@@ -102,9 +102,9 @@ typedef struct {
 ///        0.0f is a real request for the 0th percentile (the minimum-RMS window), not the default.
 /// @param high_percentile Upper percentile in [0,1]. Pass -1.0f for the library default (0.95).
 ///        0.0f is a real request for the 0th percentile, not the default.
-/// @note Other values outside [0,1] are refused. For values in range,
-///       low_percentile == high_percentile is accepted and yields a 0-LU range; an inverted pair
-///       (low > high) is rejected.
+/// @note Other values outside [0,1], non-finite values, and an inverted percentile
+///       pair are refused. Equal measured levels yield a range of 0 dB. If both selected
+///       levels are silent, dynamic_range_db is NaN (not measured).
 SonareError sonare_metering_dynamic_range(const float* samples, size_t length, int sample_rate,
                                           float window_sec, float hop_sec, float low_percentile,
                                           float high_percentile, SonareDynamicRangeResult* out);
@@ -286,7 +286,7 @@ typedef struct {
 } SonareWaveformPeakPyramidResult;
 
 /// @brief Compute per-channel min/max buckets from interleaved audio.
-/// @param samples Interleaved input buffer (may be null only when @p frames is 0).
+/// @param samples Interleaved input buffer (may be null only when @p length is 0).
 ///        A non-finite sample is rejected with SONARE_ERROR_INVALID_PARAMETER,
 ///        on the same rule every other offline entry point applies: a bucket
 ///        whose samples are not finite has no min/max to report, and the 0/0 it
@@ -297,8 +297,14 @@ typedef struct {
 SonareError sonare_waveform_peaks(const float* samples, size_t length, int num_channels,
                                   size_t samples_per_bucket, SonareWaveformPeaksResult* out);
 
-/// @brief Compute multiple waveform peak levels. @p samples_per_bucket_levels
-///        has @p level_count entries; each must be > 0.
+/// @brief Compute multiple waveform peak levels.
+/// @param samples Interleaved input buffer (may be null only when @p length is 0).
+///        A non-finite sample is rejected with SONARE_ERROR_INVALID_PARAMETER.
+/// @param length Number of sample frames.
+/// @param num_channels Channel count (must be > 0).
+/// @param samples_per_bucket_levels Array of @p level_count bucket widths, in frames; each must
+///        be > 0. An invalid entry is named as @c samples_per_bucket_levels[i].
+/// @param level_count Number of entries in @p samples_per_bucket_levels; must be > 0.
 /// @param out Receives heap-owned level buckets; free with
 ///        sonare_free_waveform_peak_pyramid_result.
 SonareError sonare_waveform_peak_pyramid(const float* samples, size_t length, int num_channels,
@@ -319,8 +325,8 @@ void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* r
 /// @details Mirrors @ref sonare_lufs but accepts an interleaved multi-channel
 ///          signal (channel-summed K-weighting per the standard). @p samples
 ///          holds @p frames * @p num_channels values in channel-interleaved order.
-/// @param samples Interleaved input buffer (may be null only when @p frames is 0).
-/// @param frames Number of sample frames (per-channel length).
+/// @param samples Interleaved input buffer; must be non-null and contain at least one frame.
+/// @param frames Number of sample frames (per-channel length); must be > 0.
 /// @param num_channels Channel count (must be > 0).
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
@@ -363,8 +369,8 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
 /// @brief EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
 /// @details Multi-channel signals are not accepted here; use
 ///          @ref sonare_lufs_interleaved for a multi-channel measurement.
-/// @param samples Mono input buffer (may be null only when @p length is 0).
-/// @param length Number of samples.
+/// @param samples Mono input buffer; must be non-null and contain at least one sample.
+/// @param length Number of samples; must be > 0.
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
 /// @param out_loudness_range_lu Receives the loudness range in LU. Must not be null.

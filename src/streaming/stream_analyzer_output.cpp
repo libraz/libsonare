@@ -439,12 +439,9 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   publish_stats_snapshot();
 }
 
-void StreamAnalyzer::set_expected_duration(float duration_seconds) {
-  if (!numeric::finite_non_negative(duration_seconds)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "expected duration must be finite and non-negative");
-  }
-  expected_duration_ = duration_seconds;
+void StreamAnalyzer::set_expected_duration(float duration_sec) {
+  util::check::at_least(duration_sec, 0.0, "duration_sec");
+  expected_duration_ = duration_sec;
 }
 
 void StreamAnalyzer::set_normalization_gain(float gain) {

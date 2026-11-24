@@ -282,8 +282,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
-  // The result records the requested rate even when the call is refused.
-  if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(config);
   SONARE_C_TRY
   require_struct_size(config->struct_size, sizeof(SonareRirSynthConfig), "config",
@@ -336,12 +334,14 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                     first_error_text(res.diagnostics).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (!res.rir.empty()) {
-    std::unique_ptr<float[]> rir(new float[res.rir.size()]);
-    std::memcpy(rir.get(), res.rir.data(), res.rir.size() * sizeof(float));
-    out->rir = rir.release();
+  sonare_c_detail::StagedOutput<SonareRirSynthResult, sonare_free_rir_synth_result> staged;
+  if (const SonareError error =
+          sonare_c_detail::copy_audio_result(res.rir, &staged->rir, &staged->length);
+      error != SONARE_OK) {
+    return error;
   }
-  out->length = res.rir.size();
+  staged->sample_rate = sample_rate;
+  staged.publish(out);
   return SONARE_OK;
   SONARE_C_CATCH
 #else

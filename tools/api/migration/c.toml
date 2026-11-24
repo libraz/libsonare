@@ -262,10 +262,10 @@ rule = "c-error-path"
 [[entry]]
 kind = "function"
 old = "sonare_synthesize_rir"
-changed = "an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagnostic's text in sonare_last_error_message() instead of SONARE_OK with has_error set"
+changed = "an invalid room returns SONARE_ERROR_INVALID_PARAMETER instead of SONARE_OK with has_error set. Read the refusal in sonare_last_error_message(). A failed call clears each provided result field, including sample_rate. In 1.x the result echoed the refused sample rate"
 domain = "effects"
 rule = "c-error-path"
-test = "tests/api/sonare_c_acoustic_test.cpp::refuses invalid RIR geometry with its diagnostic"
+test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API refuses invalid RIR geometry with its diagnostic"
 
 [[entry]]
 kind = "function"
@@ -1415,10 +1415,10 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "function"
 old = "sonare_streaming_retune_prepare"
-changed = "max_block_size 0 is refused; pass the largest block the stream will process"
+changed = "max_block_size must be in [1, 1048576]; pass the largest block the stream will process. A failed re-prepare leaves the previous prepared stream usable"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retune lifecycle and validation"
+test = "tests/api/c_bare_refusal_retune_test.cpp::failed streaming retune re-prepare preserves the previous stage"
 
 [[entry]]
 kind = "type"
@@ -2212,6 +2212,7 @@ old = "sonare_lufs_series_interleaved(out_short_term_length)"
 new = "sonare_lufs_series_interleaved(out_short_term_lufs_length)"
 domain = "mastering"
 rule = "unit-in-name"
+
 [[entry]]
 kind = "type"
 old = "SonareSectionResult"
@@ -2939,10 +2940,10 @@ test = "tests/editing/voice_changer_realtime_core_test.cpp::RealtimeVoiceChanger
 [[entry]]
 kind = "option"
 old = "sonare_streaming_retune_prepare(sample_rate)"
-changed = "the sample rate is an int instead of a double"
+changed = "the sample rate is an int instead of a double and must be in [8000, 384000]"
 domain = "effects"
 rule = "c-count-types"
-test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retune lifecycle and validation"
+test = "tests/api/c_bare_refusal_retune_test.cpp::streaming retune prepare uses the realtime sample-rate domain"
 
 
 [[entry]]
@@ -4043,6 +4044,7 @@ changed = "the sample rate is an int instead of a double"
 domain = "project"
 rule = "c-count-types"
 test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI set_sample_rate names its accepted range when it refuses one"
+
 [[entry]]
 kind = "function"
 old = "sonare_analyze_impulse_response_ex"
@@ -7087,6 +7089,94 @@ changed = "with graph support compiled out, a NULL required pointer or a graph s
 domain = "engine"
 rule = "error-class-by-cause"
 test = "tests/api/feature_off_errors_test.cpp::An unavailable engine graph is refused before inspecting its dimensions"
+
+[[entry]]
+kind = "function"
+old = "sonare_waveform_peaks"
+changed = "A failed call leaves the result empty, including on allocation failure. An invalid input extent is named length."
+domain = "mastering"
+rule = "c-error-path"
+test = "tests/api/sonare_c_metering_extra_test.cpp::waveform peak results publish atomically on allocation failure"
+
+[[entry]]
+kind = "function"
+old = "sonare_waveform_peak_pyramid"
+changed = "A failed call leaves the result empty, including on allocation failure. An invalid input extent is named length, and a refused bucket width names samples_per_bucket_levels and its index."
+domain = "mastering"
+rule = "c-error-path"
+test = "tests/api/sonare_c_metering_extra_test.cpp::waveform peak pyramid refusals name the extent and indexed bucket width"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_create"
+changed = "Requesting the unsupported magnitude plane returns SONARE_ERROR_NOT_SUPPORTED with config.compute_magnitude in the message instead of SONARE_ERROR_INVALID_PARAMETER."
+domain = "analysis"
+rule = "c-error-path"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "function"
+old = "sonare_polyphonic_set_note_edit"
+changed = "A nonfinite or negative envelope point is refused at the setter under amplitude_envelope and its index, leaving the previous edit intact. The refusal previously arrived when rendering."
+domain = "analysis"
+rule = "c-error-path"
+test = "tests/api/sonare_c_polyphony_test.cpp::the edit is the one thing a host writes, and it reaches the render"
+
+[[entry]]
+kind = "field"
+old = "SonareDynamicRangeResult.dynamic_range_db"
+changed = "NaN (not measured) when both percentiles are silent, instead of 0 dB. Equal measured percentiles still yield 0 dB."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_metering_extra_test.cpp::equal dynamic-range percentiles on silence remain unmeasured"
+
+[[entry]]
+kind = "field"
+old = "SonareDynamicRangeResult.low_percentile_db"
+changed = "A silent percentile level is negative infinity instead of a finite floor."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_metering_extra_test.cpp::equal dynamic-range percentiles on silence remain unmeasured"
+
+[[entry]]
+kind = "field"
+old = "SonareDynamicRangeResult.high_percentile_db"
+changed = "A silent percentile level is negative infinity instead of a finite floor."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_metering_extra_test.cpp::equal dynamic-range percentiles on silence remain unmeasured"
+
+[[entry]]
+kind = "function"
+old = "sonare_note_targets_from_smf"
+changed = "An out-of-range requested track is refused under track_index with the available integer interval. A failed call clears each supplied output, including when the other output pointer is null."
+domain = "effects"
+rule = "c-error-path"
+test = "tests/api/sonare_c_note_targets_test.cpp::the SMF reader refuses what it cannot read"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_set_expected_duration"
+changed = "A negative or nonfinite expected duration is refused under duration_sec rather than a generic expected duration message."
+domain = "analysis"
+rule = "c-error-path"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_dynamic_range"
+changed = "Pass exactly -1 for a library-default low_percentile or high_percentile. Other finite negative values no longer select the default and return SONARE_ERROR_INVALID_PARAMETER naming the refused percentile. A specified percentile must be in [0, 1]."
+domain = "mastering"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_metering_extra_test.cpp::dynamic-range C readers refuse negative percentiles other than the -1 sentinel"
+
+[[entry]]
+kind = "function"
+old = "sonare_metering_dynamic_range"
+changed = "Pass exactly -1 for a library-default low_percentile or high_percentile. Other finite negative values no longer select the default and return SONARE_ERROR_INVALID_PARAMETER naming the refused percentile. A specified percentile must be in [0, 1]."
+domain = "mastering"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_metering_extra_test.cpp::dynamic-range C readers refuse negative percentiles other than the -1 sentinel"
 
 [[entry]]
 kind = "function"

@@ -661,7 +661,7 @@ TEST_CASE("the effects and metering entries refuse their own members", "[c_api][
   SonareWaveformPeakPyramidResult pyramid{};
   CHECK(sonare_waveform_peak_pyramid(samples.data(), samples.size(), 1, levels, 2, &pyramid) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "samples_per_bucket must be an integer of at least 1");
+  CHECK(last_message() == "samples_per_bucket_levels[1] must be an integer of at least 1");
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)

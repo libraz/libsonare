@@ -454,6 +454,49 @@ TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
     REQUIRE(functions.count == 0);
   }
 
+  SECTION("refuses empty audio without publishing chord or label arrays") {
+    const float sample = 0.0f;
+    SonareChord chord{};
+    SonareChordAnalysisResult detected{};
+    detected.chords = &chord;
+    detected.chord_count = 1;
+    char* label = nullptr;
+    SonareStringArray roman{&label, 1};
+    SonareStringArray functions{&label, 1};
+    CHECK(sonare_chord_functional_analysis(&sample, 0, 22050, &options, SONARE_PITCH_C,
+                                           SONARE_MODE_MAJOR, &detected, &roman,
+                                           &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(detected.chords == nullptr);
+    CHECK(detected.chord_count == 0);
+    CHECK(roman.items == nullptr);
+    CHECK(roman.count == 0);
+    CHECK(functions.items == nullptr);
+    CHECK(functions.count == 0);
+
+    SonareChordDetectionOptions bad = options;
+    bad.n_fft = 0;
+    REQUIRE(sonare_chord_functional_analysis(&sample, 0, 22050, &bad, SONARE_PITCH_C,
+                                             SONARE_MODE_MAJOR, &detected, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "options.n_fft");
+  }
+
+  SECTION("accepts nonempty silence") {
+    const std::vector<float> silence(22050, 0.0f);
+    SonareChordAnalysisResult detected{};
+    SonareStringArray roman{};
+    SonareStringArray functions{};
+    REQUIRE(sonare_chord_functional_analysis(silence.data(), silence.size(), 22050, &options,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
+                                             &functions) == SONARE_OK);
+    CHECK(roman.count == detected.chord_count);
+    CHECK(functions.count == detected.chord_count);
+    sonare_free_chord_analysis_result(&detected);
+    sonare_free_string_array(&roman);
+    sonare_free_string_array(&functions);
+  }
+
   SECTION("rejects invalid parameters") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     SonareChordAnalysisResult detected = {};

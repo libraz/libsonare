@@ -1159,12 +1159,10 @@ void sonare_note_target_assign_config_init(SonareNoteTargetAssignConfig* config)
 SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int track_index,
                                          SonareNoteTarget** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_count);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  *out = nullptr;
-  *out_count = 0;
-
   SONARE_C_TRY
   const std::vector<editing::note_model::NoteTarget> targets =
       midi::note_targets_from_smf(bytes, len, track_index);
@@ -1180,8 +1178,6 @@ SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int t
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = nullptr;
-  if (out_count) *out_count = 0;
   return refuse_not_compiled_in(Feature::kArrangement, bytes, len, track_index, out, out_count);
 #endif
 }

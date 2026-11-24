@@ -1,7 +1,6 @@
 #include "midi/note_targets.h"
 
 #include <algorithm>
-#include <string>
 
 #include "midi/midi_clip.h"
 #include "midi/note_pairing.h"
@@ -9,6 +8,7 @@
 #include "transport/tempo_map.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::midi {
 
@@ -35,11 +35,11 @@ std::vector<editing::note_model::NoteTarget> note_targets_from_smf(const uint8_t
   if (!imported.recoverable()) {
     throw SonareException(ErrorCode::InvalidFormat, "unreadable SMF");
   }
-  if (track_index < 0 || static_cast<size_t>(track_index) >= imported.clips.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "no MIDI-bearing track at index " + std::to_string(track_index) + " (" +
-                              std::to_string(imported.clips.size()) + " available)");
+  if (imported.clips.empty()) {
+    util::check::refuse("track_index", "must select a MIDI-bearing track, but the file has none");
   }
+  const auto last_track_index = static_cast<long long>(imported.clips.size() - 1);
+  util::check::integer_in_range(track_index, 0, last_track_index, "track_index");
 
   transport::TempoMap map;
   load_tempo_map(map, imported);

@@ -308,11 +308,12 @@ void sonare_room_morph_config_init(SonareRoomMorphConfig* config);
 /// @brief Synthesize a room impulse response from shoebox geometry.
 /// @param config      Geometry + placement + synthesis controls.
 /// @param sample_rate Output sample rate (Hz).
-/// @param out         Receives the synthesized RIR (caller frees).
-/// @return SONARE_ERROR_INVALID_PARAMETER for an invalid room or placement, with the
-///   first Error diagnostic's message in sonare_last_error_message() and its code (for
-///   example acoustic.source_outside_room) in sonare_last_diagnostic; @p out is left empty.
-///   Recoverable problems (a clamped tail) are Warning entries of sonare_last_diagnostic.
+/// @param out         Receives the synthesized RIR (caller frees). Cleared on entry and
+///                    left empty on failure.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER for an invalid room or placement.
+///         sonare_last_error_message() names the refused input. When available,
+///         sonare_last_diagnostic() reports additional detail, including codes such as
+///         acoustic.source_outside_room and warnings such as a clamped tail.
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out);
 /// @brief Release the buffer of a @ref SonareRirSynthResult; NULL-safe.

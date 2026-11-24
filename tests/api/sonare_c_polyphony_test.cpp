@@ -504,6 +504,25 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
     CHECK(back[0] == 1.0f);
     CHECK(back[1] == 0.25f);
     CHECK(back[2] == 0.0f);
+
+    for (float invalid : {-0.25f, std::numeric_limits<float>::quiet_NaN(),
+                          std::numeric_limits<float>::infinity()}) {
+      const float bad_envelope[] = {1.0f, invalid};
+      SonareNoteEdit replacement = edit;
+      replacement.gain_db = -6.0f;
+      REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 1, &replacement, bad_envelope,
+                                              std::size(bad_envelope)) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "amplitude_envelope[1] must be finite and at least 0");
+      CHECK(notes_of(handle.get())[1].edit.gain_db == edit.gain_db);
+      REQUIRE(sonare_polyphonic_note_envelope(handle.get(), 1, back.data(), back.size(),
+                                              &written) == SONARE_OK);
+      REQUIRE(written == 3);
+      CHECK(back[0] == 1.0f);
+      CHECK(back[1] == 0.25f);
+      CHECK(back[2] == 0.0f);
+    }
     // The other note never had one, which is what says the read is per note.
     REQUIRE(sonare_polyphonic_note_envelope(handle.get(), 0, back.data(), back.size(), &written) ==
             SONARE_OK);

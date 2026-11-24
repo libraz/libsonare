@@ -23,7 +23,7 @@ typedef struct {
   /// Window in samples at 44100 Hz (default 2048); rescaled below that rate, never shorter than
   /// the hop.
   int n_fft;
-  size_t hop_length;  ///< Hop between analysis frames in input samples (default 512, at most n_fft)
+  size_t hop_length;  ///< Hop in analysis-rate samples (default 512, at most n_fft)
   int n_mels;         ///< Number of Mel bands (default 128)
   float fmin_hz;      ///< Lowest Mel filterbank frequency in Hz (default 0)
   /// Highest Mel filterbank frequency in Hz, greater than fmin_hz; NaN (the default) is the
@@ -33,8 +33,8 @@ typedef struct {
   /// A4 tuning reference in Hz (default 440; must be within 220..880, the same range
   /// sonare_stream_analyzer_set_reference_hz accepts).
   float reference_hz;
-  /// Magnitude readout is not yet supported through the C ABI; must be 0 (non-zero is rejected
-  /// with SONARE_ERROR_INVALID_PARAMETER).
+  /// Magnitude frames are not exposed by the C read paths; non-zero returns
+  /// SONARE_ERROR_NOT_SUPPORTED for config.compute_magnitude.
   int compute_magnitude;
   int compute_mel;                ///< Non-zero to compute Mel spectra
   int compute_chroma;             ///< Non-zero to compute chroma and per-frame chord estimates
@@ -210,9 +210,9 @@ void sonare_stream_quantize_config_init(SonareStreamQuantizeConfig* config);
 /// Mirrors sonare::AnalyzerStats and ProgressiveEstimate. Variable-length arrays are owned by this
 /// result and released by sonare_free_stream_stats.
 typedef struct {
-  int total_frames;                ///< Total frames processed
-  size_t total_samples;            ///< Total samples processed
-  float duration_sec;              ///< Total audio processed (s)
+  int total_frames;                ///< Analysis frames processed since reset
+  size_t total_samples;            ///< Input-sample cursor, including the caller's timeline origin
+  float duration_sec;              ///< Stream position in seconds, including the timeline origin
   size_t pending_frames;           ///< Unread frames currently retained
   uint64_t dropped_output_frames;  ///< New output frames dropped at the configured cap
   float bpm;                       ///< Estimated BPM (0 if not yet estimated)
@@ -273,9 +273,11 @@ typedef struct {
 /// @brief Creates a streaming analyzer from the given config.
 /// @param config Construction config (must be non-null). A sample_rate outside
 ///        [8000, 384000], an n_fft above 524288 or an n_mels above 4096 is
-///        SONARE_ERROR_INVALID_PARAMETER.
-/// @param out Receives the new handle (caller destroys with
-///        sonare_stream_analyzer_destroy).
+///        SONARE_ERROR_INVALID_PARAMETER. Non-zero compute_magnitude is
+///        SONARE_ERROR_NOT_SUPPORTED because no C read path exposes its frames.
+/// @param out Receives the new handle on success and NULL on failure; destroy it with
+///        sonare_stream_analyzer_destroy.
+/// @return SONARE_OK or the error code describing the failure.
 /// @note @p out is a handle, not a sonare_free_* buffer.
 SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out);
@@ -286,19 +288,21 @@ void sonare_stream_analyzer_destroy(SonareStreamAnalyzer* analyzer);
 /// @brief Feeds an audio chunk.
 /// @details A NULL @p sample_offset tracks the cumulative offset internally. A non-NULL
 ///   @p sample_offset is the explicit external offset of this chunk: offsets must be
-///   contiguous across non-empty calls. A gap, seek, or switch from internal tracking
-///   returns SONARE_ERROR_INVALID_PARAMETER; call sonare_stream_analyzer_reset first to
-///   discard the buffered partial frame and begin a new timeline segment.
-///   Feeding a finalized analyzer returns SONARE_ERROR_INVALID_STATE; call
-///   sonare_stream_analyzer_reset first to begin a new stream.
+///   contiguous across non-empty calls. A non-empty call cannot switch between internal
+///   and explicit offset tracking; a gap, seek, or mode switch returns
+///   SONARE_ERROR_INVALID_PARAMETER. Call sonare_stream_analyzer_reset first to discard
+///   the buffered partial frame and begin a new timeline segment. A zero-sample call is
+///   a no-op: it neither changes the tracking mode nor the timeline, including on a finalized
+///   analyzer. Feeding non-empty audio to a finalized analyzer returns
+///   SONARE_ERROR_INVALID_STATE; call sonare_stream_analyzer_reset first to begin a new stream.
 SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const float* samples,
                                            size_t n_samples, const size_t* sample_offset);
 
 /// @brief Drains any high-rate resampler tail, then flushes the final partial
 ///        analysis frame with zero-padding.
-/// @details Repeating a successful call is a no-op. A call that fails leaves
-///   the stream un-finalized, so retrying resumes from the same point instead
-///   of returning SONARE_OK with the tail frame never emitted.
+/// @details Repeating a successful call is a no-op. A failed call leaves the stream
+///   un-finalized and may have advanced its analysis state or published frames.
+///   Call sonare_stream_analyzer_reset before starting a new stream.
 SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer);
 
 /// @brief Returns the number of frames available to read.
@@ -340,7 +344,8 @@ void sonare_free_stream_stats(SonareStreamStats* stats);
 /// @brief Returns the total number of frames processed.
 SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, size_t* out_count);
 
-/// @brief Returns the current stream time position in seconds.
+/// @brief Returns the current stream time position in seconds, including the caller's timeline
+/// origin.
 SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyzer, float* out_sec);
 
 /// @brief Returns the configured input sample rate (Hz).
@@ -414,9 +419,10 @@ SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int
 void sonare_streaming_retune_destroy(SonareStreamingRetune* retune);
 
 /// @brief Allocates the grain / ring buffers for @p sample_rate and resolves the
-///        grain size. Must be called before processing.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle, a non-positive
-///         sample rate, or a @p max_block_size outside [1, 1048576]; there is no default
+///        grain size. Must succeed before processing a non-empty block.
+/// @details A rejected re-prepare leaves the previous prepared stage usable.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle, a @p sample_rate outside
+///         [8000, 384000], or a @p max_block_size outside [1, 1048576]; there is no default
 ///         block size, so 0 is refused.
 SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, int sample_rate,
                                             int max_block_size);
@@ -442,14 +448,14 @@ SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune,
                                            int* out_grain_size_samples);
 
 /// @brief Processes one mono block in place.
-/// @details @p samples is read and overwritten with the retuned output.
-/// @return SONARE_ERROR_INVALID_STATE when prepare() has not succeeded,
-///         SONARE_ERROR_INVALID_PARAMETER for a NULL handle, a NULL @p samples
-///         with a non-zero count, a block longer than the prepared
-///         max_block_size, or any non-finite input sample. A non-finite sample
-///         is refused rather than zeroed: it would otherwise persist in the
-///         grain history and poison every later block, and the caller would
-///         never learn its input was altered.
+/// @details @p samples is read and overwritten with the retuned output. A zero-length block
+///          is a no-op on a valid handle, even before prepare().
+/// @return SONARE_ERROR_INVALID_STATE for a non-empty block when prepare() has not succeeded;
+///         SONARE_ERROR_INVALID_PARAMETER for a NULL handle, a NULL @p samples with a non-zero
+///         count, a block longer than the prepared max_block_size, or any non-finite input sample.
+///         A non-finite sample is refused rather than zeroed: it would otherwise persist in the
+///         grain history and poison every later block, and the caller would never learn its input
+///         was altered.
 SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, float* samples,
                                                  size_t num_samples);
 

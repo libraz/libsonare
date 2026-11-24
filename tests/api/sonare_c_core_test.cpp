@@ -536,6 +536,13 @@ TEST_CASE("sonare_audio_file_num_channels reports source channels", "[c_api][aud
           SONARE_ERROR_DECODE_FAILED);
   REQUIRE(channels == 0);
 
+#if defined(__linux__)
+  channels = 17;
+  REQUIRE(sonare_audio_file_num_channels(".", &channels) == SONARE_ERROR_DECODE_FAILED);
+  CHECK(std::string(sonare_last_error_message()).find("Failed to read file:") == 0);
+  CHECK(channels == 0);
+#endif
+
   channels = 17;
   REQUIRE(sonare_audio_file_num_channels(nullptr, &channels) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(channels == 0);
@@ -1165,12 +1172,15 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(analyzer == nullptr);
   }
 
-  SECTION("reports compute_magnitude as unsupported, not as a refused argument") {
+  SECTION("reports the unavailable magnitude plane by its C field name") {
     SonareStreamConfig bad = config;
     bad.compute_magnitude = 1;
-    SonareStreamAnalyzer* analyzer = nullptr;
+    auto* analyzer = reinterpret_cast<SonareStreamAnalyzer*>(&bad);
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_NOT_SUPPORTED);
-    REQUIRE(analyzer == nullptr);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.compute_magnitude is not supported because magnitude frames are not "
+          "exposed by StreamAnalyzer read paths");
+    CHECK(analyzer == nullptr);
   }
 
   SECTION("rejects invalid intervals and mel range") {
@@ -1247,13 +1257,16 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const float inf = std::numeric_limits<float>::infinity();
-    REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, nan) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    for (float invalid : {nan, inf, -inf, -1.0f}) {
+      REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, invalid) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "duration_sec must be finite and at least 0");
+    }
+    CHECK(sonare_stream_analyzer_set_expected_duration(analyzer, 0.0f) == SONARE_OK);
     REQUIRE(sonare_stream_analyzer_set_normalization_gain(analyzer, inf) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_stream_analyzer_set_reference_hz(analyzer, nan) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, -inf) ==
             SONARE_ERROR_INVALID_PARAMETER);
 
     SonareStreamQuantizeConfig quantize;

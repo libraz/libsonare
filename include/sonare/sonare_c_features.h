@@ -101,7 +101,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
 /// @param chords Receives the detection result; free with sonare_free_chord_analysis_result.
 /// @param roman Receives a heap-owned string array; free with sonare_free_string_array.
 /// @param functions Receives a heap-owned string array; free with sonare_free_string_array.
-///   Empty audio with no chords yields empty arrays.
+/// @return SONARE_ERROR_INVALID_PARAMETER for empty @p samples or invalid options.
 SonareError sonare_chord_functional_analysis(const float* samples, size_t length, int sample_rate,
                                              const SonareChordDetectionOptions* options,
                                              SonarePitchClass key_root, SonareMode key_mode,

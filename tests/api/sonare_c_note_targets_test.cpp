@@ -456,10 +456,16 @@ TEST_CASE("the SMF reader refuses what it cannot read", "[c_api][note_targets]")
   // the one melody is the only index this file has.
   REQUIRE(sonare_note_targets_from_smf(bytes.data(), bytes.size(), 1, &targets, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "track_index must be an integer in [0, 0]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "track_index");
   REQUIRE(targets == nullptr);
   REQUIRE(count == 0);
   REQUIRE(sonare_note_targets_from_smf(bytes.data(), bytes.size(), -1, &targets, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "track_index must be an integer in [0, 0]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "track_index");
 
   const std::vector<uint8_t> garbage(64, 0x7F);
   REQUIRE(sonare_note_targets_from_smf(garbage.data(), garbage.size(), 0, &targets, &count) ==
@@ -472,10 +478,18 @@ TEST_CASE("the SMF reader refuses what it cannot read", "[c_api][note_targets]")
           SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_note_targets_from_smf(nullptr, 0, 0, &targets, &count) ==
           SONARE_ERROR_INVALID_FORMAT);
+  count = 7;
   REQUIRE(sonare_note_targets_from_smf(bytes.data(), bytes.size(), 0, nullptr, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out must not be NULL");
+  CHECK(count == 0);
+
+  SonareNoteTarget sentinel{};
+  targets = &sentinel;
   REQUIRE(sonare_note_targets_from_smf(bytes.data(), bytes.size(), 0, &targets, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_count must not be NULL");
+  CHECK(targets == nullptr);
 }
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
@@ -513,8 +527,9 @@ TEST_CASE("a take assigned from an SMF ends up at the pitches the file wrote",
 TEST_CASE("the SMF reference reader reports NOT_SUPPORTED without the arrangement layer",
           "[c_api][note_targets]") {
   const std::vector<uint8_t> bytes(64, 0x00);
-  SonareNoteTarget* targets = nullptr;
-  size_t count = 0;
+  SonareNoteTarget sentinel{};
+  SonareNoteTarget* targets = &sentinel;
+  size_t count = 7;
   REQUIRE(sonare_note_targets_from_smf(bytes.data(), bytes.size(), 0, &targets, &count) ==
           SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(targets == nullptr);

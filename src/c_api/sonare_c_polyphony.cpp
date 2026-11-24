@@ -11,6 +11,7 @@
 #include "c_api/note_render_common.h"
 #include "c_api/polyphonic_analysis_names.h"
 #include "c_api/transcribe_input_domains.h"
+#include "editing/note_model/note_renderer.h"
 #include "editing/polyphony/polyphonic_edit.h"
 #endif
 #include <sonare/sonare_c.h>
@@ -352,10 +353,12 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
     replacement.vibrato_depth_change = edit->vibrato_depth_change;
     replacement.drift_change = edit->drift_change;
   }
-  replacement.amplitude_envelope.assign(amplitude_envelope,
-                                        amplitude_envelope + amplitude_envelope_count);
-  // Whatever the render rejects about an edit it rejects on the way out, so a
-  // field is not checked twice here and a refusal names one place.
+  editing::note_model::validate_amplitude_envelope(amplitude_envelope, amplitude_envelope_count,
+                                                   "amplitude_envelope");
+  if (amplitude_envelope_count != 0) {
+    replacement.amplitude_envelope.assign(amplitude_envelope,
+                                          amplitude_envelope + amplitude_envelope_count);
+  }
   analysis->analysis.notes[note].edit = std::move(replacement);
   return SONARE_OK;
   SONARE_C_CATCH

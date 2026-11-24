@@ -409,6 +409,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_hz_to_note` | returns SonareError and writes a caller-owned name through out_string, released with sonare_free_string |
+| `sonare_polyphonic_set_note_edit` | A nonfinite or negative envelope point is refused at the setter under amplitude_envelope and its index, leaving the previous edit intact. The refusal previously arrived when rendering. |
+| `sonare_stream_analyzer_create` | Requesting the unsupported magnitude plane returns SONARE_ERROR_NOT_SUPPORTED with config.compute_magnitude in the message instead of SONARE_ERROR_INVALID_PARAMETER. |
+| `sonare_stream_analyzer_set_expected_duration` | A negative or nonfinite expected duration is refused under duration_sec rather than a generic expected duration message. |
 
 #### Each operation has exactly one entry point
 
@@ -542,7 +545,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_pitch_correct_timevarying` | at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
 | `sonare_pitch_correct_to_midi_timevarying` | at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
 | `sonare_split_note` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
-| `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
+| `sonare_streaming_retune_prepare` | max_block_size must be in [1, 1048576]; pass the largest block the stream will process. A failed re-prepare leaves the previous prepared stream usable |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -640,7 +643,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_pitch_correct_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_pitch_correct_to_midi_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. |
-| `sonare_streaming_retune_prepare(sample_rate)` | the sample rate is an int instead of a double |
+| `sonare_streaming_retune_prepare(sample_rate)` | the sample rate is an int instead of a double and must be in [8000, 384000] |
 
 #### A C matrix result reports its buffer length and named dimensions
 
@@ -653,7 +656,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareRirSynthResult.has_error` | removed: check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic message in sonare_last_error_message() and every diagnostic, code included, in sonare_last_diagnostic |
-| `sonare_synthesize_rir` | an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagnostic's text in sonare_last_error_message() instead of SONARE_OK with has_error set |
+| `sonare_note_targets_from_smf` | An out-of-range requested track is refused under track_index with the available integer interval. A failed call clears each supplied output, including when the other output pointer is null. |
+| `sonare_synthesize_rir` | an invalid room returns SONARE_ERROR_INVALID_PARAMETER instead of SONARE_OK with has_error set. Read the refusal in sonare_last_error_message(). A failed call clears each provided result field, including sample_rate. In 1.x the result echoed the refused sample rate |
 
 #### Errors are coded by cause on every surface
 
@@ -812,10 +816,20 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareDynamicRangeResult.dynamic_range_db` | NaN (not measured) when both percentiles are silent, instead of 0 dB. Equal measured percentiles still yield 0 dB. |
+| `SonareDynamicRangeResult.high_percentile_db` | A silent percentile level is negative infinity instead of a finite floor. |
+| `SonareDynamicRangeResult.low_percentile_db` | A silent percentile level is negative infinity instead of a finite floor. |
 | `SonarePhaseScopePoint.angle_rad` | NaN at a point where mid and side are both 0, which has no angle, instead of 0; points keeps one entry per point |
 | `SonarePhaseScopeResult.average_abs_angle_rad` | the mean over the non-silent points; NaN (not measured) when every point is silent instead of 0 |
 | `SonareStreamingLoudnessGain.loudness_static_gain_db` | NaN for a silent or below-gate stage input instead of 0; sonare_streaming_mastering_chain_create reads a NaN static gain as no gain |
 | `SonareStreamingLoudnessGain.true_peak_db` | `SonareStreamingLoudnessGain.true_peak_dbtp`: -inf for digital silence instead of -120 |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_audio_dynamic_range` | Pass exactly -1 for a library-default low_percentile or high_percentile. Other finite negative values no longer select the default and return SONARE_ERROR_INVALID_PARAMETER naming the refused percentile. A specified percentile must be in [0, 1]. |
+| `sonare_metering_dynamic_range` | Pass exactly -1 for a library-default low_percentile or high_percentile. Other finite negative values no longer select the default and return SONARE_ERROR_INVALID_PARAMETER naming the refused percentile. A specified percentile must be in [0, 1]. |
 
 #### String values are lowerCamelCase tokens
 
@@ -892,6 +906,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_streaming_mastering_chain_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. |
 | `sonare_streaming_mastering_chain_non_finite_substitution_count(out_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. |
+
+#### Every C failure sets the error message
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_waveform_peak_pyramid` | A failed call leaves the result empty, including on allocation failure. An invalid input extent is named length, and a refused bucket width names samples_per_bucket_levels and its index. |
+| `sonare_waveform_peaks` | A failed call leaves the result empty, including on allocation failure. An invalid input extent is named length. |
 
 #### Errors are coded by cause on every surface
 

@@ -234,9 +234,15 @@ inline void finite(double value, const char* subject) {
   }
 }
 
-/// @brief The subject "<array>[<index>].<field>" naming one member of an array element.
-inline std::string indexed_subject(const char* array, std::size_t index, const char* field) {
-  return std::string(array) + "[" + std::to_string(index) + "]." + field;
+/// @brief Names an array element or, when supplied, one of its fields.
+inline std::string indexed_subject(const char* array, std::size_t index,
+                                   const char* field = nullptr) {
+  std::string subject = std::string(array) + "[" + std::to_string(index) + "]";
+  if (field != nullptr) {
+    subject += ".";
+    subject += field;
+  }
+  return subject;
 }
 
 /// @brief Refuses @p value unless it is in [lo, hi]. Compared as an integer, so a 64-bit value

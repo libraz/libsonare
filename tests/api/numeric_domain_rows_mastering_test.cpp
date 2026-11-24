@@ -452,7 +452,7 @@ SonareError probe_waveform_peaks(const std::string& param, double value) {
 
 SonareError probe_waveform_peak_pyramid(const std::string& param, double value) {
   const int channels = is_param(param, "num_channels") ? as_int(value) : 1;
-  const size_t levels[1] = {is_param(param, "samples_per_bucket") ? as_size(value) : 256};
+  const size_t levels[1] = {is_param(param, "samples_per_bucket_levels[]") ? as_size(value) : 256};
   SonareWaveformPeakPyramidResult out{};
   const SonareError err = sonare_waveform_peak_pyramid(
       interleaved_values().data(), kInterleavedFrames, channels, levels, 1, &out);

@@ -504,6 +504,40 @@ TEST_CASE("StreamAnalyzer external-offset timestamps track the resampled timelin
   }
 }
 
+TEST_CASE("96 kHz StreamAnalyzer uses analysis-rate hops and retains the timeline origin",
+          "[streaming][offset]") {
+  StreamConfig config;
+  config.sample_rate = 96000;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_mel = false;
+  config.compute_chroma = false;
+  config.compute_onset = false;
+  config.compute_spectral = false;
+  config.emit_every_n_frames = 2;
+  config.max_pending_frames = 256;
+  const std::vector<float> audio =
+      generate_sine(config.sample_rate * 2, 440.0f, config.sample_rate);
+  constexpr size_t kOrigin = 192000;
+
+  StreamAnalyzer analyzer(config);
+  analyzer.process(audio.data(), audio.size(), kOrigin);
+  const auto frames = analyzer.read_frames(256);
+  REQUIRE(frames.size() > 2);
+  const AnalyzerStats stats = analyzer.stats();
+
+  const float origin_sec = static_cast<float>(kOrigin) / static_cast<float>(config.sample_rate);
+  const float input_sample_sec = 1.0f / static_cast<float>(config.sample_rate);
+  const float analysis_hop_sec = 512.0f / 44100.0f;
+  CHECK_THAT(frames.front().timestamp, WithinAbs(origin_sec + analysis_hop_sec, input_sample_sec));
+  CHECK_THAT(frames[1].timestamp - frames[0].timestamp,
+             WithinAbs(analysis_hop_sec * config.emit_every_n_frames, 2.0f * input_sample_sec));
+  CHECK(stats.total_samples > kOrigin);
+  CHECK(static_cast<size_t>(stats.total_frames / config.emit_every_n_frames) == frames.size());
+  CHECK_THAT(stats.duration_seconds,
+             WithinAbs(static_cast<float>(stats.total_samples) / config.sample_rate, 1.0e-6f));
+}
+
 TEST_CASE("StreamAnalyzer external offset discontinuities require reset", "[streaming][offset]") {
   StreamConfig config;
   config.sample_rate = 22050;
@@ -512,13 +546,18 @@ TEST_CASE("StreamAnalyzer external offset discontinuities require reset", "[stre
   StreamAnalyzer analyzer(config);
   std::vector<float> chunk(128, 0.0f);
 
+  REQUIRE_NOTHROW(analyzer.process(nullptr, 0));
   analyzer.process(chunk.data(), chunk.size(), 1000);
-  REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size(), 1129), SonareException);
+  REQUIRE_NOTHROW(analyzer.process(nullptr, 0));
+  REQUIRE_NOTHROW(analyzer.process(chunk.data(), chunk.size(), 1128));
+  REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size(), 1257), SonareException);
   REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size()), SonareException);
 
   analyzer.reset(5000);
+  REQUIRE_NOTHROW(analyzer.process(nullptr, 0, 9000));
   REQUIRE_NOTHROW(analyzer.process(chunk.data(), chunk.size(), 5000));
   analyzer.reset();
+  REQUIRE_NOTHROW(analyzer.process(nullptr, 0));
   REQUIRE_NOTHROW(analyzer.process(chunk.data(), chunk.size()));
   REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size(), 128), SonareException);
 }
@@ -1750,6 +1789,7 @@ TEST_CASE("StreamAnalyzer refuses audio fed after finalize", "[streaming][contra
     StreamAnalyzer analyzer(config);
     analyzer.process(chunk.data(), chunk.size(), 0);
     analyzer.finalize();
+    REQUIRE_NOTHROW(analyzer.process(nullptr, 0, chunk.size()));
     REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size(), chunk.size()), SonareException);
 
     analyzer.reset();

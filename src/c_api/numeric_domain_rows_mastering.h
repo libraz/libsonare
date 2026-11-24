@@ -310,8 +310,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"vqt_to_audio", "n_iter", kGriffinLimIterationsDomain, nullptr},
     {"vqt_to_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"waveform_peak_pyramid", "num_channels", kInterleavedChannelsDomain, nullptr},
-    {"waveform_peak_pyramid", "samples_per_bucket", sonare::metering::kSamplesPerBucketDomain,
-     nullptr},
+    {"waveform_peak_pyramid", "samples_per_bucket_levels[]",
+     sonare::metering::kSamplesPerBucketDomain, nullptr},
     {"waveform_peaks", "num_channels", kInterleavedChannelsDomain, nullptr},
     {"waveform_peaks", "samples_per_bucket", sonare::metering::kSamplesPerBucketDomain, nullptr},
 };
