@@ -113,14 +113,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'A spectral-edit op start position in samples; 0 is the first sample of the buffer.',
   ],
   [
-    'engine/midi_instruments.cpp:wordCount',
-    'Documented as tolerant — anything outside [1,4] lets the C bridge infer the word form. Unsettled: an inferred form and a requested one are not distinguishable from the JS surface, so no control separates them.',
-  ],
-  [
-    'sonare_wrap_engine.cpp:keyFifths',
-    'A signed count of sharps or flats; 0 is C major, a quantity the caller can mean.',
-  ],
-  [
     'engine/midi_instruments.cpp:trackId',
     'The unassigned track id, and also what destinationId falls back to; the clip player returns on it rather than substituting a track.',
   ],

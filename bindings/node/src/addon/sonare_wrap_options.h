@@ -468,13 +468,13 @@ inline int IntInRangeOrAbsentProperty(const Napi::Object& obj, const char* key, 
                                  absent);
 }
 
-/// @brief Read a property destined for an int8_t C-ABI field: undefined/null
-///        returns the fallback, a non-number is refused by name, and a value the
-///        narrowing cast would wrap (256 -> 0, 200 -> -56) is a RangeError naming
-///        @p key. The field's own domain stays the C ABI's to enforce.
-inline int8_t Int8Property(const Napi::Object& obj, const char* key, int8_t fallback) {
+/// @brief Read an optional property destined for an int8_t C-ABI field.
+/// @details Missing or null leaves the field absent. A non-number is refused by
+///          name, and a number outside int8_t's representation is a RangeError.
+///          The C entry checks the field's own domain.
+inline std::optional<int8_t> Int8Property(const Napi::Object& obj, const char* key) {
   Napi::Value value = obj.Get(key);
-  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (value.IsUndefined() || value.IsNull()) return std::nullopt;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return static_cast<int8_t>(node_narrow_number(
       obj.Env(), value, key, static_cast<double>(std::numeric_limits<int8_t>::min()),

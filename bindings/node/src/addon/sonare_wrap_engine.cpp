@@ -517,7 +517,9 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
-    marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
+    if (const auto key_fifths = sonare_node::Int8Property(obj, "keyFifths")) {
+      marker.key_fifths = *key_fifths;
+    }
     marker.key_minor = BoolProperty(obj, "keyMinor", marker.key_minor != 0) ? 1 : 0;
     if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
     if (!CopyString(env, marker.name, sizeof(marker.name), StringProperty(obj, "name", ""),
