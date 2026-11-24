@@ -854,6 +854,7 @@ val js_estimate_meter(val accent, val has_attack, val low_frequency_energy, val 
     candidates.call<void>("push", timeSignatureToVal(candidate));
   }
   out.set("candidates", candidates);
+  out.set("unobservedBeats", numberArrayFromVector(result.unobserved_beats));
   return out;
 }
 

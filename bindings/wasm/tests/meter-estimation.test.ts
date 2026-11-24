@@ -76,6 +76,14 @@ describe('WASM estimateMeter', () => {
     await init();
   });
 
+  it('reports masked beats in index order when per-beat energy is supplied', () => {
+    const observations = meterObservations([1, 0.35, 0.35, 1, 0.35, 0.35, 1, 0.35]);
+    observations.hasAttack = [false, true, true, true, true, true, false, true];
+    expect(estimateMeter({ observations }).unobservedBeats).toEqual([]);
+    observations.lowFrequencyEnergy = [16, 1, 1, 1, 1, 1, 24, 1];
+    expect(estimateMeter({ observations }).unobservedBeats).toEqual([0, 6]);
+  });
+
   it('scores accent patterns and honors the candidate list', () => {
     const four = estimateMeter({ observations: beatSeries(4, 8) });
     const five = estimateMeter({

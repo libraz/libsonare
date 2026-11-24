@@ -323,6 +323,11 @@ class MeterEstimate:
     """Standardized support per requested numerator, in request order (see above)."""
     candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
     """Scored meters by descending support; each ``confidence`` is its share of the total."""
+    unobserved_beats: npt.NDArray[np.int32] = dataclasses.field(default_factory=_empty_int32)
+    """Ascending zero-based indices of masked beats excluded from scoring.
+
+    Empty without per-beat energy.
+    """
 
 
 @dataclass(frozen=True, slots=True)

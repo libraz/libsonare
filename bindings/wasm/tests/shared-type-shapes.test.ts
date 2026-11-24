@@ -33,6 +33,7 @@ import type {
   MasteringInsertSlot,
   MasteringPresetCatalogEntry,
   MasteringProcessorCatalogEntry,
+  MeterEstimate,
 } from '../src/index';
 
 interface SharedTypeShapes {
@@ -65,7 +66,21 @@ const dynamicsProcessorResult = {
   latencySamples: 0,
 } satisfies DynamicsProcessorResult;
 
+const meterEstimate = {
+  timeSignature: { numerator: 4, denominator: 4, confidence: 0 },
+  downbeatPhase: 0,
+  searched: false,
+  grouping: [4],
+  candidateScores: [],
+  candidates: [],
+  unobservedBeats: [0, 6],
+} satisfies MeterEstimate;
+
 describe('shared public type shapes', () => {
+  it('MeterEstimate is the shape the shared corpus declares', () => {
+    expect(Object.keys(meterEstimate).sort()).toEqual([...shapes.types.MeterEstimate].sort());
+  });
+
   it('DynamicsResult is the analysis shape the shared corpus declares', () => {
     expect(Object.keys(dynamicsResult).sort()).toEqual([...shapes.types.DynamicsResult].sort());
   });

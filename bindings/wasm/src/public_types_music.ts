@@ -690,6 +690,8 @@ export interface MeterEstimate {
    * name and nothing else.
    */
   candidates: TimeSignature[];
+  /** Ascending zero-based indices of masked beats excluded from scoring. Empty without per-beat energy. */
+  unobservedBeats: number[];
 }
 
 /**

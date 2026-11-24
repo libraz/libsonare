@@ -337,6 +337,8 @@ export interface MeterEstimate {
    * the two on `numerator` rather than by index.
    */
   candidates: TimeSignature[];
+  /** Ascending zero-based indices of masked beats excluded from scoring. Empty without per-beat energy. */
+  unobservedBeats: number[];
 }
 
 /** Options for {@link analyzeMelody}. All fields are optional. */

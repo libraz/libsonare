@@ -157,6 +157,7 @@ export interface WasmMeterEstimateResult {
   grouping: number[];
   candidateScores: number[];
   candidates: WasmTimeSignatureResult[];
+  unobservedBeats: number[];
 }
 
 export interface WasmChordResult {

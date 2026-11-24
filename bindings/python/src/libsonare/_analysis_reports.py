@@ -579,6 +579,7 @@ def estimate_meter(
             )
             for candidate in data["candidates"]
         ],
+        unobserved_beats=np.asarray(data["unobservedBeats"], dtype=np.int32),
     )
 
 

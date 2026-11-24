@@ -79,6 +79,14 @@ function overLongList(): number[] {
 }
 
 describe('estimateMeter()', () => {
+  it('reports masked beats in index order when per-beat energy is supplied', () => {
+    const observations = observationsFromAccent([1, 0.35, 0.35, 1, 0.35, 0.35, 1, 0.35]);
+    observations.hasAttack = [false, true, true, true, true, true, false, true];
+    expect(estimateMeter({ observations }).unobservedBeats).toEqual([]);
+    observations.lowFrequencyEnergy = [16, 1, 1, 1, 1, 1, 24, 1];
+    expect(estimateMeter({ observations }).unobservedBeats).toEqual([0, 6]);
+  });
+
   it('resolves a 4-beat accent pattern with the default candidate set', () => {
     const result = estimateMeter(beatSeries(4, 8));
 

@@ -983,6 +983,26 @@ def test_estimate_meter_takes_the_observations_of_an_analysis(
         libsonare.estimate_meter(None)  # type: ignore[arg-type]
 
 
+def test_estimate_meter_reports_masked_beats_in_index_order() -> None:
+    accent = np.array([1, 0.35, 0.35, 1, 0.35, 0.35, 1, 0.35], dtype=np.float32)
+    has_attack = np.array([False, True, True, True, True, True, False, True])
+    no_energy = libsonare.estimate_meter(
+        libsonare.BeatObservations(accent=accent, has_attack=has_attack)
+    )
+    assert no_energy.unobserved_beats.dtype == np.int32
+    assert no_energy.unobserved_beats.tolist() == []
+
+    with_energy = libsonare.estimate_meter(
+        libsonare.BeatObservations(
+            accent=accent,
+            has_attack=has_attack,
+            low_frequency_energy=np.array([16, 1, 1, 1, 1, 1, 24, 1], dtype=np.float32),
+        )
+    )
+    assert with_energy.unobserved_beats.dtype == np.int32
+    assert with_energy.unobserved_beats.tolist() == [0, 6]
+
+
 def test_chord_qualities_index_the_c_ordinals() -> None:
     assert len(libsonare.CHORD_QUALITIES) == 25
     assert libsonare.CHORD_QUALITIES[0] == "major"
