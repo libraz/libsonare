@@ -1841,5 +1841,124 @@ class WavToleranceArtifactTest(unittest.TestCase):
         self.assertTrue(any("unknown keys sha256" in e for e in errors), errors)
 
 
+class DspArtifactTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        manifest = CHECKER.load_manifest(CHECKER.DEFAULT_MANIFEST)
+        cls.eq = next(item for item in manifest["active_paths"] if item["path"] == "eq")
+        cls.align = next(
+            item for item in manifest["active_paths"] if item["path"] == "project.align-takes"
+        )
+        artifacts = sys.modules["cli_contract_artifacts"]
+        cls.wav_references = json.loads(artifacts.WAV_REFERENCES.read_text(encoding="utf-8"))
+        cls.json_references = json.loads(artifacts.JSON_REFERENCES.read_text(encoding="utf-8"))
+
+    def _wav(self, key: str) -> tuple[wave._wave_params, list[int]]:
+        entry = self.wav_references[f"eq.{key}"]
+        with wave.open(io.BytesIO(base64.b64decode(entry["wav_base64"])), "rb") as source:
+            params = source.getparams()
+            frames = source.readframes(params.nframes)
+        width = params.sampwidth
+        codes = [
+            int.from_bytes(frames[i : i + width], "little", signed=True)
+            for i in range(0, len(frames), width)
+        ]
+        return params, codes
+
+    def _write_pcm(self, params: wave._wave_params, codes: list[int]) -> bytes:
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as out:
+            out.setparams(params)
+            out.writeframes(
+                b"".join(code.to_bytes(params.sampwidth, "little", signed=True) for code in codes)
+            )
+        return buffer.getvalue()
+
+    def _check(
+        self, contract: dict, key: str, data: bytes
+    ) -> tuple[bytes | None, list[tuple[str, str]]]:
+        report: list[tuple[str, str]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "artifact"
+            out.write_bytes(data)
+            placeholder = contract["artifacts"][key]["placeholder"]
+            output = CHECKER._check_artifact(
+                key, contract, None, {placeholder: str(out)}, "test", report
+            )
+        return output, report
+
+    def test_silence_is_exact_at_both_depths(self) -> None:
+        for key in ("non_finite_wav", "non_finite_wav_24bit"):
+            with self.subTest(artifact=key):
+                params, codes = self._wav(key)
+                self.assertEqual(self._check(self.eq, key, self._write_pcm(params, codes))[1], [])
+                position = codes.index(0, 1)
+                # A one-code error here must fail inside the finite-sample tolerance.
+                codes[position] = 1
+                _, report = self._check(self.eq, key, self._write_pcm(params, codes))
+                self.assertEqual(
+                    report, [("fail", f"test: sample {position} PCM code 1 must equal 0")]
+                )
+
+    def test_rails_are_exact_and_in_range_samples_have_one_lsb(self) -> None:
+        key = "saturating_wav"
+        params, codes = self._wav(key)
+        for rail, delta in ((-32768, 1), (32767, -1)):
+            with self.subTest(rail=rail):
+                position = codes.index(rail)
+                nudged = codes.copy()
+                nudged[position] += delta
+                _, report = self._check(self.eq, key, self._write_pcm(params, nudged))
+                self.assertEqual(
+                    report,
+                    [
+                        (
+                            "fail",
+                            f"test: sample {position} PCM code {rail + delta} must equal {rail}",
+                        )
+                    ],
+                )
+        codes[1] += 1
+        _, report = self._check(self.eq, key, self._write_pcm(params, codes))
+        self.assertEqual(report, [])
+        codes[1] += 1
+        _, report = self._check(self.eq, key, self._write_pcm(params, codes))
+        self.assertEqual(
+            report,
+            [("fail", "test: sample 1 is 2 LSB from the reference, past the tolerance (1 LSB)")],
+        )
+
+    def test_peer_bytes_are_exact_even_when_both_match_the_tolerant_reference(self) -> None:
+        key = "saturating_wav"
+        params, codes = self._wav(key)
+        native, report = self._check(self.eq, key, self._write_pcm(params, codes))
+        self.assertEqual(report, [])
+        codes[1] += 1
+        python, report = self._check(self.eq, key, self._write_pcm(params, codes))
+        self.assertEqual(report, [])
+        self.assertIsInstance(native, bytes)
+        self.assertIsInstance(python, bytes)
+        case = ("eq", "saturating_samples")
+        CHECKER._compare_artifact_outputs({case: native}, {case: python}, report)
+        self.assertEqual(
+            report, [("fail", "surface comparison: eq.saturating_samples: artifact bytes differ")]
+        )
+
+    def test_aligned_document_shape_and_coordinates(self) -> None:
+        key = "aligned_project_other_rate"
+        doc = copy.deepcopy(self.json_references[f"project.align-takes.{key}"])
+        anchors = doc["warpMaps"][0]["anchors"]
+        anchors[1]["sourceSample"] += 1e-8
+        self.assertEqual(self._check(self.align, key, json.dumps(doc).encode())[1], [])
+        anchors[1]["sourceSample"] += 1e-6
+        _, report = self._check(self.align, key, json.dumps(doc).encode())
+        self.assertEqual(len(report), 1)
+        self.assertIn(".warpMaps[0].anchors[1].sourceSample", report[0][1])
+        anchors.pop()
+        _, report = self._check(self.align, key, json.dumps(doc).encode())
+        self.assertEqual(len(report), 1)
+        self.assertIn("array lengths differ", report[0][1])
+
+
 if __name__ == "__main__":
     unittest.main()

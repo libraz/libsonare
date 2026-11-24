@@ -30,7 +30,7 @@ from _repo import REPO_ROOT
 # `_validate_option` and `validate_payload` are not called here; the conformance
 # self-tests reach every checker helper through this module, so both stay part of
 # its surface.
-from cli_contract_artifacts import _check_artifact
+from cli_contract_artifacts import _check_artifact, _compare_artifact_outputs
 from cli_contract_fixtures import _resolve_argv, _write_fixtures
 from cli_contract_inventory import (
     _accepted_names,
@@ -566,6 +566,7 @@ def _run_active_cases(
     report: list[tuple[str, str]],
     disabled_features: frozenset[str] = frozenset(),
     compared: str = "",
+    artifact_outputs: dict[tuple[str, str], bytes] | None = None,
 ) -> dict[tuple[str, str], Any]:
     payloads: dict[tuple[str, str], Any] = {}
     for contract in manifest["active_paths"]:
@@ -635,6 +636,7 @@ def _run_active_cases(
                     )
                 )
             _check_text_expectations(case, result, label, report)
+            parsed = None
             if case["stdout"] in {"empty", "text"}:
                 if case["stdout"] == "empty" and result["stdout"].strip():
                     report.append(
@@ -643,12 +645,6 @@ def _run_active_cases(
                             f"{label}: expected empty stdout, got {result['stdout'][:160]!r}",
                         )
                     )
-                # A case printing text still writes its artifact, and the bytes are
-                # the point of declaring one: without this the declaration sits on
-                # the case and nothing reads it.
-                _check_artifact(
-                    case["artifact"], contract, None, normal_paths, label, report, compared
-                )
             else:
                 try:
                     parsed = parse_single_json(result["stdout"])
@@ -658,9 +654,11 @@ def _run_active_cases(
                 if case["payload"] != "none":
                     _validate_case_payload(path, case, parsed, contract, surface, label, report)
                     payloads[(path, case["id"])] = parsed
-                    _check_artifact(
-                        case["artifact"], contract, parsed, normal_paths, label, report, compared
-                    )
+            data = _check_artifact(
+                case["artifact"], contract, parsed, normal_paths, label, report, compared
+            )
+            if data is not None and artifact_outputs is not None:
+                artifact_outputs[path, case["id"]] = data
     _validate_audio_case_relationships(surface, payloads, manifest, report)
     if any(contract["path"] == "analyze" for contract in manifest["active_paths"]):
         _validate_analyze_case_relationships(surface, payloads, manifest, report)
@@ -912,6 +910,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
         python_library = _resolved_python_library(python_executable, args.timeout)
         compared = f"{native_executable} and {python_library or python_executable}"
+        native_artifacts: dict[tuple[str, str], bytes] = {}
+        python_artifacts: dict[tuple[str, str], bytes] = {}
         native_payloads = _run_active_cases(
             "native",
             native_executable,
@@ -921,6 +921,7 @@ def main(argv: list[str] | None = None) -> int:
             report,
             native_disabled,
             compared,
+            native_artifacts,
         )
         python_payloads = _run_active_cases(
             "python",
@@ -931,7 +932,9 @@ def main(argv: list[str] | None = None) -> int:
             report,
             python_disabled,
             compared,
+            python_artifacts,
         )
+        _compare_artifact_outputs(native_artifacts, python_artifacts, report)
         for contract in manifest["active_paths"]:
             path = contract["path"]
             for case in contract["cases"]:

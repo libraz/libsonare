@@ -341,22 +341,45 @@ def _validate_active_paths(
             else:
                 for artifact_name, artifact in artifacts.items():
                     artifact_label = f"{label}.artifacts.{artifact_name}"
+                    parity_keys = set()
+                    if isinstance(artifact, dict) and "compare_bytes" in artifact:
+                        parity_keys.add("compare_bytes")
+                        if artifact["compare_bytes"] is not True:
+                            errors.append(f"{artifact_label}.compare_bytes: expected true")
                     if isinstance(artifact, dict) and artifact.get("kind") == "wav":
-                        # A tolerance artifact replaces the digest with a committed reference.
-                        tolerant = "tolerance_of_peak" in artifact
-                        wav_keys = {"placeholder", "kind", "sample_rate_key"} | (
-                            {"reference_sha256", "tolerance_of_peak"} if tolerant else {"sha256"}
-                        )
+                        wav_keys = {"placeholder", "kind", "sample_rate_key"} | parity_keys
+                        if "tolerance_lsb" in artifact:
+                            wav_keys |= {"reference_sha256", "tolerance_lsb"}
+                            if "exact_pcm" in artifact:
+                                wav_keys.add("exact_pcm")
+                        elif "tolerance_of_peak" in artifact:
+                            wav_keys |= {"reference_sha256", "tolerance_of_peak"}
+                        else:
+                            wav_keys.add("sha256")
                         if not _exact(artifact, wav_keys, artifact_label, errors):
                             continue
                         tolerance = artifact.get("tolerance_of_peak")
-                        if tolerant and not (
+                        if "tolerance_of_peak" in artifact and not (
                             _is_number(tolerance) and 0.0 < tolerance <= _MAX_TOLERANCE_OF_PEAK
                         ):
                             errors.append(
                                 f"{artifact_label}.tolerance_of_peak: expected a number in "
                                 f"(0, {_MAX_TOLERANCE_OF_PEAK}]"
                             )
+                        if "tolerance_lsb" in artifact and not (
+                            _is_int(artifact["tolerance_lsb"]) and artifact["tolerance_lsb"] > 0
+                        ):
+                            errors.append(
+                                f"{artifact_label}.tolerance_lsb: expected a positive integer"
+                            )
+                        if "exact_pcm" in artifact:
+                            modes = artifact["exact_pcm"]
+                            if _strings(modes, f"{artifact_label}.exact_pcm", errors) and (
+                                not modes or not set(modes) <= {"silence", "full_scale"}
+                            ):
+                                errors.append(
+                                    f"{artifact_label}.exact_pcm: expected silence or full_scale"
+                                )
                         for key in ("placeholder", "sample_rate_key"):
                             if not isinstance(artifact[key], str) or not artifact[key]:
                                 errors.append(
@@ -365,7 +388,7 @@ def _validate_active_paths(
                     elif isinstance(artifact, dict) and artifact.get("kind") == "json":
                         if not _exact(
                             artifact,
-                            {"placeholder", "kind", "keys", "sha256"},
+                            {"placeholder", "kind", "keys", "sha256"} | parity_keys,
                             artifact_label,
                             errors,
                         ):
@@ -375,23 +398,30 @@ def _validate_active_paths(
                         if not artifact["keys"]:
                             errors.append(f"{artifact_label}.keys: expected a non-empty array")
                     else:
+                        tolerant_json = (
+                            isinstance(artifact, dict) and "tolerance_of_samples" in artifact
+                        )
+                        expectation = "tolerance_of_samples" if tolerant_json else "sha256"
                         if not _exact(
                             artifact,
-                            {"placeholder", "encoding", "bytes_key", "sha256"},
+                            {"placeholder", "encoding", "bytes_key", expectation} | parity_keys,
                             artifact_label,
                             errors,
                         ):
                             continue
-                        for key in ("placeholder", "encoding", "bytes_key", "sha256"):
+                        for key in ("placeholder", "encoding", "bytes_key"):
                             if not isinstance(artifact[key], str) or not artifact[key]:
                                 errors.append(
                                     f"{artifact_label}.{key}: expected a non-empty string"
                                 )
-                    digest_key = (
-                        "reference_sha256"
-                        if isinstance(artifact, dict) and "tolerance_of_peak" in artifact
-                        else "sha256"
-                    )
+                        if tolerant_json:
+                            tolerance = artifact["tolerance_of_samples"]
+                            if not _is_number(tolerance) or not 0 < tolerance < 1:
+                                errors.append(
+                                    f"{artifact_label}.{expectation}: expected a number in (0, 1)"
+                                )
+                            continue
+                    digest_key = "reference_sha256" if "reference_sha256" in artifact else "sha256"
                     digest = artifact.get(digest_key)
                     if (
                         not isinstance(digest, str)

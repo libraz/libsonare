@@ -12592,7 +12592,12 @@
           "placeholder": "rir_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "99b7e1ea28016d5b35fa0276a12c50d267a2d6dacbe8b341bd70e392279dc7ba"
+          "reference_sha256": "99b7e1ea28016d5b35fa0276a12c50d267a2d6dacbe8b341bd70e392279dc7ba",
+          "tolerance_lsb": 2,
+          "exact_pcm": [
+            "silence"
+          ],
+          "compare_bytes": true
         }
       }
     },
@@ -13553,19 +13558,34 @@
           "placeholder": "eq_non_finite_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "7780bac56821b4b2f467f1fa5db376569e2916719817bac35f97198780f8e0c4"
+          "reference_sha256": "c60450d11694f7cc2989144e8ffafc09199f3b888a81ef3b675f7a5d2ca419fb",
+          "tolerance_lsb": 8,
+          "exact_pcm": [
+            "silence"
+          ],
+          "compare_bytes": true
         },
         "non_finite_wav_24bit": {
           "placeholder": "eq_non_finite_output_24bit",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "7107af60417f3760511610fae05271b9589f3e3cd4fc8655b119d17342983b09"
+          "reference_sha256": "a0eb3625129c56f0cd864197bd17e369d4a3bd63c5a998a5b38fe844946ef03c",
+          "tolerance_lsb": 2048,
+          "exact_pcm": [
+            "silence"
+          ],
+          "compare_bytes": true
         },
         "saturating_wav": {
           "placeholder": "eq_saturating_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "f714c1bfda8e2b5e4e55f41b78827d3e25c5e2833df66369af5bf1fd996379c2"
+          "reference_sha256": "7191f928a5457925cd58b7dfb60f856c1ee0c03e82795a98461b8bd7179998a4",
+          "tolerance_lsb": 1,
+          "exact_pcm": [
+            "full_scale"
+          ],
+          "compare_bytes": true
         }
       }
     },
@@ -19425,19 +19445,22 @@
           "placeholder": "align_takes_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "2b5522b338e580db77fb80f43ad65acde98ab136ba0152c79969fefa1d825913"
+          "tolerance_of_samples": 1e-07,
+          "compare_bytes": true
         },
         "aligned_project_many": {
           "placeholder": "align_takes_many_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "76e1ed19c48bc8f22052d23c670b94fee3465ae5bd67527c0a60ea500e9da41e"
+          "tolerance_of_samples": 1e-07,
+          "compare_bytes": true
         },
         "aligned_project_other_rate": {
           "placeholder": "align_takes_other_rate_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "feb11dd5f3f903fdc5e5b159b84fa5ea9c34e820c997bab095ede6e4f17103eb"
+          "tolerance_of_samples": 1e-07,
+          "compare_bytes": true
         }
       }
     },
