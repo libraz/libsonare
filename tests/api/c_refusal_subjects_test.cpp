@@ -1125,6 +1125,43 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
           sonare_project_apply_vocal_edit(project.get(), &desc, &result);
         },
         "desc"}},
+      {"clip_page_provider_supply.frames", {[] {
+         SonareClipPageProvider* raw = nullptr;
+         REQUIRE(sonare_clip_page_provider_create(1, 10, 4, &raw) == SONARE_OK);
+         const std::unique_ptr<SonareClipPageProvider, decltype(&sonare_clip_page_provider_destroy)>
+             provider(raw, sonare_clip_page_provider_destroy);
+         const float samples[3] = {};
+         const float* channels[] = {samples};
+         sonare_clip_page_provider_supply(provider.get(), 0, channels, 1, 3);
+       }}},
+      {"project_set_source_audio.interleaved", {[] {
+         const ProjectPtr project = new_project();
+         uint32_t source_id = 0;
+         REQUIRE(sonare_project_add_audio_source(project.get(), "spelling.wav", &source_id) ==
+                 SONARE_OK);
+         sonare_project_set_source_audio(project.get(), source_id, nullptr, 1, 1, 48000);
+       }}},
+      {"project_apply_vocal_edit.sve1_size",
+       {[] {
+          const ProjectPtr project = new_project();
+          const float rendered[1] = {0.0f};
+          const uint8_t sve1[1] = {};
+          SonareProjectVocalEditApplyDesc desc;
+          sonare_project_vocal_edit_apply_desc_init(&desc);
+          desc.clip_id = 1;
+          desc.expected_source_sample_rate = 48000;
+          desc.expected_source_sample_count = 1;
+          desc.expected_clip_length_ppq = 4.0;
+          desc.rendered_mono = rendered;
+          desc.rendered_sample_count = 1;
+          desc.rendered_sample_rate = 48000;
+          desc.sve1 = sve1;
+          desc.sve1_size = 0;
+          SonareProjectVocalEditApplyResult result;
+          sonare_project_vocal_edit_apply_result_init(&result);
+          sonare_project_apply_vocal_edit(project.get(), &desc, &result);
+        },
+        "desc"}},
       {"project_import_clip_file.bytes", {[] {
          const ProjectPtr project = new_project();
          uint32_t first_clip_id = 0;
