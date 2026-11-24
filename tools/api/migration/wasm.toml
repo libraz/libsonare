@@ -25014,6 +25014,22 @@ rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
 
 [[entry]]
+kind = "option"
+old = "masteringAudioProfile(request)"
+changed = "an odd nFft, or nFft 1, is refused on the caller's value before the rescale as a RangeError 'masteringAudioProfile: nFft must be an even integer in [2, 524288]' at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even"
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::both audio profile entries refuse an odd nFft at %d Hz"
+
+[[entry]]
+kind = "option"
+old = "masteringAudioProfileStereo(request)"
+changed = "an odd nFft, or nFft 1, is refused on the caller's value before the rescale as a RangeError 'masteringAudioProfileStereo: nFft must be an even integer in [2, 524288]' at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even"
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::both audio profile entries refuse an odd nFft at %d Hz"
+
+[[entry]]
 kind = "function"
 old = "masteringDynamicsCompressor"
 changed = "one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult"

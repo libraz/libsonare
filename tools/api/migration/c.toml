@@ -6443,18 +6443,18 @@ test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics config
 [[entry]]
 kind = "option"
 old = "sonare_mastering_audio_profile(params)"
-changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size')"
+changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain ('params.nFft must be an even integer in [2, 524288]') and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size'); an odd nFft, or nFft 1, is refused on the caller's value before the rescale at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even"
 domain = "mastering"
 rule = "individual"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering profile rescale relations use C caller names"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering profile refuses an odd caller nFft before the rescale at every rate"
 
 [[entry]]
 kind = "option"
 old = "sonare_mastering_audio_profile_stereo(params)"
-changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size')"
+changed = "a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain ('params.nFft must be an even integer in [2, 524288]') and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size'); an odd nFft, or nFft 1, is refused on the caller's value before the rescale at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even"
 domain = "mastering"
 rule = "individual"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering profile rescale relations use C caller names"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering profile refuses an odd caller nFft before the rescale at every rate"
 
 [[entry]]
 kind = "option"
