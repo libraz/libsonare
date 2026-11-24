@@ -1036,6 +1036,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_engine_set_midi_fx` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
+| `sonare_midi_cc_to_breakpoint` | a SysEx event returns SONARE_ERROR_NOT_SUPPORTED (1.x: SONARE_ERROR_INVALID_STATE) with the message 'MIDI CC conversion does not support SysEx events'; an unmatched event still returns SONARE_ERROR_INVALID_STATE |
 
 #### Each operation has exactly one entry point
 
@@ -8321,8 +8322,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `resample(srcSr)` | `resample(sampleRate)` |
 | `resample(targetSr)` (`./analysis`) | `resample(targetSampleRate)` |
 | `resample(targetSr)` | `resample(targetSampleRate)` |
-| `resample` (`./analysis`) | one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate} |
-| `resample` | one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate} |
+| `resample` (`./analysis`) | one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
+| `resample` | one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
 | `timeToFrames(sr)` (`./analysis`) | `timeToFrames(sampleRate)` |
 | `timeToFrames(sr)` | `timeToFrames(sampleRate)` |
 
@@ -10202,8 +10203,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
 | `noteToHz` (`./analysis`) | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
 | `noteToHz` | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
-| `resample` (`./analysis`) | an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
-| `resample` | an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
 | `samplesToFrames(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `samplesToFrames(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `streamAnalyzerConfigDefaults` | removed: Omit a StreamConfig field; the analyzer reads an absent field as the library default. |

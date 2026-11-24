@@ -1552,34 +1552,17 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
 domain = "analysis"
 rule = "sample-rate-name"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by source and target rate"
-
-[[entry]]
-kind = "function"
-old = "resample"
-changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}"
-domain = "analysis"
-rule = "sample-rate-name"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by source and target rate"
-
-[[entry]]
-kind = "function"
-old = "resample"
-changed = "an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
-domain = "analysis"
-rule = "individual"
 test = "bindings/wasm/tests/core-validation-refusals.test.ts::converts an empty buffer to an empty one"
 
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}; an empty samples buffer returns an empty Float32Array, as on the other surfaces, and both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
 domain = "analysis"
-rule = "individual"
+rule = "sample-rate-name"
 entry = "./analysis"
 test = "bindings/wasm/tests/core-validation-refusals.test.ts::converts an empty buffer to an empty one"
 
