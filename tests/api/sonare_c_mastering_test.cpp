@@ -986,6 +986,32 @@ TEST_CASE("mastering profile rescale relations use C caller names",
   }
 }
 
+TEST_CASE("mastering profile refuses an odd caller nFft before the rescale at every rate",
+          "[c_api][mastering][rescale-boundary]") {
+  const std::array<float, 1> samples{0.125f};
+  const SonareMasteringParam params[] = {{"nFft", 1023.0}};
+  for (const int rate : {48000, 96000}) {
+    for (const bool stereo : {false, true}) {
+      CAPTURE(rate, stereo);
+      char sentinel = 'x';
+      char* json = &sentinel;
+      const SonareError error =
+          stereo ? sonare_mastering_audio_profile_stereo(samples.data(), samples.data(),
+                                                         samples.size(), rate, params, 1, &json)
+                 : sonare_mastering_audio_profile(samples.data(), samples.size(), rate, params, 1,
+                                                  &json);
+      CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "params.nFft must be an even integer in [2, 524288]");
+      CHECKED_IF(sonare_last_refusal_subject_count() == 1) {
+        CHECK(std::string(sonare_last_refusal_subject(0)) == "params.nFft");
+      }
+      CHECK(json == nullptr);
+      if (json != nullptr && json != &sentinel) sonare_free_string(json);
+    }
+  }
+}
+
 TEST_CASE("band_json exceeding the JSON byte budget is refused, not parsed",
           "[c_api][mastering][eq][resource]") {
   using sonare::c_api::parse_eq_band_json;

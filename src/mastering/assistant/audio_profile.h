@@ -115,8 +115,8 @@ inline constexpr int kProfileReferenceRate =
     static_cast<int>(sonare::constants::kDefaultDawSampleRate);
 
 /// @brief Domains of the integer @c AudioProfileConfig members, stated once for the core check.
-inline constexpr util::check::NumericDomain kAudioProfileNFftDomain =
-    util::check::integer_domain(1, kMaxStftNFft);
+/// The window length must also be even, checked on the caller's value before the rescale.
+inline constexpr util::check::NumericDomain kAudioProfileNFftDomain = kStftNFftDomain;
 inline constexpr util::check::NumericDomain kAudioProfileHopLengthDomain =
     util::check::integer_domain_of<int>(1);
 
