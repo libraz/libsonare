@@ -324,6 +324,37 @@ def test_engine_midi_cc_bindings_refuse_inconsistent_owned_list(
     engine._handle = None
 
 
+_INACTIVE_CC_FIELDS = [
+    ("cc_lsb_number", "control-change 14"),
+    ("selector_msb", "RPN or NRPN"),
+    ("selector_lsb", "RPN or NRPN"),
+]
+
+
+@pytest.mark.parametrize(("field", "kind"), _INACTIVE_CC_FIELDS)
+def test_engine_bind_midi_cc_refuses_a_nonzero_inactive_field(field: str, kind: str) -> None:
+    binding = MidiCcBinding(cc_number=7, param_id=11, **{field: 1})
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        with pytest.raises(SonareValueError) as error:
+            engine.bind_midi_cc(binding)
+        assert str(error.value).endswith(f"binding.{field} must be 0 unless binding.kind is {kind}")
+        assert engine.midi_cc_bindings() == []
+
+
+@pytest.mark.parametrize(("field", "kind"), _INACTIVE_CC_FIELDS)
+def test_midi_cc_conversions_refuse_a_nonzero_inactive_field(field: str, kind: str) -> None:
+    good = MidiCcBinding(cc_number=7, param_id=5)
+    bad = MidiCcBinding(cc_number=7, param_id=5, **{field: 1})
+    expected = f"bindings[1].{field} must be 0 unless bindings[1].kind is {kind}"
+    event = ProjectMidiEvent(ppq=0.0, word0=0x20B00740)
+    with pytest.raises(SonareValueError) as error:
+        midi_cc_to_breakpoint([good, bad], event)
+    assert str(error.value).endswith(expected)
+    with pytest.raises(SonareValueError) as error:
+        midi_param_to_cc([good, bad], 5, 0.5, 0)
+    assert str(error.value).endswith(expected)
+
+
 def test_a_cc_binding_mapping_is_a_type_error() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(TypeError, match="MidiCcBinding"):

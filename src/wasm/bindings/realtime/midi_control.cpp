@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/midi_cc_binding_check.h"
 #include "c_api/midi_input_domains.h"
 #include "c_api/part_rig_json.h"
 #include "c_api/synth_patch_common.h"
@@ -134,6 +135,11 @@ void RealtimeEngineWasm::bindMidiCc(val object) {
        (binding.cc_number > 31 || binding.cc_lsb_number != binding.cc_number + 32u))) {
     throw WasmRangeError("invalid full MIDI CC binding");
   }
+  sonare_c_detail::check_midi_cc_binding_kind_fields(
+      binding.kind, sonare::midi::CcBindingKind::kControlChange14,
+      sonare::midi::CcBindingKind::kRpn, sonare::midi::CcBindingKind::kNrpn, binding.cc_lsb_number,
+      binding.selector_msb, binding.selector_lsb, "ccLsbNumber", "selectorMsb", "selectorLsb",
+      "kind");
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(binding.param_id)) {
     throw WasmRangeError("paramId " + std::to_string(binding.param_id) + " is reserved");
   }

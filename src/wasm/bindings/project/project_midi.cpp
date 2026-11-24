@@ -716,7 +716,8 @@ double js_midi2_pitch_bend_to_midi1(const val& v) {
 }
 
 val js_midi_gm_instrument_name(const val& program) {
-  return js_nullable_string(sonare_midi_gm_instrument_name(checkedIntFromVal(program, "program")));
+  return js_nullable_string(sonare_midi_gm_instrument_name(
+      domainNumberFromVal<int>(program, "program", sonare_c_detail::kMidiDataByteDomain)));
 }
 
 int js_midi_gm_program_for_name(const std::string& name) {
@@ -724,20 +725,24 @@ int js_midi_gm_program_for_name(const std::string& name) {
 }
 
 val js_midi_gm_family_name(const val& family) {
-  return js_nullable_string(sonare_midi_gm_family_name(checkedIntFromVal(family, "family")));
+  return js_nullable_string(sonare_midi_gm_family_name(
+      domainNumberFromVal<int>(family, "family", sonare_c_detail::kMidiFamilyIndexDomain)));
 }
 
 int js_midi_gm_family_first_program(const val& family) {
-  return sonare_midi_gm_family_first_program(checkedIntFromVal(family, "family"));
+  return sonare_midi_gm_family_first_program(
+      domainNumberFromVal<int>(family, "family", sonare_c_detail::kMidiFamilyIndexDomain));
 }
 
 val js_midi_gm2_instrument_name(const val& bank_lsb, const val& program) {
-  return js_nullable_string(sonare_midi_gm2_instrument_name(checkedIntFromVal(bank_lsb, "bankLsb"),
-                                                            checkedIntFromVal(program, "program")));
+  return js_nullable_string(sonare_midi_gm2_instrument_name(
+      domainNumberFromVal<int>(bank_lsb, "bankLsb", sonare_c_detail::kMidiDataByteDomain),
+      domainNumberFromVal<int>(program, "program", sonare_c_detail::kMidiDataByteDomain)));
 }
 
 val js_midi_gm_drum_name(const val& note) {
-  return js_nullable_string(sonare_midi_gm_drum_name(checkedIntFromVal(note, "note")));
+  return js_nullable_string(sonare_midi_gm_drum_name(
+      domainNumberFromVal<int>(note, "note", sonare_c_detail::kMidiDataByteDomain)));
 }
 
 int js_midi_gm_drum_note_for_name(const std::string& name) {
@@ -745,16 +750,19 @@ int js_midi_gm_drum_note_for_name(const std::string& name) {
 }
 
 val js_midi_gm2_drum_set_name(const val& bank_lsb) {
-  return js_nullable_string(sonare_midi_gm2_drum_set_name(checkedIntFromVal(bank_lsb, "bankLsb")));
+  return js_nullable_string(sonare_midi_gm2_drum_set_name(
+      domainNumberFromVal<int>(bank_lsb, "bankLsb", sonare_c_detail::kMidiDataByteDomain)));
 }
 
 val js_midi_gm2_drum_name(const val& bank_lsb, const val& note) {
-  return js_nullable_string(sonare_midi_gm2_drum_name(checkedIntFromVal(bank_lsb, "bankLsb"),
-                                                      checkedIntFromVal(note, "note")));
+  return js_nullable_string(sonare_midi_gm2_drum_name(
+      domainNumberFromVal<int>(bank_lsb, "bankLsb", sonare_c_detail::kMidiDataByteDomain),
+      domainNumberFromVal<int>(note, "note", sonare_c_detail::kMidiDataByteDomain)));
 }
 
 val js_midi_cc_name(const val& controller) {
-  return js_nullable_string(sonare_midi_cc_name(checkedIntFromVal(controller, "controller")));
+  return js_nullable_string(sonare_midi_cc_name(
+      domainNumberFromVal<int>(controller, "controller", sonare_c_detail::kMidiDataByteDomain)));
 }
 
 int js_midi_cc_index_for_name(const std::string& name) {
@@ -762,8 +770,8 @@ int js_midi_cc_index_for_name(const std::string& name) {
 }
 
 val js_midi_per_note_controller_name(const val& index) {
-  return js_nullable_string(
-      sonare_midi_per_note_controller_name(checkedIntFromVal(index, "index")));
+  return js_nullable_string(sonare_midi_per_note_controller_name(domainNumberFromVal<int>(
+      index, "index", sonare_c_detail::kMidiPerNoteControllerIndexDomain)));
 }
 
 val js_midi_bank_program(const val& ppq_val, const val& group_val, const val& channel_val,

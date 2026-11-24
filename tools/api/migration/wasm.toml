@@ -15918,7 +15918,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::sets a part rig from one req
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.bindMidiCc"
-changed = "bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor"
+changed = "bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor; a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
 domain = "engine"
 rule = "one-entry-per-operation"
 test = "bindings/wasm/tests/surface/engine.test.ts::binds a MIDI controller from one descriptor"
@@ -22204,14 +22204,14 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midiCcToBreakpoint"
-removed = "call the module function midiCcToBreakpoint"
+removed = "call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiParamToCc"
-removed = "call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it"
+removed = "call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it, and in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
 domain = "project"
 rule = "midi-module-functions"
 

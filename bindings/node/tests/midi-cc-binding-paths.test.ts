@@ -69,4 +69,44 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
       engine.destroy();
     }
   });
+
+  it.each([
+    ['ccLsbNumber', { ccLsbNumber: 1 }, 'control-change 14'],
+    ['selectorMsb', { selectorMsb: 1 }, 'RPN or NRPN'],
+    ['selectorLsb', { selectorLsb: 1 }, 'RPN or NRPN'],
+  ] as const)(
+    'the conversions refuse a nonzero inactive %s naming it and the kind',
+    (field, extra, kind) => {
+      const binding = { ...good, ...extra };
+      expect(() => toCc(binding)).toThrow(
+        new RangeError(
+          `midiParamToCc: bindings[1].${field} must be 0 unless bindings[1].kind is ${kind}`,
+        ),
+      );
+      expect(() => midiCcToBreakpoint({ bindings: [binding], event: event })).toThrow(
+        new RangeError(
+          `midiCcToBreakpoint: bindings[0].${field} must be 0 unless bindings[0].kind is ${kind}`,
+        ),
+      );
+    },
+  );
+
+  it.each([
+    ['ccLsbNumber', { ccNumber: 7, paramId: 11, ccLsbNumber: 1 }, 'control-change 14'],
+    ['selectorMsb', { ccNumber: 8, paramId: 12, selectorMsb: 1 }, 'RPN or NRPN'],
+    ['selectorLsb', { ccNumber: 9, paramId: 13, selectorLsb: 1 }, 'RPN or NRPN'],
+  ] as const)(
+    'bindMidiCc refuses a nonzero inactive %s naming it and the kind',
+    (field, binding, kind) => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        expect(() => engine.bindMidiCc(binding)).toThrow(
+          new RangeError(`RealtimeEngine.bindMidiCc: ${field} must be 0 unless kind is ${kind}`),
+        );
+        expect(engine.midiCcBindings()).toHaveLength(0);
+      } finally {
+        engine.destroy();
+      }
+    },
+  );
 });

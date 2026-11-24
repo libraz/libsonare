@@ -121,3 +121,32 @@ describe('the raw mixer factory reads maxBlockSize as the facade does', () => {
     }
   });
 });
+
+describe('GM and MIDI lookups refuse an index outside its domain with the domain text', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: the lookups are not on the module declaration.
+  const lookups = (m: any): Array<[string, string, number, (value: unknown) => unknown]> => [
+    ['midiGmInstrumentName', 'program', 127, (v) => m.midiGmInstrumentName(v)],
+    ['midiGmFamilyName', 'family', 15, (v) => m.midiGmFamilyName(v)],
+    ['midiGmFamilyFirstProgram', 'family', 15, (v) => m.midiGmFamilyFirstProgram(v)],
+    ['midiGm2InstrumentName', 'bankLsb', 127, (v) => m.midiGm2InstrumentName(v, 0)],
+    ['midiGm2InstrumentName', 'program', 127, (v) => m.midiGm2InstrumentName(0, v)],
+    ['midiGmDrumName', 'note', 127, (v) => m.midiGmDrumName(v)],
+    ['midiGm2DrumSetName', 'bankLsb', 127, (v) => m.midiGm2DrumSetName(v)],
+    ['midiGm2DrumName', 'bankLsb', 127, (v) => m.midiGm2DrumName(v, 35)],
+    ['midiGm2DrumName', 'note', 127, (v) => m.midiGm2DrumName(0, v)],
+    ['midiCcName', 'controller', 127, (v) => m.midiCcName(v)],
+    ['midiPerNoteControllerName', 'index', 255, (v) => m.midiPerNoteControllerName(v)],
+  ];
+
+  it('every lookup refuses -1 and one past its maximum, and answers the maximum', () => {
+    for (const [name, argument, max, lookup] of lookups(mod)) {
+      for (const bad of [-1, max + 1]) {
+        expect(
+          refusal(() => lookup(bad)),
+          `${name} ${argument}=${bad}`,
+        ).toEqual(new RangeError(`${name}: ${argument} must be an integer in [0, ${max}]`));
+      }
+      expect(() => lookup(max), name).not.toThrow();
+    }
+  });
+});

@@ -3723,7 +3723,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.bind_midi_cc(param_id)` | removed: pass a MidiCcBinding record and set its param_id field |
 | `RealtimeEngine.bind_midi_cc_binding(binding)` | `RealtimeEngine.bind_midi_cc(binding)`: binding is a MidiCcBinding record; a mapping is TypeError |
 | `RealtimeEngine.bind_midi_cc_binding` | `RealtimeEngine.bind_midi_cc` |
-| `RealtimeEngine.bind_midi_cc` | takes one MidiCcBinding record (bind_midi_cc(MidiCcBinding(cc_number=..., channel=..., param_id=...))) instead of channel, controller, param_id, min_value and max_value |
+| `RealtimeEngine.bind_midi_cc` | takes one MidiCcBinding record (bind_midi_cc(MidiCcBinding(cc_number=..., channel=..., param_id=...))) instead of channel, controller, param_id, min_value and max_value; a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them) |
 | `RealtimeEngine.set_bus_strip_eq_band(band)` | `RealtimeEngine.set_bus_eq_band(band)`: takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first |
 | `RealtimeEngine.set_bus_strip_eq_band_json` | removed: call set_bus_eq_band(bus_id, band_index, band) with an EqBandInput mapping (json.loads the text first) |
 | `RealtimeEngine.set_bus_strip_json(scene_json)` | removed: set_bus_strip(bus_id, settings) takes one MixSceneBusInput mapping as settings |
@@ -3991,12 +3991,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.midi_cc_index_for_name` | removed: call the module function midi_cc_index_for_name |
 | `Project.midi_cc_learn` | removed: call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError) |
 | `Project.midi_cc_name` | removed: call the module function midi_cc_name |
-| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None |
+| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None, in which a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them) |
 | `Project.midi_cc` | removed: call the module function midi_cc, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_channel_pressure` | removed: call the module function midi_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_note_off` | removed: call the module function midi_note_off, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_note_on` | removed: call the module function midi_note_on, which returns a frozen ProjectMidiEvent instead of a tuple |
-| `Project.midi_param_to_cc` | removed: call the module function midi_param_to_cc, which takes each binding as a MidiCcBinding record (a mapping is TypeError) and returns a ProjectMidiEvent record or None |
+| `Project.midi_param_to_cc` | removed: call the module function midi_param_to_cc, which takes each binding as a MidiCcBinding record (a mapping is TypeError) and returns a ProjectMidiEvent record or None, and in which a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them) |
 | `Project.midi_pitch_bend` | removed: call the module function midi_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_poly_pressure` | removed: call the module function midi_poly_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_program` | removed: call the module function midi_program, which returns a frozen ProjectMidiEvent instead of a tuple |
@@ -7104,7 +7104,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.bindMidiCc(options)` | removed: pass it as minValue and maxValue in ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | `RealtimeEngine.bindMidiCc` |
-| `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor; a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
 | `RealtimeEngine.midiCcBindingCount` | removed: Use midiCcBindings().length. The reader returns owned binding rows with a boolean consume field. |
 | `RealtimeEngine.processWithMonitor` | removed: Call process(channels, { withMonitor: true }). |
 | `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
@@ -7501,12 +7501,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
 | `Project.midiCcLearn` | removed: call the module function midiCcLearn |
 | `Project.midiCcName` | removed: call the module function midiCcName |
-| `Project.midiCcToBreakpoint` | removed: call the module function midiCcToBreakpoint |
+| `Project.midiCcToBreakpoint` | removed: call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
 | `Project.midiCc` | removed: call the module function midiCc |
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |
 | `Project.midiNoteOn` | removed: call the module function midiNoteOn |
-| `Project.midiParamToCc` | removed: call the module function midiParamToCc |
+| `Project.midiParamToCc` | removed: call the module function midiParamToCc, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
 | `Project.midiPitchBend` | removed: call the module function midiPitchBend |
 | `Project.midiPolyPressure` | removed: call the module function midiPolyPressure |
 | `Project.midiProgram` | removed: call the module function midiProgram |
@@ -12487,7 +12487,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.bindMidiCc(options)` | removed: pass it as minValue and maxValue in ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | removed: Call bindMidiCc(binding) with a ProjectMidiCcBinding. |
-| `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor; a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
 | `RealtimeEngine.processPreparedWithMonitor` | removed: Call processPrepared(numFrames, { withMonitor: true }). |
 | `RealtimeEngine.processWithMonitor` | removed: Call process(channels, { withMonitor: true }). |
 | `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
@@ -13274,12 +13274,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
 | `Project.midiCcLearn` | removed: call the module function midiCcLearn |
 | `Project.midiCcName` | removed: call the module function midiCcName |
-| `Project.midiCcToBreakpoint` | removed: call the module function midiCcToBreakpoint |
+| `Project.midiCcToBreakpoint` | removed: call the module function midiCcToBreakpoint, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
 | `Project.midiCc` | removed: call the module function midiCc |
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |
 | `Project.midiNoteOn` | removed: call the module function midiNoteOn |
-| `Project.midiParamToCc` | removed: call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
+| `Project.midiParamToCc` | removed: call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it, and in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
 | `Project.midiPitchBend` | removed: call the module function midiPitchBend |
 | `Project.midiPolyPressure` | removed: call the module function midiPolyPressure |
 | `Project.midiProgram` | removed: call the module function midiProgram |

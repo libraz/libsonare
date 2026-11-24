@@ -11249,14 +11249,14 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midi_param_to_cc"
-removed = "call the module function midi_param_to_cc, which takes each binding as a MidiCcBinding record (a mapping is TypeError) and returns a ProjectMidiEvent record or None"
+removed = "call the module function midi_param_to_cc, which takes each binding as a MidiCcBinding record (a mapping is TypeError) and returns a ProjectMidiEvent record or None, and in which a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_to_breakpoint"
-removed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None"
+removed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None, in which a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -12160,7 +12160,7 @@ test = "bindings/python/tests/test_soundfont.py::test_project_sound_fonts_are_se
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.bind_midi_cc"
-changed = "takes one MidiCcBinding record (bind_midi_cc(MidiCcBinding(cc_number=..., channel=..., param_id=...))) instead of channel, controller, param_id, min_value and max_value"
+changed = "takes one MidiCcBinding record (bind_midi_cc(MidiCcBinding(cc_number=..., channel=..., param_id=...))) instead of channel, controller, param_id, min_value and max_value; a nonzero cc_lsb_number is refused unless kind is control-change 14, and a nonzero selector_msb or selector_lsb unless kind is RPN or NRPN, with SonareValueError naming the field and the kind (1.x accepted and ignored them)"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_engine_midi.py::test_engine_midi_cc_bindings"

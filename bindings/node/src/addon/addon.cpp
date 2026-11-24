@@ -53,7 +53,9 @@ Napi::Value MidiGmInstrumentName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int program = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "program", &program)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "program", sonare_c_detail::kMidiDataByteDomain,
+                                      &program))
+    return env.Undefined();
   return NullableString(env, sonare_midi_gm_instrument_name(program));
   SONARE_NODE_CATCH(env)
 }
@@ -71,7 +73,9 @@ Napi::Value MidiGmFamilyName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int family = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "family", &family)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "family",
+                                      sonare_c_detail::kMidiFamilyIndexDomain, &family))
+    return env.Undefined();
   return NullableString(env, sonare_midi_gm_family_name(family));
   SONARE_NODE_CATCH(env)
 }
@@ -80,7 +84,9 @@ Napi::Value MidiGmFamilyFirstProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int family = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "family", &family)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "family",
+                                      sonare_c_detail::kMidiFamilyIndexDomain, &family))
+    return env.Undefined();
   return Napi::Number::New(env, sonare_midi_gm_family_first_program(family));
   SONARE_NODE_CATCH(env)
 }
@@ -90,8 +96,10 @@ Napi::Value MidiGm2InstrumentName(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   int bank_lsb = 0;
   int program = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "bankLsb", &bank_lsb) ||
-      !sonare_node::RequiredIntArg(env, info, 1, "program", &program)) {
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "bankLsb", sonare_c_detail::kMidiDataByteDomain,
+                                      &bank_lsb) ||
+      !sonare_node::RequiredDomainArg(env, info, 1, "program", sonare_c_detail::kMidiDataByteDomain,
+                                      &program)) {
     return env.Undefined();
   }
   return NullableString(env, sonare_midi_gm2_instrument_name(bank_lsb, program));
@@ -102,7 +110,9 @@ Napi::Value MidiGmDrumName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int note = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "note", &note)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "note", sonare_c_detail::kMidiDataByteDomain,
+                                      &note))
+    return env.Undefined();
   return NullableString(env, sonare_midi_gm_drum_name(note));
   SONARE_NODE_CATCH(env)
 }
@@ -120,7 +130,9 @@ Napi::Value MidiGm2DrumSetName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int bank_lsb = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "bankLsb", &bank_lsb)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "bankLsb", sonare_c_detail::kMidiDataByteDomain,
+                                      &bank_lsb))
+    return env.Undefined();
   return NullableString(env, sonare_midi_gm2_drum_set_name(bank_lsb));
   SONARE_NODE_CATCH(env)
 }
@@ -130,8 +142,10 @@ Napi::Value MidiGm2DrumName(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   int bank_lsb = 0;
   int note = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "bankLsb", &bank_lsb) ||
-      !sonare_node::RequiredIntArg(env, info, 1, "note", &note)) {
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "bankLsb", sonare_c_detail::kMidiDataByteDomain,
+                                      &bank_lsb) ||
+      !sonare_node::RequiredDomainArg(env, info, 1, "note", sonare_c_detail::kMidiDataByteDomain,
+                                      &note)) {
     return env.Undefined();
   }
   return NullableString(env, sonare_midi_gm2_drum_name(bank_lsb, note));
@@ -214,7 +228,9 @@ Napi::Value MidiCcName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int controller = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "controller", &controller)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "controller",
+                                      sonare_c_detail::kMidiDataByteDomain, &controller))
+    return env.Undefined();
   return NullableString(env, sonare_midi_cc_name(controller));
   SONARE_NODE_CATCH(env)
 }
@@ -232,7 +248,9 @@ Napi::Value MidiPerNoteControllerName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   int index = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "index", &index)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "index",
+                                      sonare_c_detail::kMidiPerNoteControllerIndexDomain, &index))
+    return env.Undefined();
   return NullableString(env, sonare_midi_per_note_controller_name(index));
   SONARE_NODE_CATCH(env)
 }
@@ -381,7 +399,7 @@ Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
                                                        bindings.size(), &event, &point);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
-    Napi::RangeError::New(env, "invalid MIDI CC breakpoint arguments").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   Napi::Object out = Napi::Object::New(env);
@@ -429,7 +447,7 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
       sonare_node::node_narrow_float(env, info[2], "unitValue"), group, ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
-    Napi::RangeError::New(env, "invalid MIDI param-to-CC arguments").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return sonare_node::MidiEventToObject(env, event);
