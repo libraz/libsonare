@@ -212,15 +212,18 @@ def _reachable(
 def _keyword(param: str, entry: str, spelled: dict[tuple[str, str], str]) -> str:
     """The caller's spelling of a row's subject.
 
-    A member of a struct argument is a keyword of its own; a member of an array element
-    keeps its path from the first indexed container (``originals[].source_id``), the
-    spelling a facade refusal takes once its index is written empty.
+    A member of a struct argument is a keyword of its own; an array element or a member of
+    one keeps its path from the first indexed container (``levels[]``,
+    ``originals[].source_id``), the spelling a facade refusal takes once its index is
+    written empty.
     """
     path = param.split(".")
     first = next((i for i, part in enumerate(path) if part.endswith("[]")), None)
-    if first is None or first == len(path) - 1:
+    if first is None:
+        return spelled.get((entry, path[-1]), path[-1])
+    if first == len(path) - 1:
         subject = path[-1].removesuffix("[]")
-        return spelled.get((entry, subject), subject)
+        return spelled.get((entry, subject), subject) + "[]"
     return ".".join(path[first:])
 
 

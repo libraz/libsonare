@@ -52,6 +52,12 @@ class ReachableRowsTest(unittest.TestCase):
         table = gen.rows(domains, {}, reached, taken={}, unbound={("project_bounce", "channel")})
         self.assertEqual(list(table), [("Project.bounce", "articulations[].channel")])
 
+    def test_an_array_element_keeps_its_brackets(self) -> None:
+        domains = [_row("waveform_peak_pyramid", "samples_per_bucket_levels[]", 1, None)]
+        reached = {"waveform_peak_pyramid": frozenset({"waveform_peak_pyramid"})}
+        table = gen.rows(domains, {}, reached, taken={}, unbound=set())
+        self.assertEqual(list(table), [("waveform_peak_pyramid", "samples_per_bucket_levels[]")])
+
     def test_a_dropped_row_does_not_split_a_reachable_one(self) -> None:
         reached = {"downmix": frozenset({"downmix", "downmix_plan"})}
         domains = [
