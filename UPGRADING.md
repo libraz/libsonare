@@ -905,6 +905,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareDeclipConfig` | gains int32_t link_channels at the tail, 0 by default; values other than 0 and 1 are refused on every entry and 1 on the mono entry point; recompile against the 2.0 header |
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `sonare_mastering_insert_param_names` | Pass a declared insert name. An undeclared name no longer returns an empty success. sonare_mastering_insert_param_names returns NULL and sets SONARE_ERROR_INVALID_PARAMETER. sonare_mastering_insert_param_info returns that error and leaves out_json NULL. Both report "unknown insert processor: <id>", with " (renamed to <current id>)" appended for a retired id. |
 
 ### C: Realtime engine, synthesis, MIDI and playback
 

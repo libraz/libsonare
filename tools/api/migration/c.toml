@@ -291,6 +291,14 @@ test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descri
 
 [[entry]]
 kind = "function"
+old = "sonare_mastering_insert_param_names"
+changed = "Pass a declared insert name. An undeclared name no longer returns an empty success. sonare_mastering_insert_param_names returns NULL and sets SONARE_ERROR_INVALID_PARAMETER. sonare_mastering_insert_param_info returns that error and leaves out_json NULL. Both report \"unknown insert processor: <id>\", with \" (renamed to <current id>)\" appended for a retired id."
+domain = "mastering"
+rule = "individual"
+test = "tests/api/metadata_and_midi_loss_test.cpp::C insert metadata refuses an undeclared insert"
+
+[[entry]]
+kind = "function"
 old = "sonare_mastering_insert_param_info_at_rate"
 removed = "call sonare_mastering_insert_param_info, which takes the sample rate"
 domain = "mastering"
