@@ -854,7 +854,7 @@ SonareError probe_apply_processor_stereo(const std::string& param, double value)
 }
 
 SonareMasteringParam profile_param(const std::string& param, double value) {
-  if (is_param(param, "hop_length")) return {"hopLength", value};
+  if (is_param(param, "params.hopLength")) return {"hopLength", value};
   return {"nFft", value};
 }
 
@@ -1049,7 +1049,7 @@ double mastering_inside_value(const NumericDomainRow& row) {
   if (entry == "stream_analyzer_create" && param == "config.n_fft") return 2048.0;
   if (entry == "mastering_repair_noise_band_bins") return param == "n_fft" ? 2048.0 : kAnalysisRate;
   if (param == "config.n_fft" && starts_with(entry, "mastering_repair_")) return 2048.0;
-  if (starts_with(entry, "mastering_audio_profile")) return param == "n_fft" ? 2048.0 : 512.0;
+  if (starts_with(entry, "mastering_audio_profile")) return param == "params.nFft" ? 2048.0 : 512.0;
   return lowest_inside_value(row);
 }
 

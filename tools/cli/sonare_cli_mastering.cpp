@@ -2,7 +2,9 @@
 #include <cctype>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 #include "sonare_cli.h"
@@ -737,6 +739,21 @@ int cmd_mastering_profile(const CliArgs& args, const Audio& audio) {
   char* json = nullptr;
   const SonareError err = sonare_mastering_audio_profile(
       audio.data(), audio.size(), audio.sample_rate(), params.data(), params.size(), &json);
+  if (err == SONARE_ERROR_INVALID_PARAMETER && sonare_last_refusal_subject_count() == 2 &&
+      std::string_view(sonare_last_refusal_subject(1)) == "sample_rate") {
+    const std::string_view subject = sonare_last_refusal_subject(0);
+    if (subject == "params.nFft" || subject == "params.hopLength") {
+      const std::string option = "--params " + std::string(subject.substr(sizeof("params.") - 1));
+      const char* subjects[] = {option.c_str(), "the input file's sample rate"};
+      char* rendered = nullptr;
+      if (sonare_last_refusal_render(subjects, nullptr, 2, SONARE_PRESENCE_SPELLING_C, &rendered) ==
+          SONARE_OK) {
+        const std::unique_ptr<char, decltype(&sonare_free_string)> message(rendered,
+                                                                           sonare_free_string);
+        throw SonareException(static_cast<ErrorCode>(err), message.get());
+      }
+    }
+  }
   return print_c_api_json(err, json);
 }
 

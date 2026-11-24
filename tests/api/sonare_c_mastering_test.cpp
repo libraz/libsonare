@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <climits>
 #include <string>
 #include <utility>
 
@@ -11,6 +12,7 @@
 #include "c_api/sonare_c_last_refusal.h"
 #include "c_api/sonare_c_mastering_helpers.h"
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
@@ -920,6 +922,67 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
       REQUIRE(std::strlen(json) > 2);
       sonare_free_string(json);
     }
+  }
+}
+
+TEST_CASE("mastering profile rescale relations use C caller names",
+          "[c_api][mastering][rescale-boundary]") {
+  constexpr int kHighRate = 96000;
+  constexpr int kReferenceRate = 48000;
+  constexpr int kHopPastHalfInt = INT_MAX / 2 + 1;
+  const std::array<float, 1> samples{0.125f};
+
+  const auto check_refusal = [&](bool stereo, const char* key, double value,
+                                 const char* expected_message) {
+    const SonareMasteringParam params[] = {{key, value}};
+    char sentinel = 'x';
+    char* json = &sentinel;
+    const SonareError error =
+        stereo ? sonare_mastering_audio_profile_stereo(samples.data(), samples.data(),
+                                                       samples.size(), kHighRate, params, 1, &json)
+               : sonare_mastering_audio_profile(samples.data(), samples.size(), kHighRate, params,
+                                                1, &json);
+    CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == expected_message);
+    CHECKED_IF(sonare_last_refusal_subject_count() == 2) {
+      CHECK(std::string(sonare_last_refusal_subject(0)) == std::string("params.") + key);
+      CHECK(std::string(sonare_last_refusal_subject(1)) == "sample_rate");
+    }
+    CHECK(json == nullptr);
+    if (json != nullptr && json != &sentinel) sonare_free_string(json);
+  };
+
+  SECTION("mono and stereo refuse an oversized rescaled FFT under nFft") {
+    const std::string message = "params.nFft rescaled to sample_rate must fit the largest FFT size";
+    check_refusal(false, "nFft", sonare::kMaxStftNFft, message.c_str());
+    check_refusal(true, "nFft", sonare::kMaxStftNFft, message.c_str());
+  }
+
+  SECTION("mono and stereo refuse an oversized rescaled hop under hopLength") {
+    const std::string message =
+        "params.hopLength rescaled to sample_rate must fit the largest hop length";
+    check_refusal(false, "hopLength", kHopPastHalfInt, message.c_str());
+    check_refusal(true, "hopLength", kHopPastHalfInt, message.c_str());
+  }
+
+  SECTION("the largest reference windows remain accepted at their reference rate") {
+    const SonareMasteringParam params[] = {
+        {"nFft", static_cast<double>(sonare::kMaxStftNFft)},
+        {"hopLength", static_cast<double>(kHopPastHalfInt)},
+    };
+    char* mono_json = nullptr;
+    REQUIRE(sonare_mastering_audio_profile(samples.data(), samples.size(), kReferenceRate, params,
+                                           2, &mono_json) == SONARE_OK);
+    REQUIRE(mono_json != nullptr);
+    sonare_free_string(mono_json);
+
+    char* stereo_json = nullptr;
+    REQUIRE(sonare_mastering_audio_profile_stereo(samples.data(), samples.data(), samples.size(),
+                                                  kReferenceRate, params, 2,
+                                                  &stereo_json) == SONARE_OK);
+    REQUIRE(stereo_json != nullptr);
+    sonare_free_string(stereo_json);
   }
 }
 

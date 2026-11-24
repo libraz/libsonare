@@ -8,6 +8,10 @@
 
 #include "sonare_cli.h"
 
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+#include "mastering/assistant/audio_profile.h"
+#endif
+
 #ifdef SONARE_WITH_MIXING
 mixing::PanMode parse_pan_mode_option(const std::string& value) {
   // The scene JSON's pan mode tokens; --pan-mode spells each in kebab-case.
@@ -515,17 +519,36 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   const std::vector<std::string> entries = args.get_string_list("input");
   const int sample_rate = args.get_int("sample-rate", kCliMixerSampleRate);
 
-  auto params = parse_mastering_params(args.get_string("params"));
+  const auto params = parse_mastering_params(args.get_string("params"));
+  auto config = mixing::assistant::mix_assistant_config_from_params(params.data(), params.size());
+  // The mixer rate is known before auto tempo or track decoding reads input.
+  if (args.has("sample-rate") && is_supported_sample_rate(sample_rate)) {
+    mastering::assistant::AudioProfileConfig profile;
+    profile.n_fft = config.n_fft;
+    profile.hop_length = config.hop_length;
+    try {
+      (void)mastering::assistant::profile_stft_config(profile, sample_rate);
+    } catch (const SonareParameterRefusal& refusal) {
+      const auto shown = refusal.respelled(
+          refusal.code(),
+          [](const std::string& subject) {
+            if (subject == "n_fft") return std::string("--params nFft");
+            if (subject == "hop_length") return std::string("--params hopLength");
+            if (subject == "sample_rate") return std::string("--sample-rate");
+            return subject;
+          },
+          true);
+      throw CliUsageError(shown.what());
+    }
+  }
   std::optional<AssistantTrack> first_track;
   if (args.has("tempo-bpm")) {
     const std::string tempo_text = args.get_string("tempo-bpm");
     if (const auto tempo = resolve_assistant_tempo(tempo_text, entries.front(), &first_track)) {
-      params.push_back({"tempoBpm", *tempo});
+      const mastering::api::Param param{"tempoBpm", *tempo};
+      config.tempo_bpm = mixing::assistant::mix_assistant_config_from_params(&param, 1).tempo_bpm;
     }
   }
-  const auto config =
-      mixing::assistant::mix_assistant_config_from_params(params.data(), params.size());
-
   std::vector<AssistantTrack> storage;
   storage.reserve(entries.size());
   for (const std::string& entry : entries) {

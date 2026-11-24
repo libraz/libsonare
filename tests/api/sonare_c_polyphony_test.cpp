@@ -911,4 +911,50 @@ TEST_CASE("reattack_ratio is refused at or below 1 and when infinite; NaN is not
   }
 }
 
+TEST_CASE("polyphony rescale relations use C config field names",
+          "[c_api][polyphony][rescale-boundary]") {
+  const std::vector<float> samples = chord();
+  constexpr int kHighRate = 96000;
+  constexpr int kControlRate = 48000;
+
+  const auto check_refusal = [&](bool n_fft_relation) {
+    SonarePolyphonicConfig config = initialized_config();
+    const char* expected_subject = nullptr;
+    const char* expected_message = nullptr;
+    if (n_fft_relation) {
+      config.n_fft = sonare::kMaxStftNFft;
+      expected_subject = "config.n_fft";
+      expected_message = "config.n_fft rescaled to sample_rate must fit the largest FFT size";
+    } else {
+      config.hop_length = std::numeric_limits<int32_t>::max() / 2 + 1;
+      expected_subject = "config.hop_length";
+      expected_message =
+          "config.hop_length rescaled to sample_rate must fit the largest hop length";
+    }
+
+    SonarePolyphonicAnalysis seeded{};
+    SonarePolyphonicAnalysis* out = &seeded;
+    REQUIRE(sonare_polyphonic_analyze(samples.data(), samples.size(), kHighRate, &config, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) == expected_message);
+    REQUIRE(sonare_last_refusal_subject_count() == 2);
+    REQUIRE(std::string(sonare_last_refusal_subject(0)) == expected_subject);
+    REQUIRE(std::string(sonare_last_refusal_subject(1)) == "sample_rate");
+    REQUIRE(out == nullptr);
+  };
+
+  SECTION("FFT size relation reports config.n_fft") { check_refusal(true); }
+  SECTION("hop relation reports config.hop_length") { check_refusal(false); }
+
+  SECTION("ordinary framing at 48 kHz remains accepted") {
+    SonarePolyphonicConfig config = initialized_config();
+    SonarePolyphonicAnalysis* out = nullptr;
+    REQUIRE(sonare_polyphonic_analyze(samples.data(), samples.size(), kControlRate, &config,
+                                      &out) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    sonare_polyphonic_analysis_destroy(out);
+  }
+}
+
 #endif  // SONARE_WITH_PITCH_EDITOR

@@ -115,12 +115,14 @@ SonareError sonare_mixing_assistant_suggest(
 
   SONARE_C_TRY
   const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
-  const auto config = assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
+  const auto config = sonare::util::check::under_member("params", [&] {
+    return assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
+  });
   std::vector<std::vector<float>> resampled;
   const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
                                    track_sample_rates, input_count, sample_rate, resampled);
   constexpr std::array<CName, 2> kProfileParamNames{
-      {{"n_fft", "nFft"}, {"hop_length", "hopLength"}}};
+      {{"n_fft", "params.nFft"}, {"hop_length", "params.hopLength"}}};
   const auto result =
       with_c_names(kProfileParamNames, [&] { return assistant::suggest_scene(tracks, config); });
   *json_out = copy_string(assistant::mix_assistant_result_to_json(result));

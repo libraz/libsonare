@@ -414,8 +414,9 @@ TEST_CASE("Track profile params reject negative or non-finite minimum duration",
 
 TEST_CASE("the mixing-assistant C entry names an FFT-size rescaling refusal",
           "[mixing][assistant][c_api][analysis_rate]") {
-  check_c_assistant_geometry_at_rates("nFft", static_cast<double>(sonare::kMaxStftNFft),
-                                      "nFft rescaled to sample_rate must fit the largest FFT size");
+  check_c_assistant_geometry_at_rates(
+      "nFft", static_cast<double>(sonare::kMaxStftNFft),
+      "params.nFft rescaled to sample_rate must fit the largest FFT size");
 }
 
 TEST_CASE("the mixing-assistant C entry names a hop-length rescaling refusal",
@@ -424,7 +425,26 @@ TEST_CASE("the mixing-assistant C entry names a hop-length rescaling refusal",
       static_cast<double>(std::numeric_limits<int>::max() / 2 + 1);
   check_c_assistant_geometry_at_rates(
       "hopLength", first_source_hop_past_96_khz_limit,
-      "hopLength rescaled to sample_rate must fit the largest hop length");
+      "params.hopLength rescaled to sample_rate must fit the largest hop length");
+}
+
+TEST_CASE("the mixing-assistant C entry roots a params refusal at params",
+          "[mixing][assistant][c_api][analysis_rate]") {
+  const std::vector<float> samples(256, 0.125f);
+  const float* input_left[] = {samples.data()};
+  const char* track_ids[] = {"track"};
+  const std::size_t track_lengths[] = {samples.size()};
+  int sample_rate = kSampleRate;
+  const SonareMasteringParam params[] = {{"nFft", 3.0}};
+  char* json_out = nullptr;
+  CHECK(sonare_mixing_assistant_suggest(input_left, nullptr, track_ids, nullptr, track_lengths,
+                                        &sample_rate, 1, sample_rate, params, 1,
+                                        &json_out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(json_out == nullptr);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "params.nFft must be an even integer in [2, 524288]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "params.nFft");
 }
 
 TEST_CASE("Track profile reports degenerate input without throwing", "[mixing][assistant]") {

@@ -707,6 +707,44 @@ TEST_CASE("CLI auxiliary outputs are atomic", "[cli][atomic-output]") {
   }
 #endif
 }
+
+TEST_CASE("CLI mastering-profile refuses STFT geometry that cannot rescale to the input rate",
+          "[cli][mastering][rescale-boundary]") {
+  const std::string input_96k = unique_temp_path("_profile_96k.wav");
+  const std::string input_48k = unique_temp_path("_profile_48k.wav");
+  create_test_wav(input_96k, 0.02f, 440.0f, 96000);
+  create_test_wav(input_48k, 0.02f, 440.0f, 48000);
+
+  const auto run = [](const std::string& input, const std::string& params) {
+    return exec_command_split(CLI + " mastering-profile " + input + " --params '" + params +
+                              "' -q");
+  };
+  const std::vector<std::pair<std::string, std::string>> refusals = {
+      {"nFft=524288",
+       "--params nFft rescaled to the input file's sample rate must fit the largest FFT size"},
+      {"hopLength=1073741824",
+       "--params hopLength rescaled to the input file's sample rate must fit the largest hop "
+       "length"},
+  };
+  for (const auto& [params, expected] : refusals) {
+    CAPTURE(params);
+    const SplitResult refused = run(input_96k, params);
+    INFO(refused.err);
+    CHECK(refused.exit_code == 3);
+    CHECK(refused.out.empty());
+    CHECK(refused.err == "\nError: " + expected + "\n");
+  }
+
+  // At the profile's 48 kHz reference rate, the same maximum FFT and large hop
+  // are in-domain; the profile result is the control for both relations.
+  const SplitResult control = run(input_48k, "nFft=524288,hopLength=1073741824");
+  INFO(control.err);
+  REQUIRE(control.exit_code == 0);
+  CHECK_FALSE(control.out.empty());
+  CHECK(sonare::util::json::parse_strict(control.out).is_object());
+  std::remove(input_96k.c_str());
+  std::remove(input_48k.c_str());
+}
 #endif
 
 TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][mastering]") {
@@ -2001,6 +2039,74 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
       exec_command(CLI + " suggest-mix --input " + missing + " --params tempoBpm=0,nFft=1000");
   INFO(output);
   CHECK(code == 4);
+}
+
+TEST_CASE("CLI suggest-mix checks STFT rescaling against the selected rate before reading inputs",
+          "[cli][mixing][rescale-boundary]") {
+  const std::string missing = "/nonexistent/rescale-boundary-input.wav";
+  const std::string scene_fft = unique_temp_path("_rescale_fft_scene.json");
+  const std::string scene_hop = unique_temp_path("_rescale_hop_scene.json");
+  std::remove(scene_fft.c_str());
+  std::remove(scene_hop.c_str());
+
+  struct Refusal {
+    std::string params;
+    std::string message;
+    bool auto_tempo = false;
+    std::string scene;
+  };
+  const std::vector<Refusal> refusals = {
+      {"nFft=524288", "--params nFft rescaled to --sample-rate must fit the largest FFT size",
+       false, scene_fft},
+      {"hopLength=1073741824",
+       "--params hopLength rescaled to --sample-rate must fit the largest hop length", true,
+       scene_hop},
+  };
+  for (const Refusal& row : refusals) {
+    CAPTURE(row.params);
+    std::string command = CLI + " suggest-mix --input " + missing +
+                          " --sample-rate 96000 --params '" + row.params + "'";
+    if (row.auto_tempo) command += " --tempo-bpm auto";
+    command += " --scene-out " + row.scene + " --json -q";
+    const SplitResult refused = exec_command_split(command);
+    INFO(refused.err << refused.out);
+    CHECK(refused.exit_code == 2);
+    CHECK(refused.out.empty());
+    CHECK(refused.err == "\nError: " + row.message + "\n");
+    CHECK_FALSE(std::ifstream(row.scene).good());
+  }
+
+  const std::string input_48k = unique_temp_path("_suggest_rescale_48k.wav");
+  const std::string input_96k = unique_temp_path("_suggest_rescale_96k.wav");
+  const std::string scene_48k = unique_temp_path("_suggest_rescale_48k_scene.json");
+  const std::string scene_default = unique_temp_path("_suggest_rescale_default_scene.json");
+  create_test_wav(input_48k, 0.02f, 440.0f, 48000);
+  create_test_wav(input_96k, 0.02f, 440.0f, 96000);
+
+  // These same values fit at the assistant's documented 48 kHz reference rate.
+  const std::string in_domain = "nFft=524288,hopLength=1073741824";
+  const SplitResult rate_control = exec_command_split(
+      CLI + " suggest-mix --input " + input_48k + " --sample-rate 48000 --params '" + in_domain +
+      "' --scene-out " + scene_48k + " --json -q");
+  INFO(rate_control.err);
+  REQUIRE(rate_control.exit_code == 0);
+  CHECK_FALSE(rate_control.out.empty());
+  CHECK(std::ifstream(scene_48k).good());
+
+  // Without --sample-rate the CLI uses its fixed 48 kHz default, not the
+  // source file's 96 kHz rate; otherwise these values would fail to rescale.
+  const SplitResult default_rate_control =
+      exec_command_split(CLI + " suggest-mix --input " + input_96k + " --params '" + in_domain +
+                         "' --scene-out " + scene_default + " --json -q");
+  INFO(default_rate_control.err);
+  REQUIRE(default_rate_control.exit_code == 0);
+  CHECK_FALSE(default_rate_control.out.empty());
+  CHECK(std::ifstream(scene_default).good());
+
+  for (const std::string& path :
+       {scene_fft, scene_hop, input_48k, input_96k, scene_48k, scene_default}) {
+    std::remove(path.c_str());
+  }
 }
 #endif
 

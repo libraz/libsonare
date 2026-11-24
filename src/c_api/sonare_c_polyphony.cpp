@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -253,7 +254,11 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         auto handle = std::make_unique<SonarePolyphonicAnalysis>();
-        handle->analysis = sonare::editing::polyphony::analyze_polyphonic(audio, resolved);
+        constexpr std::array<CName, 2> kGeometryNames{
+            {{"n_fft", "config.n_fft"}, {"hop_length", "config.hop_length"}}};
+        handle->analysis = with_c_names(kGeometryNames, [&] {
+          return sonare::editing::polyphony::analyze_polyphonic(audio, resolved);
+        });
         *out = handle.release();
         return SONARE_OK;
       });

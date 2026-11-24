@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -19,6 +20,13 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 using namespace sonare_c_mastering_detail;
+
+namespace {
+
+constexpr std::array<CName, 2> kAudioProfileParamNames{
+    {{"n_fft", "params.nFft"}, {"hop_length", "params.hopLength"}}};
+
+}  // namespace
 
 SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
                                                const SonareStreamingPlatform* platforms,
@@ -134,8 +142,10 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
 
   SONARE_C_TRY
   const auto config = to_audio_profile_config(params, param_count);
-  const auto profile =
-      sonare::mastering::assistant::analyze_audio_profile(samples, length, sample_rate, config);
+  const auto profile = with_c_names(kAudioProfileParamNames, [&] {
+    return sonare::mastering::assistant::analyze_audio_profile(samples, length, sample_rate,
+                                                               config);
+  });
   *json_out = copy_string(sonare::mastering::assistant::audio_profile_to_json(profile));
   return SONARE_OK;
   SONARE_C_CATCH
@@ -257,8 +267,10 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
   SONARE_C_TRY
   const auto config = to_audio_profile_config(params, param_count);
   const std::vector<float> interleaved = interleave_pair(left, right, length);
-  const auto profile = sonare::mastering::assistant::analyze_audio_profile_interleaved(
-      interleaved.data(), length, 2, sample_rate, config);
+  const auto profile = with_c_names(kAudioProfileParamNames, [&] {
+    return sonare::mastering::assistant::analyze_audio_profile_interleaved(
+        interleaved.data(), length, 2, sample_rate, config);
+  });
   *json_out = copy_string(sonare::mastering::assistant::audio_profile_to_json(profile));
   return SONARE_OK;
   SONARE_C_CATCH
