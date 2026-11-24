@@ -103,9 +103,8 @@ inline bool requires_presence(const std::string& pattern) {
 /// @brief A refusal of one or more parameters that carries their subject keys as data.
 /// @details The layer that knows where a parameter sits in a document, or how its caller spells
 ///          it, rethrows the refusal with each subject rewritten. what() reads
-///          "<subject> <predicate>", "unknown key <subject>" with either " (renamed to
-///          <renamed_to>)" or " (expected <expected>)", or a relation text naming every subject it
-///          constrains.
+///          "<subject> <predicate>", "unknown key <subject>" with " (expected <expected>)" when
+///          the accepted keys are known, or a relation text naming every subject it constrains.
 class SonareParameterRefusal : public SonareException {
  public:
   /// @brief WrongType reads as a Predicate does. It and UnknownKey are shape errors, refusing the
@@ -117,15 +116,15 @@ class SonareParameterRefusal : public SonareException {
   static SonareParameterRefusal predicate(ErrorCode code, const std::string& subject,
                                           const std::string& predicate) {
     return SonareParameterRefusal(code, Form::Predicate, {subject}, predicate, std::string(),
-                                  std::string(), false);
+                                  false);
   }
 
   /// @brief A refusal reading "<subject> <predicate>" with a machine-readable reason.
   static SonareParameterRefusal predicate_with_reason(ErrorCode code, const std::string& subject,
                                                       const std::string& predicate,
                                                       ErrorReason reason) {
-    return SonareParameterRefusal(code, Form::Predicate, {subject}, predicate, std::string(),
-                                  std::string(), false, reason);
+    return SonareParameterRefusal(code, Form::Predicate, {subject}, predicate, std::string(), false,
+                                  reason);
   }
 
   /// @brief A refusal reading "<subject> <predicate>" where @p predicate states @p domain.
@@ -141,25 +140,24 @@ class SonareParameterRefusal : public SonareException {
   static SonareParameterRefusal wrong_type(ErrorCode code, const std::string& subject,
                                            const std::string& predicate) {
     return SonareParameterRefusal(code, Form::WrongType, {subject}, predicate, std::string(),
-                                  std::string(), false);
+                                  false);
   }
 
-  /// @brief A refusal reading "unknown key <subject>", naming the successor when @p renamed_to is
-  ///        set and otherwise the keys the reader takes when @p expected is.
+  /// @brief A refusal reading "unknown key <subject>", listing the keys the reader takes when
+  ///        @p expected is set.
   /// @param expected The accepted sibling keys as one comma-separated list. They are leaf names
   ///        already in the caller's spelling, so a respelling leaves them as they are.
   static SonareParameterRefusal unknown(ErrorCode code, const std::string& subject,
-                                        const std::string& renamed_to = std::string(),
                                         const std::string& expected = std::string()) {
-    return SonareParameterRefusal(code, Form::UnknownKey, {subject}, std::string(), renamed_to,
-                                  expected, false);
+    return SonareParameterRefusal(code, Form::UnknownKey, {subject}, std::string(), expected,
+                                  false);
   }
 
   /// @brief A refusal relating several parameters; @p text writes subject @c i as "{i}".
   static SonareParameterRefusal relation(ErrorCode code, std::vector<std::string> subjects,
                                          const std::string& text) {
     return SonareParameterRefusal(code, Form::Relation, std::move(subjects), text, std::string(),
-                                  std::string(), false);
+                                  false);
   }
 
   Form form() const { return form_; }
@@ -176,7 +174,6 @@ class SonareParameterRefusal : public SonareException {
   /// @brief The predicate, or a relation's text with its "{i}" placeholders; either may carry
   ///        presence tokens, which what() renders as C spells them.
   const std::string& predicate() const { return predicate_; }
-  const std::string& renamed_to() const { return renamed_to_; }
   /// @brief The accepted keys an unknown-key refusal lists, or empty.
   const std::string& expected() const { return expected_; }
   /// @brief The numeric domain the predicate states, when it states one.
@@ -186,7 +183,7 @@ class SonareParameterRefusal : public SonareException {
 
   /// @brief The text what() reads with its presence tokens rendered in @p spelling.
   std::string text(PresenceSpelling spelling) const {
-    return compose(form_, subjects_, predicate_, renamed_to_, expected_, spelling);
+    return compose(form_, subjects_, predicate_, expected_, spelling);
   }
 
   /// @brief This refusal marked as already in the caller's spelling.
@@ -194,16 +191,15 @@ class SonareParameterRefusal : public SonareException {
     return respelled(code(), [](const std::string& subject) { return subject; }, true);
   }
 
-  /// @brief This refusal with every subject (and rename target) passed through @p spell.
+  /// @brief This refusal with every subject passed through @p spell.
   /// @param caller_spelled Whether the result is in the caller's spelling; once set it stays set.
   template <typename Spell>
   SonareParameterRefusal respelled(ErrorCode code, const Spell& spell, bool caller_spelled) const {
     std::vector<std::string> subjects;
     subjects.reserve(subjects_.size());
     for (const std::string& subject : subjects_) subjects.push_back(spell(subject));
-    SonareParameterRefusal refusal(code, form_, std::move(subjects), predicate_,
-                                   renamed_to_.empty() ? std::string() : spell(renamed_to_),
-                                   expected_, caller_spelled_ || caller_spelled,
+    SonareParameterRefusal refusal(code, form_, std::move(subjects), predicate_, expected_,
+                                   caller_spelled_ || caller_spelled,
                                    code == this->code() ? reason() : std::nullopt);
     refusal.domain_ = domain_;
     return refusal;
@@ -211,29 +207,25 @@ class SonareParameterRefusal : public SonareException {
 
  private:
   SonareParameterRefusal(ErrorCode code, Form form, std::vector<std::string> subjects,
-                         std::string predicate, std::string renamed_to, std::string expected,
-                         bool caller_spelled, std::optional<ErrorReason> reason = std::nullopt)
-      : SonareException(
-            code, compose(form, subjects, predicate, renamed_to, expected, PresenceSpelling::kC),
-            reason),
+                         std::string predicate, std::string expected, bool caller_spelled,
+                         std::optional<ErrorReason> reason = std::nullopt)
+      : SonareException(code, compose(form, subjects, predicate, expected, PresenceSpelling::kC),
+                        reason),
         form_(form),
         subjects_(std::move(subjects)),
         predicate_(std::move(predicate)),
-        renamed_to_(std::move(renamed_to)),
         expected_(std::move(expected)),
         caller_spelled_(caller_spelled) {}
 
   static std::string compose(Form form, const std::vector<std::string>& subjects,
-                             const std::string& predicate, const std::string& renamed_to,
-                             const std::string& expected, PresenceSpelling spelling) {
+                             const std::string& predicate, const std::string& expected,
+                             PresenceSpelling spelling) {
     if (form == Form::Predicate || form == Form::WrongType) {
       return subjects.front() + " " + render(predicate, {}, spelling);
     }
     if (form == Form::UnknownKey) {
       std::string text = "unknown key " + subjects.front();
-      if (!renamed_to.empty()) {
-        text += " (renamed to " + renamed_to + ")";
-      } else if (!expected.empty()) {
+      if (!expected.empty()) {
         text += " (expected " + expected + ")";
       }
       return text;
@@ -271,7 +263,6 @@ class SonareParameterRefusal : public SonareException {
   Form form_;
   std::vector<std::string> subjects_;
   std::string predicate_;
-  std::string renamed_to_;
   std::string expected_;
   bool caller_spelled_;
   std::optional<RefusalDomain> domain_;

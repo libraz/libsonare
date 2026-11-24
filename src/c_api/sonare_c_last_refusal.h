@@ -18,7 +18,7 @@ namespace sonare_c_detail {
 ///        failure was not a SonareParameterRefusal. Cleared together with the last error.
 const sonare::SonareParameterRefusal* last_parameter_refusal() noexcept;
 
-/// @brief Backs sonare_last_refusal_subject_count: the refusal's subjects plus a named successor.
+/// @brief Backs sonare_last_refusal_subject_count: the number of the refusal's subjects.
 size_t last_refusal_subject_count() noexcept;
 
 /// @brief Backs sonare_last_refusal_entry: the refused call's c-entry-name key, or nullptr
@@ -30,8 +30,8 @@ const char* last_refusal_subject(size_t index) noexcept;
 
 /// @brief @p refusal with its subjects replaced by @p subjects, in order, and a predicate's domain
 ///        divided by @p scales[0] (C units per caller unit; NULL means 1).
-/// @throws SonareParameterRefusal(InvalidParameter) on a count other than the refusal's subjects
-///         plus a named successor, a NULL subject, or a scale that is not finite and positive.
+/// @throws SonareParameterRefusal(InvalidParameter) on a count other than the refusal's subjects,
+///         a NULL subject, or a scale that is not finite and positive.
 sonare::SonareParameterRefusal respelled_refusal(const sonare::SonareParameterRefusal& refusal,
                                                  const char* const* subjects, const double* scales,
                                                  size_t subject_count);

@@ -61,9 +61,8 @@ inline std::vector<sonare::midi::PartRigStage> read_part_rig_inserts(const char*
     for (const auto& entry : item.as_object()) {
       const std::string& key = entry.first;
       if (key == "processor" || key == "params" || json::is_annotation_key(key)) continue;
-      throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter,
-                                                    schema::child_path(at, key), std::string(),
-                                                    "processor, params")
+      throw sonare::SonareParameterRefusal::unknown(
+          sonare::ErrorCode::InvalidParameter, schema::child_path(at, key), "params, processor")
           .as_caller_spelled();
     }
     const std::string processor_at = schema::child_path(at, "processor");

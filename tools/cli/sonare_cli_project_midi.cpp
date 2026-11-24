@@ -91,6 +91,7 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   }
 
   float tempo_bpm = 0.0f;
+  SonareProjectAutoTempoResult detected{};
   if (tempo_given) {
     tempo_bpm = args.get_float("tempo-bpm", 0.0f);
     SonareProjectTempoSegment segment{};
@@ -105,11 +106,12 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     SonareProjectTempoOptions options;
     sonare_project_tempo_options_init(&options);
     err = sonare_project_auto_tempo(handle.ptr, audio.data(), audio.size(), audio.sample_rate(),
-                                    &options, 0, 0, &tempo_bpm);
+                                    &options, 0, 0, &detected);
     if (err != SONARE_OK) {
       project_report_error("detect tempo", err);
       return project_exit_code(err);
     }
+    tempo_bpm = detected.bpm;
   }
 
   // PPQ coordinates are beats, so the take's length in beats is what the clip
@@ -194,14 +196,22 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   }
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("output", args.output_file)
         .kv("note_count", note_count)
         .kv("tempo_bpm", tempo_bpm)
-        .kv("bytes", len)
-        .end_object()
-        .print();
+        .kv("bytes", len);
+    if (!tempo_given) {
+      json.kv("tempo_confidence", detected.bpm_confidence)
+          .key("time_signature")
+          .begin_object()
+          .kv("numerator", detected.time_signature.numerator)
+          .kv("denominator", detected.time_signature.denominator)
+          .kv("confidence", detected.time_signature.confidence)
+          .end_object();
+    }
+    json.end_object().print();
   } else if (!args.quiet) {
     std::cout << color::green << "Transcribed " << note_count << " notes at " << std::fixed
               << std::setprecision(2) << tempo_bpm << std::defaultfloat << " BPM to "

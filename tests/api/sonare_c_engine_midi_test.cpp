@@ -114,9 +114,10 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   REQUIRE(sonare_engine_set_graph(engine, &graph) == SONARE_OK);
 
   REQUIRE(bind_cc7(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
-  size_t binding_count = 0;
-  REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
-  REQUIRE(binding_count == 1);
+  SonareMidiCcBindingList bindings{};
+  REQUIRE(sonare_engine_midi_cc_bindings(engine, &bindings) == SONARE_OK);
+  CHECK(bindings.count == 1);
+  sonare_free_midi_cc_binding_list(&bindings);
 
   std::array<float, 64> audio{};
   audio.fill(1.0f);
@@ -126,8 +127,9 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   REQUIRE(audio[0] < 0.01f);
 
   REQUIRE(sonare_engine_clear_midi_cc_bindings(engine) == SONARE_OK);
-  REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
-  REQUIRE(binding_count == 0);
+  REQUIRE(sonare_engine_midi_cc_bindings(engine, &bindings) == SONARE_OK);
+  CHECK(bindings.count == 0);
+  sonare_free_midi_cc_binding_list(&bindings);
 
   SonareMidiCcBinding high_resolution{};
   high_resolution.cc_number = 1;
@@ -138,8 +140,9 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   high_resolution.min_value = -60.0f;
   high_resolution.max_value = 0.0f;
   REQUIRE(sonare_engine_bind_midi_cc(engine, &high_resolution) == SONARE_OK);
-  REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
-  REQUIRE(binding_count == 1);
+  REQUIRE(sonare_engine_midi_cc_bindings(engine, &bindings) == SONARE_OK);
+  CHECK(bindings.count == 1);
+  sonare_free_midi_cc_binding_list(&bindings);
 
   audio.fill(1.0f);
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 1, 64, -1) == SONARE_OK);
@@ -239,13 +242,13 @@ TEST_CASE("sonare_engine malformed SoundFont bytes report invalid format", "[c_a
 
   const uint8_t bad_sf2[] = {'n', 'o', 't', ' ', 's', 'f', '2'};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  REQUIRE(sonare_engine_load_soundfont(engine, bad_sf2, sizeof(bad_sf2)) ==
+  REQUIRE(sonare_engine_load_sound_font(engine, bad_sf2, sizeof(bad_sf2)) ==
           SONARE_ERROR_INVALID_FORMAT);
 #else
-  REQUIRE(sonare_engine_load_soundfont(engine, bad_sf2, sizeof(bad_sf2)) ==
+  REQUIRE(sonare_engine_load_sound_font(engine, bad_sf2, sizeof(bad_sf2)) ==
           SONARE_ERROR_NOT_SUPPORTED);
 #endif
-  REQUIRE(sonare_engine_load_soundfont(engine, nullptr, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_load_sound_font(engine, nullptr, 0) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }
@@ -388,7 +391,7 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
   REQUIRE(drained[1].render_frame == 48);
 
   // Overflow telemetry is observable, and a too-small buffer is rejected.
-  size_t dropped = 123;
+  uint64_t dropped = 123;
   REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) == SONARE_OK);
   REQUIRE(dropped == 0);
   REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), 2, &count) ==
@@ -1667,7 +1670,7 @@ TEST_CASE("an SF2 instrument config with a struct_size below sizeof is refused",
   options.total_frames = 64;
   options.block_size = 64;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   SonareSf2InstrumentBinding binding{};
   sonare_sf2_instrument_config_init(&binding.config);
   binding.destination_id = 2;

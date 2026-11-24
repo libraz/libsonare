@@ -466,7 +466,7 @@ std::vector<float> render_project_bounce(const Row& row) {
           SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, midi_track, kDestination) ==
           SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(project, midi_track, "tmidi", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, midi_track, "tmidi", nullptr) == SONARE_OK);
   if (row.clip_gain_fades) {
     REQUIRE(sonare_project_set_clip_gain(project, midi_clip, kMidiClipGain) == SONARE_OK);
     SonareProjectClipFade fade{};
@@ -480,7 +480,7 @@ std::vector<float> render_project_bounce(const Row& row) {
   track_desc.name = "audio";
   uint32_t audio_track = 0;
   REQUIRE(sonare_project_add_track(project, &track_desc, &audio_track) == SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(project, audio_track, "taudio", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, audio_track, "taudio", nullptr) == SONARE_OK);
   const std::vector<float> audio = interleave({audio_plane(0), audio_plane(1)});
   SonareProjectClipDesc clip_desc{};
   clip_desc.track_id = audio_track;
@@ -500,7 +500,6 @@ std::vector<float> render_project_bounce(const Row& row) {
   options.total_frames = kTotalFrames;
   options.block_size = kBlockSize;
   options.num_channels = output_channels(row);
-  options.sample_rate = static_cast<int>(kSampleRate);
   SonareBuiltinInstrumentBinding binding{};
   sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;

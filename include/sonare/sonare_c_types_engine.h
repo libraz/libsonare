@@ -408,11 +408,12 @@ typedef enum SONARE_ENUM_BASE {
 /// Capture state returned by sonare_engine_capture_status.
 typedef struct {
   int64_t captured_frames;        ///< Frames recorded into the capture buffer so far.
-  size_t overflow_count;          ///< Times the capture buffer filled and dropped audio.
+  uint64_t overflow_count;        ///< Legacy per-frame count of audio frames discarded while full.
   int armed;                      ///< Non-zero while capture is armed.
   int punch_enabled;              ///< Non-zero while the punch-in/out window is enabled.
   int source;                     ///< A @ref SonareEngineCaptureSource naming the recorded signal.
   int64_t record_offset_samples;  ///< Capture window shift on the timeline, in samples.
+  uint64_t dropped_frames;        ///< Frames discarded because the capture buffer was full.
 } SonareEngineCaptureStatus;
 
 /// Target loudness sonare_engine_bounce_offline normalizes to when normalize_lufs is set and

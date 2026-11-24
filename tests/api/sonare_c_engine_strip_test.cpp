@@ -2672,4 +2672,90 @@ TEST_CASE("sonare_engine resolves the master fader, pan and width to engine para
 
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("sonare_engine_set_track_strip_json refuses unread insert parameters",
+          "[c_api][engine]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 16, 0) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+
+  const char* invalid = R"({"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain",)"
+                        R"("params":{"gainDB":3}}]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, invalid) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key settings.inserts[0].params.gainDB (expected levelDb)");
+
+  const char* valid = R"({"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain",)"
+                      R"("params":{"levelDb":3}}]})";
+  CHECK(sonare_engine_set_track_strip_json(engine, 10, valid) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_bus_strip_json refuses unread insert parameters", "[c_api][engine]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 16, 0) == SONARE_OK);
+  SonareEngineBus bus[] = {{1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, bus, 1) == SONARE_OK);
+
+  const char* invalid = R"({"id":"1","inserts":[{"slot":"pre","processor":"utility.gain",)"
+                        R"("params":{"gainDB":3}}]})";
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, invalid) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key settings.inserts[0].params.gainDB (expected levelDb)");
+
+  const char* valid = R"({"id":"1","inserts":[{"slot":"pre","processor":"utility.gain",)"
+                      R"("params":{"levelDb":3}}]})";
+  CHECK(sonare_engine_set_bus_strip_json(engine, 1, valid) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_master_strip_json refuses unread insert parameters",
+          "[c_api][engine]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 16, 0) == SONARE_OK);
+
+  const char* invalid = R"({"id":"master","inserts":[{"slot":"pre","processor":"utility.gain",)"
+                        R"("params":{"gainDB":3}}]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, invalid) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key settings.inserts[0].params.gainDB (expected levelDb)");
+
+  const char* valid = R"({"id":"master","inserts":[{"slot":"pre","processor":"utility.gain",)"
+                      R"("params":{"levelDb":3}}]})";
+  CHECK(sonare_engine_set_master_strip_json(engine, valid) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("strip setters keep an insert parameter's structured refusal and its path",
+          "[c_api][engine]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 16, 0) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+
+  const char* wrong_type = R"({"id":"track-10","inserts":[{"slot":"pre",)"
+                           R"("processor":"utility.gain","params":{"levelDb":"loud"}}]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, wrong_type) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "settings.inserts[0].params.levelDb");
+  CHECK(std::string(sonare_last_error_message()).rfind("settings.inserts[0].params.levelDb ", 0) ==
+        0);
+
+  const char* unsupported =
+      R"({"id":"master","inserts":[{"slot":"pre","processor":"effects.gsEfx",)"
+      R"("params":{"typeMsb":127,"typeLsb":127}}]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, unsupported) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "settings.inserts[0].params.typeMsb and settings.inserts[0].params.typeLsb must name a "
+        "supported GS EFX type");
+  sonare_engine_destroy(engine);
+}
 #endif

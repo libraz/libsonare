@@ -39,6 +39,17 @@
 #include "rt/command.h"
 #include "support/alloc_guard.h"
 
+namespace sonare::host {
+
+struct ExternalMidiLossTestAccess {
+  template <size_t Capacity>
+  static void seed(FixedExternalMidiOutputQueue<Capacity>& queue, uint64_t count) {
+    queue.dropped_count_.store(count, std::memory_order_relaxed);
+  }
+};
+
+}  // namespace sonare::host
+
 namespace {
 
 using sonare::host::AudioBufferView;
@@ -635,7 +646,8 @@ TEST_CASE("fixed MIDI I/O clear discards a prior session's queued events", "[hos
   REQUIRE(output.queued_count() == 0);
 }
 
-TEST_CASE("destination-tagged MIDI output queue preserves order, tags, and telemetry", "[host]") {
+TEST_CASE("destination-tagged MIDI output queue preserves order, tags, and telemetry",
+          "[host][loss-tally]") {
   using sonare::host::ExternalMidiRecord;
   using sonare::host::FixedExternalMidiOutputQueue;
 
@@ -644,12 +656,15 @@ TEST_CASE("destination-tagged MIDI output queue preserves order, tags, and telem
   const Ump cc = sonare::midi::make_midi1_control_change(0, 0, 74, 64);
 
   FixedExternalMidiOutputQueue<2> queue;
+  constexpr uint64_t kInitialDrops = std::numeric_limits<uint32_t>::max();
+  sonare::host::ExternalMidiLossTestAccess::seed(queue, kInitialDrops);
   REQUIRE(queue.send(7, MidiEvent{10, on}));
   REQUIRE(queue.send(7, MidiEvent{20, off}));
+  REQUIRE(queue.dropped_count() == kInitialDrops);
   // Capacity 2 is full; the third send overflows and is counted.
   REQUIRE_FALSE(queue.send(9, MidiEvent{30, cc}));
   REQUIRE(queue.pending_count() == 2);
-  REQUIRE(queue.dropped_count() == 1);
+  REQUIRE(queue.dropped_count() == kInitialDrops + 1);
 
   std::array<ExternalMidiRecord, 1> first{};
   REQUIRE(queue.drain(first.data(), first.size()) == 1);

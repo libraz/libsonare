@@ -145,18 +145,9 @@ sonare::SonareParameterRefusal relabel_struct_refusal(const sonare::SonareParame
   return sonare::util::json::schema::relabel_under(e, root, sonare::ErrorCode::InvalidParameter);
 }
 
-namespace {
-
-/// The subjects a binding names to render @p refusal: its own plus a named successor.
-size_t refusal_subject_count(const sonare::SonareParameterRefusal& refusal) {
-  return refusal.subjects().size() + (refusal.renamed_to().empty() ? 0 : 1);
-}
-
-}  // namespace
-
 size_t last_refusal_subject_count() noexcept {
   const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
-  return refusal == nullptr ? 0 : refusal_subject_count(*refusal);
+  return refusal == nullptr ? 0 : refusal->subjects().size();
 }
 
 const char* last_refusal_entry() noexcept {
@@ -169,9 +160,6 @@ const char* last_refusal_subject(size_t index) noexcept {
   if (refusal == nullptr) return nullptr;
   const std::vector<std::string>& subjects = refusal->subjects();
   if (index < subjects.size()) return subjects[index].c_str();
-  if (index == subjects.size() && !refusal->renamed_to().empty()) {
-    return refusal->renamed_to().c_str();
-  }
   return nullptr;
 }
 
@@ -203,7 +191,7 @@ sonare::SonareParameterRefusal respelled_refusal(const sonare::SonareParameterRe
                                                  const char* const* subjects, const double* scales,
                                                  size_t subject_count) {
   namespace check = sonare::util::check;
-  if (subject_count != refusal_subject_count(refusal)) {
+  if (subject_count != refusal.subjects().size()) {
     check::refuse("subject_count", "must equal the refusal's subject count");
   }
   if (subject_count > 0 && subjects == nullptr) check::refuse("subjects", "must not be NULL");

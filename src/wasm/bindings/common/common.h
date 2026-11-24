@@ -327,11 +327,21 @@ inline std::vector<std::string> lastDiagnosticMessages() {
   return messages;
 }
 
+enum class CErrorSubjectMode { kSurface, kDocument };
+
 /// @brief Throws the failure recorded by a C-ABI call that returned NULL
 ///        (a handle, or a descriptor / JSON string): the thread-local code with
 ///        the recorded detail as the message.
 /// @param fallback Code used when the library recorded none (the code reads Ok).
-[[noreturn]] inline void throwLastCError(SonareError fallback = SONARE_ERROR_INVALID_STATE) {
+/// @param subjects Whether to keep caller-spelled document paths verbatim.
+[[noreturn]] inline void throwLastCError(SonareError fallback = SONARE_ERROR_INVALID_STATE,
+                                         CErrorSubjectMode subjects = CErrorSubjectMode::kSurface) {
+  if (subjects == CErrorSubjectMode::kDocument) {
+    const auto* refusal = sonare_c_detail::last_parameter_refusal();
+    if (refusal != nullptr && refusal->caller_spelled()) {
+      throwCEntryRefusal(*refusal);
+    }
+  }
   rethrowLastCRefusal();
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;

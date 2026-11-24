@@ -10,6 +10,11 @@
 
 namespace {
 
+struct OwnedTimeSignatureSegments {
+  SonareProjectTimeSignatureList value{};
+  ~OwnedTimeSignatureSegments() { sonare_free_project_time_signature_list(&value); }
+};
+
 void check_bar_grid_origin(double origin, sonare::transport::TimeSignature preceding_signature) {
   using namespace sonare::transport;
 
@@ -82,10 +87,11 @@ TEST_CASE("a sub-epsilon signature pickup shares the next bar index", "[transpor
       raw_project, &sonare_project_destroy);
   REQUIRE(sonare_project_set_time_signatures(project.get(), segments, 2) == SONARE_OK);
 
+  OwnedTimeSignatureSegments stored_segments;
+  REQUIRE(sonare_project_time_signatures(project.get(), &stored_segments.value) == SONARE_OK);
   std::vector<sonare::transport::TimeSignatureSegment> signatures;
-  for (size_t i = 0; i < 2; ++i) {
-    SonareProjectTimeSignatureSegment stored{};
-    REQUIRE(sonare_project_time_signature_by_index(project.get(), i, &stored) == SONARE_OK);
+  for (size_t i = 0; i < stored_segments.value.count; ++i) {
+    const SonareProjectTimeSignatureSegment& stored = stored_segments.value.items[i];
     signatures.push_back({stored.start_ppq, {stored.numerator, stored.denominator}});
   }
 

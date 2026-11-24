@@ -152,14 +152,6 @@ void RealtimeEngineWasm::clearMidiCcBindings() {
 #endif
 }
 
-size_t RealtimeEngineWasm::midiCcBindingCount() const {
-#if defined(SONARE_WITH_ARRANGEMENT)
-  return engine_.midi_cc_binding_count();
-#else
-  return 0;
-#endif
-}
-
 val RealtimeEngineWasm::midiCcBindings() const {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const std::vector<sonare::midi::CcBinding> bindings = engine_.midi_cc_bindings();
@@ -507,7 +499,6 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
 void registerRealtimeEngineMidiControl(class_<RealtimeEngineWasm>& cls) {
   cls.function("bindMidiCc", &RealtimeEngineWasm::bindMidiCc)
       .function("clearMidiCcBindings", &RealtimeEngineWasm::clearMidiCcBindings)
-      .function("midiCcBindingCount", &RealtimeEngineWasm::midiCcBindingCount)
       .function("midiCcBindings", &RealtimeEngineWasm::midiCcBindings)
       // destinationId first, matching the C ABI's own argument order minus the
       // engine handle -- stated because embind argument order on this surface

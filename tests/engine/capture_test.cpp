@@ -3,7 +3,18 @@
 #include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <thread>
+
+namespace sonare::engine {
+
+struct CaptureLossTestAccess {
+  static void seed(CaptureSink& owner, uint64_t count) {
+    owner.overflow_count_.store(count, std::memory_order_relaxed);
+  }
+};
+
+}  // namespace sonare::engine
 
 TEST_CASE("CaptureSink captures only armed punch range with sample accuracy", "[engine][capture]") {
   std::array<float, 8> in_l{0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
@@ -28,21 +39,28 @@ TEST_CASE("CaptureSink captures only armed punch range with sample accuracy", "[
   REQUIRE(sink.overflow_count() == 0);
 }
 
-TEST_CASE("CaptureSink records overflow without writing beyond capacity", "[engine][capture]") {
+TEST_CASE("CaptureSink records overflow without writing beyond capacity",
+          "[engine][capture][loss-tally]") {
   std::array<float, 4> input_data{1.0f, 2.0f, 3.0f, 4.0f};
-  const float* input[] = {input_data.data()};
-  std::array<float, 2> capture_data{};
-  float* capture[] = {capture_data.data()};
+  const float* input[] = {input_data.data(), input_data.data()};
+  std::array<float, 2> capture_left{};
+  std::array<float, 2> capture_right{};
+  float* capture[] = {capture_left.data(), capture_right.data()};
 
   sonare::engine::CaptureSink sink;
-  sink.prepare({capture, 1, 2});
+  sink.prepare({capture, 2, 2});
   sink.arm(true);
-  sink.process(input, 1, 4, 0);
+  constexpr uint64_t kInitialDrops = std::numeric_limits<uint32_t>::max();
+  sonare::engine::CaptureLossTestAccess::seed(sink, kInitialDrops);
+  REQUIRE(sink.overflow_count() == kInitialDrops);
+  sink.process(input, 2, 4, 0);
 
   REQUIRE(sink.captured_frames() == 2);
-  REQUIRE(sink.overflow_count() == 2);
-  REQUIRE(capture_data[0] == 1.0f);
-  REQUIRE(capture_data[1] == 2.0f);
+  REQUIRE(sink.overflow_count() == kInitialDrops + 2);
+  REQUIRE(sink.dropped_frames() == 2);
+  REQUIRE(capture_left[0] == 1.0f);
+  REQUIRE(capture_left[1] == 2.0f);
+  REQUIRE(capture_right == capture_left);
 }
 
 TEST_CASE("CaptureSink stops recording when disarmed mid-region", "[engine][capture]") {

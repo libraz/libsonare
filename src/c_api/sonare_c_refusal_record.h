@@ -21,7 +21,6 @@ struct RefusalParts {
   std::string form;  ///< "predicate", "wrongType", "unknownKey" or "relation".
   std::vector<std::string> subjects;
   std::string predicate;
-  std::string renamed_to;
   std::string expected;
   bool caller_spelled = false;
   std::optional<sonare::RefusalDomain> domain;
@@ -48,7 +47,6 @@ inline RefusalParts refusal_parts(const sonare::SonareParameterRefusal& refusal)
   parts.form = refusal_form_token(refusal.form());
   parts.subjects = refusal.subjects();
   parts.predicate = refusal.predicate();
-  parts.renamed_to = refusal.renamed_to();
   parts.expected = refusal.expected();
   parts.caller_spelled = refusal.caller_spelled();
   parts.domain = refusal.domain();
@@ -78,8 +76,7 @@ inline sonare::SonareParameterRefusal refusal_from_parts(const RefusalParts& par
     return spelled(SonareParameterRefusal::wrong_type(parts.code, subject, parts.predicate));
   }
   if (parts.form == "unknownKey") {
-    return spelled(
-        SonareParameterRefusal::unknown(parts.code, subject, parts.renamed_to, parts.expected));
+    return spelled(SonareParameterRefusal::unknown(parts.code, subject, parts.expected));
   }
   if (parts.form == "relation") {
     return spelled(SonareParameterRefusal::relation(parts.code, parts.subjects, parts.predicate));

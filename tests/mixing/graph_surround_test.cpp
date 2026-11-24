@@ -156,7 +156,7 @@ SonareProject* make_project(const std::string& scene_json) {
   const SonareMidiEventPod events[] = {{0.0, 0x20903C7Fu, 0u}};
   REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(project, track, "track", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "track", nullptr) == SONARE_OK);
   return project;
 }
 
@@ -166,7 +166,6 @@ SonareError bounce(SonareProject* project, int channels, std::vector<float>* out
   options.total_frames = kTotalFrames;
   options.block_size = kBlockSize;
   options.num_channels = channels;
-  options.sample_rate = static_cast<int>(kSampleRate);
   SonareBuiltinInstrumentBinding binding{};
   sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;

@@ -89,8 +89,8 @@ static_assert(sizeof(SonareProjectKeySegment) == 2u * sizeof(double) + 2u * size
 /// 2 minor, 3 diminished, 4 augmented, 5 dominant, 6 half-diminished,
 /// 7 suspended). @p extensions holds scale degrees (e.g. 7, 9, 13, or 2 / 4 for a
 /// suspension), not semitone offsets; at most 32 are accepted. It is copied and
-/// may be NULL only when @p extension_count is 0. @p roman_numeral is optional
-/// and copied. @ref sonare_chord_symbol_from_analysis fills the root, quality,
+/// may be NULL only when @p extension_count is 0. @p roman_numeral is NULL or a
+/// non-empty string that is copied. @ref sonare_chord_symbol_from_analysis fills the root, quality,
 /// extensions and slash bass from an analysis chord.
 typedef struct {
   double start_ppq;           ///< Chord start in quarter notes, in [0, 1e12].
@@ -190,7 +190,7 @@ typedef struct {
       first_time_signature;  ///< First detected time-signature segment.
 } SonareProjectTempoCandidate;
 
-/// Result of applying one tempo candidate with @ref sonare_project_auto_tempo_with_result.
+/// Result of applying one tempo candidate with @ref sonare_project_auto_tempo.
 /// This is a library-filled record with no version field.
 typedef struct {
   float bpm;                           ///< BPM of the first installed tempo segment.
@@ -260,32 +260,23 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
 
 /// @brief Detects tempo from a mono audio buffer and installs the requested
 ///        ranked candidate via undoable edits.
-/// @details @p candidate_index is the index returned by
-///          @ref sonare_project_analyze_tempo run on the same @p options, so a
-///          caller pairs the two rather than mixing option sets. When
+/// @details @p candidate_index is the zero-based index into the ranked
+///          candidates @ref sonare_project_analyze_tempo returns for the same
+///          audio and @p options, so a caller pairs the two rather than mixing
+///          option sets. When
 ///          @p apply_time_signatures is nonzero, the candidate's complete
 ///          detected meter sequence is also installed; its first signature
 ///          starts on the first downbeat's bar phase, at most one bar in, so
 ///          only the opening bar is shortened, and a lead-in of a whole number
-///          of bars starts it at ppq 0. @p out_bpm (optional)
-///          receives the selected BPM. A NULL @p options is the defaults. Read
-///          the installed map back with @ref sonare_project_tempo_segment_count
-///          and @ref sonare_project_tempo_segment_by_index.
+///          of bars starts it at ppq 0. The required @p out receives the
+///          selected BPM, confidence, and detected time signature even when
+///          @p apply_time_signatures is zero; it is zeroed on failure. A NULL
+///          @p options uses the defaults. Read the installed map back with
+///          @ref sonare_project_tempo_segments.
 SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
                                       int sample_rate, const SonareProjectTempoOptions* options,
-                                      size_t candidate_index, uint8_t apply_time_signatures,
-                                      float* out_bpm);
-
-/// @brief Applies one ranked tempo candidate and returns its tempo and detected meter.
-/// @details The arguments and project edits match @ref sonare_project_auto_tempo. Unlike its
-///          optional @p out_bpm, @p out is required. The detected time signature is returned even
-///          when @p apply_time_signatures is zero. On failure, @p out is zeroed.
-SonareError sonare_project_auto_tempo_with_result(SonareProject* project, const float* audio,
-                                                  size_t len, int sample_rate,
-                                                  const SonareProjectTempoOptions* options,
-                                                  size_t candidate_index,
-                                                  uint8_t apply_time_signatures,
-                                                  SonareProjectAutoTempoResult* out);
+                                      size_t candidate_index, int32_t apply_time_signatures,
+                                      SonareProjectAutoTempoResult* out);
 
 /// Options for @ref sonare_project_snap_to_grid. Start from
 /// @ref sonare_project_snap_to_grid_options_init.

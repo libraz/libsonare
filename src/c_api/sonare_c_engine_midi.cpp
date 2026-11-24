@@ -21,6 +21,9 @@
 #include "util/resource_limits.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#if defined(SONARE_WITH_MASTERING)
+#include "c_api/checked_insert.h"
+#endif
 #include "c_api/midi_fx_json.h"
 #include "c_api/part_rig_json.h"
 #include "c_api/ppq_domains.h"
@@ -356,7 +359,8 @@ SonareError bind_native_synth(SonareEngine* engine, uint32_t destination_id,
   cfg.use_gm_programs = use_gm_programs;
 #if defined(SONARE_WITH_MASTERING)
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
-    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    return sonare::mastering::api::make_checked_insert(
+        std::string(name), std::string(json), "params", sonare::ErrorCode::InvalidParameter);
   };
 #endif
   auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
@@ -419,7 +423,7 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* data, size_t size) {
+SonareError sonare_engine_load_sound_font(SonareEngine* engine, const uint8_t* data, size_t size) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(data);
@@ -470,7 +474,8 @@ SonareError sonare_engine_set_sf2_instrument(SonareEngine* engine, uint32_t dest
   // yields a null insert that is bypassed.
 #if defined(SONARE_WITH_MASTERING)
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
-    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    return sonare::mastering::api::make_checked_insert(
+        std::string(name), std::string(json), "params", sonare::ErrorCode::InvalidParameter);
   };
 #endif
   auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
@@ -692,26 +697,14 @@ SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine) {
 #endif
 }
 
-SonareError sonare_engine_midi_cc_binding_count(SonareEngine* engine, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
-#if !defined(SONARE_WITH_ARRANGEMENT)
-  *out_count = 0;
-  return refuse_not_compiled_in(Feature::kArrangement);
-#else
-  *out_count = engine->engine.midi_cc_binding_count();
-  return SONARE_OK;
-#endif
-}
-
 void sonare_free_midi_cc_binding_list(SonareMidiCcBindingList* list) {
   if (list == nullptr) return;
   delete[] list->items;
   *list = {};
 }
 
-SonareError sonare_engine_midi_cc_bindings(SonareEngine* engine, SonareMidiCcBindingList* out) {
+SonareError sonare_engine_midi_cc_bindings(const SonareEngine* engine,
+                                           SonareMidiCcBindingList* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(engine);
@@ -1240,12 +1233,13 @@ SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, 
 #endif
 }
 
-SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, size_t* out_count) {
+SonareError sonare_engine_external_midi_dropped_count(const SonareEngine* engine,
+                                                      uint64_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  *out_count = 0;
   return refuse_not_compiled_in(Feature::kArrangement);
 #else
   SONARE_C_TRY

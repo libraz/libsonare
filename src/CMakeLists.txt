@@ -262,7 +262,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_instruments.cpp
   c_api/sonare_c_transcribe.cpp
   c_api/sonare_c_assist.cpp
-  c_api/project_soundfont.cpp
+  c_api/project_sound_font.cpp
   c_api/sonare_c_sample_bank.cpp
   c_api/synth_catalog.cpp
 )

@@ -70,7 +70,7 @@ SonareProjectBounceOptions bounce_options(int64_t total_frames) {
   options.total_frames = total_frames;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   return options;
 }
 
@@ -250,7 +250,7 @@ TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[projec
     uint32_t clip = 0;
     REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
     REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
-    REQUIRE(sonare_project_set_track_route(project, track, route, "") == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, route, nullptr) == SONARE_OK);
   }
 
   SonareBuiltinInstrumentBinding binding{};
@@ -286,7 +286,7 @@ TEST_CASE("project bounce rejects oversized MIDI source-stem shapes", "[project]
     uint32_t clip = 0;
     REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
     REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
-    REQUIRE(sonare_project_set_track_route(project, track, "shared", "") == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, "shared", nullptr) == SONARE_OK);
   }
 
   SonareBuiltinInstrumentBinding binding{};

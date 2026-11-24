@@ -122,7 +122,6 @@ SonareProjectBounceOptions auto_length_options() {
   options.total_frames = SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = static_cast<int>(kRate);
   return options;
 }
 
@@ -316,7 +315,8 @@ std::vector<float> pedal_bounce(int pedal_cc, bool sf2) {
     const std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file),
                                      std::istreambuf_iterator<char>()};
     REQUIRE(!bytes.empty());
-    REQUIRE(sonare_project_load_soundfont(project, bytes.data(), bytes.size()) == SONARE_OK);
+    REQUIRE(sonare_project_load_sound_font(project, nullptr, bytes.data(), bytes.size()) ==
+            SONARE_OK);
   }
   uint32_t track = 0;
   uint32_t clip = 0;

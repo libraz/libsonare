@@ -95,7 +95,8 @@ void RealtimeEngineWasm::resetCapture() { engine_.reset_capture(); }
 val RealtimeEngineWasm::captureStatus() const {
   val out = val::object();
   out.set("capturedFrames", static_cast<double>(engine_.captured_frames()));
-  out.set("overflowCount", engine_.capture_overflow_count());
+  out.set("overflowCount", static_cast<double>(engine_.capture_overflow_count()));
+  out.set("droppedFrames", static_cast<double>(engine_.capture_dropped_frames()));
   out.set("armed", engine_.capture_armed());
   out.set("punchEnabled", engine_.capture_punch_enabled());
   out.set("source", captureSourceName(engine_.capture_source()));

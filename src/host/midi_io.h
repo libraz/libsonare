@@ -89,9 +89,9 @@ constexpr size_t spsc_distance(size_t read, size_t write) noexcept {
   return write >= read ? write - read : Capacity + 1 - read + write;
 }
 
-template <size_t Capacity, typename Record>
+template <size_t Capacity, typename Record, typename DropCount>
 bool spsc_push(std::array<Record, Capacity + 1>& queue, const std::atomic<size_t>& read_index,
-               std::atomic<size_t>& write_index, std::atomic<uint32_t>& dropped_count,
+               std::atomic<size_t>& write_index, std::atomic<DropCount>& dropped_count,
                const Record& record) noexcept {
   const size_t write = write_index.load(std::memory_order_relaxed);
   const size_t next = spsc_increment<Capacity>(write);
@@ -653,6 +653,7 @@ template <size_t Capacity>
 class FixedExternalMidiOutputQueue {
  public:
   static_assert(Capacity > 0, "FixedExternalMidiOutputQueue capacity must be positive");
+  static_assert(std::atomic<uint64_t>::is_always_lock_free);
 
   /// AUDIO/RT thread: enqueue one destination-tagged event. Returns false if the
   /// fixed queue overflowed or the event carries a borrowed SysEx payload or
@@ -679,17 +680,19 @@ class FixedExternalMidiOutputQueue {
                                            write_index_.load(std::memory_order_acquire));
   }
 
-  uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
+  uint64_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
 
   void reset_telemetry() noexcept { dropped_count_.store(0, std::memory_order_relaxed); }
 
  private:
+  friend struct ExternalMidiLossTestAccess;
+
   static constexpr size_t kSlots = Capacity + 1;
 
   std::array<ExternalMidiRecord, kSlots> queue_{};
   std::atomic<size_t> read_index_{0};
   std::atomic<size_t> write_index_{0};
-  std::atomic<uint32_t> dropped_count_{0};
+  std::atomic<uint64_t> dropped_count_{0};
 };
 
 }  // namespace sonare::host

@@ -1,7 +1,7 @@
 /// @file binding_project_soundfont_test.cpp
-/// @brief SoundFont C ABI tests: sonare_project_load_soundfont / preset count /
+/// @brief SoundFont C ABI tests: sonare_project_load_sound_font / preset count /
 ///        bounce manifest / bounce_with_sf2_instruments, and the realtime
-///        engine SF2 entry (sonare_engine_load_soundfont +
+///        engine SF2 entry (sonare_engine_load_sound_font +
 ///        sonare_engine_set_sf2_instrument with live MIDI input).
 
 #include "binding_project_parity_test_helpers.h"
@@ -212,74 +212,92 @@ std::vector<SonareSf2ProgramStatus> gs_manifest_of(
   uint32_t clip = 0;
   REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &clip) == SONARE_OK);
   const std::vector<uint8_t> sf2 = make_gs_manifest_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), sf2.size()) == SONARE_OK);
   size_t total = 0;
-  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 0, &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, nullptr, 0, &total) == SONARE_OK);
   std::vector<SonareSf2ProgramStatus> out(total);
-  REQUIRE(sonare_project_soundfont_manifest(project, out.data(), out.size(), &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, out.data(), out.size(), &total) ==
+          SONARE_OK);
   sonare_project_destroy(project);
   return out;
 }
 
 }  // namespace
 
-TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project][sf2]") {
+TEST_CASE("sonare_project_load_sound_font parses, replaces and clears", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const SonareProject* read_only_project = project;
 
   size_t count = 999;
-  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(read_only_project, nullptr, &count) == SONARE_OK);
   REQUIRE(count == 0);
 
   // Invalid arguments / malformed bytes.
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(nullptr, sf2.data(), sf2.size()) ==
+  REQUIRE(sonare_project_load_sound_font(nullptr, nullptr, sf2.data(), sf2.size()) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_project_load_soundfont(project, nullptr, 16) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, nullptr, 16) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   // A broken file is INVALID_FORMAT, not INVALID_PARAMETER: the call itself was
   // well formed and the statement is about the data. INVALID_PARAMETER above is
   // reserved for the NULL/zero-length argument cases, so a caller can tell the
-  // two apart -- and it is the same split sonare_engine_load_soundfont makes for
+  // two apart -- and it is the same split sonare_engine_load_sound_font makes for
   // the same two conditions.
   const uint8_t garbage[8] = {'n', 'o', 't', ' ', 'a', 's', 'f', '2'};
-  REQUIRE(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, garbage, sizeof(garbage)) ==
           SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_last_error_message() != nullptr);
   REQUIRE(std::strlen(sonare_last_error_message()) > 0);
   // A failed load leaves the previous state untouched (still no soundfont).
-  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(project, nullptr, &count) == SONARE_OK);
   REQUIRE(count == 0);
 
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
-  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(project, nullptr, &count) == SONARE_OK);
   REQUIRE(count == 5);
+
+  const char* uri = "asset://banks/custom.sf2";
+  REQUIRE(sonare_project_load_sound_font(project, uri, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(read_only_project, uri, &count) == SONARE_OK);
+  REQUIRE(count == 5);
+  REQUIRE(sonare_project_sound_font_preset_count(read_only_project, nullptr, &count) == SONARE_OK);
+  REQUIRE(count == 5);
+  REQUIRE(sonare_project_clear_sound_font(project, uri) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(read_only_project, uri, &count) == SONARE_OK);
+  CHECK(count == 0);
+  REQUIRE(sonare_project_sound_font_preset_count(read_only_project, nullptr, &count) == SONARE_OK);
+  CHECK(count == 5);
 
   // Size-only preflight rejects before reading the one-byte pointer and keeps
   // the previously loaded SoundFont intact.
   const uint8_t sentinel = 0;
-  REQUIRE(sonare_project_load_soundfont(
-              project, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
+  REQUIRE(sonare_project_load_sound_font(
+              project, nullptr, &sentinel,
+              sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(project, nullptr, &count) == SONARE_OK);
   REQUIRE(count == 5);
 
   // A malformed re-load keeps the loaded soundfont.
-  REQUIRE(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, garbage, sizeof(garbage)) ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(project, nullptr, &count) == SONARE_OK);
   REQUIRE(count == 5);
 
-  REQUIRE(sonare_project_clear_soundfont(project) == SONARE_OK);
-  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(sonare_project_clear_sound_font(project, nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_preset_count(project, nullptr, &count) == SONARE_OK);
   REQUIRE(count == 0);
 
   sonare_project_destroy(project);
 }
 
-TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[project][sf2]") {
+TEST_CASE("sonare_project_sound_font_manifest reports per-program backends", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const SonareProject* read_only_project = project;
   REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
@@ -305,15 +323,17 @@ TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[pr
 
   // Without a soundfont everything is a synth fallback.
   size_t total = 0;
-  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 0, &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(read_only_project, nullptr, nullptr, 0, &total) ==
+          SONARE_OK);
   REQUIRE(total == 4);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  const char* uri = "asset://banks/manifest.sf2";
+  REQUIRE(sonare_project_load_sound_font(project, uri, sf2.data(), sf2.size()) == SONARE_OK);
 
   std::vector<SonareSf2ProgramStatus> manifest(8);
-  REQUIRE(sonare_project_soundfont_manifest(project, manifest.data(), manifest.size(), &total) ==
-          SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(read_only_project, uri, manifest.data(),
+                                             manifest.size(), &total) == SONARE_OK);
   REQUIRE(total == 4);
   manifest.resize(total);
 
@@ -346,7 +366,8 @@ TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[pr
 
   // Truncated write still reports the total.
   SonareSf2ProgramStatus first{};
-  REQUIRE(sonare_project_soundfont_manifest(project, &first, 1, &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(read_only_project, uri, &first, 1, &total) ==
+          SONARE_OK);
   REQUIRE(total == 4);
   REQUIRE(first.bank == 0);
   REQUIRE(first.backend == SONARE_SOURCE_BACKEND_SF2);
@@ -354,7 +375,7 @@ TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[pr
   sonare_project_destroy(project);
 }
 
-TEST_CASE("sonare_project_soundfont_manifest rejects preset zones that miss played notes",
+TEST_CASE("sonare_project_sound_font_manifest rejects preset zones that miss played notes",
           "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -370,11 +391,11 @@ TEST_CASE("sonare_project_soundfont_manifest rejects preset zones that miss play
   };
   REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), sf2.size()) == SONARE_OK);
 
   size_t total = 0;
   SonareSf2ProgramStatus manifest{};
-  REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, &manifest, 1, &total) == SONARE_OK);
   REQUIRE(total == 1);
   REQUIRE(manifest.program == 3);
   REQUIRE(manifest.backend == SONARE_SOURCE_BACKEND_SYNTH);
@@ -383,7 +404,7 @@ TEST_CASE("sonare_project_soundfont_manifest rejects preset zones that miss play
   sonare_project_destroy(project);
 }
 
-TEST_CASE("sonare_project_soundfont_manifest decodes MIDI 2.0 program change", "[project][sf2]") {
+TEST_CASE("sonare_project_sound_font_manifest decodes MIDI 2.0 program change", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
@@ -399,11 +420,11 @@ TEST_CASE("sonare_project_soundfont_manifest decodes MIDI 2.0 program change", "
   REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), sf2.size()) == SONARE_OK);
 
   size_t total = 0;
   SonareSf2ProgramStatus manifest{};
-  REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, &manifest, 1, &total) == SONARE_OK);
   REQUIRE(total == 1);
   REQUIRE(manifest.channel == 0);
   REQUIRE(manifest.bank == 0);
@@ -414,7 +435,7 @@ TEST_CASE("sonare_project_soundfont_manifest decodes MIDI 2.0 program change", "
   sonare_project_destroy(project);
 }
 
-TEST_CASE("sonare_project_soundfont_manifest preserves low MIDI 2.0 note-on velocity",
+TEST_CASE("sonare_project_sound_font_manifest preserves low MIDI 2.0 note-on velocity",
           "[project][sf2]") {
   const std::vector<uint8_t> sf2 = make_velocity_ranged_sf2_bytes();
 
@@ -433,11 +454,13 @@ TEST_CASE("sonare_project_soundfont_manifest preserves low MIDI 2.0 note-on velo
       const SonareMidiEventPod event =
           pod(0.0, sonare::midi::make_midi2_note_on(0, 0, 60, velocity16));
       REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
-      REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+      REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), sf2.size()) ==
+              SONARE_OK);
 
       size_t total = 0;
       SonareSf2ProgramStatus manifest{};
-      REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+      REQUIRE(sonare_project_sound_font_manifest(project, nullptr, &manifest, 1, &total) ==
+              SONARE_OK);
       REQUIRE(total == 1);
       REQUIRE(manifest.channel == 0);
       REQUIRE(manifest.bank == 0);
@@ -450,7 +473,7 @@ TEST_CASE("sonare_project_soundfont_manifest preserves low MIDI 2.0 note-on velo
   }
 }
 
-TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[project][sf2]") {
+TEST_CASE("sonare_project_sound_font_manifest resolves GM2 Bank Select LSB", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
@@ -466,11 +489,11 @@ TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[pr
   REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, sf2.data(), sf2.size()) == SONARE_OK);
 
   size_t total = 0;
   SonareSf2ProgramStatus manifest{};
-  REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, &manifest, 1, &total) == SONARE_OK);
   REQUIRE(total == 1);
   REQUIRE(manifest.channel == 0);
   REQUIRE(manifest.bank == 5);
@@ -481,7 +504,7 @@ TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[pr
   sonare_project_destroy(project);
 }
 
-TEST_CASE("sonare_project_soundfont_manifest reports what the player resolves under GS part state",
+TEST_CASE("sonare_project_sound_font_manifest reports what the player resolves under GS part state",
           "[project][sf2]") {
   constexpr uint8_t kPart1 = 0x11;  // GS part block of MIDI channel 0.
   const std::vector<uint8_t> note60 = {0x90, 60, 100};
@@ -553,7 +576,6 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   options.total_frames = 12000;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
 
   SonareSf2InstrumentBinding binding{};
   sonare_sf2_instrument_config_init(&binding.config);
@@ -577,7 +599,21 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   out_len = 0;
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  constexpr const char* uri = "memory:font.sf2";
+  REQUIRE(sonare_project_load_sound_font(project, uri, sf2.data(), sf2.size()) == SONARE_OK);
+
+  binding.sound_font_uri = "";
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.sf2_instruments[0].sound_font_uri must not be empty");
+
+  binding.sound_font_uri = "memory:missing.sf2";
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels1) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_last_error_reason() != nullptr);
+  CHECK(std::string(sonare_last_error_reason()) == "unresolvedSoundFont");
+  binding.sound_font_uri = uri;
 
   // A struct not started from its init is rejected.
   binding.config.struct_size = 0;
@@ -670,11 +706,11 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
   }
 
   const uint8_t garbage[4] = {'b', 'a', 'd', '!'};
-  REQUIRE(sonare_engine_load_soundfont(engine, garbage, sizeof(garbage)) ==
+  REQUIRE(sonare_engine_load_sound_font(engine, garbage, sizeof(garbage)) ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_engine_load_sound_font(engine, sf2.data(), sf2.size()) == SONARE_OK);
   const uint8_t sentinel = 0;
-  REQUIRE(sonare_engine_load_soundfont(
+  REQUIRE(sonare_engine_load_sound_font(
               engine, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_FORMAT);
 
@@ -714,7 +750,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
   REQUIRE(count == 0);
 #else
-  REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) ==
+  REQUIRE(sonare_engine_load_sound_font(engine, sf2.data(), sf2.size()) ==
           SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -738,17 +774,18 @@ TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[pro
   const uint8_t sentinel = 0;
 
   // Malformed bytes.
-  CHECK(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
-        sonare_engine_load_soundfont(engine, garbage, sizeof(garbage)));
+  CHECK(sonare_project_load_sound_font(project, nullptr, garbage, sizeof(garbage)) ==
+        sonare_engine_load_sound_font(engine, garbage, sizeof(garbage)));
   // Over the resource budget.
-  CHECK(sonare_project_load_soundfont(project, &sentinel, over_budget) ==
-        sonare_engine_load_soundfont(engine, &sentinel, over_budget));
+  CHECK(sonare_project_load_sound_font(project, nullptr, &sentinel, over_budget) ==
+        sonare_engine_load_sound_font(engine, &sentinel, over_budget));
   // A NULL/empty argument stays a caller error on both, and is a DIFFERENT code
   // from the two above — which is the whole point of the split.
-  CHECK(sonare_project_load_soundfont(project, nullptr, 16) ==
-        sonare_engine_load_soundfont(engine, nullptr, 16));
-  CHECK(sonare_project_load_soundfont(project, nullptr, 16) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
+  CHECK(sonare_project_load_sound_font(project, nullptr, nullptr, 16) ==
+        sonare_engine_load_sound_font(engine, nullptr, 16));
+  CHECK(sonare_project_load_sound_font(project, nullptr, nullptr, 16) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_load_sound_font(project, nullptr, garbage, sizeof(garbage)) ==
         SONARE_ERROR_INVALID_FORMAT);
 
   sonare_engine_destroy(engine);
@@ -762,7 +799,7 @@ TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_a
   REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_engine_load_sound_font(engine, sf2.data(), sf2.size()) == SONARE_OK);
 
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
@@ -819,7 +856,7 @@ std::vector<float> render_overdrive(int realization) {
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
-  REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_engine_load_sound_font(engine, sf2.data(), sf2.size()) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   config.gs_efx_realization = realization;
@@ -889,30 +926,48 @@ TEST_CASE("project SoundFont entries refuse an argument by its header name", "[p
   const auto message = [] { return std::string(sonare_last_error_message()); };
   const uint8_t byte = 0;
 
-  REQUIRE(sonare_project_load_soundfont(nullptr, &byte, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_load_sound_font(nullptr, nullptr, &byte, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "project must not be NULL");
-  REQUIRE(sonare_project_load_soundfont(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, nullptr, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "data must not be NULL");
-  REQUIRE(sonare_project_load_soundfont(project, &byte, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_load_sound_font(project, nullptr, &byte, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "size must be an integer of at least 1");
-  REQUIRE(sonare_project_clear_soundfont(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_load_sound_font(project, "", &byte, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "uri must not be empty");
+  REQUIRE(sonare_project_clear_sound_font(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_clear_sound_font(project, "") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "uri must not be empty");
 
   size_t count = 7;
-  REQUIRE(sonare_project_soundfont_preset_count(project, nullptr) ==
+  REQUIRE(sonare_project_sound_font_preset_count(project, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_count must not be NULL");
-  REQUIRE(sonare_project_soundfont_preset_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  count = 7;
+  REQUIRE(sonare_project_sound_font_preset_count(project, "", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
+  CHECK(message() == "uri must not be empty");
+  REQUIRE(sonare_project_sound_font_preset_count(nullptr, nullptr, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(count == 0);
   CHECK(message() == "project must not be NULL");
 
   // Two NULL pointers: the first one in header order is named.
-  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 4, nullptr) ==
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, nullptr, 4, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out must not be NULL when max_entries is not 0");
-  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 0, nullptr) ==
+  REQUIRE(sonare_project_sound_font_manifest(project, nullptr, nullptr, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_count must not be NULL");
+  size_t total = 9;
+  REQUIRE(sonare_project_sound_font_manifest(project, "", nullptr, 0, &total) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(total == 0);
+  CHECK(message() == "uri must not be empty");
 
   sonare_project_destroy(project);
 }

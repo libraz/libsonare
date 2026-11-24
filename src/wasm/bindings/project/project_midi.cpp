@@ -611,18 +611,26 @@ val ProjectWasm::analyzeTempo(val audio, const val& sample_rate_val, val options
   return output;
 }
 
-float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& candidate_index_val,
-                             bool apply_time_signatures, val options) {
+val ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& candidate_index_val,
+                           bool apply_time_signatures, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int candidate_index = checkedIntFromVal(candidate_index_val, "candidateIndex");
+  const size_t candidate_index = checkedSizeTFromVal(candidate_index_val, "candidateIndex");
   std::vector<float> samples = float32ArrayToVector(audio, "samples");
-  float bpm = 0.0f;
   const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
-  const SonareError err = sonare_project_auto_tempo(
-      project_.get(), elementData(samples), samples.size(), sample_rate, &resolved,
-      static_cast<size_t>(std::max(candidate_index, 0)), apply_time_signatures ? 1 : 0, &bpm);
+  SonareProjectAutoTempoResult result{};
+  const SonareError err =
+      sonare_project_auto_tempo(project_.get(), elementData(samples), samples.size(), sample_rate,
+                                &resolved, candidate_index, apply_time_signatures ? 1 : 0, &result);
   if (err != SONARE_OK) throwCodedCError(err);
-  return bpm;
+  val signature = val::object();
+  signature.set("numerator", result.time_signature.numerator);
+  signature.set("denominator", result.time_signature.denominator);
+  signature.set("confidence", result.time_signature.confidence);
+  val out = val::object();
+  out.set("bpm", result.bpm);
+  out.set("bpmConfidence", result.bpm_confidence);
+  out.set("timeSignature", signature);
+  return out;
 }
 
 double ProjectWasm::snapToGrid(const val& ppq_val, const val& strength_val,
@@ -816,11 +824,13 @@ SonareMidiCcBinding js_cc_binding_from_val(val object, const std::string& at) {
   out.param_id = checkedUintFromVal(object["paramId"], elementField(at, "paramId").c_str());
   out.min_value = floatProperty(object, "minValue", 0.0f, at);
   out.max_value = floatProperty(object, "maxValue", 1.0f, at);
+  out.consume = boolProperty(object, "consume", false, at) ? 1 : 0;
   return out;
 }
 
 val js_cc_binding_to_val(const SonareMidiCcBinding& binding) {
   val out = val::object();
+  out.set("consume", binding.consume != 0);
   out.set("ccNumber", static_cast<double>(binding.cc_number));
   if (binding.channel != SONARE_MIDI_CC_ANY_CHANNEL) {
     out.set("channel", static_cast<double>(binding.channel));

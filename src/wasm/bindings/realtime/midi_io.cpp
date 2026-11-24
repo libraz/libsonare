@@ -93,9 +93,9 @@ void RealtimeEngineWasm::setExternalMidiClockEnabled(bool enabled) {
 }
 
 // Count of external-MIDI events dropped because the output queue was full.
-uint32_t RealtimeEngineWasm::externalMidiDroppedCount() const {
+double RealtimeEngineWasm::externalMidiDroppedCount() const {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return engine_.external_midi_dropped_count();
+  return static_cast<double>(engine_.external_midi_dropped_count());
 #else
   return 0;
 #endif

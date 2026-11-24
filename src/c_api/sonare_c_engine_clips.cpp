@@ -390,17 +390,20 @@ SonareError sonare_engine_pop_clip_page_request(SonareEngine* engine,
   return SONARE_OK;
 }
 
-SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine,
-                                                           size_t* out_count) {
+SonareError sonare_engine_clip_page_request_overflow_count(const SonareEngine* engine,
+                                                           uint64_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = engine->engine.clip_page_request_overflow_count();
   return SONARE_OK;
 }
 
-SonareError sonare_engine_warp_stretch_overflow_count(SonareEngine* engine, size_t* out_count) {
+SonareError sonare_engine_warp_stretch_overflow_count(const SonareEngine* engine,
+                                                      uint64_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = engine->engine.warp_stretch_overflow_count();

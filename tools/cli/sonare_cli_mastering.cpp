@@ -282,9 +282,9 @@ namespace {
 /// Build the mastering assistant's config from the command line.
 /// @details `mastering --assistant` and `mastering-suggest` declare the same
 ///   named options, and `mastering-suggest` also takes them as `--params`. Both
-///   routes reach the one flat-param builder, so the explicit-loudness flags and
-///   the refusal of an unknown key come from the core. `targetPlatform` and
-///   `preset` take a name: the index the C ABI carries is a transport detail.
+///   routes reach the flat-param builder, which sets the explicit-loudness flags.
+///   The argv preflight checks the params before the input read. `targetPlatform`
+///   and `preset` take a name: the index the C ABI carries is a transport detail.
 ///   A setting named by an option and by `--params` is a contradiction rather
 ///   than a precedence question.
 mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& args,
@@ -307,8 +307,7 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
       preset = item.substr(eq + 1);
       has_preset = true;
     } else {
-      const auto parsed = parse_mastering_params(item);
-      params.insert(params.end(), parsed.begin(), parsed.end());
+      params.push_back({key, parse_double_strict("params", item.substr(eq + 1))});
     }
   }
 

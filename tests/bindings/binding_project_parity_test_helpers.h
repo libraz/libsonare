@@ -121,7 +121,7 @@ struct BuiltProject {
                                        &built.midi_clip) == SONARE_OK);
   REQUIRE(built.midi_clip != 0);
 
-  SonareMidiEventPod events[2];
+  SonareMidiEventPod events[2]{};
   events[0].ppq = 0.0;
   events[0].word0 = 0x20903C40u;  // UMP word
   events[0].word1 = 0u;

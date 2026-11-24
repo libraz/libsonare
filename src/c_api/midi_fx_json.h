@@ -112,7 +112,7 @@ inline void refuse_unknown_keys(const json::Value& root) {
     std::vector<std::string> accepted;
     for (const KeySpelling& spelling : kKeys) accepted.emplace_back(spelling.current);
     throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, at(key),
-                                                  std::string(), schema::expected_keys(accepted))
+                                                  schema::expected_keys(accepted))
         .as_caller_spelled();
   }
 }

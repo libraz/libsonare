@@ -5,6 +5,9 @@
 #include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
+#if defined(SONARE_WITH_MASTERING) && defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/checked_insert.h"
+#endif
 #include "mixing/panner.h"
 #include "util/parameter_checks.h"
 
@@ -442,6 +445,10 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
     set_last_error(SONARE_ERROR_INVALID_FORMAT, ex.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
+#if defined(SONARE_WITH_MASTERING)
+  sonare::mastering::api::validate_scene_insert_params(scene, "",
+                                                       project->history.project().sample_rate());
+#endif
   auto command = std::make_unique<arr::SetScene>(std::move(scene));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
@@ -695,6 +702,9 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
   SONARE_C_REQUIRE_NONNULL(project);
   if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
+  if (channel_strip_ref != nullptr)
+    sonare::util::check::non_empty(channel_strip_ref, "channel_strip_ref");
+  if (output_target != nullptr) sonare::util::check::non_empty(output_target, "output_target");
   auto command = std::make_unique<arr::SetTrackRoute>(
       track_id, channel_strip_ref ? std::string(channel_strip_ref) : std::string(),
       output_target ? std::string(output_target) : std::string());

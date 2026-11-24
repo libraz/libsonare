@@ -325,22 +325,6 @@ SonareError sonare_project_bar_start_ppq(const SonareProject* project, int64_t b
 ///          audible track holds a clip. Render tails are excluded.
 SonareError sonare_project_end_ppq(const SonareProject* project, double* out_end_ppq);
 
-/// @brief Reads a project tempo segment by index (0-based, in stored order).
-/// @details Pairs with @ref sonare_project_tempo_segment_count, which is the
-///          only way to learn the valid index range; an index at or past that
-///          count yields SONARE_ERROR_INVALID_PARAMETER.
-///
-///          A project keeps musical positions only; a caller that needs sample
-///          positions has to run @p start_ppq and @p bpm through the tempo map.
-SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, size_t index,
-                                                  SonareProjectTempoSegment* out);
-
-/// @brief Reads a project time-signature segment by index (0-based, in stored order).
-/// @details Pairs with @ref sonare_project_time_signature_count. An index out of
-///          range yields SONARE_ERROR_INVALID_PARAMETER.
-SonareError sonare_project_time_signature_by_index(const SonareProject* project, size_t index,
-                                                   SonareProjectTimeSignatureSegment* out);
-
 /// @brief Project timeline marker with its kind and (for key signatures) the
 ///        structured key. @c kind is a SonareMarkerKind ordinal; the key fields
 ///        apply only to the key-signature kind. The name travels beside the
@@ -539,13 +523,6 @@ SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_
 SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count);
 /// @brief Counts markers without requiring JSON serialization.
 SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count);
-/// @brief Counts tempo segments; the valid index range for
-///        @ref sonare_project_tempo_segment_by_index.
-SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count);
-/// @brief Counts time-signature segments; the valid index range for
-///        @ref sonare_project_time_signature_by_index.
-SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count);
-
 /// @brief Reads the project's stored tempo segments in stored order.
 /// @details This returns only stored segments, without inserting a default. An empty list has
 ///          NULL items and zero count. Release the copy with

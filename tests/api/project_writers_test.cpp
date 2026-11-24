@@ -18,6 +18,93 @@ struct ProjectHandle {
   ProjectHandle& operator=(const ProjectHandle&) = delete;
 };
 
+TEST_CASE("track routes require nonempty strings when supplied",
+          "[c_api][project][writers][route]") {
+  ProjectHandle project;
+  SonareProjectTrackDesc desc{};
+  desc.kind = SONARE_TRACK_AUDIO;
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project.value, &desc, &track_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project.value, track_id, "lead", "master") == SONARE_OK);
+
+  CHECK(sonare_project_set_track_route(project.value, track_id, "", "master") ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("channel_strip_ref") == 0);
+  CHECK(sonare_project_set_track_route(project.value, track_id, "lead", "") ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("output_target") == 0);
+  REQUIRE(sonare_project_set_track_route(project.value, track_id, nullptr, nullptr) == SONARE_OK);
+}
+
+TEST_CASE("chord annotations require a nonempty Roman numeral when supplied",
+          "[c_api][project][writers][chords]") {
+  ProjectHandle project;
+  const SonareProjectChordSymbol chords[] = {
+      {0, 1, 0, 0, nullptr, 0, 255, nullptr, 0},
+      {1, 2, 0, 0, nullptr, 0, 255, "", 0},
+  };
+  REQUIRE(sonare_project_annotate_chords(project.value, chords, 1) == SONARE_OK);
+  CHECK(sonare_project_annotate_chords(project.value, chords, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("chords[1].roman_numeral") == 0);
+}
+
+#if defined(SONARE_WITH_MASTERING)
+TEST_CASE("project scene documents refuse unread insert parameters",
+          "[c_api][project][writers][insert-keys]") {
+  ProjectHandle project;
+  constexpr const char* kScene =
+      R"({"version":2,"strips":[{"id":"lead","inserts":[{"processor":"saturation.softClipper","params":{"bogus":1}}]}]})";
+  constexpr const char* kMessage =
+      "unknown key strips[0].inserts[0].params.bogus (expected aliasing, ceiling, driveDb, mix)";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.value, kScene) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) == kMessage);
+
+  const std::string document = std::string(R"({"version":7,"scene":)") + kScene + "}";
+  const std::string message =
+      "unknown key scene.strips[0].inserts[0].params.bogus (expected aliasing, ceiling, driveDb, "
+      "mix)";
+  SonareProject* loaded = nullptr;
+  char* diagnostics = nullptr;
+  CHECK(sonare_project_deserialize(document.data(), document.size(), &loaded, &diagnostics) ==
+        SONARE_ERROR_INVALID_FORMAT);
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> owned(
+      loaded, sonare_project_destroy);
+  const std::unique_ptr<char, decltype(&sonare_free_string)> owned_diagnostics(diagnostics,
+                                                                               sonare_free_string);
+  CHECK(std::string(sonare_last_error_message()) == message);
+  CHECK(owned == nullptr);
+  REQUIRE(owned_diagnostics != nullptr);
+  CHECK(std::string(owned_diagnostics.get()) == "invalid_format: " + message);
+}
+
+TEST_CASE("project scene documents refuse an unknown insert processor as the mixer does",
+          "[c_api][project][writers][insert-keys]") {
+  ProjectHandle project;
+  constexpr const char* kScene =
+      R"({"version":2,"strips":[{"id":"lead","inserts":[{"processor":"not.a.processor"}]}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.value, kScene) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "strips[0].inserts[0].processor must name a known processor");
+
+  const std::string document = std::string(R"({"version":7,"scene":)") + kScene + "}";
+  SonareProject* loaded = nullptr;
+  CHECK(sonare_project_deserialize(document.data(), document.size(), &loaded, nullptr) ==
+        SONARE_ERROR_INVALID_FORMAT);
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> owned(
+      loaded, sonare_project_destroy);
+  CHECK(owned == nullptr);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "scene.strips[0].inserts[0].processor must name a known processor");
+
+  SonareMixer* mixer = sonare_mixer_from_scene_json(kScene, 48000, 512);
+  CHECK(mixer == nullptr);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "strips[0].inserts[0].processor must name a known processor");
+}
+#endif
+
 std::string serialize(const SonareProject* project) {
   char* json = nullptr;
   size_t length = 0;

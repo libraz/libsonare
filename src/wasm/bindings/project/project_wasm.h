@@ -220,8 +220,8 @@ struct ProjectWasm {
   uint32_t transcribeToClip(const val& clip_id, val samples, const val& sample_rate, val config);
 
   val analyzeTempo(val audio, const val& sample_rate, val options);
-  float autoTempo(val audio, const val& sample_rate, const val& candidate_index,
-                  bool apply_time_signatures, val options);
+  val autoTempo(val audio, const val& sample_rate, const val& candidate_index,
+                bool apply_time_signatures, val options);
   double snapToGrid(const val& ppq, const val& strength, const val& division);
 
   // Compiles the project into a renderable timeline, returning a small JS
@@ -278,23 +278,24 @@ struct ProjectWasm {
   // into linear memory as a Uint8Array (same convention as importSmf); they are
   // not referenced after the call. Throws on malformed input (the previous
   // SoundFont is kept).
-  void loadSoundFont(val data);
+  void loadSoundFont(val data, const val& uri);
 
   // Releases the project's loaded SoundFont (no-op when none is loaded).
-  void clearSoundFont();
+  void clearSoundFont(const val& uri);
 
   // Number of presets in the loaded SoundFont (0 when none is loaded).
-  size_t soundFontPresetCount();
+  size_t soundFontPresetCount(const val& uri);
 
   // Enumerates every (channel, bank, program) combination the arrangement
   // plays a note through, in first-use order, as an array of { channel, bank,
   // program, backend: 'sf2'|'synth', presetName } objects (matching Node).
-  val soundFontManifest();
+  val soundFontManifest(const val& uri);
 
   // Reads a single SF2 instrument binding object into a C binding started from
   // sonare_sf2_instrument_config_init: an omitted key keeps the default and a given value is
   // read literally by the C entry.
-  static SonareSf2InstrumentBinding sf2BindingFromVal(val desc);
+  static SonareSf2InstrumentBinding sf2BindingFromVal(
+      val desc, std::vector<std::string>* uri_storage = nullptr);
 
   // --------------------------------------------------------------------------
   // Edit operations (undoable; route through EditHistory commands)
@@ -321,8 +322,7 @@ struct ProjectWasm {
   uint32_t duplicateClip(const val& clip_id, const val& new_start_ppq);
   void removeTrack(const val& track_id);
   void renameTrack(const val& track_id, const std::string& name);
-  void setTrackRoute(const val& track_id, const std::string& channel_strip_ref,
-                     const std::string& output_target);
+  void setTrackRoute(const val& track_id, const val& channel_strip_ref, const val& output_target);
 
   // Reads a JS array of { ppq, value, curve? } automation breakpoints into the
   // shared SonareAutomationPoint POD. `curve` accepts the ordinal or a string
@@ -369,7 +369,7 @@ struct ProjectWasm {
   double countInFrames(const val& count_in_bars) const;
   uint32_t addAudioSource(const std::string& uri);
   uint32_t relinkSource(const val& source_id, const std::string& uri);
-  void setMixerSceneJson(const std::string& scene_json);
+  void setMixerScene(const val& document);
   val mixerScene() const;
   val unresolvedSoundFontUris() const;
   uint32_t setMarker(val marker);
@@ -388,10 +388,8 @@ struct ProjectWasm {
   double trackCount() const;
   double clipCount() const;
   double sourceCount() const;
-  double tempoSegmentCount() const;
-  val tempoSegmentByIndex(const val& index_val) const;
-  val timeSignatureByIndex(const val& index_val) const;
-  double timeSignatureCount() const;
+  val tempoSegments() const;
+  val timeSignatures() const;
 
   // Replaces the project's tempo map from an array of { startPpq, bpm,
   // startSample?, endBpm? } segments. startSample is accepted for ABI/source

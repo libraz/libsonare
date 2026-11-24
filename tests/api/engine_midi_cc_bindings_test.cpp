@@ -70,9 +70,6 @@ TEST_CASE("C MIDI CC binding lists are owned and round-trip", "[c_api][engine][m
   for (const auto& row : expected) {
     REQUIRE(sonare_engine_bind_midi_cc(engine.get(), &row) == SONARE_OK);
   }
-  size_t legacy_count = 0;
-  REQUIRE(sonare_engine_midi_cc_binding_count(engine.get(), &legacy_count) == SONARE_OK);
-  REQUIRE(legacy_count == expected.size());
   REQUIRE(sonare_engine_midi_cc_bindings(engine.get(), &snapshot) == SONARE_OK);
   REQUIRE(snapshot.count == expected.size());
   REQUIRE(snapshot.items != nullptr);

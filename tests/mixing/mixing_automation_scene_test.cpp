@@ -354,6 +354,34 @@ TEST_CASE("Mixing Scene JSON rejects unsupported version", "[mixing]") {
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(json), "version must be 2");
 }
 
+TEST_CASE(
+    "Mixing Scene JSON refuses an ordinal for a token as a wrong type, an unknown token "
+    "as out of domain",
+    "[mixing]") {
+  using sonare::SonareParameterRefusal;
+  const auto form_of = [](const char* document) {
+    try {
+      (void)sonare::mixing::api::scene_from_json(document);
+    } catch (const SonareParameterRefusal& refusal) {
+      CHECK(refusal.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK(std::string(refusal.what()).find("must be one of ") != std::string::npos);
+      return refusal.form();
+    }
+    FAIL("no structured refusal");
+    return SonareParameterRefusal::Form::Predicate;
+  };
+  CHECK(form_of(R"({"version":2,"strips":[{"id":"a","panMode":1}]})") ==
+        SonareParameterRefusal::Form::WrongType);
+  CHECK(form_of(R"({"version":2,"buses":[{"id":"b","panLaw":0}]})") ==
+        SonareParameterRefusal::Form::WrongType);
+  CHECK(form_of(R"({"version":2,"strips":[{"id":"a","panMode":"wide"}]})") ==
+        SonareParameterRefusal::Form::Predicate);
+  CHECK(form_of(R"({"version":2,"buses":[{"id":"b","role":2}]})") ==
+        SonareParameterRefusal::Form::WrongType);
+  CHECK(form_of(R"({"version":2,"buses":[{"id":"b","role":"side"}]})") ==
+        SonareParameterRefusal::Form::Predicate);
+}
+
 TEST_CASE("Mixing scene presets expose planned templates and JSON round-trip", "[mixing]") {
   const auto names = sonare::mixing::api::scene_preset_names();
   REQUIRE(names.size() == 3);

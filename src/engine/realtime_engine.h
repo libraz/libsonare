@@ -458,7 +458,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool pop_clip_page_request(ClipPageRequest& out) noexcept { return clip_page_requests_.pop(out); }
   /// Cumulative number of page-miss requests the bounded SPSC queue could not retain.
   /// Reset by prepare(). The audio thread increments this without allocating or blocking.
-  uint32_t clip_page_request_overflow_count() const noexcept {
+  uint64_t clip_page_request_overflow_count() const noexcept {
     return clip_page_request_overflow_count_.load(std::memory_order_relaxed);
   }
   /// Cumulative number of blocks in which a time-stretched clip could not claim
@@ -468,7 +468,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// count -- except at capacity 0, a deliberate "stretch disabled" choice that
   /// never counts as overflow. Forwarded from the player, which owns the
   /// counter; the audio thread increments it without allocating or blocking.
-  uint32_t warp_stretch_overflow_count() const noexcept {
+  uint64_t warp_stretch_overflow_count() const noexcept {
     return clip_player_.warp_stretch_overflow_count();
   }
   /// @brief Sets the number of concurrent time-stretch voices.
@@ -746,7 +746,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_external_midi_clock_enabled(bool enabled) noexcept;
   // Number of external-MIDI events dropped because the output queue was full
   // (advisory telemetry; cleared by reset).
-  uint32_t external_midi_dropped_count() const noexcept {
+  uint64_t external_midi_dropped_count() const noexcept {
     return external_midi_queue_.dropped_count();
   }
   size_t external_midi_pending_count() const noexcept {
@@ -897,7 +897,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   InputMonitorState input_monitor() const noexcept { return input_monitor_.load(); }
   void reset_capture() noexcept;
   int64_t captured_frames() const noexcept { return capture_sink_.captured_frames(); }
-  uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
+  uint64_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
   uint64_t capture_dropped_frames() const noexcept { return capture_sink_.dropped_frames(); }
   bool capture_armed() const noexcept { return capture_sink_.armed(); }
   bool capture_punch_enabled() const noexcept { return capture_sink_.punch_enabled(); }
@@ -1240,6 +1240,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   int max_block_size() const noexcept { return max_block_size_; }
 
  private:
+  friend struct ClipPageLossTestAccess;
+
   static rt::ProcessorBase* resolve_graph_parameter_thunk(void* context,
                                                           uint32_t param_id) noexcept;
   void drain_commands(int64_t block_render_frame, int num_frames) noexcept;
@@ -1972,7 +1974,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};
   rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
-  std::atomic<uint32_t> clip_page_request_overflow_count_{0};
+  static_assert(std::atomic<uint64_t>::is_always_lock_free);
+  std::atomic<uint64_t> clip_page_request_overflow_count_{0};
   // Reads that found no resident page and produced silence; render_offline refuses on any.
   std::atomic<uint64_t> clip_page_read_misses_{0};
   BoundarySplitter boundary_splitter_{};

@@ -197,13 +197,21 @@ void ProjectWasm::renameTrack(const val& track_id_val, const std::string& name) 
                                                name.empty() ? nullptr : wasmCString(name, "name")));
 }
 
-void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& channel_strip_ref,
-                                const std::string& output_target) {
+void ProjectWasm::setTrackRoute(const val& track_id_val, const val& channel_strip_ref_val,
+                                const val& output_target_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  std::optional<std::string> channel_strip_ref;
+  std::optional<std::string> output_target;
+  if (!channel_strip_ref_val.isUndefined() && !channel_strip_ref_val.isNull()) {
+    channel_strip_ref = stringFromVal(channel_strip_ref_val, "channelStripRef");
+  }
+  if (!output_target_val.isUndefined() && !output_target_val.isNull()) {
+    output_target = stringFromVal(output_target_val, "outputTarget");
+  }
   checkCodedCError(sonare_project_set_track_route(
       project_.get(), track_id,
-      channel_strip_ref.empty() ? nullptr : wasmCString(channel_strip_ref, "channelStripRef"),
-      output_target.empty() ? nullptr : wasmCString(output_target, "outputTarget")));
+      channel_strip_ref ? wasmCString(*channel_strip_ref, "channelStripRef") : nullptr,
+      output_target ? wasmCString(*output_target, "outputTarget") : nullptr));
 }
 
 namespace {

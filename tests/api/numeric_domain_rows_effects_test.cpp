@@ -379,10 +379,10 @@ SonareError probe_engine_set_clip_page_prefetch_frames(const std::string&, doubl
   return sonare_engine_set_clip_page_prefetch_frames(engine.get(), as_i64(value));
 }
 
-SonareError probe_engine_load_soundfont(const std::string&, double value) {
+SonareError probe_engine_load_sound_font(const std::string&, double value) {
   PreparedEngine engine;
   const std::array<std::uint8_t, 4> data{};
-  return sonare_engine_load_soundfont(engine.get(), data.data(), as_size(value));
+  return sonare_engine_load_sound_font(engine.get(), data.data(), as_size(value));
 }
 
 SonareError probe_engine_push_midi_sysex(const std::string&, double value) {
@@ -984,7 +984,7 @@ const std::map<std::string, Probe>& probes() {
       {"engine_bounce_offline", probe_engine_bounce_offline},
       {"engine_count_in_end_sample", probe_engine_count_in_end_sample},
       {"engine_freeze_offline", probe_engine_freeze_offline},
-      {"engine_load_soundfont", probe_engine_load_soundfont},
+      {"engine_load_sound_font", probe_engine_load_sound_font},
       {"engine_prepare", probe_engine_prepare},
       {"engine_prime_offline_parameters", probe_engine_prime_offline_parameters},
       {"engine_push_midi_sysex", probe_engine_push_midi_sysex},

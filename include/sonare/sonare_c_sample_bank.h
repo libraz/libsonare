@@ -4,7 +4,7 @@
 /// @brief Host-supplied PCM for the sample synthesis engine: a bank of float
 ///        samples plus key/velocity keymaps, bound alongside a synth patch.
 ///
-/// The SoundFont path (@ref sonare_project_load_soundfont) parses a container
+/// The SoundFont path (@ref sonare_project_load_sound_font) parses a container
 /// and brings its own generator model. This is the other door: PCM the caller
 /// prepared elsewhere, described by nothing but a keymap, so a host that
 /// already has its own waveforms does not have to author an SF2 to play them.

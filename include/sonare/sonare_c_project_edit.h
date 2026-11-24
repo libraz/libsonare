@@ -700,8 +700,8 @@ SonareError sonare_project_rename_track(SonareProject* project, uint32_t track_i
 
 /// @brief Sets a track's mixer-strip binding + output target via an undoable
 ///        edit command. @p channel_strip_ref and @p output_target are
-///        NUL-terminated C strings; pass NULL or "" to clear the respective
-///        field. @p track_id must reference an existing track.
+///        non-empty NUL-terminated C strings. NULL clears the respective field.
+///        @p track_id must reference an existing track.
 SonareError sonare_project_set_track_route(SonareProject* project, uint32_t track_id,
                                            const char* channel_strip_ref,
                                            const char* output_target);

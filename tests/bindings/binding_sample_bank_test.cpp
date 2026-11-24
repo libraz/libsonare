@@ -269,7 +269,7 @@ TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]"
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
-  options.sample_rate = 48000;
+
   options.total_frames = 48000;
   float* out = nullptr;
   size_t len = 0;
@@ -318,7 +318,7 @@ TEST_CASE("narrowing one range leaves the other covering everything", "[project]
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
-  options.sample_rate = 48000;
+
   options.total_frames = 48000;
   float* out = nullptr;
   size_t len = 0;
@@ -347,7 +347,7 @@ TEST_CASE("a sample patch without a bank renders silence, not an error", "[proje
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
-  options.sample_rate = 48000;
+
   options.total_frames = 24000;
   float* out = nullptr;
   size_t len = 0;
@@ -385,7 +385,7 @@ TEST_CASE("a synth patch whose struct_size is below sizeof is refused", "[projec
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
-  options.sample_rate = 48000;
+
   options.total_frames = 4800;
   float* out = nullptr;
   size_t len = 0;

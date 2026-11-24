@@ -138,7 +138,7 @@ SonareError probe_project_bounce(const std::string& param, double value) {
   options.total_frames = 64;
   options.block_size = 64;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   SonareEngineMetronomeConfig metronome{};
   if (param.rfind("options.metronome.", 0) == 0) {
     sonare_engine_metronome_config_init(&metronome);

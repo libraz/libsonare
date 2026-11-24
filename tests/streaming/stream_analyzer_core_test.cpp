@@ -8,16 +8,32 @@
 #include <cstring>
 #include <limits>
 #include <thread>
+#include <type_traits>
 
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/progression_patterns.h"
 #include "core/resample.h"
 #include "stream_analyzer_test_helpers.h"
+#include "streaming/stream_analyzer_publication.h"
 #include "streaming/stream_resampler.h"
 #include "support/alloc_guard.h"
 #include "util/db.h"
 #include "util/exception.h"
+
+namespace sonare {
+
+struct StreamOutputLossTestAccess {
+  static void seed(StreamAnalyzer& analyzer, uint64_t count) {
+    analyzer.publication_->producer_dropped_frames = count;
+  }
+};
+
+static_assert(
+    std::is_same_v<decltype(StreamAnalyzerPublication::producer_dropped_frames), uint64_t>);
+static_assert(std::is_same_v<decltype(AnalyzerStats::dropped_output_frames), uint64_t>);
+
+}  // namespace sonare
 
 TEST_CASE("StreamConfig helpers", "[streaming]") {
   StreamConfig config;
@@ -899,6 +915,28 @@ TEST_CASE("StreamAnalyzer pending output is bounded with drop-newest telemetry",
   analyzer.reset();
   REQUIRE(analyzer.stats().pending_frames == 0);
   REQUIRE(analyzer.stats().dropped_output_frames == 0);
+}
+
+TEST_CASE("StreamAnalyzer publishes output drops past the 32-bit boundary",
+          "[streaming][loss-tally]") {
+  constexpr size_t kFrameSamples = 32;
+  constexpr uint64_t kInitialDrops = std::numeric_limits<uint32_t>::max();
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = kFrameSamples;
+  config.hop_length = kFrameSamples;
+  config.n_mels = 8;
+  config.max_pending_frames = 1;
+  StreamAnalyzer analyzer(config);
+  sonare::StreamOutputLossTestAccess::seed(analyzer, kInitialDrops);
+
+  std::array<float, 3 * kFrameSamples> audio{};
+  analyzer.process(audio.data(), audio.size());
+
+  const auto stats = analyzer.stats();
+  REQUIRE(stats.total_frames == 3);
+  REQUIRE(stats.pending_frames == 1);
+  REQUIRE(stats.dropped_output_frames == kInitialDrops + 2);
 }
 
 TEST_CASE("StreamAnalyzer publishes frames and stats to one concurrent consumer",

@@ -1,6 +1,9 @@
 #include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
 #include "c_api/project_timeline_internal.h"
+#if defined(SONARE_WITH_MASTERING) && defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/checked_insert.h"
+#endif
 #include "mixing/api/scene.h"
 #include "util/parameter_checks.h"
 #include "util/resource_limits.h"
@@ -155,6 +158,19 @@ SonareError sonare_project_deserialize(const char* document, size_t len, SonareP
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str(), result.reason);
     return SONARE_ERROR_INVALID_FORMAT;
   }
+#if defined(SONARE_WITH_MASTERING)
+  if (const auto* scene = result.project->find_scene()) {
+    try {
+      sonare::mastering::api::validate_scene_insert_params(*scene, "scene",
+                                                           result.project->sample_rate());
+    } catch (const sonare::SonareException& error) {
+      if (error.code() == sonare::ErrorCode::InvalidFormat && out_diag != nullptr) {
+        *out_diag = copy_string(std::string("invalid_format: ") + error.what());
+      }
+      throw;
+    }
+  }
+#endif
   auto handle = std::make_unique<SonareProject>();
   handle->history = arr::EditHistory(std::move(*result.project));
   handle->history.midi_content() = std::move(result.midi);
@@ -401,48 +417,6 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
   out->key_fifths = m.key_fifths;
   out->key_minor = m.key_minor ? 1 : 0;
   out->ppq = m.ppq;
-  return SONARE_OK;
-#else
-  if (out) *out = {};
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 index, out);
-#endif
-}
-
-SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, size_t index,
-                                                  SonareProjectTempoSegment* out) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (out) *out = {};
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out);
-  const auto& segments = project->history.project().tempo_segments();
-  if (index >= segments.size()) return refuse_index_past("tempo segments");
-  const sonare::transport::TempoSegment& seg = segments[index];
-  out->start_ppq = seg.start_ppq;
-  out->bpm = seg.bpm;
-  out->end_bpm = seg.end_bpm;
-  return SONARE_OK;
-#else
-  if (out) *out = {};
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 index, out);
-#endif
-}
-
-SonareError sonare_project_time_signature_by_index(const SonareProject* project, size_t index,
-                                                   SonareProjectTimeSignatureSegment* out) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (out) *out = {};
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out);
-  const auto& segments = project->history.project().time_signatures();
-  if (index >= segments.size()) return refuse_index_past("time signature segments");
-  const sonare::transport::TimeSignatureSegment& seg = segments[index];
-  out->start_ppq = seg.start_ppq;
-  out->numerator = seg.time_sig.numerator;
-  out->denominator = seg.time_sig.denominator;
   return SONARE_OK;
 #else
   if (out) *out = {};
@@ -705,32 +679,6 @@ SonareError sonare_project_marker_name_by_index(const SonareProject* project, si
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  index, out_name);
 #endif
-}
-
-SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_TRY
-#if defined(SONARE_WITH_ARRANGEMENT)
-  return project_count(project, out_count,
-                       [](const arr::Project& p) { return p.tempo_segments().size(); });
-#else
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 out_count);
-#endif
-  SONARE_C_CATCH
-}
-
-SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_TRY
-#if defined(SONARE_WITH_ARRANGEMENT)
-  return project_count(project, out_count,
-                       [](const arr::Project& p) { return p.time_signatures().size(); });
-#else
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 out_count);
-#endif
-  SONARE_C_CATCH
 }
 
 void sonare_free_project_tempo_segment_list(SonareProjectTempoSegmentList* list) {

@@ -32,6 +32,16 @@
 #include "midi/midi_event.h"
 #endif
 
+namespace sonare::engine {
+
+struct ClipPageLossTestAccess {
+  static void seed(RealtimeEngine& owner, uint64_t count) {
+    owner.clip_page_request_overflow_count_.store(count, std::memory_order_relaxed);
+  }
+};
+
+}  // namespace sonare::engine
+
 namespace {
 
 #if defined(SONARE_WITH_MIXING)
@@ -3746,8 +3756,8 @@ TEST_CASE("RealtimeEngine live channel delay edit renders like a fresh build of 
     if (track_id == kLatentTrack) {
       spec.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
                               R"({"thresholdDb":24,"lookaheadMs":0.16666667,"releaseMs":50})"});
-      spec.inserts.push_back(
-          {sonare::mixing::api::InsertSlot::PostFader, "effects.reverb.plate", R"({"mix":0.5})"});
+      spec.inserts.push_back({sonare::mixing::api::InsertSlot::PostFader, "effects.reverb.plate",
+                              R"({"dryWet":0.5})"});
     }
     return spec;
   };
@@ -4366,7 +4376,7 @@ TEST_CASE("render_offline refuses a span that read a page its provider did not h
 }
 
 TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queue",
-          "[engine][realtime][clip_pages]") {
+          "[engine][realtime][clip_pages][loss-tally]") {
   class AlwaysMissingPagedProvider final : public sonare::engine::ClipPagedAudioProvider {
    public:
     int num_channels() const noexcept override { return 1; }
@@ -4380,6 +4390,10 @@ TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queu
   // one-sample pages miss in a single block, so two requests must be observable
   // through the counter rather than disappearing silently.
   engine.prepare(48000.0, 4, 16, 2);
+
+  constexpr uint64_t kInitialDrops = std::numeric_limits<uint32_t>::max();
+  sonare::engine::ClipPageLossTestAccess::seed(engine, kInitialDrops);
+  REQUIRE(engine.clip_page_request_overflow_count() == kInitialDrops);
 
   auto provider = std::make_shared<AlwaysMissingPagedProvider>();
   sonare::engine::ClipSchedule clip{45, {}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
@@ -4401,7 +4415,7 @@ TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queu
     ++retained;
   }
   REQUIRE(retained == 2);
-  REQUIRE(engine.clip_page_request_overflow_count() == 2);
+  REQUIRE(engine.clip_page_request_overflow_count() == kInitialDrops + 2);
 
   // Re-prepare is a lifecycle reset, including the visible drop counter.
   engine.prepare(48000.0, 4, 16, 2);

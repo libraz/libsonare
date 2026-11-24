@@ -462,9 +462,8 @@ const char* sonare_mastering_insert_names(void);
 ///        reads, separated by '\n' (empty string when @p insert is unknown or its
 ///        insert needs an unavailable build feature).
 /// @details For tools/UIs that want to validate a scene insert's params before
-///   loading it: any supplied key NOT in this list is silently ignored by the
-///   processor (and would be reported as a `mixing.ignored_insert_param`
-///   diagnostic on a scene load). Band/sub-band processors enumerate their indexed
+///   loading it: an unread parameter is refused and the error lists the accepted keys.
+///   Band/sub-band processors enumerate their indexed
 ///   `band{i}.<field>` keys. Unlike @ref sonare_mastering_insert_names (which
 ///   stays valid across later API calls on the calling thread), this pointer is
 ///   thread-local valid only until the next API call on the same thread; the
@@ -930,12 +929,13 @@ void sonare_eq_destroy(SonareEq* eq);
 /// @c externalSidechain. Omitted fields use the default @c EqBand values.
 /// @p band_json is the shape of @c $defs/eqBand in schemas/mixer-scene.schema.json.
 /// Every refusal of it, malformed JSON and any other key included, is
-/// @c SONARE_ERROR_INVALID_PARAMETER naming its path under @c band
-/// (`unknown key band.gain`); keys starting with @c $ or @c x- are ignored.
+/// @c SONARE_ERROR_INVALID_PARAMETER naming its path under @c band; an
+/// undeclared key is refused with the sorted list of accepted keys
+/// (`unknown key band.gain (expected attackMs, …, type)`); keys starting with
+/// @c $ or @c x- are ignored.
 /// @c detectorDelayMs delays the detector's view of the signal, so a larger
 /// value makes the band react later; it is not look-ahead and adds no latency
-/// to the audio path. An earlier spelling (@c lookaheadMs, @c dynEnabled, or a key's snake_case
-/// form) is refused naming the current key (`band.lookaheadMs`, naming `band.detectorDelayMs`).
+/// to the audio path.
 /// @c phase == NaturalPhase forces @c coeffMode = Vicanek for the band. Vicanek
 /// has no Q/S parameter, so @c q is ignored on LowShelf and HighShelf, though it
 /// is still stored and read back verbatim; Peak, pass and notch bands honour

@@ -14,6 +14,16 @@
 #include "engine/tempo_sync.h"
 #include "util/constants.h"
 
+namespace sonare::engine {
+
+struct WarpLossTestAccess {
+  static void seed(ClipPlayer& owner, uint64_t count) {
+    owner.stretch_overflow_count_.store(count, std::memory_order_relaxed);
+  }
+};
+
+}  // namespace sonare::engine
+
 using Catch::Matchers::WithinAbs;
 
 namespace {
@@ -1078,7 +1088,7 @@ TEST_CASE("ClipPlayer time-stretch warp is block-size independent while playback
 }
 
 TEST_CASE("ClipPlayer time-stretch warp falls back to resampling past the voice budget",
-          "[engine][clip_player]") {
+          "[engine][clip_player][loss-tally]") {
   constexpr size_t kSourceSamples = 4000;
   constexpr int kOutputSamples = 4096;
   const std::vector<float> source = tone(220.0, kSourceSamples);
@@ -1093,12 +1103,15 @@ TEST_CASE("ClipPlayer time-stretch warp falls back to resampling past the voice 
   sonare::engine::ClipPlayer player;
   player.prepare(kStretchSampleRate, kOutputSamples);
   player.set_clips(clips);
+  constexpr uint64_t kInitialDrops = std::numeric_limits<uint32_t>::max();
+  sonare::engine::WarpLossTestAccess::seed(player, kInitialDrops);
+  REQUIRE(player.warp_stretch_overflow_count() == kInitialDrops);
 
   std::vector<float> out(kOutputSamples, 0.0f);
   float* out_ptrs[] = {out.data()};
   player.process_at(out_ptrs, 1, kOutputSamples, 0);
 
-  REQUIRE(player.warp_stretch_overflow_count() > 0);
+  REQUIRE(player.warp_stretch_overflow_count() > kInitialDrops);
   // The overflowing clip must still be audible through the resampling path.
   double energy = 0.0;
   for (float value : out) energy += static_cast<double>(value) * value;

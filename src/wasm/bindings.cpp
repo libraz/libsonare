@@ -282,7 +282,6 @@ val refusal_object(const sonare::SonareParameterRefusal& refusal) {
   out.set("form", parts.form);
   out.set("subjects", stringVectorToVal(parts.subjects));
   out.set("predicate", parts.predicate);
-  out.set("renamedTo", parts.renamed_to);
   out.set("expected", parts.expected);
   out.set("callerSpelled", parts.caller_spelled);
   out.set("text", refusal_text(refusal));
@@ -311,7 +310,6 @@ sonare::SonareParameterRefusal refusal_from_object(const val& object) {
   const std::size_t count = subjects.isArray() ? wasmArrayLength(subjects, "refusal.subjects") : 0;
   for (std::size_t i = 0; i < count; ++i) parts.subjects.push_back(subjects[i].as<std::string>());
   parts.predicate = string_field(object, "predicate");
-  parts.renamed_to = string_field(object, "renamedTo");
   parts.expected = string_field(object, "expected");
   parts.caller_spelled = boolProperty(object, "callerSpelled", false);
   const val domain = object["domain"];

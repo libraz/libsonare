@@ -633,7 +633,6 @@ TEST_CASE("sonare_project_set_clip_gain and set_clip_fade change a MIDI clip's b
   options.total_frames = static_cast<int64_t>(kSampleRate);  // 1 second: well within the note.
   options.block_size = 256;
   options.num_channels = 2;
-  options.sample_rate = static_cast<int>(kSampleRate);
 
   SonareBuiltinInstrumentBinding binding{};
   sonare_builtin_synth_config_init(&binding.config);

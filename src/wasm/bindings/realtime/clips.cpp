@@ -488,12 +488,12 @@ double RealtimeEngineWasm::clipPageRequestScratchSample() const {
   return static_cast<double>(clip_page_request_scratch_.sample);
 }
 
-uint32_t RealtimeEngineWasm::clipPageRequestOverflowCount() const {
-  return engine_.clip_page_request_overflow_count();
+double RealtimeEngineWasm::clipPageRequestOverflowCount() const {
+  return static_cast<double>(engine_.clip_page_request_overflow_count());
 }
 
-uint32_t RealtimeEngineWasm::warpStretchOverflowCount() const {
-  return engine_.warp_stretch_overflow_count();
+double RealtimeEngineWasm::warpStretchOverflowCount() const {
+  return static_cast<double>(engine_.warp_stretch_overflow_count());
 }
 
 // The core rejects an out-of-domain capacity (bool return) rather than

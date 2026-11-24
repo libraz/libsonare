@@ -60,8 +60,10 @@ TempoReading read_tempo(const std::vector<float>& samples, int sample_rate) {
   reading.numerator = candidates[0].first_time_signature.numerator;
   reading.denominator = candidates[0].first_time_signature.denominator;
   reading.time_signature_count = candidates[0].time_signature_count;
+  SonareProjectAutoTempoResult applied{};
   REQUIRE(sonare_project_auto_tempo(project, samples.data(), samples.size(), sample_rate, nullptr,
-                                    0, 1, &reading.applied_bpm) == SONARE_OK);
+                                    0, 1, &applied) == SONARE_OK);
+  reading.applied_bpm = applied.bpm;
   sonare_project_destroy(project);
   return reading;
 }

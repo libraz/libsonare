@@ -31,7 +31,7 @@ void refuse_unknown_band_keys(const sonare::util::json::Value& json) {
     }
     throw sonare::SonareParameterRefusal::unknown(
         sonare::ErrorCode::InvalidParameter, sonare::util::json::schema::child_path(kRoot, key),
-        std::string(), sonare::util::json::schema::expected_keys(known));
+        sonare::util::json::schema::expected_keys(known));
   }
 }
 
@@ -49,8 +49,7 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
         sonare::ErrorCode::InvalidParameter, kRoot,
         std::string("must be valid JSON: ") + ex.what());
   }
-  // Field parsing and validation are shared with the scene walker; it runs first so an earlier
-  // spelling of a known key is refused naming the current one rather than as an unknown key.
+  // Field parsing and validation are shared with the scene walker.
   sonare::mastering::eq::EqBand band;
   try {
     band = sonare::mastering::eq::eq_band_from_value(json, kRoot);

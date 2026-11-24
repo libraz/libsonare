@@ -257,14 +257,13 @@ std::vector<float> render_project_bounce(const BusStripCase& c) {
   const SonareMidiEventPod events[] = {{0.0, 0x20903C7Fu, 0u}};
   REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(project, track, "track", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "track", nullptr) == SONARE_OK);
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
   options.total_frames = kTotalFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
-  options.sample_rate = static_cast<int>(kSampleRate);
   SonareBuiltinInstrumentBinding binding{};
   sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
@@ -361,7 +360,7 @@ TEST_CASE("project serialize/deserialize preserves bus and master pan+EQ through
       REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) ==
               SONARE_OK);
       REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
-      REQUIRE(sonare_project_set_track_route(project, track, "track", "") == SONARE_OK);
+      REQUIRE(sonare_project_set_track_route(project, track, "track", nullptr) == SONARE_OK);
 
       char* json = nullptr;
       size_t json_len = 0;
@@ -376,7 +375,6 @@ TEST_CASE("project serialize/deserialize preserves bus and master pan+EQ through
       options.total_frames = kTotalFrames;
       options.block_size = kBlockSize;
       options.num_channels = 2;
-      options.sample_rate = static_cast<int>(kSampleRate);
       SonareBuiltinInstrumentBinding binding{};
       sonare_builtin_synth_config_init(&binding.config);
       binding.destination_id = kDestination;

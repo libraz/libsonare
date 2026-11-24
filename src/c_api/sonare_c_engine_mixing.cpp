@@ -577,9 +577,8 @@ SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_
   SONARE_C_TRY
   const mixing::api::Bus settings = mixing::api::bus_settings_from_json(settings_json, "settings");
   engine->engine.require_quiescent();
-  return engine->engine.set_bus_strip(bus_id, settings)
-             ? SONARE_OK
-             : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
+  if (engine->engine.set_bus_strip(bus_id, settings)) return SONARE_OK;
+  return run_validation([&] { throw_strip_edit_refusal(engine->engine, settings.inserts); });
   SONARE_C_CATCH
 #endif
 }
@@ -597,9 +596,8 @@ SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t tr
   const mixing::api::Strip settings =
       mixing::api::strip_settings_from_json(settings_json, "settings");
   engine->engine.require_quiescent();
-  return engine->engine.set_track_strip(track_id, settings)
-             ? SONARE_OK
-             : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
+  if (engine->engine.set_track_strip(track_id, settings)) return SONARE_OK;
+  return run_validation([&] { throw_strip_edit_refusal(engine->engine, settings.inserts); });
   SONARE_C_CATCH
 #endif
 }
@@ -663,9 +661,8 @@ SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char
   const mixing::api::Strip settings =
       mixing::api::strip_settings_from_json(settings_json, "settings");
   engine->engine.require_quiescent();
-  return engine->engine.set_master_strip(settings)
-             ? SONARE_OK
-             : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
+  if (engine->engine.set_master_strip(settings)) return SONARE_OK;
+  return run_validation([&] { throw_strip_edit_refusal(engine->engine, settings.inserts); });
   SONARE_C_CATCH
 #endif
 }

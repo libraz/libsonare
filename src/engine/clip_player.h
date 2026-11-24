@@ -14,7 +14,6 @@
 
 #include "core/fade_curve.h"
 #include "engine/warp_stretch.h"
-#include "rt/overflow_counter.h"
 #include "rt/pan_law.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
@@ -281,7 +280,9 @@ class ClipPlayer final : public rt::ProcessorBase {
   /// Number of blocks in which a @c WarpMode::kTimeStretch clip could not be
   /// given a stretcher voice and fell back to resampling. Monotonic; read from
   /// the control thread for telemetry.
-  uint32_t warp_stretch_overflow_count() const noexcept { return stretch_overflow_count_.load(); }
+  uint64_t warp_stretch_overflow_count() const noexcept {
+    return stretch_overflow_count_.load(std::memory_order_relaxed);
+  }
 
   /// Rebuilds the warp-voice pool at @p voices capacity and publishes it.
   /// Always records @p voices as the stored capacity, so a later prepare()
@@ -301,6 +302,8 @@ class ClipPlayer final : public rt::ProcessorBase {
   uint32_t warp_voice_capacity() const noexcept { return warp_voice_capacity_; }
 
  private:
+  friend struct WarpLossTestAccess;
+
   // Curves come from the clip itself (fade_in_curve / fade_out_curve), so no
   // curve parameter: the legacy single fade_curve field is not consulted here.
   static float fade_gain(const ClipSchedule& clip, int64_t position) noexcept;
@@ -387,8 +390,9 @@ class ClipPlayer final : public rt::ProcessorBase {
   int stretch_scratch_capacity_ = 0;
   // Bumped on the audio thread by acquire_stretch_voice and read from the
   // control thread by the accessor above, so it is atomic rather than a plain
-  // counter — the requirement overflow_counter.h states for exactly this pair.
-  rt::OverflowCounter stretch_overflow_count_{};
+  // counter.
+  static_assert(std::atomic<uint64_t>::is_always_lock_free);
+  std::atomic<uint64_t> stretch_overflow_count_{0};
 
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;

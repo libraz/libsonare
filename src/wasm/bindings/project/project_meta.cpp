@@ -74,7 +74,7 @@ void refuseUnknownAnnotationKeys(const val& row, const char* array_subject, size
       const std::string subject =
           std::string(array_subject) + "[" + std::to_string(index) + "]." + key;
       throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, subject,
-                                                    "", expected)
+                                                    expected)
           .as_caller_spelled();
     }
   }
@@ -141,53 +141,58 @@ void ProjectWasm::annotateChords(val chords) {
   // call returns (the POD holds borrowed pointers into these buffers).
   std::vector<std::vector<uint8_t>> ext_storage;
   std::vector<std::string> roman_storage;
-  if (!chords.isUndefined() && !chords.isNull()) {
-    const size_t count = wasmArrayLength(chords, "chords");
-    symbols.reserve(count);
-    ext_storage.reserve(count);
-    roman_storage.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-      val entry = chords[i];
-      static constexpr std::array<const char*, 8> kAllowed = {
-          "endPpq",       "extensions", "modulationBoundary", "quality",
-          "romanNumeral", "rootPc",     "slashBassPc",        "startPpq"};
-      refuseUnknownAnnotationKeys(entry, "chords", i, kAllowed);
-      SonareProjectChordSymbol sym{};
-      sym.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      sym.end_ppq = doubleProperty(entry, "endPpq", 0.0);
-      sym.root_pc = static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "rootPc", 0, 11, 255));
-      sym.quality = uintProperty(entry, "quality", sym.quality);
-      sym.slash_bass_pc =
-          static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "slashBassPc", 0, 11, 255));
-      sym.modulation_boundary =
-          boolProperty(entry, "modulationBoundary", sym.modulation_boundary != 0) ? 1 : 0;
-      std::vector<uint8_t> exts;
-      if (hasProperty(entry, "extensions")) {
-        val ext_arr = entry["extensions"];
-        if (!val::global("Array").call<bool>("isArray", ext_arr)) {
-          throw WasmTypeError("chord extensions must be an array");
-        }
-        const size_t ec = wasmArrayLength(ext_arr, "extensions");
-        exts.reserve(ec);
-        for (size_t e = 0; e < ec; ++e) {
-          exts.push_back(checkedByteFromVal(ext_arr[e], "extensions[i]"));
-        }
-      }
-      ext_storage.push_back(std::move(exts));
-      sym.extensions = ext_storage.back().empty() ? nullptr : ext_storage.back().data();
-      sym.extension_count = ext_storage.back().size();
-      roman_storage.push_back(stringProperty(entry, "romanNumeral", std::string()));
-      sym.roman_numeral = roman_storage.back().empty()
-                              ? nullptr
-                              : wasmCString(roman_storage.back(), "romanNumeral");
-      symbols.push_back(sym);
+  const size_t count = wasmArrayLength(chords, "chords");
+  symbols.reserve(count);
+  ext_storage.reserve(count);
+  roman_storage.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    if (val::global("Array").call<bool>("isArray", chords[i])) {
+      throw WasmTypeError("chords[" + std::to_string(i) + "] must be an object");
     }
+    val entry = requiredElementObject(chords, i, "chords");
+    const std::string at = "chords[" + std::to_string(i) + "]";
+    static constexpr std::array<const char*, 8> kAllowed = {
+        "endPpq",       "extensions", "modulationBoundary", "quality",
+        "romanNumeral", "rootPc",     "slashBassPc",        "startPpq"};
+    refuseUnknownAnnotationKeys(entry, "chords", i, kAllowed);
+    SonareProjectChordSymbol sym{};
+    sym.start_ppq = checkedDoubleFromVal(entry["startPpq"], "startPpq");
+    sym.end_ppq = checkedDoubleFromVal(entry["endPpq"], "endPpq");
+    sym.root_pc = static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "rootPc", 0, 11, 255));
+    sym.quality = uintProperty(entry, "quality", sym.quality);
+    sym.slash_bass_pc =
+        static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "slashBassPc", 0, 11, 255));
+    sym.modulation_boundary =
+        boolProperty(entry, "modulationBoundary", sym.modulation_boundary != 0) ? 1 : 0;
+    std::vector<uint8_t> exts;
+    if (hasProperty(entry, "extensions")) {
+      val ext_arr = entry["extensions"];
+      if (!val::global("Array").call<bool>("isArray", ext_arr)) {
+        throw WasmTypeError(at + ".extensions must be an array");
+      }
+      const size_t ec = wasmArrayLength(ext_arr, (at + ".extensions").c_str());
+      exts.reserve(ec);
+      for (size_t e = 0; e < ec; ++e) {
+        const std::string subject = at + ".extensions[" + std::to_string(e) + "]";
+        exts.push_back(checkedByteFromVal(ext_arr[e], subject.c_str()));
+      }
+    }
+    ext_storage.push_back(std::move(exts));
+    sym.extensions = ext_storage.back().empty() ? nullptr : ext_storage.back().data();
+    sym.extension_count = ext_storage.back().size();
+    if (hasProperty(entry, "romanNumeral")) {
+      val roman_numeral = entry["romanNumeral"];
+      if (!roman_numeral.isNull() && !roman_numeral.isUndefined()) {
+        const std::string subject = at + ".romanNumeral";
+        roman_storage.push_back(stringFromVal(roman_numeral, subject.c_str()));
+        sym.roman_numeral = wasmCString(roman_storage.back(), subject.c_str());
+      }
+    }
+    symbols.push_back(sym);
   }
   const SonareError err = sonare_project_annotate_chords(
       project_.get(), symbols.empty() ? nullptr : symbols.data(), symbols.size());
-  if (err != SONARE_OK) {
-    throwCodedCError(err);
-  }
+  if (err != SONARE_OK) throwCodedCError(err);
 }
 
 val ProjectWasm::chordAnnotations() const {
@@ -354,15 +359,15 @@ double ProjectWasm::getSampleRate() const {
 }
 
 double ProjectWasm::countInFrames(const val& count_in_bars_val) const {
-  const int32_t count_in_bars = checkedIntFromVal(count_in_bars_val, "countInBars");
+  const int32_t count_in_bars = domainNumberFromVal<int32_t>(
+      count_in_bars_val, "countInBars", sonare_c_detail::kProjectCountInBarsDomain);
   int64_t frames = 0;
-  const SonareError err = sonare_project_count_in_frames(
-      project_.get(), count_in_bars, SONARE_PROJECT_SAMPLE_RATE_PROJECT, &frames);
+  const SonareError err = sonare_project_count_in_frames(project_.get(), count_in_bars, &frames);
   if (err != SONARE_OK) throwCodedCError(err);
   constexpr int64_t kMaxSafeJsInteger = 9007199254740991LL;
   if (frames < 0 || frames > kMaxSafeJsInteger) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "countInFrames.frames is not exactly representable as a number");
+                                  "frames is not exactly representable as a number");
   }
   return static_cast<double>(frames);
 }
@@ -446,12 +451,20 @@ double ProjectWasm::endPpq() const {
   return out;
 }
 
-void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
-  const SonareError err =
-      sonare_project_set_mixer_scene_json(project_.get(), wasmCString(scene_json, "document"));
-  if (err != SONARE_OK) {
-    throwCodedCError(err);
+void ProjectWasm::setMixerScene(const val& document) {
+  std::optional<std::string> text;
+  if (!document.isUndefined() && !document.isNull()) {
+    text = stringFromVal(document, "scene");
   }
+  const SonareError err = sonare_project_set_mixer_scene_json(
+      project_.get(), text ? wasmCString(*text, "scene") : nullptr);
+  if (err == SONARE_OK) return;
+  if (err == SONARE_ERROR_INVALID_FORMAT) {
+    if (const auto* refusal = sonare_c_detail::last_parameter_refusal()) {
+      throwCEntryRefusal(refusal->as_caller_spelled());
+    }
+  }
+  throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
 }
 
 val ProjectWasm::mixerScene() const {
@@ -648,53 +661,49 @@ double ProjectWasm::sourceCount() const {
   return static_cast<double>(out);
 }
 
-double ProjectWasm::tempoSegmentCount() const {
-  size_t out = 0;
-  const SonareError err = sonare_project_tempo_segment_count(project_.get(), &out);
-  if (err != SONARE_OK) {
-    throwCodedCError(err);
+val ProjectWasm::tempoSegments() const {
+  struct TempoListGuard {
+    SonareProjectTempoSegmentList value{};
+    ~TempoListGuard() { sonare_free_project_tempo_segment_list(&value); }
+  } list;
+  const SonareError err = sonare_project_tempo_segments(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "tempoSegments returned a missing item array");
   }
-  return static_cast<double>(out);
-}
-
-double ProjectWasm::timeSignatureCount() const {
-  size_t out = 0;
-  const SonareError err = sonare_project_time_signature_count(project_.get(), &out);
-  if (err != SONARE_OK) {
-    throwCodedCError(err);
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const auto& segment = list.value.items[i];
+    val row = val::object();
+    row.set("startPpq", segment.start_ppq);
+    row.set("bpm", segment.bpm);
+    row.set("endBpm", segment.end_bpm);
+    out.call<void>("push", row);
   }
-  return static_cast<double>(out);
-}
-
-val ProjectWasm::tempoSegmentByIndex(const val& index_val) const {
-  const int index = checkedIntFromVal(index_val, "index");
-  SonareProjectTempoSegment seg{};
-  const SonareError err =
-      sonare_project_tempo_segment_by_index(project_.get(), static_cast<size_t>(index), &seg);
-  if (err != SONARE_OK) {
-    throwCodedCError(err);
-  }
-  val out = val::object();
-  // The same three fields setTempoSegments reads, so a segment read back can be
-  // written straight to another project.
-  out.set("startPpq", seg.start_ppq);
-  out.set("bpm", seg.bpm);
-  out.set("endBpm", seg.end_bpm);
   return out;
 }
 
-val ProjectWasm::timeSignatureByIndex(const val& index_val) const {
-  const int index = checkedIntFromVal(index_val, "index");
-  SonareProjectTimeSignatureSegment seg{};
-  const SonareError err =
-      sonare_project_time_signature_by_index(project_.get(), static_cast<size_t>(index), &seg);
-  if (err != SONARE_OK) {
-    throwCodedCError(err);
+val ProjectWasm::timeSignatures() const {
+  struct TimeSignatureListGuard {
+    SonareProjectTimeSignatureList value{};
+    ~TimeSignatureListGuard() { sonare_free_project_time_signature_list(&value); }
+  } list;
+  const SonareError err = sonare_project_time_signatures(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "timeSignatures returned a missing item array");
   }
-  val out = val::object();
-  out.set("startPpq", seg.start_ppq);
-  out.set("numerator", seg.numerator);
-  out.set("denominator", seg.denominator);
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const auto& segment = list.value.items[i];
+    val row = val::object();
+    row.set("startPpq", segment.start_ppq);
+    row.set("numerator", segment.numerator);
+    row.set("denominator", segment.denominator);
+    out.call<void>("push", row);
+  }
   return out;
 }
 
@@ -786,7 +795,7 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("positionAtPpq", &ProjectWasm::positionAtPpq)
       .function("barStartPpq", &ProjectWasm::barStartPpq)
       .function("endPpq", &ProjectWasm::endPpq)
-      .function("setMixerSceneJson", &ProjectWasm::setMixerSceneJson)
+      .function("setMixerScene", &ProjectWasm::setMixerScene)
       .function("mixerScene", &ProjectWasm::mixerScene)
       .function("unresolvedSoundFontUris", &ProjectWasm::unresolvedSoundFontUris)
       .function("setMarker", &ProjectWasm::setMarker)
@@ -798,10 +807,8 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("trackCount", &ProjectWasm::trackCount)
       .function("clipCount", &ProjectWasm::clipCount)
       .function("sourceCount", &ProjectWasm::sourceCount)
-      .function("tempoSegmentCount", &ProjectWasm::tempoSegmentCount)
-      .function("tempoSegmentByIndex", &ProjectWasm::tempoSegmentByIndex)
-      .function("timeSignatureByIndex", &ProjectWasm::timeSignatureByIndex)
-      .function("timeSignatureCount", &ProjectWasm::timeSignatureCount)
+      .function("tempoSegments", &ProjectWasm::tempoSegments)
+      .function("timeSignatures", &ProjectWasm::timeSignatures)
       .function("setTempoSegments", &ProjectWasm::setTempoSegments)
       .function("setTimeSignatures", &ProjectWasm::setTimeSignatures)
       .function("lastBounceCompileResult", &ProjectWasm::lastBounceCompileResult);

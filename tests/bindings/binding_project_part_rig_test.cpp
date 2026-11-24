@@ -72,7 +72,7 @@ std::vector<float> bounce_gm_synth(SonareProject* project) {
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   SonareSynthInstrumentBinding binding{};
   sonare_synth_patch_init(&binding.patch);
   binding.destination_id = kDestination;
@@ -148,7 +148,7 @@ TEST_CASE("a SoundFont-player bounce honours part rigs", "[bindings][part_rig]")
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   SonareSf2InstrumentBinding binding{};
   sonare_sf2_instrument_config_init(&binding.config);
   binding.destination_id = kDestination;
@@ -209,6 +209,12 @@ TEST_CASE("sonare_engine_set_part_rig reaches NativeSynth and Sf2Player, not the
                                        SONARE_PART_RIG_BANK, nullptr) == SONARE_OK);
     REQUIRE(sonare_engine_set_part_rig(engine, destination, 5, SONARE_PART_RIG_CHAIN,
                                        kSoftClipChain) == SONARE_OK);
+    constexpr const char* kUnread =
+        R"([{"processor":"saturation.softClipper","params":{"bogus":1}}])";
+    CHECK(sonare_engine_set_part_rig(engine, destination, 5, SONARE_PART_RIG_CHAIN, kUnread) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "unknown key inserts[0].params.bogus (expected aliasing, ceiling, driveDb, mix)");
   }
   REQUIRE(sonare_engine_set_part_rig(engine, 3, 0, SONARE_PART_RIG_NONE, nullptr) ==
           SONARE_ERROR_NOT_SUPPORTED);

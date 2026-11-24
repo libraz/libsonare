@@ -123,7 +123,6 @@ class RealtimeEngineWasm {
   size_t midiInstrumentCount() const;
   void bindMidiCc(emscripten::val binding);
   void clearMidiCcBindings();
-  size_t midiCcBindingCount() const;
   emscripten::val midiCcBindings() const;
   void setControllerProfile(const emscripten::val& destination_id_val,
                             const std::string& preset_name);
@@ -150,7 +149,7 @@ class RealtimeEngineWasm {
   size_t midiInputPendingCount() const;
   void setMidiDestinationExternal(const emscripten::val& destination_id_val, bool external);
   void setExternalMidiClockEnabled(bool enabled);
-  uint32_t externalMidiDroppedCount() const;
+  double externalMidiDroppedCount() const;
   size_t externalMidiPendingCount() const;
   emscripten::val drainExternalMidi(const emscripten::val& max_records_val);
   // Scalar scratch drain for the AudioWorklet external-MIDI SAB path. This
@@ -364,8 +363,8 @@ class RealtimeEngineWasm {
   bool popClipPageRequestToScratch();
   uint32_t clipPageRequestScratchClipId() const;
   double clipPageRequestScratchSample() const;
-  uint32_t clipPageRequestOverflowCount() const;
-  uint32_t warpStretchOverflowCount() const;
+  double clipPageRequestOverflowCount() const;
+  double warpStretchOverflowCount() const;
   void setWarpVoiceCapacity(const emscripten::val& voices_val);
   uint32_t warpVoiceCapacity() const;
   void setClipPagePrefetchFrames(double frames);

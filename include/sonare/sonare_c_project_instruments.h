@@ -4,6 +4,9 @@
 /// @brief Instrument-driven bounce surfaces (callback host shim, built-in synth,
 ///        NativeSynth, SoundFont) for the headless arrangement C ABI. Included
 ///        via @ref sonare_c_project.h.
+/// @details The *InstrumentBinding rows are fixed-stride caller-filled array
+///          elements with no struct_size of their own; their layout is governed
+///          by SONARE_PROJECT_ABI_VERSION, which moves with any change to it.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -318,27 +321,33 @@ typedef struct {
 // SoundFont (SF2) instrument: host-supplied sample data, GS-compatible player
 // ============================================================================
 
-/// @brief Loads (parses) SF2 bytes into the project: presets / instruments /
-///        sample headers plus the sample PCM converted to a float pool.
-///        Replaces any previously loaded SoundFont. CONTROL thread; the bytes
+/// @brief Loads (parses) SF2 bytes under @p uri: presets / instruments / sample
+///        headers plus the sample PCM converted to a float pool. A NULL @p uri
+///        selects the default SoundFont; a non-NULL URI names an independent
+///        SoundFont, and an empty URI is refused. The URI is copied. Replaces any
+///        previously loaded SoundFont for that URI. CONTROL thread; the bytes
 ///        are copied/decoded, so @p data may be freed after the call. On a
 ///        malformed file the project's SoundFont is left unchanged and
 ///        SONARE_ERROR_INVALID_FORMAT is returned (sonare_last_error_message
 ///        carries the parser detail); a file rejected against the resource
 ///        limits below returns the same code, because that too is a statement
 ///        about the supplied data. SONARE_ERROR_INVALID_PARAMETER is reserved
-///        for a NULL project/@p data or a zero @p size, so a caller can tell a
-///        broken file from a broken call — the same split
-///        @ref sonare_engine_load_soundfont makes. Resource limits are
+///        for a NULL project/@p data, a non-NULL empty @p uri or a zero @p size,
+///        so a caller can tell a broken file from a broken call — the same split
+///        @ref sonare_engine_load_sound_font makes. Resource limits are
 ///        268,435,456 input bytes, 67,108,864 sample points, 536,870,912 peak
 ///        input-plus-decoded bytes, and 65,536 records per pdta table.
-SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t* data, size_t size);
+SonareError sonare_project_load_sound_font(SonareProject* project, const char* uri,
+                                           const uint8_t* data, size_t size);
 
-/// @brief Releases the project's loaded SoundFont (no-op when none is loaded).
-SonareError sonare_project_clear_soundfont(SonareProject* project);
+/// @brief Releases the SoundFont named by @p uri (no-op when none is loaded).
+/// @details A NULL @p uri selects the default SoundFont; a non-NULL empty URI is refused.
+SonareError sonare_project_clear_sound_font(SonareProject* project, const char* uri);
 
-/// @brief Number of presets in the project's loaded SoundFont (0 when none).
-SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t* out_count);
+/// @brief Number of presets in the SoundFont named by @p uri (0 when none is loaded).
+/// @details A NULL @p uri selects the default SoundFont; a non-NULL empty URI is refused.
+SonareError sonare_project_sound_font_preset_count(const SonareProject* project, const char* uri,
+                                                   size_t* out_count);
 
 /// @brief Source backend a resolved MIDI program renders through: the loaded
 ///        SoundFont (kSf2) or the built-in synthesizer fallback (kSynth).
@@ -366,7 +375,7 @@ typedef struct {
 
 /// @brief Enumerates every (channel, bank, program) combination the compiled
 ///        arrangement plays a note through, in first-use order, and reports
-///        whether each resolves in the loaded SoundFont (GS variation/drum
+///        whether each resolves in the SoundFont named by @p uri (GS variation/drum
 ///        fallbacks included) or would fall back to the built-in synth.
 ///        Each destination's events drive the SoundFont player's own part
 ///        state in event order and every note-on is resolved by that player,
@@ -377,10 +386,17 @@ typedef struct {
 ///        not reported. Channel 10 and GM2 CC0=120 rhythm parts resolve drums
 ///        via bank 128. @p out may be NULL when
 ///        @p max_entries is 0 to query the
-///        count: @p out_count always receives the TOTAL entry count and at most
-///        @p max_entries entries are written.
-SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
-                                              size_t max_entries, size_t* out_count);
+///        count: on success @p out_count receives the TOTAL entry count and at
+///        most @p max_entries entries are written; on failure it is 0.
+/// @details A NULL @p uri selects the default SoundFont; a non-NULL empty URI is refused.
+///          A named @p uri no SoundFont was loaded under reports every
+///          combination on the synth backend, whereas a bounce binding that URI
+///          refuses with SONARE_ERROR_INVALID_STATE and reason
+///          @c unresolvedSoundFont; the manifest matches a bounce only for a
+///          resolved SoundFont under the default coverage policy.
+SonareError sonare_project_sound_font_manifest(const SonareProject* project, const char* uri,
+                                               SonareSf2ProgramStatus* out, size_t max_entries,
+                                               size_t* out_count);
 
 /// @brief SF2 player patch for @ref SonareProjectBounceOptions::sf2_instruments. Start from
 ///        @ref sonare_sf2_instrument_config_init and override what you need; every field is then
@@ -411,9 +427,12 @@ void sonare_sf2_instrument_config_init(SonareSf2InstrumentConfig* config);
 
 /// @brief Binds an SF2 player patch to a MIDI destination id (the value set by
 ///        @ref sonare_project_set_track_midi_destination; default 0).
+/// @details @p sound_font_uri is borrowed for the bounce call. NULL selects the
+///          default SoundFont; a non-NULL empty URI is refused.
 typedef struct {
   uint32_t destination_id;           ///< MIDI destination id the player serves.
   SonareSf2InstrumentConfig config;  ///< Player patch for that destination.
+  const char* sound_font_uri;        ///< SoundFont URI, or NULL for the default.
 } SonareSf2InstrumentBinding;
 
 /// @brief Configuration kind persisted for a project MIDI destination.
@@ -435,7 +454,7 @@ typedef struct {
   const SonareSynthPatch* synth;            ///< Patch for a NativeSynth binding.
   const SonareBuiltinSynthConfig* builtin;  ///< Configuration for a built-in binding.
   const SonareSf2InstrumentConfig* sf2;     ///< Configuration for a SoundFont binding.
-  const char* sound_font_uri;               ///< URI for a SoundFont binding, or NULL for default.
+  const char* sound_font_uri;               ///< Non-empty SoundFont URI, or NULL for the default.
   int32_t use_gm_programs;                  ///< Nonzero enables GM programs for NativeSynth.
   int32_t bank_msb;                         ///< MIDI bank MSB in [0, 127], or FROM_CLIP.
   int32_t bank_lsb;                         ///< MIDI bank LSB in [0, 127], or FROM_CLIP.
@@ -508,9 +527,6 @@ static_assert(sizeof(SonareProjectInstrument) == 6u * sizeof(uint32_t) + 4u * si
 /// real domain, so it never reads as a width.
 #define SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1)
 
-/// The project's own sample rate. Outside the rate's real domain, so it never reads as a rate.
-#define SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1)
-
 /// @brief Articulation ordinals. Mirrors midi::ArticulationMode.
 /// @details What a channel does with a note-on while another note on the same
 ///          channel is still held.
@@ -553,7 +569,7 @@ typedef struct {
 /// @note Pointer members stay the caller's; the call does not transfer ownership.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareProjectBounceOptions); set by the init function.
-  /// Render length in frames at @p sample_rate; positive. Default
+  /// Render length in frames at the project sample rate; positive. Default
   /// @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT, which derives it.
   int64_t total_frames;
   /// Render block size in frames; positive. Default 128.
@@ -563,9 +579,6 @@ typedef struct {
   /// the width of the scene master's layout (2 with no master). The master is mixed at this
   /// width; 1 folds a 2-channel master to 0.5(L+R).
   int num_channels;
-  /// Sample rate in Hz; must equal the project sample rate. Default
-  /// @ref SONARE_PROJECT_SAMPLE_RATE_PROJECT, the project's.
-  int sample_rate;
   /// Host-instrument latency compensation in samples fed to the compiler; >= 0. Default 0.
   int instrument_latency_samples;
   /// Callback instruments (see @ref SonareInstrumentBinding): MIDI tracks routed to their
@@ -586,12 +599,12 @@ typedef struct {
   /// SONARE_ERROR_INVALID_PARAMETER. Default NULL.
   const SonareSynthInstrumentBinding* synth_instruments;
   size_t synth_instrument_count;  ///< Entries in @p synth_instruments. Default 0.
-  /// GS-compatible SoundFont players fed by the project's loaded SoundFont
-  /// (@ref sonare_project_load_soundfont). Each player is multitimbral (16 MIDI channels;
-  /// channel 10 and GM2 CC0=120 rhythm parts as drums via bank 128; GS NRPN part edits and GS/GM
-  /// SysEx resets honored); programs the SoundFont does not cover, including bouncing with no
-  /// SoundFont loaded, play through the built-in synthesizer GM fallback bank.
-  /// @ref sonare_project_soundfont_manifest reports default SF2-first coverage. Default NULL.
+  /// GS-compatible SoundFont players. Each player's @p sound_font_uri selects a
+  /// loaded SoundFont, or NULL selects the default loaded SoundFont. Players are
+  /// multitimbral (16 MIDI channels; channel 10 and GM2 CC0=120 rhythm parts as
+  /// drums via bank 128; GS NRPN part edits and GS/GM SysEx resets honored);
+  /// programs the SoundFont does not cover play through the built-in synthesizer
+  /// GM fallback bank. Default NULL.
   const SonareSf2InstrumentBinding* sf2_instruments;
   size_t sf2_instrument_count;  ///< Entries in @p sf2_instruments. Default 0.
   /// Optional click, mixed after the master chain when enabled is nonzero.
@@ -619,10 +632,13 @@ static_assert(offsetof(SonareProjectBounceOptions, struct_size) == 0,
 static_assert(offsetof(SonareProjectBounceOptions, total_frames) == sizeof(int64_t),
               "BounceOptions.total_frames offset");
 static_assert(offsetof(SonareProjectBounceOptions, instruments) ==
-                  2 * sizeof(int64_t) + 4 * sizeof(int),
+                  (2 * sizeof(int64_t) + 3 * sizeof(int) + alignof(void*) - 1) / alignof(void*) *
+                      alignof(void*),
               "BounceOptions.instruments offset");
 static_assert(offsetof(SonareProjectBounceOptions, count_in_bars) ==
-                  2 * sizeof(int64_t) + 4 * sizeof(int) + 13 * sizeof(void*),
+                  (2 * sizeof(int64_t) + 3 * sizeof(int) + alignof(void*) - 1) / alignof(void*) *
+                          alignof(void*) +
+                      13 * sizeof(void*),
               "BounceOptions.count_in_bars offset");
 // The tail is padded to the int64_t alignment where pointers are 4 bytes (wasm32).
 static_assert(sizeof(SonareProjectBounceOptions) ==
@@ -632,12 +648,11 @@ static_assert(sizeof(SonareProjectBounceOptions) ==
               "SonareProjectBounceOptions layout drift");
 #endif
 
-/// @brief Returns the count-in length at the project's initial tempo and meter.
+/// @brief Returns count-in frames at the project's sample rate, initial tempo and meter.
 /// @param count_in_bars Number of initial bars, in [0, 16].
-/// @param sample_rate The project sample rate, or @ref SONARE_PROJECT_SAMPLE_RATE_PROJECT.
 /// @param out_frames Receives the count-in length in frames.
 SonareError sonare_project_count_in_frames(const SonareProject* project, int32_t count_in_bars,
-                                           int sample_rate, int64_t* out_frames);
+                                           int64_t* out_frames);
 
 /// @brief Compiles + renders the project offline to interleaved float audio.
 /// @param options Render options, started from @ref sonare_project_bounce_options_init. May be

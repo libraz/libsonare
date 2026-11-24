@@ -210,13 +210,13 @@ void sonare_stream_quantize_config_init(SonareStreamQuantizeConfig* config);
 /// Mirrors sonare::AnalyzerStats and ProgressiveEstimate. Variable-length arrays are owned by this
 /// result and released by sonare_free_stream_stats.
 typedef struct {
-  int total_frames;              ///< Total frames processed
-  size_t total_samples;          ///< Total samples processed
-  float duration_sec;            ///< Total audio processed (s)
-  size_t pending_frames;         ///< Unread frames currently retained
-  size_t dropped_output_frames;  ///< New output frames dropped at the configured cap
-  float bpm;                     ///< Estimated BPM (0 if not yet estimated)
-  float bpm_confidence;          ///< BPM confidence (0-1)
+  int total_frames;                ///< Total frames processed
+  size_t total_samples;            ///< Total samples processed
+  float duration_sec;              ///< Total audio processed (s)
+  size_t pending_frames;           ///< Unread frames currently retained
+  uint64_t dropped_output_frames;  ///< New output frames dropped at the configured cap
+  float bpm;                       ///< Estimated BPM (0 if not yet estimated)
+  float bpm_confidence;            ///< BPM confidence (0-1)
   /// Tempo candidates the most recent BPM estimate chose from; 0 until one has run.
   size_t bpm_candidate_count;
   int key;                         ///< Estimated key root pitch class (0-11, -1 = unknown)

@@ -18,9 +18,9 @@
 
 namespace sonare::mastering::eq {
 
-/// @brief Parses one EQ band with the keys and validation of `sonare_eq_set_band`'s JSON. An
-///        earlier spelling of a key (snake_case, `lookaheadMs`, `dynEnabled`) is refused naming
-///        the current key, as is a token outside the lowerCamel sets of band_strings.h.
+/// @brief Parses one EQ band with the keys and validation of `sonare_eq_set_band`'s JSON. A
+///        token outside the lowerCamel sets of band_strings.h is refused; keys it does not read
+///        are left for the caller to refuse against eq_band_known_keys().
 /// @param path Path of @p value in its document (empty for a standalone band document), the
 ///        root every thrown message names its key from.
 /// @throws SonareException(InvalidFormat) on a value that is not a JSON

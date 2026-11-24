@@ -115,37 +115,86 @@ TEST_CASE("sonare_diagnostic_init sets the struct size and empty strings", "[sur
 
 namespace {
 
-// One load that trips each mixing scene warning once.
-constexpr const char* kSceneWithEveryMixingWarning = R"({
+// One load that trips the undeclared-send warning once.
+constexpr const char* kSceneWithUndeclaredSendWarning = R"({
   "version": 2,
   "buses": [{"id": "master", "role": "master"}],
   "strips": [{"id": "a", "faderDb": -3,
-    "inserts": [{"slot": "post", "processor": "eq.parametric",
-                 "params": {"highPassHz":80}}],
     "sends": [{"id": "s", "destinationBusId": "aux1typo", "sendDb": 0}]}],
   "connections": [{"source": "a", "destination": "master"}]
 })";
 
 }  // namespace
 
-TEST_CASE("Mixer scene warnings carry their public codes in a fixed order", "[surface][core]") {
-  SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithEveryMixingWarning, 48000, 512);
+TEST_CASE("Mixer scene emits the undeclared-send warning", "[surface][core]") {
+  SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithUndeclaredSendWarning, 48000, 512);
   REQUIRE(mixer != nullptr);
   const auto diagnostics = diagnostic_codes_and_messages();
   sonare_mixer_destroy(mixer);
-  REQUIRE(diagnostics.size() == 2);
-  CHECK(diagnostics[0].first == "mixing.ignored_insert_param");
-  CHECK(diagnostics[1].first == "mixing.undeclared_send");
-  CHECK(diagnostics[1].second ==
+  REQUIRE(diagnostics.size() == 1);
+  CHECK(diagnostics[0].first == "mixing.undeclared_send");
+  CHECK(diagnostics[0].second ==
         "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux");
+}
+
+TEST_CASE("Mixer scene refuses an insert parameter no processor reads", "[surface][core]") {
+  constexpr const char* invalid = R"({
+    "version": 2,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "a", "inserts": [{"slot": "post", "processor": "utility.gain",
+      "params": {"gainDB": 3}}]}],
+    "connections": [{"source": "a", "destination": "master"}]
+  })";
+  CHECK(sonare_mixer_from_scene_json(invalid, 48000, 512) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key strips[0].inserts[0].params.gainDB (expected levelDb)");
+
+  constexpr const char* valid = R"({
+    "version": 2,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "a", "inserts": [{"slot": "post", "processor": "utility.gain",
+      "params": {"levelDb": 3}}]}],
+    "connections": [{"source": "a", "destination": "master"}]
+  })";
+  SonareMixer* mixer = sonare_mixer_from_scene_json(valid, 48000, 512);
+  REQUIRE(mixer != nullptr);
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixer scene refuses an unread bus insert parameter", "[surface][core]") {
+  constexpr const char* invalid = R"({
+    "version": 2,
+    "buses": [{"id": "master", "role": "master", "inserts": [
+      {"slot": "pre", "processor": "utility.gain", "params": {"gainDB": 3}}
+    ]}],
+    "strips": [],
+    "connections": []
+  })";
+  CHECK(sonare_mixer_from_scene_json(invalid, 48000, 512) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key buses[0].inserts[0].params.gainDB (expected levelDb)");
+
+  constexpr const char* valid = R"({
+    "version": 2,
+    "buses": [{"id": "master", "role": "master", "inserts": [
+      {"slot": "pre", "processor": "utility.gain", "params": {"levelDb": 3}}
+    ]}],
+    "strips": [],
+    "connections": []
+  })";
+  SonareMixer* mixer = sonare_mixer_from_scene_json(valid, 48000, 512);
+  REQUIRE(mixer != nullptr);
+  sonare_mixer_destroy(mixer);
 }
 
 TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list intact",
           "[surface][core]") {
-  SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithEveryMixingWarning, 48000, 512);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithUndeclaredSendWarning, 48000, 512);
   REQUIRE(mixer != nullptr);
   sonare_mixer_destroy(mixer);
-  REQUIRE(sonare_last_diagnostic_count() == 2);
+  REQUIRE(sonare_last_diagnostic_count() == 1);
 
   SonareDiagnostic diagnostic;
   sonare_diagnostic_init(&diagnostic);
@@ -160,11 +209,11 @@ TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list inta
     CHECK(diagnostic.code == untouched_code);
   }
   SECTION("index past the count") {
-    CHECK(sonare_last_diagnostic(2, &diagnostic) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_diagnostic(1, &diagnostic) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(diagnostic.code == untouched_code);
   }
   // A refused read neither clears the list nor records an error message.
-  CHECK(sonare_last_diagnostic_count() == 2);
+  CHECK(sonare_last_diagnostic_count() == 1);
   CHECK(std::string(sonare_last_error_message()).empty());
 }
 

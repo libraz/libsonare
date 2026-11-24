@@ -108,17 +108,16 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   SONARE_C_REQUIRE_NONNULL(project);
   SonareError err = validate_audio_params("audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
-  SonareProjectTempoOptions resolved;
-  if (options) {
-    resolved = *options;
-  } else {
-    sonare_project_tempo_options_init(&resolved);
+  SonareProjectTempoOptions defaults{};
+  if (options == nullptr) {
+    sonare_project_tempo_options_init(&defaults);
+    options = &defaults;
   }
-  if (err = run_validation([&] { check_tempo_options(resolved); }); err != SONARE_OK) return err;
+  if (err = run_validation([&] { check_tempo_options(*options); }); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(candidates, capacity);
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
-      analyze_tempo_candidates(audio, len, sample_rate, resolved);
+      analyze_tempo_candidates(audio, len, sample_rate, *options);
   if (estimates.empty()) return SONARE_ERROR_INVALID_STATE;
   if (out_count) *out_count = estimates.size();
   const size_t emitted = std::min(capacity, estimates.size());
@@ -135,56 +134,12 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
 
 SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
                                       int sample_rate, const SonareProjectTempoOptions* options,
-                                      size_t candidate_index, uint8_t apply_time_signatures,
-                                      float* out_bpm) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_bpm) *out_bpm = 0.0f;
-  SONARE_C_REQUIRE_NONNULL(project);
-  SonareError err = validate_audio_params("audio", audio, len, sample_rate);
-  if (err != SONARE_OK) return err;
-  SonareProjectTempoOptions resolved;
-  if (options) {
-    resolved = *options;
-  } else {
-    sonare_project_tempo_options_init(&resolved);
-  }
-  if (err = run_validation([&] { check_tempo_options(resolved); }); err != SONARE_OK) return err;
-  SONARE_C_TRY
-  const std::vector<sonare::mir::TempoEstimate> estimates =
-      analyze_tempo_candidates(audio, len, sample_rate, resolved);
-  check_tempo_candidate(estimates, candidate_index);
-  const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
-  auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
-    auto time_signature_command =
-        std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs);
-    if (!project->history.apply(std::move(time_signature_command)))
-      return SONARE_ERROR_INVALID_STATE;
-  }
-  if (out_bpm) *out_bpm = static_cast<float>(selected.segments.front().bpm);
-  return SONARE_OK;
-  SONARE_C_CATCH
-#else
-  if (out_bpm) *out_bpm = {};
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 audio, len, sample_rate, options, candidate_index,
-                                                 apply_time_signatures, out_bpm);
-#endif
-}
-
-SonareError sonare_project_auto_tempo_with_result(SonareProject* project, const float* audio,
-                                                  size_t len, int sample_rate,
-                                                  const SonareProjectTempoOptions* options,
-                                                  size_t candidate_index,
-                                                  uint8_t apply_time_signatures,
-                                                  SonareProjectAutoTempoResult* out) {
+                                      size_t candidate_index, int32_t apply_time_signatures,
+                                      SonareProjectAutoTempoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out);
   SonareError err = validate_audio_params("audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SonareProjectTempoOptions defaults{};
@@ -200,6 +155,7 @@ SonareError sonare_project_auto_tempo_with_result(SonareProject* project, const 
   const std::vector<sonare::mir::TempoEstimate> estimates =
       analyze_tempo_candidates(audio, len, sample_rate, *supplied_options);
   check_tempo_candidate(estimates, candidate_index);
+  SONARE_C_REQUIRE_NONNULL(out);
   const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
   SonareProjectAutoTempoResult result{};
   result.bpm = static_cast<float>(selected.segments.front().bpm);
@@ -207,20 +163,15 @@ SonareError sonare_project_auto_tempo_with_result(SonareProject* project, const 
   result.time_signature = {selected.meter.numerator, selected.meter.denominator,
                            selected.meter.confidence};
 
-  auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
-  if (!project->history.apply(std::move(command))) {
+  std::vector<arr::EditCommandPtr> commands;
+  commands.push_back(std::make_unique<arr::SetTempoSegment>(selected.segments));
+  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
+    commands.push_back(std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs));
+  }
+  if (!project->history.apply_transaction(std::move(commands))) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE,
                                     "the tempo candidate could not be applied");
     return SONARE_ERROR_INVALID_STATE;
-  }
-  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
-    auto time_signature_command =
-        std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs);
-    if (!project->history.apply(std::move(time_signature_command))) {
-      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE,
-                                      "the detected time signatures could not be applied");
-      return SONARE_ERROR_INVALID_STATE;
-    }
   }
   *out = result;
   return SONARE_OK;
@@ -411,6 +362,7 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
       chord.extensions.assign(in.extensions, in.extensions + in.extension_count);
     }
     if (in.roman_numeral != nullptr) {
+      check::non_empty(in.roman_numeral, subject("roman_numeral").c_str());
       chord.roman_numeral = in.roman_numeral;
     }
     out.push_back(std::move(chord));

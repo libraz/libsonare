@@ -181,6 +181,31 @@ TEST_CASE("GS EFX factory rejects incomplete selectors and non-integral or out-o
   require_invalid({{"typeMsb", 127.0}, {"typeLsb", 127.0}});
 }
 
+TEST_CASE("GS EFX factory refuses a half or unsupported TYPE pair as a relation naming both keys",
+          "[mastering][insert_factory][gs][efx]") {
+  using sonare::SonareParameterRefusal;
+  const auto refusal_of = [](const std::vector<Param>& params) {
+    try {
+      (void)make_insert_from_params(kName, params);
+    } catch (const SonareParameterRefusal& refusal) {
+      return refusal;
+    }
+    FAIL("no structured refusal");
+    throw;
+  };
+  const SonareParameterRefusal lsb_missing = refusal_of({{"typeMsb", 1.0}});
+  CHECK(lsb_missing.code() == sonare::ErrorCode::InvalidParameter);
+  CHECK(lsb_missing.form() == SonareParameterRefusal::Form::Relation);
+  CHECK(lsb_missing.subjects() == std::vector<std::string>{"typeLsb", "typeMsb"});
+  CHECK(std::string(lsb_missing.what()) == "typeLsb must not be NULL when typeMsb is not NULL");
+  const SonareParameterRefusal msb_missing = refusal_of({{"typeLsb", 0.0}});
+  CHECK(msb_missing.subjects() == std::vector<std::string>{"typeMsb", "typeLsb"});
+  const SonareParameterRefusal unsupported = refusal_of({{"typeMsb", 127.0}, {"typeLsb", 127.0}});
+  CHECK(unsupported.form() == SonareParameterRefusal::Form::Relation);
+  CHECK(unsupported.subjects() == std::vector<std::string>{"typeMsb", "typeLsb"});
+  CHECK(std::string(unsupported.what()) == "typeMsb and typeLsb must name a supported GS EFX type");
+}
+
 TEST_CASE("GS EFX explicit raw bytes overlay type defaults before prepare",
           "[mastering][insert_factory][gs][efx]") {
   auto processor = make_insert(kName, R"({"typeMsb":1,"typeLsb":0,"byte3":127})");

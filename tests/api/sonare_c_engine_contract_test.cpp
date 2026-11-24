@@ -128,10 +128,14 @@ TEST_CASE("engine MIDI getters define their out-parameter on every exit path",
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
-  size_t dropped = 0xDEADBEEF;
+  uint64_t dropped = 0xDEADBEEF;
   uint32_t automation_id = 0xDEADBEEF;
   size_t instrument_count = 123;
   size_t pending_count = 456;
+
+  REQUIRE(sonare_engine_external_midi_dropped_count(nullptr, &dropped) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(dropped == 0);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) == SONARE_OK);
@@ -141,8 +145,10 @@ TEST_CASE("engine MIDI getters define their out-parameter on every exit path",
   REQUIRE(sonare_engine_midi_instrument_count(engine, &instrument_count) == SONARE_OK);
   REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending_count) == SONARE_OK);
 #else
+  dropped = 77;
   REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) ==
           SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(dropped == 0);
   REQUIRE(sonare_engine_resolve_instrument_automation_id(engine, 7, "cutoff", &automation_id) ==
           SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_midi_instrument_count(engine, &instrument_count) ==

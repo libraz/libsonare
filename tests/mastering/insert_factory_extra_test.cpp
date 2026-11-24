@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
+#include "c_api/checked_insert.h"
 #include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
@@ -1771,7 +1772,7 @@ TEST_CASE("Mastering inserts publish non-empty automation parameter descriptors"
   }
 }
 
-TEST_CASE("eq.dynamic reads detectorDelayMs and refuses its earlier lookaheadMs spelling",
+TEST_CASE("eq.dynamic reads detectorDelayMs and leaves lookaheadMs unread",
           "[mastering][insert_factory][eq]") {
   using sonare::mastering::eq::DynamicEq;
 
@@ -1782,14 +1783,15 @@ TEST_CASE("eq.dynamic reads detectorDelayMs and refuses its earlier lookaheadMs 
   REQUIRE(dyn_new != nullptr);
   REQUIRE(dyn_new->band(0).detector_delay_ms == 12.0f);
 
+  std::vector<std::string> unknown;
+  REQUIRE(make_insert("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})",
+                      &unknown) != nullptr);
+  CHECK(unknown == std::vector<std::string>{"band0.lookaheadMs"});
   REQUIRE_THROWS_WITH(
-      make_insert("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})"),
-      Catch::Matchers::ContainsSubstring(
-          "band0.lookaheadMs is an earlier spelling; write band0.detectorDelayMs"));
-  REQUIRE_THROWS_WITH(
-      make_insert("eq.dynamic",
-                  R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8,"band0.detectorDelayMs":12})"),
-      Catch::Matchers::ContainsSubstring("write band0.detectorDelayMs"));
+      sonare::mastering::api::make_checked_insert(
+          "eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})", "params",
+          sonare::ErrorCode::InvalidParameter),
+      Catch::Matchers::StartsWith("unknown key params.band0.lookaheadMs (expected "));
 }
 
 // ---------------------------------------------------------------------------

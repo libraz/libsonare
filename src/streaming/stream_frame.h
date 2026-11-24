@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace sonare {
@@ -157,11 +158,11 @@ struct ProgressiveEstimate {
 
 /// @brief Statistics and current state of the analyzer.
 struct AnalyzerStats {
-  int total_frames = 0;              ///< Total frames processed
-  size_t total_samples = 0;          ///< Total samples processed
-  float duration_seconds = 0.0f;     ///< Total duration processed
-  size_t pending_frames = 0;         ///< Unread output frames currently retained
-  size_t dropped_output_frames = 0;  ///< New output frames dropped at the pending-frame limit
+  int total_frames = 0;                ///< Total frames processed
+  size_t total_samples = 0;            ///< Total samples processed
+  float duration_seconds = 0.0f;       ///< Total duration processed
+  size_t pending_frames = 0;           ///< Unread output frames currently retained
+  uint64_t dropped_output_frames = 0;  ///< New output frames dropped at the pending-frame limit
   size_t dropped_chord_progression_entries = 0;  ///< Chord changes dropped at the history cap
   size_t dropped_bar_progression_entries = 0;    ///< Bar chords dropped at the history cap
   /// Blocks in which a non-finite input sample was replaced before it could

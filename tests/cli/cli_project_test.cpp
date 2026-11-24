@@ -1204,6 +1204,44 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
   std::remove(out.c_str());
 }
 
+TEST_CASE("CLI transcribe reports detected tempo confidence and meter", "[cli][transcribe]") {
+  const std::string clicks = unique_temp_path("_transcribe_clicks.wav");
+  const std::string output_midi = unique_temp_path("_transcribe_clicks.mid");
+  create_click_track_wav(clicks);
+
+  const auto run = [&](const std::string& tempo_option) {
+    auto [code, output] = exec_command(CLI + " transcribe " + clicks + " " + tempo_option +
+                                       " --json -o " + output_midi);
+    INFO(output);
+    REQUIRE(code == 0);
+    return sonare::util::json::parse_strict(output);
+  };
+
+  const auto detected = run("");
+  REQUIRE(detected.contains("tempo_confidence"));
+  REQUIRE(detected["tempo_confidence"].is_number());
+  REQUIRE(std::isfinite(detected["tempo_confidence"].as_number()));
+  REQUIRE(detected.contains("time_signature"));
+  const auto& time_signature = detected["time_signature"];
+  REQUIRE(time_signature.size() == 3);
+  for (const char* key : {"numerator", "denominator", "confidence"}) {
+    REQUIRE(time_signature.contains(key));
+    REQUIRE(time_signature[key].is_number());
+    REQUIRE(std::isfinite(time_signature[key].as_number()));
+  }
+  CHECK(time_signature["numerator"].as_number() > 0.0);
+  CHECK(time_signature["denominator"].as_number() > 0.0);
+  CHECK(time_signature["confidence"].as_number() >= 0.0);
+  CHECK(time_signature["confidence"].as_number() <= 1.0);
+
+  const auto explicit_tempo = run("--tempo-bpm 120");
+  CHECK_FALSE(explicit_tempo.contains("tempo_confidence"));
+  CHECK_FALSE(explicit_tempo.contains("time_signature"));
+
+  std::remove(clicks.c_str());
+  std::remove(output_midi.c_str());
+}
+
 TEST_CASE("CLI pitch-correct-timevarying holds the pYIN frame as a duration",
           "[cli][pitch-correct-timevarying]") {
   for (const int rate : {44100, 48000, 192000}) {

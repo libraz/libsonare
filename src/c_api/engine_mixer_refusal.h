@@ -12,12 +12,15 @@
 #include <cassert>
 #include <cstdint>
 #include <string>
+#include <vector>
 
+#include "c_api/checked_insert.h"
 #include "c_api/engine_config_domains.h"
 #include "engine/insert_automation_targets.h"
 #include "engine/realtime_engine.h"
 #include "mastering/eq/parametric.h"
 #include "mixing/alignment_delay.h"
+#include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -221,6 +224,36 @@ inline std::string send_subject(MixerEditScope scope, const sonare::engine::Mixe
       break;
   }
   d::refuse_state("the mixer refused the change and retained no cause for it");
+}
+
+/// @brief Throws the refusal for a refused strip setter. When the engine retained only its coarse
+///        insert-construction fault, replays @p inserts to raise the factory's structured parameter
+///        refusal under `settings.inserts[i].params`; otherwise the retained cause, as
+///        throw_mixer_edit_refusal raises it for MixerEditScope::kStrip.
+[[noreturn]] inline void throw_strip_edit_refusal(
+    sonare::engine::RealtimeEngine& realtime,
+    const std::vector<sonare::mixing::api::Insert>& inserts) {
+  if (realtime.last_mixer_edit_fault().cause ==
+      sonare::engine::MixerEditCause::kStripInsertsRefused) {
+    namespace schema = sonare::util::json::schema;
+    for (size_t i = 0; i < inserts.size(); ++i) {
+      const sonare::mixing::api::Insert& insert = inserts[i];
+      const std::string path =
+          schema::child_path(schema::index_path("settings.inserts", i), "params");
+      try {
+        if (!sonare::mastering::api::make_checked_insert(insert.processor_name, insert.params_json,
+                                                         path, sonare::ErrorCode::InvalidParameter,
+                                                         realtime.sample_rate())) {
+          break;
+        }
+      } catch (const sonare::SonareParameterRefusal&) {
+        throw;
+      } catch (const sonare::SonareException&) {
+        break;
+      }
+    }
+  }
+  throw_mixer_edit_refusal(realtime, MixerEditScope::kStrip);
 }
 
 /// @brief Throws the refusal for a refused single-lane edit (set_track_sends /

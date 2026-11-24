@@ -14,8 +14,8 @@ TEST_CASE("engine degradation counters are reachable through the C ABI",
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
-  size_t pages = 0xDEADBEEFu;
-  size_t stretch = 0xDEADBEEFu;
+  uint64_t pages = 0xDEADBEEFu;
+  uint64_t stretch = 0xDEADBEEFu;
   REQUIRE(sonare_engine_clip_page_request_overflow_count(engine, &pages) == SONARE_OK);
   REQUIRE(sonare_engine_warp_stretch_overflow_count(engine, &stretch) == SONARE_OK);
   // prepare() resets both, so a freshly prepared engine reads zero on each -
@@ -24,15 +24,53 @@ TEST_CASE("engine degradation counters are reachable through the C ABI",
   REQUIRE(stretch == 0);
 
   // Both reject a null engine and a null out pointer, like every sibling getter.
+  pages = 17;
   REQUIRE(sonare_engine_clip_page_request_overflow_count(nullptr, &pages) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(pages == 0);
   REQUIRE(sonare_engine_clip_page_request_overflow_count(engine, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  stretch = 23;
   REQUIRE(sonare_engine_warp_stretch_overflow_count(nullptr, &stretch) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(stretch == 0);
   REQUIRE(sonare_engine_warp_stretch_overflow_count(engine, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine read-only queries accept const handles", "[c_api][engine][const]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
+
+  const SonareEngine* read_only_engine = engine;
+  uint64_t pages = 99;
+  uint64_t stretch = 99;
+  uint64_t external_midi = 99;
+  SonareEngineCaptureStatus capture{};
+  SonareMidiCcBindingList bindings{};
+  REQUIRE(sonare_engine_clip_page_request_overflow_count(read_only_engine, &pages) == SONARE_OK);
+  REQUIRE(sonare_engine_warp_stretch_overflow_count(read_only_engine, &stretch) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(read_only_engine, &capture) == SONARE_OK);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_external_midi_dropped_count(read_only_engine, &external_midi) == SONARE_OK);
+  REQUIRE(sonare_engine_midi_cc_bindings(read_only_engine, &bindings) == SONARE_OK);
+  REQUIRE(external_midi == 0);
+#else
+  REQUIRE(sonare_engine_external_midi_dropped_count(read_only_engine, &external_midi) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_midi_cc_bindings(read_only_engine, &bindings) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  REQUIRE(pages == 0);
+  REQUIRE(stretch == 0);
+  REQUIRE(capture.overflow_count == 0);
+  REQUIRE(capture.dropped_frames == 0);
+  REQUIRE(external_midi == 0);
+  sonare_free_midi_cc_binding_list(&bindings);
   sonare_engine_destroy(engine);
 }
 

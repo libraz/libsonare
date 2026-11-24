@@ -140,7 +140,7 @@ std::vector<float> project_bounce(SonareProject* project) {
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
-  options.sample_rate = kSampleRate;
+
   SonareBuiltinInstrumentBinding binding{};
   sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
@@ -334,7 +334,8 @@ TEST_CASE("applied timeline binds a 1:1 scene strip like the project bounce mixe
       R"("frequencyHz":1000.0,"gainDb":6.0,"q":0.7,"enabled":true}]}}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(built.project, scene) == SONARE_OK);
   const std::vector<float> unrouted = project_bounce(built.project);
-  REQUIRE(sonare_project_set_track_route(built.project, built.midi_track, "lead", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(built.project, built.midi_track, "lead", nullptr) ==
+          SONARE_OK);
   const std::vector<float> bounced = project_bounce(built.project);
 
   SonareEngine* engine = prepared_engine();

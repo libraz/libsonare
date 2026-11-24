@@ -1096,8 +1096,8 @@ TEST_CASE("C-ABI set_track_route with undo", "[project][c-abi-edit]") {
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
 
-  // Empty / NULL args clear the route (still a valid command, no-op here).
-  REQUIRE(sonare_project_set_track_route(project, fx.track, "", nullptr) == SONARE_OK);
+  // Null arguments clear the route (a no-op here).
+  REQUIRE(sonare_project_set_track_route(project, fx.track, nullptr, nullptr) == SONARE_OK);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
 
@@ -1240,7 +1240,6 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   options.total_frames = 480;
   options.block_size = 64;
   options.num_channels = 2;
-  options.sample_rate = 48000;
   float* bounced = nullptr;
   size_t bounced_len = 0;
   int bounce_channels = 0;

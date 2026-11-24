@@ -107,16 +107,19 @@ std::optional<ChannelLayout> channel_layout_token(const std::string& value) {
 }
 
 [[noreturn]] void refuse_unknown(const std::string& at, const std::string& expected) {
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, at, std::string(), expected)
-      .as_caller_spelled();
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, at, expected).as_caller_spelled();
 }
 
-// A closed set is read only as its token; a number is refused naming the tokens.
+// A closed set is read only as its token; a number is a wrong type, refused naming the tokens.
 template <typename Enum>
 Enum token_value(const JsonValue& value, const std::string& at, const char* tokens,
                  std::optional<Enum> (*from_string)(const std::string&)) {
   if (!value.is_string()) {
-    if (value.is_number()) refuse_at(at, std::string("must be one of ") + tokens);
+    if (value.is_number()) {
+      throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, at,
+                                               std::string("must be one of ") + tokens)
+          .as_caller_spelled();
+    }
     refuse_kind(at, schema::Kind::String);
   }
   const auto parsed = from_string(value.as_string());
@@ -442,13 +445,18 @@ Bus bus_from_value(const JsonValue& object, const std::string& path) {
   Bus bus;
   bus.id = string_or(object, path, "id", bus.id);
   if (const auto* role = object.find("role")) {
-    // A number is refused naming the roles, like every other closed set here.
+    // A number is a wrong type refused naming the roles, like every other closed set here.
     const std::string at = schema::child_path(path, "role");
-    if (role->is_string()) bus.role = role->as_string();
-    if (role->is_number() || (role->is_string() && !bus_role::is_declared(bus.role))) {
-      refuse_at(at, std::string("must be one of ") + bus_role::kChoices);
+    if (role->is_number()) {
+      throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, at,
+                                               std::string("must be one of ") + bus_role::kChoices)
+          .as_caller_spelled();
     }
     if (!role->is_string()) refuse_kind(at, schema::Kind::String);
+    bus.role = role->as_string();
+    if (!bus_role::is_declared(bus.role)) {
+      refuse_at(at, std::string("must be one of ") + bus_role::kChoices);
+    }
   }
   bus.layout = channel_layout_or(object, path, "layout", bus.layout);
   bus.input_trim_db = number_or(object, path, "inputTrimDb", bus.input_trim_db);

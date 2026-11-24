@@ -125,7 +125,7 @@ void ClipPlayer::prepare(double sample_rate, int max_block_size) {
   // have recorded a non-default value before this prepare(), or the block
   // size may simply have changed), whether or not the session actually warps.
   build_warp_voice_pool(max_block_size_);
-  stretch_overflow_count_.reset();
+  stretch_overflow_count_.store(0, std::memory_order_relaxed);
 }
 
 void ClipPlayer::set_warp_voice_capacity(uint32_t voices, int max_block) {
@@ -615,7 +615,7 @@ WarpStretchVoice* ClipPlayer::acquire_stretch_voice(const ClipSchedule& clip) no
   // still streaming would swap two clips' overlap state mid-note, which is a
   // far worse artefact than the resampling fallback.
   if (oldest && oldest->idle_blocks() > 0) return oldest;
-  stretch_overflow_count_.bump();
+  stretch_overflow_count_.fetch_add(1, std::memory_order_relaxed);
   return nullptr;
 }
 

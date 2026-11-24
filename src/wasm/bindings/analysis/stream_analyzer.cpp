@@ -287,7 +287,7 @@ class StreamAnalyzerWrapper {
     out.set("totalSamples", static_cast<double>(s.total_samples));
     out.set("durationSec", s.duration_seconds);
     out.set("pendingFrames", s.pending_frames);
-    out.set("droppedOutputFrames", s.dropped_output_frames);
+    out.set("droppedOutputFrames", static_cast<double>(s.dropped_output_frames));
     out.set("droppedChordProgressionEntries", s.dropped_chord_progression_entries);
     out.set("droppedBarProgressionEntries", s.dropped_bar_progression_entries);
     out.set("nonFiniteDiscardBlocks", s.non_finite_discard_blocks);

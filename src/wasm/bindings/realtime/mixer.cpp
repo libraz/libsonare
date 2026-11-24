@@ -25,6 +25,7 @@ namespace {
 }  // namespace
 
 #if defined(SONARE_WITH_MIXING)
+#include "c_api/checked_insert.h"
 #include "c_api/engine_mixer_refusal.h"
 #include "mixing/channel_strip_eq.h"
 
@@ -39,6 +40,32 @@ decltype(auto) withCEntryRefusal(const char* entry, Body&& body) {
   } catch (const sonare::SonareParameterRefusal& refusal) {
     throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry), entry, std::nullopt);
   }
+}
+
+// Replay insert construction only when the engine retained its coarse insert fault.
+[[noreturn]] void throwStripEditRefusal(sonare::engine::RealtimeEngine& engine,
+                                        const std::vector<sonare::mixing::api::Insert>& inserts) {
+  if (engine.last_mixer_edit_fault().cause ==
+      sonare::engine::MixerEditCause::kStripInsertsRefused) {
+    namespace schema = sonare::util::json::schema;
+    for (size_t i = 0; i < inserts.size(); ++i) {
+      const auto& insert = inserts[i];
+      const std::string path =
+          schema::child_path(schema::index_path("settings.inserts", i), "params");
+      try {
+        if (!sonare::mastering::api::make_checked_insert(insert.processor_name, insert.params_json,
+                                                         path, sonare::ErrorCode::InvalidParameter,
+                                                         engine.sample_rate())) {
+          break;
+        }
+      } catch (const sonare::SonareParameterRefusal&) {
+        throw;
+      } catch (const sonare::SonareException&) {
+        break;
+      }
+    }
+  }
+  sonare_c_detail::throw_mixer_edit_refusal(engine, sonare_c_detail::MixerEditScope::kStrip);
 }
 
 /// Whether @p track_id names a lane of @p engine's mixer.
@@ -434,7 +461,7 @@ void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::strin
       sonare::mixing::api::bus_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_bus_strip_json", [&] {
     if (!engine_.set_bus_strip(bus_id, settings)) {
-      sonare_c_detail::throw_mixer_edit_refusal(engine_, sonare_c_detail::MixerEditScope::kStrip);
+      throwStripEditRefusal(engine_, settings.inserts);
     }
   });
 #else
@@ -456,7 +483,7 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val,
       sonare::mixing::api::strip_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_track_strip_json", [&] {
     if (!engine_.set_track_strip(track_id, settings)) {
-      sonare_c_detail::throw_mixer_edit_refusal(engine_, sonare_c_detail::MixerEditScope::kStrip);
+      throwStripEditRefusal(engine_, settings.inserts);
     }
   });
 #else
@@ -541,7 +568,7 @@ void RealtimeEngineWasm::setMasterStripJson(const std::string& settings_json) {
       sonare::mixing::api::strip_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_master_strip_json", [&] {
     if (!engine_.set_master_strip(settings)) {
-      sonare_c_detail::throw_mixer_edit_refusal(engine_, sonare_c_detail::MixerEditScope::kStrip);
+      throwStripEditRefusal(engine_, settings.inserts);
     }
   });
 #else

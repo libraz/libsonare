@@ -342,26 +342,17 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
       options.metronome = &metronome;
     }
   }
-  // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
-  // actually used, or the file plays back at the wrong pitch. Default to the
-  // project's own rate (queried above via sonare_project_get_sample_rate) rather
-  // than a hardcoded value, so a 44.1k/96k project bounces without --sample-rate
-  // at all. An explicit --sample-rate is only accepted when it matches the
-  // project's rate: the C ABI rejects a genuine mismatch with a generic
-  // invalid-parameter error, so the check is duplicated here to name both rates.
-  // A project rate is a whole number of hertz (loading refuses anything else).
-  int render_sample_rate = static_cast<int>(project_sample_rate);
+  // The bounce and the WAV header both use the project's sample rate.
+  const int sample_rate = static_cast<int>(project_sample_rate);
   if (args.has("sample-rate")) {
-    render_sample_rate = args.get_int("sample-rate", render_sample_rate);
-    if (std::abs(static_cast<double>(render_sample_rate) - project_sample_rate) > 1e-6) {
-      std::cerr << color::red << "Error: --sample-rate " << render_sample_rate
+    const int requested_sample_rate = args.get_int("sample-rate", sample_rate);
+    if (std::abs(static_cast<double>(requested_sample_rate) - project_sample_rate) > 1e-6) {
+      std::cerr << color::red << "Error: --sample-rate " << requested_sample_rate
                 << " does not match the project's sample rate (" << project_sample_rate
                 << " Hz); project bounce renders at the project's own rate" << color::reset << "\n";
       return kExitInvalidParameter;
     }
-    options.sample_rate = render_sample_rate;
   }
-  // Left at the init value when the caller did not ask for a rate, which is the project's own.
 
   float* interleaved = nullptr;
   size_t frames = 0;
@@ -377,16 +368,14 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
     return project_exit_code(err);
   }
   const int channels = rendered_channels;
-  // The WAV header sample rate equals the render rate the engine used (see above).
-  const int sample_rate = render_sample_rate;
   const size_t total = frames * static_cast<size_t>(channels);
   std::vector<float> rendered(interleaved, interleaved + total);
   sonare_free_floats(interleaved);
   size_t prefix_frames = 0;
   if (args.json_output && binds_source_audio && options.count_in_bars > 0) {
     int64_t full_prefix = 0;
-    const SonareError prefix_err = sonare_project_count_in_frames(
-        handle.ptr, options.count_in_bars, SONARE_PROJECT_SAMPLE_RATE_PROJECT, &full_prefix);
+    const SonareError prefix_err =
+        sonare_project_count_in_frames(handle.ptr, options.count_in_bars, &full_prefix);
     if (prefix_err != SONARE_OK) {
       project_report_error("read count-in length", prefix_err);
       return project_exit_code(prefix_err);

@@ -323,7 +323,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     return span;
   };
 
-  const uint32_t capture_overflow_before = capture_sink_.overflow_count();
+  const uint64_t capture_overflow_before = capture_sink_.overflow_count();
   const BoundaryList& boundaries = boundary_splitter_.finish();
   clip_player_.begin_page_miss_block();
   size_t next_boundary = 0;
@@ -500,10 +500,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // capture_overflow_count() accessor) so the two stay consistent. The sink
   // increments its counter when the capture segment is full; report the delta
   // accrued during this block.
-  const uint32_t capture_overflow_delta = capture_sink_.overflow_count() - capture_overflow_before;
+  const uint64_t capture_overflow_delta = capture_sink_.overflow_count() - capture_overflow_before;
   if (capture_overflow_delta > 0) {
     enqueue_error(TelemetryErrorCode::kCaptureOverflow, state.render_frame, state.sample_position,
-                  capture_overflow_delta);
+                  static_cast<uint32_t>(capture_overflow_delta));
   }
   const int latency_q8 = graph_latency_samples_q8_.load(std::memory_order_relaxed);
   enqueue_telemetry({TelemetryType::kProcessBlock, TelemetryErrorCode::kNone, state.render_frame,

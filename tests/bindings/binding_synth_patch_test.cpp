@@ -92,7 +92,7 @@ SonareProject* make_synth_project(uint32_t dest, uint8_t note = 60) {
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
-  SonareMidiEventPod events[2];
+  SonareMidiEventPod events[2]{};
   events[0].ppq = 0.0;
   events[0].word0 = 0x20900040u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 64
   events[0].word1 = 0u;
@@ -111,7 +111,7 @@ std::vector<float> bounce_synth(SonareProject* project, const SonareSynthPatch& 
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = dest;
   binding.patch = patch;
@@ -1436,7 +1436,7 @@ SonareProject* make_census_project(uint8_t note) {
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
-  SonareMidiEventPod events[2];
+  SonareMidiEventPod events[2]{};
   events[0].ppq = 0.0;
   events[0].word0 = 0x20900064u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 100
   events[0].word1 = 0u;
@@ -1455,7 +1455,7 @@ std::vector<float> census_render(const SonareSynthPatch& patch, SonareSampleBank
   options.total_frames = 9600;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
+
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = 3;
   binding.patch = patch;

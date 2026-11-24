@@ -122,17 +122,6 @@ inline std::vector<float> cutoffs(const ParamMap& params) {
   return values;
 }
 
-/// @brief Refuses `<prefix>lookaheadMs`, the earlier spelling of `<prefix>detectorDelayMs`.
-inline void refuse_earlier_lookahead(const ParamMap& params, const std::string& prefix) {
-  const std::string earlier = prefix + "lookaheadMs";
-  if (params.has(earlier)) {
-    throw SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, earlier,
-        "is an earlier spelling; write " + prefix + "detectorDelayMs")
-        .as_caller_spelled();
-  }
-}
-
 inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   eq::EqBand band;
   band.type = read_enum(params, (prefix + "type").c_str(), band.type);
@@ -158,7 +147,6 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   band.dyn.range_db = f(params, (prefix + "rangeDb").c_str(), band.dyn.range_db, kDb);
   band.dyn.attack_ms = f(params, (prefix + "attackMs").c_str(), band.dyn.attack_ms, kMsLog);
   band.dyn.release_ms = f(params, (prefix + "releaseMs").c_str(), band.dyn.release_ms, kMsLog);
-  refuse_earlier_lookahead(params, prefix);
   band.dyn.detector_delay_ms =
       f(params, (prefix + "detectorDelayMs").c_str(), band.dyn.detector_delay_ms, kMs);
   band.dyn.sidechain_freq_hz =
@@ -206,7 +194,6 @@ inline eq::DynamicEqBand dynamic_eq_band(const ParamMap& params, const std::stri
       f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz, kHz);
   band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms, kMsLog);
   band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms, kMsLog);
-  refuse_earlier_lookahead(params, prefix);
   band.detector_delay_ms =
       f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms, kMs);
   return band;

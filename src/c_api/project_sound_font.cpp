@@ -5,6 +5,8 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <optional>
+#include <string>
 #include <tuple>
 
 #include "c_api/instrument_config_domains.h"
@@ -17,6 +19,12 @@
 namespace {
 
 namespace synth = sonare::midi::synth;
+
+std::optional<std::string> sound_font_uri_key(const char* uri) {
+  if (uri == nullptr) return std::nullopt;
+  sonare::util::check::non_empty(uri, "uri");
+  return std::string(uri);
+}
 
 /// Copies a preset name into the fixed manifest field (truncating, always
 /// NUL-terminated).
@@ -114,11 +122,13 @@ std::vector<SonareSf2ProgramStatus> build_manifest(
 }  // namespace
 #endif
 
-SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t* data,
-                                          size_t size) {
+SonareError sonare_project_load_sound_font(SonareProject* project, const char* uri,
+                                           const uint8_t* data, size_t size) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_TRY
+  const std::optional<std::string> key = sound_font_uri_key(uri);
   SONARE_C_REQUIRE_NONNULL(data);
   if (const SonareError err = sonare_c_detail::run_validation([&] {
         sonare::util::check::integer_within(size, sonare_c_detail::kSoundFontSizeDomain, "size");
@@ -126,7 +136,6 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_TRY
   // Both rejections are statements about the supplied data rather than about the
   // call's arguments, so they carry INVALID_FORMAT and leave INVALID_PARAMETER
   // to the null/empty check above. That is the rule the project MIDI import
@@ -143,60 +152,70 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
-  project->sound_fonts.insert_or_assign(std::nullopt, std::move(soundfont));
+  project->sound_fonts.insert_or_assign(key, std::move(soundfont));
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 data, size);
+                                                 uri, data, size);
 #endif
 }
 
-SonareError sonare_project_clear_soundfont(SonareProject* project) {
+SonareError sonare_project_clear_sound_font(SonareProject* project, const char* uri) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
-  project->sound_fonts.erase(std::nullopt);
+  project->sound_fonts.erase(sound_font_uri_key(uri));
   return SONARE_OK;
 #else
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 uri);
 #endif
   SONARE_C_CATCH
 }
 
-SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t* out_count) {
+SonareError sonare_project_sound_font_preset_count(const SonareProject* project, const char* uri,
+                                                   size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_count) *out_count = 0;
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
-  const auto soundfont = project->sound_font();
+  const std::optional<std::string> key = sound_font_uri_key(uri);
+  SONARE_C_REQUIRE_NONNULL(out_count);
+  const auto soundfont = project->sound_font(key);
   *out_count = soundfont ? soundfont->presets().size() : 0;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 out_count);
+                                                 uri, out_count);
 #endif
 }
 
-SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
-                                              size_t max_entries, size_t* out_count) {
+SonareError sonare_project_sound_font_manifest(const SonareProject* project, const char* uri,
+                                               SonareSf2ProgramStatus* out, size_t max_entries,
+                                               size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_count) *out_count = 0;
   SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_TRY
+  const std::optional<std::string> key = sound_font_uri_key(uri);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_entries);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  SONARE_C_TRY
   arr::CompileResult compiled =
       arr::compile(project->history.project(), project->history.midi_content(), project->audio, {});
-  if (!compiled.timeline.has_value()) return SONARE_ERROR_INVALID_STATE;
+  if (!compiled.timeline.has_value()) {
+    sonare_c_detail::set_last_error(
+        SONARE_ERROR_INVALID_STATE,
+        "the project does not compile; its compile diagnostics name the cause");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   const std::vector<SonareSf2ProgramStatus> manifest = build_manifest(
-      *compiled.timeline, project->sound_font(), project->history.project().sample_rate());
+      *compiled.timeline, project->sound_font(key), project->history.project().sample_rate());
   *out_count = manifest.size();
   const size_t to_write = std::min(max_entries, manifest.size());
   for (size_t i = 0; i < to_write; ++i) out[i] = manifest[i];
@@ -205,6 +224,6 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
 #else
   if (out_count) *out_count = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 out, max_entries, out_count);
+                                                 uri, out, max_entries, out_count);
 #endif
 }

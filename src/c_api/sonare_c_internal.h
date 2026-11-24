@@ -50,7 +50,7 @@ struct SonareEngine {
   /// Engine-owned instrument per destination (built-in synth or SF2 player).
   std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::MidiInstrument>>>
       builtin_instruments;
-  /// Loaded SoundFont (sonare_engine_load_soundfont); shared read-only with the
+  /// Loaded SoundFont (sonare_engine_load_sound_font); shared read-only with the
   /// SF2 players bound through sonare_engine_set_sf2_instrument.
   std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
   std::shared_ptr<sonare::host::FixedMidiInputSource<512>> midi_input_source;

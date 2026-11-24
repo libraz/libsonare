@@ -624,7 +624,6 @@ const char* sonare_last_error_reason(void);
 ///   The warning codes a call publishes are stable strings a caller may switch on:
 ///   | code                           | published by                                   |
 ///   |---|---|
-///   | `mixing.ignored_insert_param`  | sonare_mixer_from_scene_json                   |
 ///   | `mixing.undeclared_send`       | sonare_mixer_from_scene_json                   |
 ///   | `acoustic.*`                   | sonare_synthesize_rir, sonare_room_morph,      |
 ///   |                                | sonare_room_morph_stereo                       |
@@ -642,7 +641,7 @@ void sonare_diagnostic_init(SonareDiagnostic* diagnostic);
 /// @brief Number of structured diagnostics the most recent call published on the
 ///        calling thread, or 0 when it published none.
 /// @details The only warning channel: a call that succeeds with a recoverable
-///   problem (an ignored scene key, a clamped RIR tail) publishes it here, never
+///   problem (a clamped RIR tail) publishes it here, never
 ///   through sonare_last_error_message.
 ///   - Cleared at the entry of every call that may publish, so a count read after
 ///     a later clean call is 0 rather than stale.
@@ -663,9 +662,9 @@ SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out);
 ///        thread recorded, or 0 when that failure was not a parameter refusal.
 /// @details A subject is the path of what was refused, rooted at the argument the call was given:
 ///   `sample_rate`, `config.cutoff_hz`, `stages[2].stage`. The list holds the subjects in the
-///   order the message names them, followed by the successor key when an unknown-key refusal
-///   names one. A binding that passes a struct or document under a name its caller never wrote
-///   drops that leading path segment from each subject and renders the message again with
+///   order the message names them. A binding that passes a struct or document under a name its
+///   caller never wrote drops that leading path segment from each subject and renders the message
+///   again with
 ///   @ref sonare_last_refusal_render, rather than editing the message text. Like every
 ///   sonare_last_* accessor, it records no error, and it clears none.
 size_t sonare_last_refusal_subject_count(void);

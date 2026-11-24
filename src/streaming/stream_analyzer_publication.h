@@ -27,10 +27,11 @@ struct StreamAnalyzerPublication {
 
   // Monotonic SPSC sequences. The producer owns producer_write_sequence and
   // publishes it to output_write_sequence only after a complete frame exists.
+  static_assert(std::atomic<uint64_t>::is_always_lock_free);
   std::atomic<uint64_t> output_read_sequence{0};
   std::atomic<uint64_t> output_write_sequence{0};
   uint64_t producer_write_sequence = 0;
-  size_t producer_dropped_frames = 0;
+  uint64_t producer_dropped_frames = 0;
 
   // Blocks in which a non-finite input sample was replaced before it could reach
   // the analyzer's recursive state. Held here rather than on StreamAnalyzer so

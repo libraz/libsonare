@@ -15,6 +15,16 @@
 
 namespace {
 
+struct OwnedTempoSegments {
+  SonareProjectTempoSegmentList value{};
+  ~OwnedTempoSegments() { sonare_free_project_tempo_segment_list(&value); }
+};
+
+struct OwnedTimeSignatureSegments {
+  SonareProjectTimeSignatureList value{};
+  ~OwnedTimeSignatureSegments() { sonare_free_project_time_signature_list(&value); }
+};
+
 using ProjectPtr = std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)>;
 
 constexpr int kSampleRate = 22050;
@@ -51,30 +61,28 @@ TEST_CASE("project auto tempo preserves a delayed 4/4 click grid", "[.][slow][mi
   REQUIRE(sonare_project_create(&raw_project) == SONARE_OK);
   const ProjectPtr project(raw_project, &sonare_project_destroy);
 
-  float applied_bpm = 0.0f;
+  SonareProjectAutoTempoResult auto_tempo{};
   REQUIRE(sonare_project_auto_tempo(project.get(), samples.data(), samples.size(), kSampleRate,
-                                    nullptr, 0, 1, &applied_bpm) == SONARE_OK);
-  CHECK(applied_bpm == Catch::Approx(kBpm).epsilon(0.03));
+                                    nullptr, 0, 1, &auto_tempo) == SONARE_OK);
+  CHECK(auto_tempo.bpm == Catch::Approx(kBpm).epsilon(0.03));
 
-  size_t tempo_count = 0;
-  REQUIRE(sonare_project_tempo_segment_count(project.get(), &tempo_count) == SONARE_OK);
-  REQUIRE(tempo_count > 0);
+  OwnedTempoSegments tempo_list;
+  REQUIRE(sonare_project_tempo_segments(project.get(), &tempo_list.value) == SONARE_OK);
+  REQUIRE(tempo_list.value.count > 0);
   std::vector<sonare::transport::TempoSegment> tempo_segments;
-  tempo_segments.reserve(tempo_count);
-  for (size_t i = 0; i < tempo_count; ++i) {
-    SonareProjectTempoSegment stored{};
-    REQUIRE(sonare_project_tempo_segment_by_index(project.get(), i, &stored) == SONARE_OK);
+  tempo_segments.reserve(tempo_list.value.count);
+  for (size_t i = 0; i < tempo_list.value.count; ++i) {
+    const SonareProjectTempoSegment& stored = tempo_list.value.items[i];
     tempo_segments.push_back({stored.start_ppq, stored.bpm, 0.0, stored.end_bpm});
   }
 
-  size_t signature_count = 0;
-  REQUIRE(sonare_project_time_signature_count(project.get(), &signature_count) == SONARE_OK);
-  REQUIRE(signature_count > 0);
+  OwnedTimeSignatureSegments signature_list;
+  REQUIRE(sonare_project_time_signatures(project.get(), &signature_list.value) == SONARE_OK);
+  REQUIRE(signature_list.value.count > 0);
   std::vector<sonare::transport::TimeSignatureSegment> signatures;
-  signatures.reserve(signature_count);
-  for (size_t i = 0; i < signature_count; ++i) {
-    SonareProjectTimeSignatureSegment stored{};
-    REQUIRE(sonare_project_time_signature_by_index(project.get(), i, &stored) == SONARE_OK);
+  signatures.reserve(signature_list.value.count);
+  for (size_t i = 0; i < signature_list.value.count; ++i) {
+    const SonareProjectTimeSignatureSegment& stored = signature_list.value.items[i];
     signatures.push_back({stored.start_ppq, {stored.numerator, stored.denominator}});
   }
   REQUIRE(signatures.front().time_sig.numerator == 4);

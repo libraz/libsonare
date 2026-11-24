@@ -130,7 +130,6 @@ std::vector<float> bounce(Project& project, int64_t total_frames,
   SonareProjectBounceOptions defaults{};
   sonare_project_bounce_options_init(&defaults);
   defaults.total_frames = total_frames;
-  defaults.sample_rate = kSampleRate;
   defaults.block_size = 128;
   defaults.num_channels = 2;
   const SonareProjectBounceOptions* options = supplied != nullptr ? supplied : &defaults;
@@ -175,7 +174,7 @@ TEST_CASE("project bounce refuses send automation with a missing send identity",
   SonareProjectBounceOptions options{};
   sonare_project_bounce_options_init(&options);
   options.total_frames = kMusicFrames;
-  options.sample_rate = kSampleRate;
+
   float* interleaved = nullptr;
   size_t frames = 0;
   int channels = 0;
@@ -200,6 +199,34 @@ TEST_CASE("project bounce refuses send automation with a missing send identity",
 }
 #endif
 
+TEST_CASE("project bounce validates input arguments before output pointers",
+          "[c_api][bounce][count-in]") {
+  Project project;
+  REQUIRE(sonare_project_create(&project.handle) == SONARE_OK);
+
+  CHECK(sonare_project_count_in_frames(project.handle, -1, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "count_in_bars must be an integer in [0, 16]");
+  CHECK(sonare_project_count_in_frames(project.handle, 0, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "out_frames must not be NULL");
+
+  SonareProjectBounceOptions options{};
+  sonare_project_bounce_options_init(&options);
+  options.struct_size = sizeof(options.struct_size);
+  size_t frames = 42;
+  int channels = 2;
+  CHECK(sonare_project_bounce(project.handle, &options, nullptr, &frames, &channels) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "options.struct_size must be set by sonare_project_bounce_options_init");
+  CHECK(frames == 0);
+  CHECK(channels == 0);
+  sonare_project_bounce_options_init(&options);
+  CHECK(sonare_project_bounce(project.handle, &options, nullptr, nullptr, &channels) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "out must not be NULL");
+}
+
 TEST_CASE("project bounce count-in query and prefix use the initial meter",
           "[c_api][bounce][count-in]") {
   Project project = project_with_audio();
@@ -208,10 +235,19 @@ TEST_CASE("project bounce count-in query and prefix use the initial meter",
   REQUIRE(sonare_project_set_tempo_segments(project.handle, tempo, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_time_signatures(project.handle, meter, 2) == SONARE_OK);
   int64_t count_in_frames = 0;
-  REQUIRE(sonare_project_count_in_frames(project.handle, 1, kSampleRate, &count_in_frames) ==
-          SONARE_OK);
+  REQUIRE(sonare_project_count_in_frames(project.handle, 1, &count_in_frames) == SONARE_OK);
   const int64_t initial_beat_frames = kSampleRate / 2;
   REQUIRE(count_in_frames == 3 * initial_beat_frames);
+
+  Project alternate_rate;
+  REQUIRE(sonare_project_create(&alternate_rate.handle) == SONARE_OK);
+  constexpr int kAlternateSampleRate = 44100;
+  REQUIRE(sonare_project_set_sample_rate(alternate_rate.handle, kAlternateSampleRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_tempo_segments(alternate_rate.handle, tempo, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_time_signatures(alternate_rate.handle, meter, 2) == SONARE_OK);
+  int64_t alternate_frames = 0;
+  REQUIRE(sonare_project_count_in_frames(alternate_rate.handle, 1, &alternate_frames) == SONARE_OK);
+  CHECK(alternate_frames == 3 * kAlternateSampleRate / 2);
 
   SonareEngineMetronomeConfig metronome{};
   sonare_engine_metronome_config_init(&metronome);
@@ -219,7 +255,7 @@ TEST_CASE("project bounce count-in query and prefix use the initial meter",
   SonareProjectBounceOptions options{};
   sonare_project_bounce_options_init(&options);
   options.total_frames = count_in_frames + kMusicFrames;
-  options.sample_rate = kSampleRate;
+
   options.num_channels = 2;
   options.count_in_bars = 1;
   const auto without_click = bounce(project, options.total_frames, &options);
@@ -253,7 +289,6 @@ TEST_CASE("disabled project bounce click preserves the original render bytes",
   SonareProjectBounceOptions without_click{};
   sonare_project_bounce_options_init(&without_click);
   without_click.total_frames = kMusicFrames;
-  without_click.sample_rate = kSampleRate;
   without_click.num_channels = 2;
   SonareEngineMetronomeConfig disabled{};
   sonare_engine_metronome_config_init(&disabled);

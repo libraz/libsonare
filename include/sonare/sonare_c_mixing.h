@@ -422,8 +422,8 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
 /// max_block_size follows sonare_mixer_create: 0 selects the library default (512 frames).
 /// A key the scene reader does not consume (other than `$`- and `x-`-prefixed ones) fails the
 /// load with SONARE_ERROR_INVALID_FORMAT naming it, e.g. `unknown key strips[2].faderDB`.
-/// Insert params no processor reads do not fail the load; each is one Warning entry of
-/// sonare_last_diagnostic (codes in the SonareDiagnostic table).
+/// A parameter the selected insert does not read also fails with SONARE_ERROR_INVALID_FORMAT,
+/// naming the parameter and listing the insert's accepted keys.
 SonareMixer* sonare_mixer_from_scene_json(const char* document, int sample_rate,
                                           int max_block_size);
 /// Free *json_out with sonare_free_string.

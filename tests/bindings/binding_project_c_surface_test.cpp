@@ -8,6 +8,16 @@
 
 namespace {
 
+struct TempoSegmentList {
+  SonareProjectTempoSegmentList value{};
+  ~TempoSegmentList() { sonare_free_project_tempo_segment_list(&value); }
+};
+
+struct TimeSignatureSegmentList {
+  SonareProjectTimeSignatureList value{};
+  ~TimeSignatureSegmentList() { sonare_free_project_time_signature_list(&value); }
+};
+
 SonareError set_marker_named(SonareProject* project, uint32_t id, double ppq, const char* name,
                              uint32_t* out_id) {
   SonareProjectMarker marker{};
@@ -79,10 +89,14 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(count == 0);
   REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
   CHECK(count == 0);
-  REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
-  CHECK(count == 0);
-  REQUIRE(sonare_project_time_signature_count(project, &count) == SONARE_OK);
-  CHECK(count == 0);
+  TempoSegmentList tempo_list;
+  TimeSignatureSegmentList signature_list;
+  REQUIRE(sonare_project_tempo_segments(project, &tempo_list.value) == SONARE_OK);
+  CHECK(tempo_list.value.count == 0);
+  REQUIRE(sonare_project_time_signatures(project, &signature_list.value) == SONARE_OK);
+  CHECK(signature_list.value.count == 0);
+  CHECK(tempo_list.value.items == nullptr);
+  CHECK(signature_list.value.items == nullptr);
 
   SonareProjectTempoSegment tempos[2]{};
   tempos[0].start_ppq = 0.0;
@@ -91,44 +105,25 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   tempos[1].bpm = 132.0;
   tempos[1].end_bpm = 144.0;
   REQUIRE(sonare_project_set_tempo_segments(project, tempos, 2) == SONARE_OK);
-  REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
-  CHECK(count == 2);
-
-  // The list is readable back, which is what makes the count usable for
-  // anything: an index alone tells a caller nothing without the segment.
-  SonareProjectTempoSegment read_tempo{};
-  REQUIRE(sonare_project_tempo_segment_by_index(project, 0, &read_tempo) == SONARE_OK);
-  CHECK(read_tempo.start_ppq == tempos[0].start_ppq);
-  CHECK(read_tempo.bpm == tempos[0].bpm);
-  CHECK(read_tempo.end_bpm == tempos[0].end_bpm);
-  REQUIRE(sonare_project_tempo_segment_by_index(project, 1, &read_tempo) == SONARE_OK);
-  CHECK(read_tempo.start_ppq == tempos[1].start_ppq);
-  CHECK(read_tempo.bpm == tempos[1].bpm);
-  CHECK(read_tempo.end_bpm == tempos[1].end_bpm);
-  CHECK(sonare_project_tempo_segment_by_index(project, 2, &read_tempo) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_project_tempo_segment_by_index(project, 0, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_project_tempo_segment_by_index(nullptr, 0, &read_tempo) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_tempo_segments(project, &tempo_list.value) == SONARE_OK);
+  REQUIRE(tempo_list.value.count == 2);
+  CHECK(tempo_list.value.items[0].start_ppq == tempos[0].start_ppq);
+  CHECK(tempo_list.value.items[0].bpm == tempos[0].bpm);
+  CHECK(tempo_list.value.items[0].end_bpm == tempos[0].end_bpm);
+  CHECK(tempo_list.value.items[1].start_ppq == tempos[1].start_ppq);
+  CHECK(tempo_list.value.items[1].bpm == tempos[1].bpm);
+  CHECK(tempo_list.value.items[1].end_bpm == tempos[1].end_bpm);
 
   SonareProjectTimeSignatureSegment sig{};
   sig.start_ppq = 0.0;
   sig.numerator = 7;
   sig.denominator = 8;
   REQUIRE(sonare_project_set_time_signatures(project, &sig, 1) == SONARE_OK);
-  REQUIRE(sonare_project_time_signature_count(project, &count) == SONARE_OK);
-  CHECK(count == 1);
-
-  SonareProjectTimeSignatureSegment read_sig{};
-  REQUIRE(sonare_project_time_signature_by_index(project, 0, &read_sig) == SONARE_OK);
-  CHECK(read_sig.start_ppq == sig.start_ppq);
-  CHECK(read_sig.numerator == sig.numerator);
-  CHECK(read_sig.denominator == sig.denominator);
-  CHECK(sonare_project_time_signature_by_index(project, 1, &read_sig) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_project_time_signature_by_index(project, 0, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_time_signatures(project, &signature_list.value) == SONARE_OK);
+  REQUIRE(signature_list.value.count == 1);
+  CHECK(signature_list.value.items[0].start_ppq == sig.start_ppq);
+  CHECK(signature_list.value.items[0].numerator == sig.numerator);
+  CHECK(signature_list.value.items[0].denominator == sig.denominator);
 
   uint32_t marker_id = 0;
   REQUIRE(set_marker_named(project, 0, 12.0, "Verse", &marker_id) == SONARE_OK);
@@ -744,7 +739,7 @@ TEST_CASE("deserialized audio sources can be rebound before bouncing through the
   options.total_frames = kFrames;
   options.block_size = 64;
   options.num_channels = 1;
-  options.sample_rate = 48000;
+
   float* output = nullptr;
   size_t output_len = 0;
   int bounce_channels1 = 0;
@@ -766,7 +761,6 @@ TEST_CASE("bounce is bit-exact across two renders through the C surface", "[proj
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
 
   float* first = nullptr;
   size_t first_len = 0;

@@ -1760,7 +1760,7 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
-  options.sample_rate = 48000;
+
   options.block_size = 128;
   options.num_channels = 2;
   options.total_frames = 256;

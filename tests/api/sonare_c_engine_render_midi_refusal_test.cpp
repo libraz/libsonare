@@ -423,8 +423,8 @@ TEST_CASE("engine MIDI entries refuse a NULL argument by name", "[c_api][engine_
   CHECK(last_error() == "engine must not be NULL");
   CHECK(sonare_engine_midi_instrument_count(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
-  CHECK(sonare_engine_midi_cc_binding_count(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "out_count must not be NULL");
+  CHECK(sonare_engine_midi_cc_bindings(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "out must not be NULL");
   CHECK(sonare_engine_midi_input_pending_count(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
   CHECK(sonare_engine_external_midi_dropped_count(engine, nullptr) ==
@@ -454,7 +454,7 @@ TEST_CASE("engine MIDI entries refuse a NULL argument by name", "[c_api][engine_
   CHECK(last_error() == "engine must not be NULL");
   CHECK(sonare_engine_push_midi_sysex(engine, 7, nullptr, 3, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "data must not be NULL");
-  CHECK(sonare_engine_load_soundfont(engine, nullptr, 8) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_load_sound_font(engine, nullptr, 8) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "data must not be NULL");
   CHECK(sonare_engine_set_external_midi_clock_enabled(nullptr, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -532,7 +532,7 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_id must not be NULL");
   const uint8_t byte = 0;
-  CHECK(sonare_engine_load_soundfont(engine, &byte, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_load_sound_font(engine, &byte, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "size must be an integer of at least 1");
 
   // Articulation and part rig ordinals.

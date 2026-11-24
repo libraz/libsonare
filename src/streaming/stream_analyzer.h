@@ -294,6 +294,8 @@ class StreamAnalyzer {
   const ProgressiveEstimate& progressive_estimate_for_test() const { return current_estimate_; }
 
  private:
+  friend struct StreamOutputLossTestAccess;
+
   StreamConfig config_;
 
   // Inputs above kMaxDirectSampleRate are resampled to kInternalSampleRate; slower inputs are

@@ -1,14 +1,26 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <initializer_list>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#ifdef SONARE_WITH_MASTERING
+#include "mastering/api/presets.h"
+#include "mastering/assistant/param_spelling.h"
+#include "mastering/assistant/platform_targets.h"
+#endif
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+#include "core/spectrum.h"
+#include "mixing/assistant/config_from_params.h"
+#include "util/parameter_checks.h"
+#endif
 #include "sonare_cli.h"
 #include "sonare_cli_project.h"
 #include "sonare_cli_registry.h"
@@ -116,6 +128,22 @@ std::string mix_input_refusal(const CliArgs& args) {
 }
 #endif
 
+#if defined(SONARE_WITH_MASTERING) || defined(SONARE_WITH_MIXING_ASSISTANT)
+namespace {
+
+double read_assistant_number(const std::string& key, const std::string& text) {
+  try {
+    const double value = parse_double_strict("params", text);
+    if (std::fabs(value) <= std::numeric_limits<float>::max()) return value;
+  } catch (const std::invalid_argument&) {
+    // Both assistants use the same refusal for a value the numeric transport cannot read.
+  }
+  throw std::invalid_argument("invalid numeric value for parameter '" + key + "'");
+}
+
+}  // namespace
+#endif
+
 #ifdef SONARE_WITH_MIXING_ASSISTANT
 /// Split `[ID=]WAV` into its two halves. A bare path takes the file's own name
 /// as the id, which is what the scene then addresses the strip by. Either half
@@ -150,6 +178,33 @@ constexpr std::initializer_list<const char*> kAssistantParamKeys = {"targetTrack
                                                                     "nFft",
                                                                     "hopLength"};
 
+// The value refusal the library raises for one `suggest-mix --params` entry, or empty: the
+// assistant's own reader decides tempoBpm and the integer fields, the STFT domains decide nFft and
+// hopLength, so the command line restates no domain.
+std::string mix_assistant_value_refusal(const std::string& key, double value) {
+  try {
+    // Integer keys are judged on the typed value, so a fraction or an overflow states the domain.
+    const bool whole = value == std::floor(value);
+    if (key == "nFft") {
+      const long long lo = static_cast<long long>(*kStftNFftDomain.lo);
+      const long long hi = static_cast<long long>(*kStftNFftDomain.hi);
+      if (!whole || !util::check::in_domain(value, kStftNFftDomain)) {
+        throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "nFft",
+                                                util::refusal::even_integer_predicate(lo, hi));
+      }
+      util::check::even_integer_in_range(static_cast<long long>(value), lo, hi, "nFft");
+    }
+    if (key == "hopLength" && (!whole || !util::check::in_domain(value, kStftHopDomain))) {
+      util::check::refuse_outside(kStftHopDomain, "hopLength");
+    }
+    const mastering::api::Param param{key, value};
+    mixing::assistant::mix_assistant_config_from_params(&param, 1);
+  } catch (const SonareException& refusal) {
+    return refusal.what();
+  }
+  return {};
+}
+
 }  // namespace
 
 std::string suggest_mix_argument_refusal(const CliArgs& args) {
@@ -166,20 +221,21 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
   std::stringstream stream(params);
   std::string item;
   bool tempo_in_params = false;
+  std::string value_refusal;
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
     if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
       return "invalid parameter entry: '" + item + "' (expected key=value)";
     }
     const std::string key = item.substr(0, eq);
+    double value;
     try {
-      parse_double_strict("params", item.substr(eq + 1));
-    } catch (const std::invalid_argument&) {
-      return "invalid numeric value for parameter '" + key + "'";
+      value = read_assistant_number(key, item.substr(eq + 1));
+    } catch (const std::invalid_argument& refusal) {
+      return refusal.what();
     }
     // The library's own refusals of a key it does not read.
     try {
-      mastering::assistant::refuse_snake_case_param(key, kAssistantParamKeys);
       const bool known = std::any_of(kAssistantParamKeys.begin(), kAssistantParamKeys.end(),
                                      [&key](const char* name) { return key == name; });
       if (!known) {
@@ -190,12 +246,13 @@ std::string suggest_mix_argument_refusal(const CliArgs& args) {
       return refusal.what();
     }
     if (key == "tempoBpm") tempo_in_params = true;
+    if (value_refusal.empty()) value_refusal = mix_assistant_value_refusal(key, value);
   }
   // Naming it twice is a contradiction rather than a precedence question.
   if (args.has("tempo-bpm") && tempo_in_params) {
     return "--tempo-bpm and --params tempoBpm= set the same value";
   }
-  return {};
+  return value_refusal;
 }
 #endif
 
@@ -218,6 +275,39 @@ constexpr AssistantOption kAssistantOptions[] = {
     {"preset", "preset"},
 };
 
+// Refuses a `mastering-suggest --params` key the mastering assistant does not read.
+void validate_assistant_param_key(const std::string& key) {
+  for (const AssistantOption& named : kAssistantOptions) {
+    if (key == named.key) return;
+  }
+  std::vector<std::string> accepted;
+  for (const AssistantOption& named : kAssistantOptions) accepted.emplace_back(named.key);
+  mastering::assistant::refuse_unknown_param(key, accepted);
+}
+
+void validate_assistant_param_value(const std::string& key, const std::string& value) {
+  std::vector<std::string> tokens;
+  if (key == "preset") {
+    using namespace mastering::api;
+    for (const auto& name : preset_names()) {
+      if (preset_kind(preset_from_string(name)) == PresetKind::Mastering) tokens.push_back(name);
+    }
+  } else if (key == "targetPlatform") {
+    tokens = mastering::assistant::platform_names();
+  } else {
+    read_assistant_number(key, value);
+    return;
+  }
+  if (std::find(tokens.begin(), tokens.end(), value) != tokens.end()) return;
+  std::string message = key + " must be one of ";
+  const char* separator = "";
+  for (const auto& token : tokens) {
+    message += separator + token;
+    separator = ", ";
+  }
+  throw std::invalid_argument(message);
+}
+
 }  // namespace
 
 std::string assistant_params_refusal(const CliArgs& args) {
@@ -226,14 +316,22 @@ std::string assistant_params_refusal(const CliArgs& args) {
   std::stringstream stream(text);
   std::string item;
   while (std::getline(stream, item, ',')) {
-    const std::string key = item.substr(0, item.find('='));
-    if (key == "target_platform") {
-      return "--params target_platform is an earlier spelling; write targetPlatform";
+    const auto eq = item.find('=');
+    const std::string key = item.substr(0, eq);
+    try {
+      validate_assistant_param_key(key);
+    } catch (const std::exception& refusal) {
+      return refusal.what();
     }
     for (const AssistantOption& named : kAssistantOptions) {
       if (key == named.key && args.has(named.option)) {
         return std::string("--") + named.option + " and --params " + key + "= set the same value";
       }
+    }
+    try {
+      validate_assistant_param_value(key, item.substr(eq + 1));
+    } catch (const std::invalid_argument& refusal) {
+      return refusal.what();
     }
   }
   return {};

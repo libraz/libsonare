@@ -351,7 +351,7 @@ inline ParamMap make_map(const std::vector<Param>& params) {
 inline void refuse_unread_params(const std::vector<std::string>& keys,
                                  const std::vector<std::string>& read_keys) {
   if (keys.empty()) return;
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, keys.front(), std::string(),
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, keys.front(),
                                         sonare::util::json::schema::expected_keys(read_keys))
       .as_caller_spelled();
 }

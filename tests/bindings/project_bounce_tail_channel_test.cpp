@@ -77,7 +77,7 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
-  SonareMidiEventPod events[2];
+  SonareMidiEventPod events[2]{};
   events[0].ppq = 0.0;
   events[0].word0 = 0x20903C40u;  // note-on, note 60, vel 64
   events[0].word1 = 0u;
@@ -96,7 +96,6 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
   options.total_frames = kTotalFrames;
   options.block_size = 128;
   options.num_channels = 2;
-  options.sample_rate = 48000;
 
   SonareInstrumentBinding binding{};
   binding.destination_id = 0;
@@ -148,7 +147,6 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   options.num_channels = 6;  // 5.1 has a layout for engine-bounce, but the project
                              // bounce sums to a stereo master and only writes
                              // mono/stereo, so it must reject anything past 2.
-  options.sample_rate = 48000;
 
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 123;
@@ -184,11 +182,11 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project bounce reads only the named constants as the default for width and rate",
-          "[project]") {
+TEST_CASE("project bounce uses the project rate and the named width default", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
+  constexpr int kProjectRate = 44100;
+  REQUIRE(sonare_project_set_sample_rate(project, kProjectRate) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
@@ -200,23 +198,31 @@ TEST_CASE("project bounce reads only the named constants as the default for widt
   float* out = nullptr;
   size_t out_len = 0;
 
-  int bounce_channels5 = 0;
-  // Init options: default block size, the scene's output width, the project's rate.
-  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels5) ==
+  double prepared_rate = 0.0;
+  SonareInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.callbacks.user_data = &prepared_rate;
+  binding.callbacks.prepare = [](void* user, double rate, int) {
+    *static_cast<double*>(user) = rate;
+  };
+  binding.callbacks.render = [](void*, float* const*, int, int) {};
+
+  int channels = 0;
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len, &channels) ==
           SONARE_OK);
+  CHECK(prepared_rate == kProjectRate);
+  CHECK(channels == 2);
   REQUIRE(out != nullptr);
   CHECK(out_len == 256u);
   sonare_free_floats(out);
 
   // Zero reads as no default, and a negative other than the constant is out of domain.
-  for (int field = 0; field < 6; ++field) {
+  for (int field = 0; field < 4; ++field) {
     SonareProjectBounceOptions negative = options;
     if (field == 0) negative.block_size = -1;
     if (field == 1) negative.num_channels = -2;
-    if (field == 2) negative.sample_rate = -48000;
-    if (field == 3) negative.block_size = 0;
-    if (field == 4) negative.num_channels = 0;
-    if (field == 5) negative.sample_rate = 0;
+    if (field == 2) negative.block_size = 0;
+    if (field == 3) negative.num_channels = 0;
     out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
     out_len = 123;
     int bounce_channels6 = 0;

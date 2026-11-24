@@ -76,9 +76,9 @@ MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block
   SonareMixer* mixer =
       sonare_mixer_from_scene_json(wasmCString(json, "document"), sample_rate, block_size);
   if (mixer == nullptr) {
-    throwLastCError();
+    throwLastCError(SONARE_ERROR_INVALID_STATE, CErrorSubjectMode::kDocument);
   }
-  // Capture the load's warnings (e.g. insert params no processor read) before
+  // Capture the load's warnings (e.g. sends to an undeclared bus) before
   // any later C-ABI call can overwrite the thread-local list.
   std::vector<std::string> warnings = lastDiagnosticMessages();
   auto* wrapped = new MixerWasm(mixer, sample_rate);
@@ -86,7 +86,7 @@ MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block
   return wrapped;
 }
 
-// Warnings captured when this mixer was built from scene JSON; empty when all consumed.
+// Warnings captured when this mixer was built from scene JSON; empty when there were none.
 val MixerWasm::sceneWarnings() const { return stringVectorToVal(scene_warnings_); }
 
 std::string MixerWasm::presetJson(std::string name) {

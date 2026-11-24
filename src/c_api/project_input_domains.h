@@ -25,10 +25,6 @@ inline constexpr sonare::util::check::NumericDomain kProjectBounceBlockSizeDomai
 ///        SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) is "not given".
 inline constexpr sonare::util::check::NumericDomain kProjectBounceChannelCountDomain =
     sonare::util::check::with_sentinel(sonare::util::check::integer_domain_of<int>(1), -1);
-/// @brief What the sample rate of a project bounce accepts: the audio rates;
-///        SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) is "not given".
-inline constexpr sonare::util::check::NumericDomain kProjectBounceSampleRateDomain =
-    sonare::util::check::with_sentinel(sonare::kAudioSampleRateDomain, -1);
 /// @brief What the instrument latency of a project bounce accepts.
 inline constexpr sonare::util::check::NumericDomain kProjectBounceInstrumentLatencyDomain =
     sonare::util::check::integer_domain_of<int>(0);

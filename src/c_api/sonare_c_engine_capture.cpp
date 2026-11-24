@@ -262,7 +262,8 @@ SonareError sonare_engine_reset_capture(SonareEngine* engine) {
   return SONARE_OK;
 }
 
-SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptureStatus* out) {
+SonareError sonare_engine_capture_status(const SonareEngine* engine,
+                                         SonareEngineCaptureStatus* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = SonareEngineCaptureStatus{};
   SONARE_C_REQUIRE_NONNULL(engine);
@@ -275,6 +276,7 @@ SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptu
                     ? SONARE_ENGINE_CAPTURE_SOURCE_INPUT
                     : SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT;
   out->record_offset_samples = engine->engine.record_offset_samples();
+  out->dropped_frames = engine->engine.capture_dropped_frames();
   return SONARE_OK;
 }
 

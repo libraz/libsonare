@@ -35,7 +35,7 @@ constexpr int kRendererConfigVersion = 2;
 }
 
 [[noreturn]] void refuse_unknown(const std::string& path, const std::string& expected) {
-  throw Refusal::unknown(kDocumentError, path, std::string(), expected).as_caller_spelled();
+  throw Refusal::unknown(kDocumentError, path, expected).as_caller_spelled();
 }
 
 void validate_renderer_values(const RendererConfig& config, ErrorCode code);

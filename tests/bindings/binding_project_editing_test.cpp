@@ -4,6 +4,15 @@
 #include "binding_project_parity_test_helpers.h"
 #include "util/resource_limits.h"
 
+namespace {
+
+struct TempoSegmentList {
+  SonareProjectTempoSegmentList value{};
+  ~TempoSegmentList() { sonare_free_project_tempo_segment_list(&value); }
+};
+
+}  // namespace
+
 TEST_CASE("undo restores the serialized bytes through the C surface", "[project]") {
   const std::vector<float> audio = make_stereo_sine(4800);
   BuiltProject built = build_project(audio);
@@ -121,10 +130,10 @@ TEST_CASE("project tempo analysis exposes ranked candidates and applies detected
   REQUIRE(candidates[0].first_time_signature.numerator > 0);
   REQUIRE(candidates[0].first_time_signature.denominator > 0);
 
-  float applied_bpm = 0.0f;
+  SonareProjectAutoTempoResult applied{};
   REQUIRE(sonare_project_auto_tempo(project, audio.data(), audio.size(), kSampleRate, nullptr, 0, 1,
-                                    &applied_bpm) == SONARE_OK);
-  REQUIRE(applied_bpm == candidates[0].bpm);
+                                    &applied) == SONARE_OK);
+  REQUIRE(applied.bpm == candidates[0].bpm);
   sonare_project_destroy(project);
 }
 
@@ -156,11 +165,12 @@ TEST_CASE("project tempo options reach the bridge and default to one tempo per t
   const auto segment_count = [&audio](const SonareProjectTempoOptions* options) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    float bpm = 0.0f;
+    SonareProjectAutoTempoResult result{};
     REQUIRE(sonare_project_auto_tempo(project, audio.data(), audio.size(), kSampleRate, options, 0,
-                                      0, &bpm) == SONARE_OK);
-    size_t count = 0;
-    REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
+                                      0, &result) == SONARE_OK);
+    TempoSegmentList segments;
+    REQUIRE(sonare_project_tempo_segments(project, &segments.value) == SONARE_OK);
+    const size_t count = segments.value.count;
     sonare_project_destroy(project);
     return count;
   };
@@ -169,11 +179,12 @@ TEST_CASE("project tempo options reach the bridge and default to one tempo per t
   // one-tempo-per-take behaviour rather than quietly enabling anything.
   SonareProject* legacy = nullptr;
   REQUIRE(sonare_project_create(&legacy) == SONARE_OK);
-  float legacy_bpm = 0.0f;
+  SonareProjectAutoTempoResult legacy_result{};
   REQUIRE(sonare_project_auto_tempo(legacy, audio.data(), audio.size(), kSampleRate, nullptr, 0, 0,
-                                    &legacy_bpm) == SONARE_OK);
-  size_t legacy_count = 0;
-  REQUIRE(sonare_project_tempo_segment_count(legacy, &legacy_count) == SONARE_OK);
+                                    &legacy_result) == SONARE_OK);
+  TempoSegmentList legacy_segments;
+  REQUIRE(sonare_project_tempo_segments(legacy, &legacy_segments.value) == SONARE_OK);
+  const size_t legacy_count = legacy_segments.value.count;
   sonare_project_destroy(legacy);
 
   CHECK(segment_count(&defaults) == legacy_count);
@@ -197,9 +208,9 @@ TEST_CASE("project tempo options reach the bridge and default to one tempo per t
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   SonareProjectTempoOptions zeroed{};
-  float bpm = 0.0f;
+  SonareProjectAutoTempoResult result{};
   CHECK(sonare_project_auto_tempo(project, audio.data(), audio.size(), kSampleRate, &zeroed, 0, 0,
-                                  &bpm) == SONARE_ERROR_INVALID_PARAMETER);
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   CHECK(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, &zeroed,

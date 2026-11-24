@@ -786,7 +786,7 @@ target_sources(sonare_tests PRIVATE
   ${PROJECT_SOURCE_DIR}/src/c_api/project_instruments.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
-  ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_sound_font.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_sample_bank.cpp
   # Compiled on every platform: without SONARE_WITH_LIVE_DEVICES its entries refuse.
   ${PROJECT_SOURCE_DIR}/src/c_api/live_session.cpp

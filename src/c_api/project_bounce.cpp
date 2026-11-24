@@ -20,6 +20,7 @@
 #include <optional>
 #include <set>
 
+#include "c_api/checked_insert.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/project_bounce_internal.h"
@@ -28,7 +29,6 @@
 #include "core/channel_layout.h"
 #include "engine/realtime_engine.h"
 #include "engine/track_mixer.h"
-#include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
 #include "midi/controller_profile.h"
 #include "midi/part_rig.h"
@@ -51,18 +51,11 @@ namespace {
 // The refusal for a render length the release tail pushes past a 64-bit count.
 constexpr const char* kTailOverflow =
     "the arrangement's end plus the instruments' release tail must fit in a 64-bit sample count";
-double bounce_sample_rate(const arr::Project& project, int requested, const char* subject) {
+double bounce_sample_rate(const arr::Project& project) {
   namespace check = sonare::util::check;
-  const bool use_project_rate = requested == SONARE_PROJECT_SAMPLE_RATE_PROJECT;
-  const double rate = use_project_rate ? project.sample_rate() : static_cast<double>(requested);
-  if (!use_project_rate) {
-    check::integer_within(requested, kProjectBounceSampleRateDomain, subject);
-  }
+  const double rate = project.sample_rate();
   if (!sonare::is_supported_sample_rate(rate)) {
     check::refuse("project", "must have a supported sample rate");
-  }
-  if (!use_project_rate && std::abs(rate - project.sample_rate()) > 1.0e-6) {
-    check::refuse(subject, "must equal the sample rate of the project");
   }
   return rate;
 }
@@ -306,8 +299,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (num_channels > std::max(2, master_channels)) {
     check::refuse("options.num_channels", "must be at most the width of the scene master's layout");
   }
-  const double sample_rate =
-      bounce_sample_rate(project->history.project(), opts.sample_rate, "options.sample_rate");
+  const double sample_rate = bounce_sample_rate(project->history.project());
   size_t block_floats = 0;
   if (!checked_frame_shape(static_cast<int64_t>(block_size), 2, &block_floats)) {
     check::refuse("options.block_size", "must be small enough for its buffer to be addressed");
@@ -454,16 +446,14 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (!checked_frame_shape(frames, static_cast<size_t>(num_channels), &total)) {
     check::refuse("options.total_frames", "must be small enough for the render to be addressed");
   }
-  if (count_in_frames > 0) {
-    const int64_t prefix =
-        derive_length ? count_in_frames : std::min(count_in_frames, opts.total_frames);
-    int64_t output_frames = 0;
-    size_t output_samples = 0;
-    if (!checked_nonnegative_add(prefix, frames, &output_frames) ||
-        !checked_frame_shape(output_frames, static_cast<size_t>(num_channels), &output_samples)) {
-      check::refuse_relation({"options.count_in_bars", "options.total_frames"},
-                             "{0} and {1} must fit in the render frame count");
-    }
+  const int64_t prefix =
+      derive_length ? count_in_frames : std::min(count_in_frames, opts.total_frames);
+  int64_t output_frames = 0;
+  size_t output_samples = 0;
+  if (!checked_nonnegative_add(prefix, frames, &output_frames) ||
+      !checked_frame_shape(output_frames, static_cast<size_t>(num_channels), &output_samples)) {
+    check::refuse_relation({"options.count_in_bars", "options.total_frames"},
+                           "{0} and {1} must fit in the render frame count");
   }
 
   if (frames == 0) {
@@ -763,7 +753,8 @@ SonareError collect_bounce_instruments(const SonareProject* project,
 #if defined(SONARE_WITH_MASTERING)
     cfg.insert_factory = [](std::string_view name,
                             std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
-      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+      return sonare::mastering::api::make_checked_insert(
+          std::string(name), std::string(json), "params", sonare::ErrorCode::InvalidParameter);
     };
 #endif
     // The bounce is single-threaded and offline: pending EFX changes realise inline.
@@ -809,7 +800,8 @@ SonareError collect_bounce_instruments(const SonareProject* project,
     player_config.insert_factory =
         [](std::string_view name,
            std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
-      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+      return sonare::mastering::api::make_checked_insert(
+          std::string(name), std::string(json), "params", sonare::ErrorCode::InvalidParameter);
     };
 #endif
     // The bounce is single-threaded and offline: pending EFX changes realise inline.
@@ -826,8 +818,13 @@ SonareError collect_bounce_instruments(const SonareProject* project,
   out->sf2_players.reserve(options.sf2_instrument_count);
   for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
     const auto& binding = options.sf2_instruments[i];
-    const auto err = add_sf2(binding.destination_id, binding.config, std::nullopt,
-                             "options.sf2_instruments[" + std::to_string(i) + "].config.");
+    const auto subject = "options.sf2_instruments[" + std::to_string(i) + "]";
+    std::optional<std::string> uri;
+    if (binding.sound_font_uri != nullptr) {
+      check::non_empty(binding.sound_font_uri, (subject + ".sound_font_uri").c_str());
+      uri.emplace(binding.sound_font_uri);
+    }
+    const auto err = add_sf2(binding.destination_id, binding.config, uri, subject + ".config.");
     if (err != SONARE_OK) return err;
   }
 
@@ -1006,55 +1003,55 @@ void sonare_project_bounce_options_init(SonareProjectBounceOptions* options) {
   options->total_frames = SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT;
   options->block_size = 128;
   options->num_channels = SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER;
-  options->sample_rate = SONARE_PROJECT_SAMPLE_RATE_PROJECT;
 }
 
 SonareError sonare_project_count_in_frames(const SonareProject* project, int32_t count_in_bars,
-                                           int sample_rate, int64_t* out_frames) {
+                                           int64_t* out_frames) {
   SONARE_C_API_ENTRY;
   if (out_frames) *out_frames = 0;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out_frames);
   SONARE_C_TRY
   sonare::util::check::integer_within(count_in_bars, sonare_c_detail::kProjectCountInBarsDomain,
                                       "count_in_bars");
+  SONARE_C_REQUIRE_NONNULL(out_frames);
   const auto& model = project->history.project();
-  const double rate = bounce_sample_rate(model, sample_rate, "sample_rate");
+  const double rate = bounce_sample_rate(model);
   sonare::transport::TempoMap map;
   *out_frames = prepare_click_map(model, rate, count_in_bars, map, "count_in_bars");
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 count_in_bars, sample_rate, out_frames);
+                                                 count_in_bars, out_frames);
 #endif
 }
 
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                                   float** out, size_t* out_frames, int* out_channels) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_frames, out_channels);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (out) *out = nullptr;
-  if (out_frames) *out_frames = 0;
-  if (out_channels) *out_channels = 0;
-  // Before the first argument rejection below, so an early return leaves the
-  // recorded compile result empty rather than describing the previous bounce.
-  clear_last_bounce_result(project);
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_frames);
-  SONARE_C_REQUIRE_NONNULL(out_channels);
+  const SonareError validation = run_validation([&] {
+    if (options != nullptr) {
+      sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareProjectBounceOptions),
+                                           "options", "sonare_project_bounce_options_init");
+    }
+    sonare::util::check::non_null(out, "out");
+    sonare::util::check::non_null(out_frames, "out_frames");
+    sonare::util::check::non_null(out_channels, "out_channels");
+  });
+  // An argument refusal leaves the last bounce's compile result empty.
+  clear_last_bounce_result(project);
+  if (validation != SONARE_OK) return validation;
+  SONARE_C_TRY
   sonare::engine::MetronomeConfig click;
   sonare::transport::TempoMap click_map;
   double rate = 0.0;
   int64_t count_in_frames = 0;
   BounceInstruments instruments;
   if (options != nullptr) {
-    // The instrument members sit past the original fields, so the size is read first.
-    sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareProjectBounceOptions),
-                                         "options", "sonare_project_bounce_options_init");
     if (const SonareError err = collect_bounce_instruments(project, *options, &instruments);
         err != SONARE_OK) {
       return err;
@@ -1069,7 +1066,7 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
     click = bounce_metronome(options->metronome);
     if (options->count_in_bars > 0 || click.enabled) {
       const auto& model = project->history.project();
-      rate = bounce_sample_rate(model, options->sample_rate, "options.sample_rate");
+      rate = bounce_sample_rate(model);
       count_in_frames = prepare_click_map(model, rate, options->count_in_bars, click_map,
                                           "options.count_in_bars");
     }
@@ -1109,9 +1106,6 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
-  if (out_frames) *out_frames = {};
-  if (out_channels) *out_channels = 0;
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  options, out, out_frames, out_channels);
 #endif

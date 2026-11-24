@@ -188,7 +188,7 @@ json::Object settings_of(const repair::DereverbClassicalConfig& config) {
   std::vector<std::string> accepted(declared.probed_keys().begin(), declared.probed_keys().end());
   accepted.emplace_back("stage");
   throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter,
-                                        schema::child_path(stage_path, key), std::string(),
+                                        schema::child_path(stage_path, key),
                                         schema::expected_keys(accepted));
 }
 
@@ -490,7 +490,7 @@ AssistantConfig read_analyze_request(const std::string& request_json) {
   for (const auto& [key, value] : root.as_object()) {
     const std::string path = schema::child_path(kRoot, key);
     if (key != "preferStreamingSafe") {
-      throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, path, std::string(),
+      throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, path,
                                             "preferStreamingSafe");
     }
     if (!value.is_bool()) {

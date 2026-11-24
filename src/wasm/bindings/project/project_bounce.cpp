@@ -505,15 +505,18 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   }
 
   std::vector<SonareSf2InstrumentBinding> players;
+  std::vector<std::string> sf2_uri_storage;
   if (!sf2_bindings.isUndefined() && !sf2_bindings.isNull()) {
     if (val::global("Array").call<bool>("isArray", sf2_bindings)) {
       const size_t count = wasmArrayLength(sf2_bindings, "bindings");
       players.reserve(count);
+      sf2_uri_storage.reserve(count);
       for (size_t i = 0; i < count; ++i) {
-        players.push_back(sf2BindingFromVal(sf2_bindings[i]));
+        players.push_back(sf2BindingFromVal(sf2_bindings[i], &sf2_uri_storage));
       }
     } else {
-      players.push_back(sf2BindingFromVal(sf2_bindings));
+      sf2_uri_storage.reserve(1);
+      players.push_back(sf2BindingFromVal(sf2_bindings, &sf2_uri_storage));
     }
   }
 
@@ -597,7 +600,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   // The native failure is reported ahead of a callback's, as in the Python binding.
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCodedCError(err);
+    throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   }
   if (failure.failed) {
     sonare_free_floats(interleaved);
@@ -610,40 +613,65 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   return bounceResultToVal(samples, num_channels);
 }
 
-void ProjectWasm::loadSoundFont(val data) {
+void ProjectWasm::loadSoundFont(val data, const val& uri_val) {
+  std::string uri_storage;
+  const char* uri = nullptr;
+  if (!uri_val.isUndefined() && !uri_val.isNull()) {
+    uri_storage = stringFromVal(uri_val, "uri");
+    uri = wasmCString(uri_storage, "uri");
+  }
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
-  const SonareError err = sonare_project_load_soundfont(
-      project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size());
+  const SonareError err = sonare_project_load_sound_font(
+      project_.get(), uri, bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
 }
 
-void ProjectWasm::clearSoundFont() {
-  const SonareError err = sonare_project_clear_soundfont(project_.get());
+void ProjectWasm::clearSoundFont(const val& uri_val) {
+  std::string uri_storage;
+  const char* uri = nullptr;
+  if (!uri_val.isUndefined() && !uri_val.isNull()) {
+    uri_storage = stringFromVal(uri_val, "uri");
+    uri = wasmCString(uri_storage, "uri");
+  }
+  const SonareError err = sonare_project_clear_sound_font(project_.get(), uri);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
 }
 
-size_t ProjectWasm::soundFontPresetCount() {
+size_t ProjectWasm::soundFontPresetCount(const val& uri_val) {
+  std::string uri_storage;
+  const char* uri = nullptr;
+  if (!uri_val.isUndefined() && !uri_val.isNull()) {
+    uri_storage = stringFromVal(uri_val, "uri");
+    uri = wasmCString(uri_storage, "uri");
+  }
   size_t count = 0;
-  const SonareError err = sonare_project_soundfont_preset_count(project_.get(), &count);
+  const SonareError err = sonare_project_sound_font_preset_count(project_.get(), uri, &count);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
   return count;
 }
 
-val ProjectWasm::soundFontManifest() {
+val ProjectWasm::soundFontManifest(const val& uri_val) {
+  std::string uri_storage;
+  const char* uri = nullptr;
+  if (!uri_val.isUndefined() && !uri_val.isNull()) {
+    uri_storage = stringFromVal(uri_val, "uri");
+    uri = wasmCString(uri_storage, "uri");
+  }
   size_t total = 0;
-  SonareError err = sonare_project_soundfont_manifest(project_.get(), nullptr, 0, &total);
+  SonareError err = sonare_project_sound_font_manifest(project_.get(), uri, nullptr, 0, &total);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
-    err = sonare_project_soundfont_manifest(project_.get(), elementData(entries), total, &total);
+    err = sonare_project_sound_font_manifest(project_.get(), uri, elementData(entries), total,
+                                             &total);
     if (err != SONARE_OK) {
       throwCodedCError(err);
     }
@@ -662,7 +690,8 @@ val ProjectWasm::soundFontManifest() {
   return out;
 }
 
-SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
+SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc,
+                                                          std::vector<std::string>* uri_storage) {
   SonareSf2InstrumentBinding binding{};
   sonare_sf2_instrument_config_init(&binding.config);
   if (desc.isUndefined() || desc.isNull()) {
@@ -684,6 +713,13 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   }
   if (hasProperty(desc, "gsEfxRealization")) {
     binding.config.gs_efx_realization = gsEfxRealizationProperty(desc, "gsEfxRealization");
+  }
+  if (uri_storage != nullptr) {
+    const val uri_val = desc["soundFontUri"];
+    if (!uri_val.isUndefined() && !uri_val.isNull()) {
+      uri_storage->push_back(stringFromVal(uri_val, "soundFontUri"));
+      binding.sound_font_uri = wasmCString(uri_storage->back(), "soundFontUri");
+    }
   }
   return binding;
 }

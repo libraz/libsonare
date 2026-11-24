@@ -76,14 +76,14 @@ SonareProject* make_shared_strip_project(uint32_t* out_track) {
   const SonareMidiEventPod events[] = {{0.0, 0x20903C7Fu, 0u}};
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 1) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(project, track, "shared", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "shared", nullptr) == SONARE_OK);
 
   SonareProjectTrackDesc desc{};
   desc.kind = SONARE_TRACK_MIDI;
   desc.name = "shared b";
   uint32_t neighbor = 0;
   REQUIRE(sonare_project_add_track(project, &desc, &neighbor) == SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(project, neighbor, "shared", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, neighbor, "shared", nullptr) == SONARE_OK);
 
   *out_track = track;
   return project;
@@ -95,7 +95,6 @@ StereoEnergy bounce_energy(SonareProject* project) {
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
-  options.sample_rate = kSampleRate;
   SonareBuiltinInstrumentBinding binding{};
   sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
@@ -166,7 +165,6 @@ TEST_CASE("an opaque callback instrument keeps its strip's controls, not its tra
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
-  options.sample_rate = kSampleRate;
   CallbackInstrumentState state;
   SonareInstrumentBinding binding{};
   binding.destination_id = kDestination;
@@ -209,7 +207,7 @@ TEST_CASE("an opaque callback instrument keeps its strip's controls, not its tra
   REQUIRE(sonare_project_set_midi_events(exclusive, exclusive_clip, events, 1) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(exclusive, exclusive_track, kDestination) ==
           SONARE_OK);
-  REQUIRE(sonare_project_set_track_route(exclusive, exclusive_track, "solo", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(exclusive, exclusive_track, "solo", nullptr) == SONARE_OK);
   REQUIRE(gain_energy_ratio(exclusive, exclusive_track) == Catch::Approx(0.25).margin(0.01));
   sonare_project_destroy(exclusive);
 
@@ -247,7 +245,6 @@ TEST_CASE("a callback destination shared by unrouted tracks bounces once",
     options.total_frames = 4096;
     options.block_size = kBlockSize;
     options.num_channels = 2;
-    options.sample_rate = kSampleRate;
     SonareInstrumentBinding binding{};
     binding.destination_id = kDestination;
     binding.callbacks.user_data = state;

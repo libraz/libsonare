@@ -1477,7 +1477,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(stats.pending_frames == 3);
     REQUIRE(stats.dropped_output_frames > 0);
     REQUIRE(stats.pending_frames + stats.dropped_output_frames ==
-            static_cast<size_t>(stats.total_frames));
+            static_cast<uint64_t>(stats.total_frames));
     REQUIRE(stats.dropped_chord_progression_entries == 0);
     REQUIRE(stats.dropped_bar_progression_entries == 0);
     sonare_free_stream_stats(&stats);

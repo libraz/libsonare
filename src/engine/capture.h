@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "rt/overflow_counter.h"
 #include "rt/seqlock_cell.h"
 
 namespace sonare::engine {
@@ -56,7 +55,9 @@ class CaptureSink {
   int64_t captured_frames() const noexcept {
     return captured_frames_.load(std::memory_order_acquire);
   }
-  uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
+  uint64_t overflow_count() const noexcept {
+    return overflow_count_.load(std::memory_order_relaxed);
+  }
   uint64_t dropped_frames() const noexcept {
     return dropped_frames_.load(std::memory_order_relaxed);
   }
@@ -81,6 +82,8 @@ class CaptureSink {
   }
 
  private:
+  friend struct CaptureLossTestAccess;
+
   // Trivially-copyable snapshot of the control-thread state, published across
   // the thread boundary via a seqlock. Kept POD so SeqlockCell can hand it to a
   // reader without a lock or allocation. Setters republish the whole snapshot so
@@ -108,8 +111,8 @@ class CaptureSink {
   std::atomic<int64_t> captured_frames_{0};
   // Atomic: process() (audio thread) bumps it while overflow_count() is polled
   // cross-thread (control thread, via RealtimeEngine::capture_overflow_count()).
-  rt::OverflowCounter overflow_count_{};
   static_assert(std::atomic<uint64_t>::is_always_lock_free);
+  std::atomic<uint64_t> overflow_count_{0};
   std::atomic<uint64_t> dropped_frames_{0};
 };
 

@@ -1321,6 +1321,9 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   }
   const auto& import_limits = sonare::resource::kProjectMidiImportResourceLimits;
   if (len > import_limits.max_file_bytes) {
+    const std::string message = "bytes exceeds the MIDI import file limit of " +
+                                std::to_string(import_limits.max_file_bytes) + " bytes";
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   SONARE_C_TRY

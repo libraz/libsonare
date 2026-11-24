@@ -1086,44 +1086,32 @@ TEST_CASE("Scene JSON refuses an insert params bag that is not an object", "[mix
   REQUIRE_THROWS_AS(sonare::mixing::api::scene_to_json(not_an_object), sonare::SonareException);
 }
 
-TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
-          "[mixing][routing][warning]") {
+TEST_CASE("Scene load refuses an unread strip insert parameter", "[mixing][routing][refusal]") {
   constexpr int kSr = 48000;
   constexpr int kBlock = 512;
 
-  // eq.parametric reads only band{i}.* fields, so flat highPassHz/presenceDb keys
-  // take no effect. The scene still loads, but the ignored keys are reported on
-  // the dedicated warning channel (NOT last_error, which stays empty on success).
   const std::string with_unknown = R"({
     "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
-      {"slot": "post", "processor": "eq.parametric",
-       "params": {"highPassHz":80,"presenceDb":4}}
+      {"slot": "post", "processor": "saturation.softClipper",
+       "params": {"unreadKey":1}}
     ]}],
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
-  SonareMixer* mixer = sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock);
-  REQUIRE(mixer != nullptr);
-  const std::vector<std::string> notes =
-      sonare_test::diagnostic_messages("mixing.ignored_insert_param");
-  REQUIRE(notes.size() == 1);
-  const std::string& warning = notes.front();
-  REQUIRE(warning.find("eq.parametric") != std::string::npos);
-  REQUIRE(warning.find("vocal") != std::string::npos);
-  REQUIRE(warning.find("highPassHz") != std::string::npos);
-  REQUIRE(warning.find("presenceDb") != std::string::npos);
-  REQUIRE(std::string(sonare_last_error_message()).empty());
-  sonare_mixer_destroy(mixer);
+  REQUIRE(sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key strips[0].inserts[0].params.unreadKey (expected aliasing, ceiling, driveDb, "
+        "mix)");
 
-  // A scene whose insert params are all consumed leaves the warning channel clear
-  // (and clears any stale warning from the previous load on this thread).
+  // The same route still loads with supported parameters.
   const std::string all_known = R"({
     "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
-      {"slot": "post", "processor": "eq.parametric",
-       "params": {"band0.frequencyHz":1000,"band0.gainDb":3}}
+      {"slot": "post", "processor": "saturation.softClipper",
+       "params": {"driveDb":3,"mix":1}}
     ]}],
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
@@ -1165,32 +1153,24 @@ TEST_CASE("Scene load warns about a send to an undeclared bus and still routes i
   sonare_mixer_destroy(mixer);
 }
 
-TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
-          "[mixing][routing][warning]") {
+TEST_CASE("Scene load refuses an unread bus insert parameter", "[mixing][routing][refusal]") {
   constexpr int kSr = 48000;
   constexpr int kBlock = 512;
 
   const std::string with_unknown = R"({
     "version": 2,
     "buses": [{"id": "master", "role": "master", "inserts": [
-      {"slot": "post", "processor": "eq.parametric",
-       "params": {"highPassHz":80,"presenceDb":4}}
+      {"slot": "post", "processor": "saturation.softClipper",
+       "params": {"unreadKey":1}}
     ]}],
     "strips": [{"id": "vocal"}],
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
-  SonareMixer* mixer = sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock);
-  REQUIRE(mixer != nullptr);
-  const std::vector<std::string> notes =
-      sonare_test::diagnostic_messages("mixing.ignored_insert_param");
-  REQUIRE(notes.size() == 1);
-  const std::string& warning = notes.front();
-  CHECK(warning.find("eq.parametric") != std::string::npos);
-  CHECK(warning.find("master") != std::string::npos);
-  CHECK(warning.find("highPassHz") != std::string::npos);
-  CHECK(warning.find("presenceDb") != std::string::npos);
-  CHECK(std::string(sonare_last_error_message()).empty());
-  sonare_mixer_destroy(mixer);
+  REQUIRE(sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key buses[0].inserts[0].params.unreadKey (expected aliasing, ceiling, driveDb, "
+        "mix)");
 }
 
 namespace {

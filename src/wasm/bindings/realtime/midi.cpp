@@ -11,6 +11,7 @@
 #include <string>
 #include <type_traits>
 
+#include "c_api/checked_insert.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
@@ -201,7 +202,8 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
   cfg.use_gm_programs = boolProperty(patch, "useGmPrograms", cfg.use_gm_programs);
   // Same injection as setSf2Instrument: the rig stages need the mastering inserts.
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
-    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    return sonare::mastering::api::make_checked_insert(
+        std::string(name), std::string(json), "params", sonare::ErrorCode::InvalidParameter);
   };
   SonareSampleBank* bank = SampleBankWasm::fromDescriptor(patch);
   auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
@@ -245,7 +247,7 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   // Empty input is a parameter error and oversized or unparsable bytes a format
-  // error, as in sonare_engine_load_soundfont; parse() applies the same SF2 file
+  // error, as in sonare_engine_load_sound_font; parse() applies the same SF2 file
   // size limit, and the engine's SoundFont is replaced only after it succeeds.
   if (bytes.empty()) {
     throw WasmRangeError("SoundFont data must not be empty");
@@ -293,7 +295,8 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
   // wait-free via the RtPublisher snapshot; without a factory the chain could
   // not be built and live EFX would be silent.
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
-    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    return sonare::mastering::api::make_checked_insert(
+        std::string(name), std::string(json), "params", sonare::ErrorCode::InvalidParameter);
   };
   auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
   player->set_soundfont(soundfont_);

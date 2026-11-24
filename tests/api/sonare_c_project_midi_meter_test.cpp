@@ -12,6 +12,11 @@
 
 namespace {
 
+struct OwnedTimeSignatureList {
+  SonareProjectTimeSignatureList value{};
+  ~OwnedTimeSignatureList() { sonare_free_project_time_signature_list(&value); }
+};
+
 using ExportFn = SonareError (*)(const SonareProject*, uint8_t**, size_t*);
 using ImportFn = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
 
@@ -42,11 +47,12 @@ SonareProject* project_with_meter(const std::vector<SonareProjectTimeSignatureSe
 }
 
 std::vector<SonareProjectTimeSignatureSegment> read_meter(const SonareProject* project) {
-  size_t count = 0;
-  REQUIRE(sonare_project_time_signature_count(project, &count) == SONARE_OK);
-  std::vector<SonareProjectTimeSignatureSegment> meter(count);
-  for (size_t i = 0; i < count; ++i) {
-    REQUIRE(sonare_project_time_signature_by_index(project, i, &meter[i]) == SONARE_OK);
+  OwnedTimeSignatureList list;
+  REQUIRE(sonare_project_time_signatures(project, &list.value) == SONARE_OK);
+  std::vector<SonareProjectTimeSignatureSegment> meter;
+  meter.reserve(list.value.count);
+  for (size_t i = 0; i < list.value.count; ++i) {
+    meter.push_back(list.value.items[i]);
   }
   return meter;
 }
@@ -107,12 +113,11 @@ TEST_CASE("an import replaces the project's meter map as it replaces the tempo m
     REQUIRE(container.import_bytes(project, bytes.data(), bytes.size(), nullptr) == SONARE_OK);
 
     CHECK(read_meter(project).empty());
-    size_t tempo_count = 0;
-    REQUIRE(sonare_project_tempo_segment_count(project, &tempo_count) == SONARE_OK);
-    REQUIRE(tempo_count == 1);
-    SonareProjectTempoSegment imported_tempo = {};
-    REQUIRE(sonare_project_tempo_segment_by_index(project, 0, &imported_tempo) == SONARE_OK);
-    CHECK(imported_tempo.bpm == 120.0);
+    SonareProjectTempoSegmentList imported_tempos{};
+    REQUIRE(sonare_project_tempo_segments(project, &imported_tempos) == SONARE_OK);
+    REQUIRE(imported_tempos.count == 1);
+    CHECK(imported_tempos.items[0].bpm == 120.0);
+    sonare_free_project_tempo_segment_list(&imported_tempos);
 
     // One undo restores the meter the import replaced.
     REQUIRE(sonare_project_undo(project) == SONARE_OK);

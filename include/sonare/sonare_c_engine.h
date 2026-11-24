@@ -887,7 +887,8 @@ SonareError sonare_engine_pop_clip_page_request(SonareEngine* engine,
 ///   @ref sonare_engine_prepare. A non-zero count means the host is draining
 ///   @ref sonare_engine_pop_clip_page_request too slowly and some pages were
 ///   never asked for, so their reads produced silence.
-SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine, size_t* out_count);
+SonareError sonare_engine_clip_page_request_overflow_count(const SonareEngine* engine,
+                                                           uint64_t* out_count);
 /// @brief Number of blocks in which a time-stretched clip fell back to resampling.
 /// @details Advisory telemetry; monotonic within a prepared session and reset by
 ///   @ref sonare_engine_prepare. Only @ref sonare_engine_warp_voice_capacity
@@ -895,7 +896,8 @@ SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine,
 ///   clips than voices plays some of them pitch-shifted instead -- except at
 ///   capacity 0, a deliberate "stretch disabled" choice that never counts here.
 ///   A non-zero count is the only way to detect that degradation.
-SonareError sonare_engine_warp_stretch_overflow_count(SonareEngine* engine, size_t* out_count);
+SonareError sonare_engine_warp_stretch_overflow_count(const SonareEngine* engine,
+                                                      uint64_t* out_count);
 /// @brief Largest @p voices @ref sonare_engine_set_warp_voice_capacity accepts.
 #define SONARE_ENGINE_MAX_WARP_VOICES 64u
 /// @brief Sets the number of concurrent time-stretch voices.
@@ -984,10 +986,11 @@ SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, f
 /// @param out_gain Receives the monitor gain.
 SonareError sonare_engine_input_monitor(const SonareEngine* engine, int* out_enabled,
                                         float* out_gain);
-/// @brief Clears the captured-frame counter. Issue it while not capturing.
+/// @brief Clears the captured-frame and overflow counters. Issue it while not capturing.
 SonareError sonare_engine_reset_capture(SonareEngine* engine);
-/// @brief Reads the capture state: frames recorded, overflow count, arming, punch and source.
-SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptureStatus* out);
+/// @brief Reads capture state, including frames recorded and frames dropped.
+SonareError sonare_engine_capture_status(const SonareEngine* engine,
+                                         SonareEngineCaptureStatus* out);
 /// @brief Fills @p node with sizeof and the library defaults: an empty id, a pass-through node,
 ///        0 dB and @ref SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC. A NULL @p node is ignored.
 void sonare_engine_graph_node_init(SonareEngineGraphNode* node);
@@ -1486,7 +1489,7 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
 ///        input-plus-decoded bytes, and 65,536 records per pdta table. A
 ///        resource-limit failure returns SONARE_ERROR_INVALID_FORMAT and leaves
 ///        the previously loaded SoundFont unchanged.
-SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* data, size_t size);
+SonareError sonare_engine_load_sound_font(SonareEngine* engine, const uint8_t* data, size_t size);
 
 /// @brief SF2 player patch for @ref sonare_engine_set_sf2_instrument.
 /// @details Same contract as the project-bounce SF2 instruments: start from
@@ -1518,7 +1521,7 @@ void sonare_engine_sf2_instrument_config_init(SonareEngineSf2InstrumentConfig* c
 
 /// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
 ///        destination, fed by the engine's loaded SoundFont
-///        (@ref sonare_engine_load_soundfont). Without a loaded SoundFont —
+///        (@ref sonare_engine_load_sound_font). Without a loaded SoundFont —
 ///        or for programs the SoundFont does not cover — notes play through
 ///        the built-in synthesizer GM fallback bank (the data-free floor).
 ///        Control-thread API; the engine owns the player. Live MIDI input
@@ -1802,8 +1805,6 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
 SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcBinding* binding);
 /// @brief Clears all live MIDI CC to parameter bindings.
 SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine);
-/// @brief Returns the number of live MIDI CC bindings.
-SonareError sonare_engine_midi_cc_binding_count(SonareEngine* engine, size_t* out_count);
 /// @brief Installs/replaces a live non-destructive MIDI-FX insert for one destination.
 /// @details Control-thread API. The JSON accepts the same fields as
 ///          @ref sonare_project_bake_midi_fx, but scheduled/live MIDI events are
@@ -2088,7 +2089,8 @@ SonareError sonare_engine_set_midi_destination_external(SonareEngine* engine,
 SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, int enabled);
 /// @brief Number of external-MIDI events dropped because the queue was full.
 /// @details Advisory telemetry; monotonic within a prepared session.
-SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, size_t* out_count);
+SonareError sonare_engine_external_midi_dropped_count(const SonareEngine* engine,
+                                                      uint64_t* out_count);
 /// @brief Drains queued external-MIDI events, lowered to MIDI 1.0 byte messages.
 /// @details Each output slot is a @ref SonareExternalMidiEvent. A single queued
 ///   channel-voice event may lower to more than one output event (e.g. a MIDI 2.0

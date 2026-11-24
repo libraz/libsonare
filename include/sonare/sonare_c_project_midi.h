@@ -156,7 +156,8 @@ typedef struct {
 /// @brief Copies live MIDI CC bindings in unspecified order. CONTROL thread.
 /// @param[out] out Receives a list to free with @ref sonare_free_midi_cc_binding_list.
 ///                 Zeroed on entry. An empty table yields NULL items and zero count.
-SonareError sonare_engine_midi_cc_bindings(SonareEngine* engine, SonareMidiCcBindingList* out);
+SonareError sonare_engine_midi_cc_bindings(const SonareEngine* engine,
+                                           SonareMidiCcBindingList* out);
 
 /// @brief Frees and zeroes the owned list. NULL is ignored.
 void sonare_free_midi_cc_binding_list(SonareMidiCcBindingList* list);

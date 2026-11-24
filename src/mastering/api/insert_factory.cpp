@@ -1193,8 +1193,12 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
   const auto type_msb = params.find("typeMsb");
   const auto type_lsb = params.find("typeLsb");
   if ((type_msb == params.end()) != (type_lsb == params.end())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "effects.gsEfx requires typeMsb and typeLsb together");
+    const bool has_msb = type_msb != params.end();
+    throw SonareParameterRefusal::relation(
+        ErrorCode::InvalidParameter,
+        {has_msb ? "typeLsb" : "typeMsb", has_msb ? "typeMsb" : "typeLsb"},
+        sonare::util::refusal::kPresentWhenPresentRelation)
+        .as_caller_spelled();
   }
   const int msb = detail::i(params, "typeMsb", 0, kNone);
   const int lsb = detail::i(params, "typeLsb", 0, kNone);
@@ -1214,8 +1218,9 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
   if (state.type != 0) {
     const auto* defaults = sonare::midi::synth::gs_efx_type_defaults(state.type);
     if (defaults == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "effects.gsEfx unsupported type " + std::to_string(state.type));
+      throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {"typeMsb", "typeLsb"},
+                                             "{0} and {1} must name a supported GS EFX type")
+          .as_caller_spelled();
     }
     state.params = defaults->params;
   }

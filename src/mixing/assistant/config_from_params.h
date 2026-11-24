@@ -67,10 +67,6 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
     } else if (key == "hopLength") {
       mastering::api::assign_int_param(key, value, config.hop_length);
     } else {
-      mastering::assistant::refuse_snake_case_param(
-          key, {"targetTrackLufs", "suggestionStrength", "eqMaxCutDb", "mixBusHeadroomDbtp",
-                "tempoBpm", "enableStructure", "enableGain", "enableBalance", "enableEq",
-                "enableDynamics", "enableImage", "enableHighPass", "nFft", "hopLength"});
       mastering::assistant::refuse_unknown_param(
           key, {"targetTrackLufs", "suggestionStrength", "eqMaxCutDb", "mixBusHeadroomDbtp",
                 "tempoBpm", "enableStructure", "enableGain", "enableBalance", "enableEq",
@@ -96,7 +92,6 @@ inline TrackProfileConfig track_profile_config_from_params(const mastering::api:
       SONARE_CHECK_MSG(value >= 0.0, ErrorCode::InvalidParameter, key + " must be non-negative");
       config.min_duration_sec = static_cast<float>(value);
     } else {
-      mastering::assistant::refuse_snake_case_param(key, {"nFft", "hopLength", "minDurationSec"});
       mastering::assistant::refuse_unknown_param(key, {"nFft", "hopLength", "minDurationSec"});
     }
   }

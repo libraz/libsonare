@@ -570,10 +570,9 @@ SonareError probe_annotate_sections(const std::string& param, double value) {
 SonareError probe_count_in_frames(const std::string& param, double value) {
   Project project;
   REQUIRE(sonare_project_set_sample_rate(project.handle, 48000) == SONARE_OK);
-  const int sample_rate = is_param(param, "sample_rate") ? static_cast<int>(value) : 48000;
   int64_t frames = 0;
   const int32_t count_in_bars = is_param(param, "count_in_bars") ? static_cast<int32_t>(value) : 0;
-  return sonare_project_count_in_frames(project.handle, count_in_bars, sample_rate, &frames);
+  return sonare_project_count_in_frames(project.handle, count_in_bars, &frames);
 }
 
 SonareError probe_snap_to_grid(const std::string& param, double value) {
@@ -653,10 +652,10 @@ SonareError probe_trim_clip(const std::string& param, double value) {
   return sonare_project_trim_clip(project.handle, clip, start, length);
 }
 
-SonareError probe_load_soundfont(const std::string&, double value) {
+SonareError probe_load_sound_font(const std::string&, double value) {
   Project project;
   const std::vector<uint8_t> data(4, 0);
-  return sonare_project_load_soundfont(project.handle, data.data(), to_count(value));
+  return sonare_project_load_sound_font(project.handle, nullptr, data.data(), to_count(value));
 }
 
 SonareError probe_move_clip(const std::string&, double value) {
@@ -741,11 +740,9 @@ SonareError bounce_options_with(const std::string& param, double value, Bounce&&
   options.total_frames = 64;
   options.block_size = 64;
   options.num_channels = 2;
-  options.sample_rate = 48000;
   if (is_param(param, "options.total_frames")) options.total_frames = to_i64(value);
   if (is_param(param, "options.block_size")) options.block_size = static_cast<int>(value);
   if (is_param(param, "options.num_channels")) options.num_channels = static_cast<int>(value);
-  if (is_param(param, "options.sample_rate")) options.sample_rate = static_cast<int>(value);
   if (is_param(param, "options.instrument_latency_samples")) {
     options.instrument_latency_samples = static_cast<int>(value);
   }
@@ -992,7 +989,7 @@ const std::map<std::string, Probe>& probes() {
       {"project_duplicate_clip", probe_duplicate_clip},
       {"project_edit_automation_lane", probe_edit_automation_lane},
       {"project_import_external_stems", probe_import_external_stems},
-      {"project_load_soundfont", probe_load_soundfont},
+      {"project_load_sound_font", probe_load_sound_font},
       {"project_move_clip", probe_move_clip},
       {"project_position_at_ppq", probe_position_at_ppq},
       {"project_ppq_to_sec", probe_ppq_to_sec},

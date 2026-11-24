@@ -67,8 +67,6 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
                        "preset must be a preset index from sonare_mastering_preset_from_name");
       config.preset = api::preset_from_string(names[static_cast<std::size_t>(index)]);
     } else {
-      refuse_snake_case_param(key, {"targetLufs", "ceilingDbtp", "enableRepair",
-                                    "preferStreamingSafe", "speechMonoAmount", "targetPlatform"});
       // Refused rather than ignored, as a chain override is: a misspelt key
       // would otherwise leave its setting at the default with nothing to say so.
       refuse_unknown_param(key, {"targetLufs", "ceilingDbtp", "enableRepair", "preferStreamingSafe",
@@ -95,7 +93,6 @@ inline AudioProfileConfig audio_profile_config_from_params(const api::Param* par
     } else if (key == "detectDefects") {
       config.detect_defects = value != 0.0;
     } else {
-      refuse_snake_case_param(key, {"nFft", "hopLength", "truePeakOversample", "detectDefects"});
       refuse_unknown_param(key, {"nFft", "hopLength", "truePeakOversample", "detectDefects"});
     }
   }

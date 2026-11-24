@@ -44,24 +44,6 @@ double json_number(const JsonValue& object, const char* key, double fallback,
   return value->as_number();
 }
 
-// An earlier spelling of a key is refused by name rather than read.
-void refuse_earlier_key(const JsonValue& object, const char* earlier_key, const char* current_key,
-                        const std::string& path) {
-  if (find_json_value(object, earlier_key)) {
-    throw SonareParameterRefusal::relation(
-        ErrorCode::InvalidFormat,
-        {schema::child_path(path, earlier_key), schema::child_path(path, current_key)},
-        "{0} is an earlier spelling; write {1}")
-        .as_caller_spelled();
-  }
-}
-
-double json_number_any(const JsonValue& object, const char* key, const char* earlier_key,
-                       double fallback, const std::string& path) {
-  refuse_earlier_key(object, earlier_key, key, path);
-  return json_number(object, key, fallback, path);
-}
-
 // Every JSON double reaches a float field through here: as_number() yields a
 // full double, so a literal like 1e39 is out of float range and its raw
 // narrowing would be undefined behaviour. Mirrors project_serializer_decode's
@@ -75,32 +57,21 @@ float json_float(const JsonValue& object, const char* key, float fallback,
   return converted;
 }
 
-float json_float_any(const JsonValue& object, const char* key, const char* earlier_key,
-                     float fallback, const std::string& path) {
-  float converted = 0.0f;
-  if (!sonare::numeric::checked_float_cast(
-          json_number_any(object, key, earlier_key, fallback, path), &converted)) {
-    refuse_value(schema::child_path(path, key), schema::kFloatRangePredicate);
-  }
-  return converted;
-}
-
 // A dB field that ends up as a filter gain: the shelf designs raise 10^(dB/20)
 // in float, which overflows past roughly 770 dB and no longer realizes the gain.
-float json_gain_db_any(const JsonValue& object, const char* key, const char* earlier_key,
-                       float fallback, const std::string& path) {
-  const float value = json_float_any(object, key, earlier_key, fallback, path);
+float json_gain_db(const JsonValue& object, const char* key, float fallback,
+                   const std::string& path) {
+  const float value = json_float(object, key, fallback, path);
   if (!sonare::numeric::finite(db_to_linear(value))) {
     refuse_value(schema::child_path(path, key), "must be small enough to realize as a filter gain");
   }
   return value;
 }
 
-int json_int_any(const JsonValue& object, const char* key, const char* earlier_key, int fallback,
-                 const std::string& path) {
+int json_int(const JsonValue& object, const char* key, int fallback, const std::string& path) {
   int converted = 0;
-  if (!sonare::numeric::checked_integral_cast(
-          std::round(json_number_any(object, key, earlier_key, fallback, path)), &converted)) {
+  if (!sonare::numeric::checked_integral_cast(std::round(json_number(object, key, fallback, path)),
+                                              &converted)) {
     refuse_value(schema::child_path(path, key),
                  schema::integer_range_predicate(std::numeric_limits<int>::min(),
                                                  std::numeric_limits<int>::max()));
@@ -115,12 +86,6 @@ bool json_bool(const JsonValue& object, const char* key, bool fallback, const st
   wrong_type(schema::child_path(path, key), schema::Kind::Boolean);
 }
 
-bool json_bool_any(const JsonValue& object, const char* key, const char* earlier_key, bool fallback,
-                   const std::string& path) {
-  refuse_earlier_key(object, earlier_key, key, path);
-  return json_bool(object, key, fallback, path);
-}
-
 std::string json_string(const JsonValue& object, const char* key, const std::string& fallback,
                         const std::string& path) {
   const JsonValue* value = find_json_value(object, key);
@@ -129,12 +94,6 @@ std::string json_string(const JsonValue& object, const char* key, const std::str
     wrong_type(schema::child_path(path, key), schema::Kind::String);
   }
   return value->as_string();
-}
-
-std::string json_string_any(const JsonValue& object, const char* key, const char* earlier_key,
-                            const std::string& fallback, const std::string& path) {
-  refuse_earlier_key(object, earlier_key, key, path);
-  return json_string(object, key, fallback, path);
 }
 
 [[noreturn]] void unknown_token(const char* key, const std::string& tokens,
@@ -177,49 +136,40 @@ EqBand eq_band_from_value(const JsonValue& value, const std::string& path) {
   EqBand band;
   band.type =
       parse_band_type(json_string(value, "type", band_type_to_string(band.type), path), path);
-  band.coeff_mode = parse_coeff_mode(json_string_any(value, "coeffMode", "coeff_mode",
-                                                     coeff_mode_to_string(band.coeff_mode), path),
-                                     path);
-  band.frequency_hz = json_float_any(value, "frequencyHz", "frequency_hz", band.frequency_hz, path);
-  band.gain_db = json_gain_db_any(value, "gainDb", "gain_db", band.gain_db, path);
+  band.coeff_mode = parse_coeff_mode(
+      json_string(value, "coeffMode", coeff_mode_to_string(band.coeff_mode), path), path);
+  band.frequency_hz = json_float(value, "frequencyHz", band.frequency_hz, path);
+  band.gain_db = json_gain_db(value, "gainDb", band.gain_db, path);
   band.q = json_float(value, "q", band.q, path);
   band.enabled = json_bool(value, "enabled", band.enabled, path);
-  band.slope_db_oct = json_int_any(value, "slopeDbOct", "slope_db_oct", band.slope_db_oct, path);
+  band.slope_db_oct = json_int(value, "slopeDbOct", band.slope_db_oct, path);
   band.placement = parse_placement(
       json_string(value, "placement", placement_to_string(band.placement), path), path);
   band.phase =
       parse_band_phase(json_string(value, "phase", phase_mode_to_string(band.phase), path), path);
   band.soloed = json_bool(value, "soloed", false, path);
   band.bypassed = json_bool(value, "bypassed", false, path);
-  band.proportional_q = json_bool_any(value, "proportionalQ", "proportional_q", false, path);
+  band.proportional_q = json_bool(value, "proportionalQ", false, path);
   band.proportional_q_strength =
-      json_float_any(value, "proportionalQStrength", "proportional_q_strength",
-                     band.proportional_q_strength, path);
+      json_float(value, "proportionalQStrength", band.proportional_q_strength, path);
 
-  refuse_earlier_key(value, "dynEnabled", "dynamic", path);
-  refuse_earlier_key(value, "dyn_enabled", "dynamic", path);
   band.dyn.enabled = json_bool(value, "dynamic", false, path);
   // threshold_db and range_db are the two dynamic terms that reach the biquad
   // as gain (detector_db - threshold_db, scaled by ratio, clamped to range_db),
   // so they carry the same realizability bound as the static gain.
-  band.dyn.threshold_db =
-      json_gain_db_any(value, "thresholdDb", "threshold_db", band.dyn.threshold_db, path);
-  band.dyn.auto_threshold =
-      json_bool_any(value, "autoThreshold", "auto_threshold", band.dyn.auto_threshold, path);
+  band.dyn.threshold_db = json_gain_db(value, "thresholdDb", band.dyn.threshold_db, path);
+  band.dyn.auto_threshold = json_bool(value, "autoThreshold", band.dyn.auto_threshold, path);
   band.dyn.ratio = json_float(value, "ratio", band.dyn.ratio, path);
-  band.dyn.range_db = json_gain_db_any(value, "rangeDb", "range_db", band.dyn.range_db, path);
-  band.dyn.attack_ms = json_float_any(value, "attackMs", "attack_ms", band.dyn.attack_ms, path);
-  band.dyn.release_ms = json_float_any(value, "releaseMs", "release_ms", band.dyn.release_ms, path);
-  refuse_earlier_key(value, "lookaheadMs", "detectorDelayMs", path);
-  refuse_earlier_key(value, "lookahead_ms", "detectorDelayMs", path);
-  band.dyn.detector_delay_ms = json_float_any(value, "detectorDelayMs", "detector_delay_ms",
-                                              band.dyn.detector_delay_ms, path);
-  band.dyn.sidechain_freq_hz = json_float_any(value, "sidechainFreqHz", "sidechain_freq_hz",
-                                              band.dyn.sidechain_freq_hz, path);
-  band.dyn.sidechain_q =
-      json_float_any(value, "sidechainQ", "sidechain_q", band.dyn.sidechain_q, path);
-  band.dyn.external_sidechain = json_bool_any(value, "externalSidechain", "external_sidechain",
-                                              band.dyn.external_sidechain, path);
+  band.dyn.range_db = json_gain_db(value, "rangeDb", band.dyn.range_db, path);
+  band.dyn.attack_ms = json_float(value, "attackMs", band.dyn.attack_ms, path);
+  band.dyn.release_ms = json_float(value, "releaseMs", band.dyn.release_ms, path);
+  band.dyn.detector_delay_ms =
+      json_float(value, "detectorDelayMs", band.dyn.detector_delay_ms, path);
+  band.dyn.sidechain_freq_hz =
+      json_float(value, "sidechainFreqHz", band.dyn.sidechain_freq_hz, path);
+  band.dyn.sidechain_q = json_float(value, "sidechainQ", band.dyn.sidechain_q, path);
+  band.dyn.external_sidechain =
+      json_bool(value, "externalSidechain", band.dyn.external_sidechain, path);
   return band;
 }
 

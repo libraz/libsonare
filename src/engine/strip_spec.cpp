@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "c_api/checked_insert.h"
 #include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
@@ -35,9 +36,9 @@ void apply_shared_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::
 std::unique_ptr<rt::ProcessorBase> make_insert_processor(const mixing::api::Insert& insert,
                                                          double build_sample_rate,
                                                          bool* stereo_pair_only) {
-  auto processor =
-      mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr,
-                                  resource::kDefaultProjectImportResourceLimits, build_sample_rate);
+  auto processor = mastering::api::make_checked_insert(
+      insert.processor_name, insert.params_json, "settings.inserts[].params",
+      ErrorCode::InvalidParameter, build_sample_rate);
   if (!processor) return nullptr;
   *stereo_pair_only = mastering::api::channel_policy(insert.processor_name) ==
                       mastering::api::ChannelPolicy::StereoPairOnly;

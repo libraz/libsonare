@@ -267,19 +267,24 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
     CHECK(loud["chain_config"]["params"]["loudness.ceilingDbtp"].as_number() == -2.0);
   }
 
-  SECTION("mastering-suggest refuses an earlier --params spelling naming the current key") {
-    auto [code, output] = exec_command(CLI + " mastering-suggest " + TEST_WAV +
-                                       " --params target_platform=broadcast --json 2>&1");
-    CHECK(code == 2);
-    CHECK_THAT(output, ContainsSubstring("target_platform"));
-    CHECK_THAT(output, ContainsSubstring("targetPlatform"));
+  SECTION("mastering-suggest refuses an unknown --params key from argv") {
+    for (const std::string extra : {" --params target_platform=broadcast",
+                                    " --target-platform club --params target_platform=club"}) {
+      CAPTURE(extra);
+      auto [code, output] =
+          exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json 2>&1");
+      CHECK(code == 2);
+      CHECK_THAT(output, ContainsSubstring("unknown key target_platform (expected ceilingDbtp, "
+                                           "enableRepair, preferStreamingSafe, preset, "
+                                           "speechMonoAmount, targetLufs, targetPlatform)"));
+    }
   }
 
   SECTION("mastering-suggest refuses a contradiction or a malformed entry before the read") {
     for (const std::string extra :
          {" --preset classical --params preset=classical",
           " --target-lufs -12 --params targetLufs=-12",
-          " --target-platform club --params target_platform=club", " --params novalue"}) {
+          " --target-platform club --params targetPlatform=club", " --params novalue"}) {
       CAPTURE(extra);
       auto [code, output] =
           exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
@@ -287,13 +292,36 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
     }
   }
 
-  SECTION("mastering-suggest refuses an unknown key and an index") {
-    for (const std::string extra :
-         {" --params notAKey=1", " --params preset=3", " --params targetPlatform=2"}) {
-      CAPTURE(extra);
-      auto [code, output] =
-          exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
-      REQUIRE(code == 3);
+  SECTION("mastering-suggest refuses an unknown key from argv") {
+    auto [code, output] =
+        exec_command(CLI + " mastering-suggest " + TEST_WAV + " --params notAKey=1 --json 2>&1");
+    CHECK(code == 2);
+    CHECK_THAT(output, ContainsSubstring("unknown key notAKey (expected "));
+  }
+
+  SECTION("mastering-suggest refuses invalid param values before the read") {
+    const std::string presets =
+        "preset must be one of pop, edm, acoustic, hipHop, aiMusic, speech, streaming, youtube, "
+        "broadcast, podcast, audiobook, cinema, jpop, ambient, lofi, classical, drumAndBass, "
+        "techno, metal, trap, rnb, jazz, kpop, trance, gameOst";
+    const std::string platforms =
+        "targetPlatform must be one of streaming, youtube, broadcast, podcast, audiobook, "
+        "cinema, club, cd";
+    const std::vector<std::pair<std::string, std::string>> rows = {
+        {"preset=3", presets},
+        {"preset=vinyl", presets},
+        {"targetPlatform=2", platforms},
+        {"targetPlatform=typo", platforms},
+        {"targetLufs=invalid", "invalid numeric value for parameter 'targetLufs'"},
+        {"ceilingDbtp=1e100", "invalid numeric value for parameter 'ceilingDbtp'"},
+        {"speechMonoAmount=nan", "invalid numeric value for parameter 'speechMonoAmount'"},
+    };
+    for (const auto& [params, expected] : rows) {
+      CAPTURE(params);
+      const auto [code, output] = exec_command(
+          CLI + " mastering-suggest /nonexistent/argv-refusal-input.wav --params " + params);
+      REQUIRE(code == 2);
+      CHECK_THAT(output, ContainsSubstring(expected + "\n"));
     }
   }
 }
@@ -1892,8 +1920,28 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
        "invalid parameter entry: 'novalue' (expected key=value)"},
       {"suggest-mix --input " + missing + " --params tempoBpm=abc",
        "invalid numeric value for parameter 'tempoBpm'"},
+      {"suggest-mix --input " + missing + " --params targetTrackLufs=1e100",
+       "invalid numeric value for parameter 'targetTrackLufs'"},
+      {"suggest-mix --input " + missing + " --params tempoBpm=19",
+       "tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
+      {"suggest-mix --input " + missing + " --params tempoBpm=401",
+       "tempoBpm must be 0 or a tempo between 20 and 400 BPM"},
+      {"suggest-mix --input " + missing + " --params nFft=3",
+       "nFft must be an even integer in [2, 524288]"},
+      {"suggest-mix --input " + missing + " --params nFft=2.5",
+       "nFft must be an even integer in [2, 524288]"},
+      {"suggest-mix --input " + missing + " --params nFft=524290",
+       "nFft must be an even integer in [2, 524288]"},
+      {"suggest-mix --input " + missing + " --params hopLength=0",
+       "hopLength must be an integer in [1, 2147483647]"},
+      {"suggest-mix --input " + missing + " --params hopLength=1.5",
+       "hopLength must be an integer in [1, 2147483647]"},
+      {"suggest-mix --input " + missing + " --params hopLength=2147483648",
+       "hopLength must be an integer in [1, 2147483647]"},
       {"suggest-mix --input " + missing + " --params enable_eq=1",
-       "assistant param enable_eq is an earlier spelling; write enableEq"},
+       "unknown key enable_eq (expected enableBalance, enableDynamics, enableEq, enableGain, "
+       "enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, "
+       "nFft, suggestionStrength, targetTrackLufs, tempoBpm)"},
       {"suggest-mix --input " + missing + " --params nosuchkey=1",
        "unknown key nosuchkey (expected "},
       {"suggest-mix --input " + missing + " --params tempoBpm=100 --tempo-bpm 120",
@@ -1910,6 +1958,11 @@ TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
     REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring(row.text));
   }
+
+  const auto [code, output] =
+      exec_command(CLI + " suggest-mix --input " + missing + " --params tempoBpm=0,nFft=1000");
+  INFO(output);
+  CHECK(code == 4);
 }
 #endif
 

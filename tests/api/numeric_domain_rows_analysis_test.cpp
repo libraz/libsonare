@@ -1011,9 +1011,9 @@ SonareError probe_project_auto_tempo(const std::string& param, double value) {
   SonareProject* project = nullptr;
   if (sonare_project_create(&project) != SONARE_OK) return SONARE_ERROR_INVALID_STATE;
   const SonareProjectTempoOptions options = tempo_options(param, value);
-  float bpm = 0.0f;
-  const SonareError err =
-      sonare_project_auto_tempo(project, pcm(), pcm_length(), kAnalysisRate, &options, 0, 0, &bpm);
+  SonareProjectAutoTempoResult result{};
+  const SonareError err = sonare_project_auto_tempo(project, pcm(), pcm_length(), kAnalysisRate,
+                                                    &options, 0, 0, &result);
   sonare_project_destroy(project);
   return err;
 }
