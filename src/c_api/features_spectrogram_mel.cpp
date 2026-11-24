@@ -1,5 +1,6 @@
 #include <limits>
 
+#include "c_api/feature_admission.h"
 #include "c_api/feature_input_domains.h"
 #include "c_api/features_internal.h"
 #include "filters/mel.h"
@@ -7,13 +8,12 @@
 
 namespace {
 
-MelConfig make_mel_config(int n_fft, size_t hop_length, int n_mels, float fmin, float fmax, int htk,
-                          int sample_rate) {
+MelConfig make_mel_config(int n_fft, size_t hop_length, int n_mels, float fmin, float fmax,
+                          int htk) {
   MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = core_length(hop_length);
   config.n_mels = n_mels;
-  with_c_names(kMelOptionsRangeNames, [&] { validate_mel_bounds(fmin, fmax, sample_rate); });
   config.fmin = fmin;
   config.fmax = fmax;
   config.htk = htk != 0;
@@ -96,34 +96,39 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline(
-      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz,
-                                                 resolved.fmax_hz, resolved.htk, sample_rate);
-        MelSpectrogram mel = with_c_names(kMelOptionsRangeNames,
-                                          [&] { return MelSpectrogram::compute(audio, config); });
+  SONARE_C_TRY
+  if (samples == nullptr) validate_offline_audio_input("samples", samples, length, sample_rate);
+  const MelConfig config =
+      make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz, resolved.fmax_hz, resolved.htk);
+  with_c_names(kMelOptionsRangeNames, [&] {
+    admit_forward_mel(length, sample_rate, config,
+                      [&] { validate_offline_audio_samples("samples", samples, length, 0); });
+  });
+  const Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  MelSpectrogram mel =
+      with_c_names(kMelOptionsRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
 
-        out->n_mels = mel.n_mels();
-        out->n_frames = mel.n_frames();
-        out->sample_rate = mel.sample_rate();
-        out->hop_length = static_cast<size_t>(mel.hop_length());
-        out->n_fft = config.n_fft;
-        out->fmin_hz = config.fmin;
-        out->fmax_hz = config.resolved_fmax(mel.sample_rate());
-        out->htk = config.htk ? 1 : 0;
-        out->is_db = 0;
+  out->n_mels = mel.n_mels();
+  out->n_frames = mel.n_frames();
+  out->sample_rate = mel.sample_rate();
+  out->hop_length = static_cast<size_t>(mel.hop_length());
+  out->n_fft = config.n_fft;
+  out->fmin_hz = config.fmin;
+  out->fmax_hz = config.resolved_fmax(mel.sample_rate());
+  out->htk = config.htk ? 1 : 0;
+  out->is_db = 0;
 
-        size_t total = static_cast<size_t>(mel.n_mels()) * mel.n_frames();
-        std::unique_ptr<float[]> power(new float[total]);
-        std::memcpy(power.get(), mel.power_data(), total * sizeof(float));
+  size_t total = static_cast<size_t>(mel.n_mels()) * mel.n_frames();
+  std::unique_ptr<float[]> power(new float[total]);
+  std::memcpy(power.get(), mel.power_data(), total * sizeof(float));
 
-        std::vector<float> db = mel.to_db();
-        std::unique_ptr<float[]> db_out(new float[total]);
-        std::memcpy(db_out.get(), db.data(), total * sizeof(float));
-        out->power = release_array(power);
-        out->db = release_array(db_out);
-        return SONARE_OK;
-      });
+  std::vector<float> db = mel.to_db();
+  std::unique_ptr<float[]> db_out(new float[total]);
+  std::memcpy(db_out.get(), db.data(), total * sizeof(float));
+  out->power = release_array(power);
+  out->db = release_array(db_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 void sonare_mel_filterbank_options_init(SonareMelFilterbankOptions* options) {
@@ -224,30 +229,36 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline(
-      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz,
-                                                 resolved.fmax_hz, resolved.htk, sample_rate);
-        MelSpectrogram mel = with_c_names(kMelOptionsRangeNames,
-                                          [&] { return MelSpectrogram::compute(audio, config); });
-        std::vector<float> mfcc_data = mel.mfcc(n_mfcc, resolved.lifter);
+  SONARE_C_TRY
+  if (samples == nullptr) validate_offline_audio_input("samples", samples, length, sample_rate);
+  const MelConfig config =
+      make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz, resolved.fmax_hz, resolved.htk);
+  with_c_names(kMelOptionsRangeNames, [&] {
+    admit_forward_mel(
+        length, sample_rate, config,
+        [&] { validate_offline_audio_samples("samples", samples, length, 0); }, &n_mfcc);
+  });
+  const Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  MelSpectrogram mel =
+      with_c_names(kMelOptionsRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
+  std::vector<float> mfcc_data = mel.mfcc(n_mfcc, resolved.lifter);
 
-        out->n_mfcc = n_mfcc;
-        out->n_frames = mel.n_frames();
-        out->sample_rate = mel.sample_rate();
-        out->hop_length = static_cast<size_t>(mel.hop_length());
-        out->n_fft = config.n_fft;
-        out->n_mels = mel.n_mels();
-        out->fmin_hz = config.fmin;
-        out->fmax_hz = config.resolved_fmax(mel.sample_rate());
-        out->htk = config.htk ? 1 : 0;
-        out->is_db = 0;
-        out->lifter = resolved.lifter;
-        std::unique_ptr<float[]> coeffs(new float[mfcc_data.size()]);
-        std::memcpy(coeffs.get(), mfcc_data.data(), mfcc_data.size() * sizeof(float));
-        out->coefficients = release_array(coeffs);
-        return SONARE_OK;
-      });
+  out->n_mfcc = n_mfcc;
+  out->n_frames = mel.n_frames();
+  out->sample_rate = mel.sample_rate();
+  out->hop_length = static_cast<size_t>(mel.hop_length());
+  out->n_fft = config.n_fft;
+  out->n_mels = mel.n_mels();
+  out->fmin_hz = config.fmin;
+  out->fmax_hz = config.resolved_fmax(mel.sample_rate());
+  out->htk = config.htk ? 1 : 0;
+  out->is_db = 0;
+  out->lifter = resolved.lifter;
+  std::unique_ptr<float[]> coeffs(new float[mfcc_data.size()]);
+  std::memcpy(coeffs.get(), mfcc_data.data(), mfcc_data.size() * sizeof(float));
+  out->coefficients = release_array(coeffs);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mel_delta(const float* features, int n_features, int n_frames, int width,

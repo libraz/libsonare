@@ -5,6 +5,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -891,3 +892,74 @@ TEST_CASE("vector-output features define the output pair on a rejected call", "[
   CHECK(ints == nullptr);
   CHECK(count == 0);
 }
+
+TEST_CASE("Mel and cyclic tempogram admit compound-invalid inputs in argument order",
+          "[c_api][features][refusal]") {
+  constexpr int kSampleRate = 22050;
+  constexpr int kNFft = 512;
+  constexpr int kHop = 128;
+  constexpr int kMelBands = 16;
+  constexpr int kFrames = 4;
+  constexpr float kAboveNyquist = kSampleRate / 2 + 1;
+  constexpr int kOddFft = 3;
+  const std::array<float, kNFft> samples{};
+  SonareMelSpectrogramOptions mel_options;
+  sonare_mel_spectrogram_options_init(&mel_options);
+  mel_options.fmax_hz = kAboveNyquist;
+  SonareMelResult mel{};
+  CHECK(sonare_mel_spectrogram(samples.data(), samples.size(), kSampleRate, kOddFft, kHop,
+                               kMelBands, &mel_options, &mel) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be finite and at most 11025");
+  CHECK(mel.power == nullptr);
+  sonare_free_mel_result(&mel);
+
+  const std::array<float, kMelBands * kFrames> power{};
+  float* out = nullptr;
+  size_t length = 0;
+  CHECK(sonare_mel_to_audio(power.data(), power.size(), kMelBands, kFrames, kSampleRate, kNFft,
+                            kHop, 0.0f, kAboveNyquist, 0, nullptr, &out,
+                            &length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "fmax_hz must be finite and at most 11025");
+  CHECK(out == nullptr);
+  CHECK(length == 0);
+  sonare_free_floats(out);
+
+  const std::array<float, 2> envelope{0.0f, std::numeric_limits<float>::quiet_NaN()};
+  int frames = 0;
+  CHECK(sonare_cyclic_tempogram(envelope.data(), envelope.size(), kSampleRate, kHop, 0, -1.0f,
+                                kMelBands, &out, &length,
+                                &frames) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "onset_envelope contains a non-finite sample at index 1");
+  CHECK(out == nullptr);
+  CHECK(length == 0);
+  CHECK(frames == 0);
+  sonare_free_floats(out);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("a bad Mel edge is refused before allocating audio storage",
+          "[c_api][features][refusal]") {
+  constexpr int kSampleRate = sonare::constants::kDefaultSampleRate;
+  constexpr int kFftSize = 512;
+  constexpr int kHop = 128;
+  constexpr int kMelBands = 16;
+  const std::array<float, 4096> samples{};
+  SonareMelSpectrogramOptions options;
+  sonare_mel_spectrogram_options_init(&options);
+  options.fmax_hz = kSampleRate / 2 + 1;
+  SonareMelResult result{};
+  SonareError error;
+  {
+    sonare::test::AllocationFailureGuard fail_audio_copy(sizeof(samples));
+    error = sonare_mel_spectrogram(samples.data(), samples.size(), kSampleRate, kFftSize, kHop,
+                                   kMelBands, &options, &result);
+  }
+  CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be finite and at most 11025");
+  CHECK(result.power == nullptr);
+  sonare_free_mel_result(&result);
+}
+#endif

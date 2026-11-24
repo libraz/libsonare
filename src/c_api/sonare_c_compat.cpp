@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/feature_admission.h"
 #include "core/audio.h"
 #include "core/convert.h"
 #include "core/db_convert.h"
@@ -433,14 +434,15 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
                                     float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
-  if (const SonareError err = validate_buffer("onset_envelope", onset_envelope, length);
-      err != SONARE_OK) {
-    return err;
-  }
+  SONARE_C_TRY
+  admit_cyclic_tempogram(
+      sample_rate, core_length(hop_length), core_length(win_length), bpm_min, n_bins, [&] {
+        util::check::non_null_when_count(onset_envelope, length, "onset_envelope", "length");
+        validate_offline_audio_samples("onset_envelope", onset_envelope, length, 0);
+      });
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
-  SONARE_C_TRY
   TempogramConfig config;
   config.hop_length = core_length(hop_length);
   config.win_length = core_length(win_length);
