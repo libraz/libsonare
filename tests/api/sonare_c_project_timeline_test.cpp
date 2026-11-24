@@ -702,6 +702,20 @@ TEST_CASE("project snap-to-grid clears output when arrangement is unavailable",
         SONARE_ERROR_NOT_SUPPORTED);
   CHECK(out_ppq == 0.0);
 }
+
+TEST_CASE("vocal edit dependencies refuse a compiled-out arrangement before their arguments",
+          "[c_api][project][vocal_dependency_count][refusal]") {
+  CHECK(sonare_project_get_vocal_edit_dependencies(nullptr, nullptr) == SONARE_ERROR_NOT_SUPPORTED);
+  SonareProjectVocalEditDependenciesResult result;
+  sonare_project_vocal_edit_dependencies_result_init(&result);
+  result.dependency_count = 99;
+  REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &result) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(result.dependency_count == 99);
+  const char* reason = sonare_last_error_reason();
+  REQUIRE(reason != nullptr);
+  CHECK(std::string(reason) == "notCompiledIn");
+}
 #endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)

@@ -193,6 +193,29 @@ bool known_envelope_header(const std::vector<uint8_t>& payload) noexcept {
   return version == 1u && flags == 1u;
 }
 
+void check_dependency_sample_count(const arr::AssistSidecar& sidecar) {
+  if (sidecar.schema_version != arr::vocal_sidecar::kSchemaVersion ||
+      sidecar.payload.size() < kEnvelopeHeaderBytes || !known_envelope_header(sidecar.payload)) {
+    return;
+  }
+
+  // Read SVP1's count before decode_envelope can discard a nonpositive value.
+  constexpr size_t kSampleCountOffset = 24u;
+  constexpr auto& domain = kVocalSourceSampleCountDomain;
+  static_assert(static_cast<uint64_t>(*domain.hi) <= std::numeric_limits<size_t>::max());
+  uint64_t count = 0;
+  for (size_t byte = 0; byte < sizeof(count); ++byte) {
+    count |= static_cast<uint64_t>(sidecar.payload[kSampleCountOffset + byte]) << (8u * byte);
+  }
+  // Negative encoded counts also exceed the upper bound when read as unsigned.
+  if (count < static_cast<uint64_t>(*domain.lo) || count > static_cast<uint64_t>(*domain.hi)) {
+    throw sonare::SonareParameterRefusal::predicate(
+        sonare::ErrorCode::InvalidFormat, sidecar.module_id + ".sourceSampleCount",
+        sonare::util::check::domain_predicate(domain),
+        sonare::RefusalDomain{domain.lo, domain.hi, domain.lo_included, domain.hi_included});
+  }
+}
+
 uint32_t malformed_reason(const arr::AssistSidecar& sidecar) noexcept {
   if (sidecar.schema_version != sonare::arrangement::vocal_sidecar::kSchemaVersion) {
     return SONARE_VOCAL_REASON_UNSUPPORTED;
@@ -612,12 +635,12 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
   const bool result_ready = initialized(result);
   if (result_ready) {
     *result = {};
     result->struct_size = sizeof(*result);
   }
-#if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(result);
   if (!result_ready) {
@@ -628,6 +651,7 @@ SonareError sonare_project_get_vocal_edit_dependencies(
   for (const arr::AssistSidecar& sidecar : project->history.project().assist_sidecars()) {
     const auto key = arr::vocal_sidecar::parse_key(sidecar.module_id);
     if (!key.has_value()) continue;
+    check_dependency_sample_count(sidecar);
     SonareProjectVocalEditDependency dependency;
     Envelope envelope;
     if (sidecar.payload.size() >
@@ -699,10 +723,6 @@ SonareError sonare_project_get_vocal_edit_dependencies(
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(result);
-  if (!result_ready) {
-    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
-  }
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  result);
 #endif

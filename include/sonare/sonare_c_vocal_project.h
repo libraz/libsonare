@@ -143,6 +143,9 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 /// @param result Initialized with @ref sonare_project_vocal_edit_dependencies_result_init; on
 ///   success holds a library-allocated array released with
 ///   @ref sonare_free_project_vocal_edit_dependencies_result.
+/// @return SONARE_ERROR_INVALID_FORMAT if a supported envelope's source sample count is not
+///   positive or exceeds the audio buffer limit. The error names the sidecar key and field, and
+///   the list stays empty.
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result);
 

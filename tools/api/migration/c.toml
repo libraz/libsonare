@@ -5131,6 +5131,14 @@ test = "tests/bindings/binding_project_midi_test.cpp::project C surface validate
 
 [[entry]]
 kind = "function"
+old = "sonare_project_get_vocal_edit_dependencies"
+changed = "returns SONARE_ERROR_INVALID_FORMAT naming <sidecar key>.sourceSampleCount when a supported envelope's source sample count is not positive or exceeds the audio buffer limit, with the list left empty (1.x returned SONARE_OK and listed the sidecar with the malformed reason for a count not positive, or the invalid-state reason for a count past the limit). An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED before reading either argument and leaves result untouched (1.x refused a NULL or uninitialised result with SONARE_ERROR_INVALID_PARAMETER and zeroed an initialised one)."
+domain = "project"
+rule = "c-error-path"
+test = "tests/api/project_readers_test.cpp::imported vocal dependency sample counts are validated before publication"
+
+[[entry]]
+kind = "function"
 old = "sonare_engine_apply_project_timeline"
 changed = "An empty timeline is refused under timeline before the live-driver state is checked."
 domain = "project"

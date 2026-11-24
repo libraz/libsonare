@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "arrangement/vocal_edit_sidecar.h"
 #include "c_api/project_internal.h"
 #include "midi/smf2.h"
 #include "midi/ump.h"
@@ -23,6 +24,72 @@ struct OwnedProject {
   OwnedProject(const OwnedProject&) = delete;
   OwnedProject& operator=(const OwnedProject&) = delete;
 };
+
+TEST_CASE("imported vocal dependency sample counts are validated before publication",
+          "[c_api][project][vocal_dependency_count]") {
+  namespace vocal_sidecar = sonare::arrangement::vocal_sidecar;
+  const auto max_count = static_cast<int64_t>(sonare::kMaxAudioBufferSize);
+
+  const auto read_imported = [&](int64_t count, SonareError expected) {
+    CAPTURE(count);
+    OwnedProject authored;
+    vocal_sidecar::Envelope envelope;
+    envelope.original_source_id = 1;
+    envelope.derived_source_id = 2;
+    envelope.source_sample_rate = 16000;
+    envelope.profile_id = 1;
+
+    const auto store = [&](uint32_t clip_id, int64_t sample_count) {
+      envelope.source_sample_count = sample_count;
+      const auto sidecar = vocal_sidecar::encode_envelope({clip_id, 0}, envelope);
+      REQUIRE(sonare_project_set_assist_sidecar(
+                  authored.handle, sidecar.module_id.c_str(), sidecar.schema_version, 0, 0, 0,
+                  sidecar.payload.data(), sidecar.payload.size()) == SONARE_OK);
+    };
+    store(1, 3200);
+    store(2, count);
+
+    char* document = nullptr;
+    size_t length = 0;
+    REQUIRE(sonare_project_serialize(authored.handle, &document, &length) == SONARE_OK);
+    const std::unique_ptr<char, decltype(&sonare_free_string)> text(document, sonare_free_string);
+    SonareProject* loaded = nullptr;
+    REQUIRE(sonare_project_deserialize(text.get(), length, &loaded, nullptr) == SONARE_OK);
+    const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> imported(
+        loaded, sonare_project_destroy);
+
+    SonareProjectVocalEditDependenciesResult result;
+    sonare_project_vocal_edit_dependencies_result_init(&result);
+    result.dependency_count = 99;
+    const SonareError status = sonare_project_get_vocal_edit_dependencies(imported.get(), &result);
+    CHECK(status == expected);
+    CHECK(result.struct_size == sizeof(result));
+    if (expected == SONARE_OK) {
+      CHECK(result.dependency_count == 2);
+      if (result.dependencies != nullptr && result.dependency_count == 2) {
+        CHECK(result.dependencies[0].source_sample_count == 3200);
+        CHECK(result.dependencies[1].source_sample_count == static_cast<size_t>(count));
+      } else {
+        CHECK(result.dependencies != nullptr);
+      }
+    } else {
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+      const char* message = sonare_last_error_message();
+      CHECK(std::string(message == nullptr ? "" : message) ==
+            "libsonare.vocal-edit/clip/2/take/0.sourceSampleCount must be an integer in [1, " +
+                std::to_string(max_count) + "]");
+      CHECK(result.dependencies == nullptr);
+      CHECK(result.dependency_count == 0);
+    }
+    sonare_free_project_vocal_edit_dependencies_result(&result);
+  };
+
+  read_imported(max_count, SONARE_OK);
+  read_imported(max_count + 1, SONARE_ERROR_INVALID_FORMAT);
+  read_imported(int64_t{1} << 53, SONARE_ERROR_INVALID_FORMAT);
+  read_imported(0, SONARE_ERROR_INVALID_FORMAT);
+  read_imported(-1, SONARE_ERROR_INVALID_FORMAT);
+}
 
 struct OwnedProjectSegments {
   SonareProjectTempoSegmentList tempo{};
