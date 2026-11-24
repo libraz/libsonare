@@ -119,6 +119,15 @@ beforeAll(async () => {
   await init();
 });
 
+const RATE_INDEPENDENT = new Set([
+  'preemphasis',
+  'deemphasis',
+  'trimSilence',
+  'splitSilence',
+  'frameSignal',
+  'zeroCrossings',
+]);
+
 describe('analysis features: sample-taking one-shots', () => {
   const sampleTaking: Array<[string, AnyFn, Record<string, unknown>]> = [
     ['stft', stft, {}],
@@ -156,36 +165,33 @@ describe('analysis features: sample-taking one-shots', () => {
     expect(caught(() => fn(samples, undefined, extra))).toBeInstanceOf(TypeError);
   });
 
-  // These never read the rate, so only its representation as a C int is checked.
-  const rateFree = new Set([
-    'preemphasis',
-    'deemphasis',
-    'trimSilence',
-    'splitSilence',
-    'frameSignal',
-    'zeroCrossings',
-  ]);
-
   it.each(sampleTaking)(
     '%s refuses a non-integer sample rate with RangeError',
-    (name, fn, extra) => {
+    (_name, fn, extra) => {
       expect(caught(() => fn({ samples, sampleRate: 22050.5, ...extra }))).toBeInstanceOf(
         RangeError,
       );
-      if (!rateFree.has(name)) {
-        expect(caught(() => fn(samples, 0, extra))).toBeInstanceOf(RangeError);
-      }
+      expect(caught(() => fn(samples, 0, extra))).toBeInstanceOf(RangeError);
     },
   );
 
-  it.each(sampleTaking.filter(([name]) => rateFree.has(name)))(
-    '%s checks only that the sample rate is a C int',
+  // The rate is held to the audio domain on every one, including those whose result does not read it.
+  it.each(sampleTaking)(
+    '%s holds sampleRate to the audio domain in both forms',
     (name, fn, extra) => {
-      expect(() => fn({ samples, sampleRate: 22050.5, ...extra })).toThrow(
-        new RangeError(`${name}: sampleRate must be an integer in [-2147483648, 2147483647]`),
-      );
-      expect(() => fn({ samples, sampleRate: 2 ** 31, ...extra })).toThrow(RangeError);
-      expect(caught(() => fn(samples, 0, extra))).toBeUndefined();
+      const refusal = new RangeError(`${name}: sampleRate must be an integer in [8000, 384000]`);
+      for (const rate of [7999, 384001, 0, 22050.5]) {
+        expect(() => fn(samples, rate, extra)).toThrow(refusal);
+        expect(() => fn({ samples, sampleRate: rate, ...extra })).toThrow(refusal);
+      }
+      // Only a computation that never reads the rate is certain to run at both ends.
+      if (!RATE_INDEPENDENT.has(name)) {
+        return;
+      }
+      for (const rate of [8000, 384000]) {
+        expect(caught(() => fn(samples, rate, extra))).toBeUndefined();
+        expect(caught(() => fn({ samples, sampleRate: rate, ...extra }))).toBeUndefined();
+      }
     },
   );
 

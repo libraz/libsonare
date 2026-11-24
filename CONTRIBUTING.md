@@ -131,6 +131,7 @@ Before merging, the maintainer brings a change here to the following:
 - A rename has found every caller in two passes: a language server for the C++ tree, and a grep of the whole tree for the bindings, `benchmarks/` and `tools/`.
 - The Node addon reads every argument and options key through the shared readers in `sonare_wrap_options.h` (`*Property`, `Optional*Arg`, `Required*Arg`), which refuse a value of the wrong type rather than substitute a default.
 - Python APIs take keyword arguments and high-level JS/TS entry points take a request object, with field names and defaults matching across surfaces.
+- A JS/TS one-shot over samples takes `sampleRate` and refuses it outside the audio sample-rate domain even when its computation does not read it, so every one keeps the `(samples, sampleRate, options?)` shape.
 - A helper's declaration ships in `dist/` even when no entry point re-exports it, and a leading underscore is a Python convention, not a TypeScript one.
 - Keyword arguments and request objects are deliberate per-surface idioms, not drift.
 

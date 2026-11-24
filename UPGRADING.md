@@ -5014,10 +5014,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `cyclicTempogram` | returns Matrix2D |
-| `frameSignal` | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
+| `frameSignal` | returns Matrix2D; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `nnlsChroma` | returns Matrix2D |
 | `tempogram` | returns Matrix2D |
-| `trimSilence` | returns TrimResult; the second positional argument is sampleRate and sampleRate is required |
+| `trimSilence` | returns TrimResult; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 
 #### Progress is an onProgress option, not a separate function
 
@@ -5140,7 +5140,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `dbToPower` | request-only: dbToPower(request: DbToPowerRequest) |
 | `deemphasis(coef)` | removed: pass coef as a field of DeemphasisRequest |
 | `deemphasis(zi)` | removed: pass zi as a field of DeemphasisRequest |
-| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `detectAcoustic` | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectChords(chromaMethod)` | removed: pass chromaMethod as a field of DetectChordsRequest |
 | `detectChords(hmmBeamWidth)` | removed: pass hmmBeamWidth as a field of DetectChordsRequest |
@@ -5310,7 +5310,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `powerToDb` | request-only: powerToDb(request: PowerToDbRequest) |
 | `preemphasis(coef)` | removed: pass coef as a field of PreemphasisRequest |
 | `preemphasis(zi)` | removed: pass zi as a field of PreemphasisRequest |
-| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `pseudoCqt(binsPerOctave)` | removed: pass binsPerOctave as a field of PseudoCqtRequest |
 | `pseudoCqt(fmin)` | removed: pass it as fminHz in PseudoCqtRequest |
 | `pseudoCqt(hopLength)` | removed: pass hopLength as a field of PseudoCqtRequest |
@@ -5352,7 +5352,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `splitSilence(frameLength)` | removed: pass frameLength as a field of SplitSilenceRequest |
 | `splitSilence(hopLength)` | removed: pass hopLength as a field of SplitSilenceRequest |
 | `splitSilence(topDb)` | removed: pass topDb as a field of SplitSilenceRequest |
-| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `stft(nFft)` | removed: pass nFft as a field of StftRequest |
 | `stft` | one positional form (stft(samples, sampleRate, options?: Omit<StftRequest,'samples'\|'sampleRate'>)); request form takes StftRequest |
@@ -5403,7 +5403,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `zeroCrossingRate(hopLength)` | removed: pass hopLength as a field of ZeroCrossingRateRequest |
 | `zeroCrossingRate` | one positional form (zeroCrossingRate(samples, sampleRate, options?: Omit<ZeroCrossingRateRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingRateRequest |
 | `zeroCrossings(threshold)` | removed: pass threshold as a field of ZeroCrossingsRequest |
-| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -9129,14 +9129,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `TempogramResult` | removed: tempogram now returns a Matrix2D |
 | `cyclicTempogram` (`./analysis`) | returns Matrix2D |
 | `cyclicTempogram` | returns Matrix2D |
-| `frameSignal` (`./analysis`) | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
-| `frameSignal` | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
+| `frameSignal` (`./analysis`) | returns Matrix2D; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
+| `frameSignal` | returns Matrix2D; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `nnlsChroma` (`./analysis`) | returns Matrix2D |
 | `nnlsChroma` | returns Matrix2D |
 | `tempogram` (`./analysis`) | returns Matrix2D |
 | `tempogram` | returns Matrix2D |
-| `trimSilence` (`./analysis`) | returns TrimResult; the second positional argument is sampleRate and sampleRate is required |
-| `trimSilence` | returns TrimResult; the second positional argument is sampleRate and sampleRate is required |
+| `trimSilence` (`./analysis`) | returns TrimResult; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
+| `trimSilence` | returns TrimResult; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 
 #### Progress is an onProgress option, not a separate function
 
@@ -9339,8 +9339,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `deemphasis(coef)` | removed: pass coef as a field of DeemphasisRequest |
 | `deemphasis(zi)` (`./analysis`) | removed: pass zi as a field of DeemphasisRequest |
 | `deemphasis(zi)` | removed: pass zi as a field of DeemphasisRequest |
-| `deemphasis` (`./analysis`) | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
-| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `deemphasis` (`./analysis`) | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
+| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `detectAcoustic` (`./analysis`) | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectAcoustic` | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectChords` (`./analysis`) | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
@@ -9673,8 +9673,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `preemphasis(coef)` | removed: pass coef as a field of PreemphasisRequest |
 | `preemphasis(zi)` (`./analysis`) | removed: pass zi as a field of PreemphasisRequest |
 | `preemphasis(zi)` | removed: pass zi as a field of PreemphasisRequest |
-| `preemphasis` (`./analysis`) | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
-| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `preemphasis` (`./analysis`) | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
+| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `pseudoCqt(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of PseudoCqtRequest |
 | `pseudoCqt(binsPerOctave)` | removed: pass binsPerOctave as a field of PseudoCqtRequest |
 | `pseudoCqt(fmin)` (`./analysis`) | removed: pass it as fminHz in PseudoCqtRequest |
@@ -9757,8 +9757,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `splitSilence(hopLength)` | removed: pass hopLength as a field of SplitSilenceRequest |
 | `splitSilence(topDb)` (`./analysis`) | removed: pass topDb as a field of SplitSilenceRequest |
 | `splitSilence(topDb)` | removed: pass topDb as a field of SplitSilenceRequest |
-| `splitSilence` (`./analysis`) | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
-| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `splitSilence` (`./analysis`) | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
+| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 | `stft(hopLength)` (`./analysis`) | removed: pass hopLength as a field of StftRequest |
 | `stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `stft(nFft)` (`./analysis`) | removed: pass nFft as a field of StftRequest |
@@ -9863,8 +9863,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `zeroCrossingRate` | one positional form (zeroCrossingRate(samples, sampleRate, options?: Omit<ZeroCrossingRateRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingRateRequest |
 | `zeroCrossings(threshold)` (`./analysis`) | removed: pass threshold as a field of ZeroCrossingsRequest |
 | `zeroCrossings(threshold)` | removed: pass threshold as a field of ZeroCrossingsRequest |
-| `zeroCrossings` (`./analysis`) | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
-| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `zeroCrossings` (`./analysis`) | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
+| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it |
 
 #### Errors are coded by cause on every surface
 

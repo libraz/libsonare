@@ -25,7 +25,7 @@ import {
 export interface TrimSilenceRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Threshold under the peak, in dB. Default 60. */
   topDb?: number;
@@ -67,7 +67,7 @@ function assertSilenceSignals(request: SplitSilenceCommonRequest): void {
 export interface FrameSignalRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Required for rule uniformity; framing itself is rate-independent. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Frame size in samples. */
   frameLength: number;
@@ -79,7 +79,7 @@ export interface FrameSignalRequest {
 export interface PreemphasisRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Filter coefficient. Default 0.97. */
   coef?: number;
@@ -250,7 +250,7 @@ export function biquadFilter(request: BiquadFilterRequest): Float32Array {
   });
 }
 
-/** First-order pre-emphasis filter. */
+/** First-order pre-emphasis filter. `sampleRate` is validated as an audio sample rate but not read. */
 export function preemphasis(request: PreemphasisRequest): Float32Array;
 export function preemphasis(
   samples: Float32Array,
@@ -267,7 +267,7 @@ export function preemphasis(...args: unknown[]): Float32Array {
   });
 }
 
-/** Inverse of {@link preemphasis}. */
+/** Inverse of {@link preemphasis}. `sampleRate` is validated as an audio sample rate but not read. */
 export function deemphasis(request: DeemphasisRequest): Float32Array;
 export function deemphasis(
   samples: Float32Array,
@@ -295,7 +295,7 @@ function resolveSilenceFraming(
   };
 }
 
-/** Trims leading and trailing silence. */
+/** Trims leading and trailing silence. `sampleRate` is validated as an audio sample rate but not read. */
 export function trimSilence(request: TrimSilenceRequest): TrimResult;
 export function trimSilence(
   samples: Float32Array,
@@ -316,7 +316,7 @@ export function trimSilence(...args: unknown[]): TrimResult {
   });
 }
 
-/** Non-silent intervals as flat `[start, end, ...]` sample pairs. */
+/** Non-silent intervals as flat `[start, end, ...]` sample pairs. `sampleRate` is validated as an audio sample rate but not read. */
 export function splitSilence(request: SplitSilenceRequest): Int32Array;
 export function splitSilence(
   samples: Float32Array,
@@ -419,7 +419,7 @@ export function splitSilenceCommonWithReport(
   });
 }
 
-/** Slices a signal into overlapping frames. Returns rows = `frameLength` samples, cols = frames. */
+/** Slices a signal into overlapping frames. Returns rows = `frameLength` samples, cols = frames. `sampleRate` is validated as an audio sample rate but not read. */
 export function frameSignal(request: FrameSignalRequest): Matrix2D;
 export function frameSignal(
   samples: Float32Array,

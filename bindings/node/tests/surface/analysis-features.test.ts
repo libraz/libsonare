@@ -101,6 +101,15 @@ const SAMPLE_FUNCTIONS: ReadonlyArray<[string, Record<string, unknown>]> = [
   ['deemphasis', {}],
 ];
 
+const RATE_INDEPENDENT = new Set([
+  'preemphasis',
+  'deemphasis',
+  'trimSilence',
+  'splitSilence',
+  'frameSignal',
+  'zeroCrossings',
+]);
+
 describe('sample-taking functions', () => {
   it.each(SAMPLE_FUNCTIONS)('%s requires sampleRate in both forms', (name, options) => {
     const fn = api[name] as (...args: unknown[]) => unknown;
@@ -111,26 +120,26 @@ describe('sample-taking functions', () => {
     expectThrows(() => fn({ samples, sampleRate: '22050', ...options }), TypeError);
   });
 
-  // These never read the rate, so only its representation as a C int is checked.
-  it.each(
-    SAMPLE_FUNCTIONS.filter(([name]) =>
-      [
-        'preemphasis',
-        'deemphasis',
-        'trimSilence',
-        'splitSilence',
-        'frameSignal',
-        'zeroCrossings',
-      ].includes(name),
-    ),
-  )('%s checks only that the sample rate is a C int', (name, options) => {
-    const fn = api[name] as (...args: unknown[]) => unknown;
-    expect(() => fn({ samples, sampleRate: 22050.5, ...options })).toThrow(
-      new RangeError(`${name}: sampleRate must be an integer in [-2147483648, 2147483647]`),
-    );
-    expectThrows(() => fn({ samples, sampleRate: 2 ** 31, ...options }), RangeError);
-    expect(() => fn(samples, 0, options)).not.toThrow();
-  });
+  // The rate is held to the audio domain on every one, including those whose result does not read it.
+  it.each(SAMPLE_FUNCTIONS)(
+    '%s holds sampleRate to the audio domain in both forms',
+    (name, options) => {
+      const fn = api[name] as (...args: unknown[]) => unknown;
+      const refusal = new RangeError(`${name}: sampleRate must be an integer in [8000, 384000]`);
+      for (const rate of [7999, 384001, 0, 22050.5]) {
+        expect(() => fn(samples, rate, options)).toThrow(refusal);
+        expect(() => fn({ samples, sampleRate: rate, ...options })).toThrow(refusal);
+      }
+      // Only a computation that never reads the rate is certain to run at both ends.
+      if (!RATE_INDEPENDENT.has(name)) {
+        return;
+      }
+      for (const rate of [8000, 384000]) {
+        expect(() => fn(samples, rate, options)).not.toThrow();
+        expect(() => fn({ samples, sampleRate: rate, ...options })).not.toThrow();
+      }
+    },
+  );
 
   it.each(SAMPLE_FUNCTIONS)('%s takes samples, sampleRate and an options bag', (name, options) => {
     const fn = api[name] as (...args: unknown[]) => unknown;

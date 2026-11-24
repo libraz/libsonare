@@ -1052,7 +1052,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "deemphasis"
-changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1060,7 +1060,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "deemphasis"
-changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1120,7 +1120,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "frameSignal"
-changed = "returns Matrix2D; the second positional argument is sampleRate and sampleRate is required"
+changed = "returns Matrix2D; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "no-internal-types"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
@@ -1128,7 +1128,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "frameSignal"
-changed = "returns Matrix2D; the second positional argument is sampleRate and sampleRate is required"
+changed = "returns Matrix2D; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "no-internal-types"
 entry = "./analysis"
@@ -1518,7 +1518,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "preemphasis"
-changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1526,7 +1526,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "preemphasis"
-changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1824,7 +1824,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "splitSilence"
-changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1832,7 +1832,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "splitSilence"
-changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1975,7 +1975,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "trimSilence"
-changed = "returns TrimResult; the second positional argument is sampleRate and sampleRate is required"
+changed = "returns TrimResult; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "no-internal-types"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
@@ -1983,7 +1983,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "trimSilence"
-changed = "returns TrimResult; the second positional argument is sampleRate and sampleRate is required"
+changed = "returns TrimResult; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "no-internal-types"
 entry = "./analysis"
@@ -2026,7 +2026,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "zeroCrossings"
-changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -2034,7 +2034,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "zeroCrossings"
-changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"

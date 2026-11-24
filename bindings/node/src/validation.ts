@@ -843,17 +843,6 @@ function assertNoExtraArguments(args: readonly unknown[], from: number): void {
   }
 }
 
-// These sample-count operations keep a sampleRate for call compatibility and never read it, so only
-// its representation as a C int is checked.
-const RATE_FREE_SAMPLE_CALLS: ReadonlySet<RequestFn> = new Set([
-  'preemphasis',
-  'deemphasis',
-  'trimSilence',
-  'splitSilence',
-  'frameSignal',
-  'zeroCrossings',
-]);
-
 /**
  * Normalises the two accepted call forms of a one-shot over audio into one
  * request: `(request)` and `(samples, sampleRate, options?)`.
@@ -901,11 +890,7 @@ export function sampleOneShot<R extends SampleRequest>(
   assertIntegerType(sampleRate, 'sampleRate');
   const normalized = request as unknown as R;
   checkShape?.(normalized);
-  if (RATE_FREE_SAMPLE_CALLS.has(requestName)) {
-    assertInt32(sampleRate, 'sampleRate');
-  } else {
-    assertSampleRateRange(sampleRate);
-  }
+  assertSampleRateRange(sampleRate);
   return normalized;
 }
 

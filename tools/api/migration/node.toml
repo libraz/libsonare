@@ -389,7 +389,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request a
 [[entry]]
 kind = "function"
 old = "deemphasis"
-changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
@@ -429,7 +429,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::drops the fourier
 [[entry]]
 kind = "function"
 old = "frameSignal"
-changed = "returns Matrix2D; the second positional argument is sampleRate and sampleRate is required"
+changed = "returns Matrix2D; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "no-internal-types"
 test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
@@ -660,7 +660,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request a
 [[entry]]
 kind = "function"
 old = "preemphasis"
-changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
@@ -812,7 +812,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sa
 [[entry]]
 kind = "function"
 old = "splitSilence"
-changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
@@ -907,7 +907,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D 
 [[entry]]
 kind = "function"
 old = "trimSilence"
-changed = "returns TrimResult; the second positional argument is sampleRate and sampleRate is required"
+changed = "returns TrimResult; the second positional argument is sampleRate, which is required and validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "no-internal-types"
 test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
@@ -947,7 +947,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sa
 [[entry]]
 kind = "function"
 old = "zeroCrossings"
-changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
+changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) is refused, because sampleRate is validated as an audio sample rate (an integer in [8000, 384000]) though the computation does not read it"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"

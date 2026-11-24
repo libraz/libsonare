@@ -148,7 +148,7 @@ export interface RmsEnergyRequest {
 export interface ZeroCrossingsRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Magnitude below which a sample counts as zero. Default 1e-10. */
   threshold?: number;
@@ -308,6 +308,7 @@ export function polyFeatures(...args: unknown[]): Matrix2D {
 
 /**
  * Locate zero-crossing indices of a signal (librosa.zero_crossings).
+ * `sampleRate` is validated as an audio sample rate but not read.
  */
 export function zeroCrossings(request: ZeroCrossingsRequest): Int32Array;
 export function zeroCrossings(

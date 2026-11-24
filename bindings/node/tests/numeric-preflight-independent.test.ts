@@ -18,7 +18,7 @@ const sampleRate = 22050;
 const samples = new Float32Array([0, 1, -1, 0]);
 const geometry = { frameLength: 2, hopLength: 1 };
 
-describe('sample-count operations keep sampleRate as a shape-only field', () => {
+describe('sample-count operations validate sampleRate without reading it', () => {
   it.each([
     ['preemphasis', preemphasis],
     ['deemphasis', deemphasis],
@@ -26,15 +26,23 @@ describe('sample-count operations keep sampleRate as a shape-only field', () => 
     ['trimSilence', trimSilence],
     ['splitSilence', splitSilence],
     ['zeroCrossings', zeroCrossings],
-  ] as const)('%s accepts the same samples with a non-audio rate in both forms', (name, fn) => {
-    const options =
-      name === 'frameSignal' || name === 'trimSilence' || name === 'splitSilence' ? geometry : {};
-    const call = fn as (...args: unknown[]) => unknown;
-    const expected = call({ samples, sampleRate, ...options });
-    expect(call({ samples, sampleRate: 7999, ...options })).toEqual(expected);
-    expect(call(samples, 7999, options)).toEqual(expected);
-    expect(() => call({ samples, sampleRate: 'bad', ...options })).toThrow(TypeError);
-  });
+  ] as const)(
+    '%s returns the same result across the audio rate domain and refuses outside it',
+    (name, fn) => {
+      const options =
+        name === 'frameSignal' || name === 'trimSilence' || name === 'splitSilence' ? geometry : {};
+      const call = fn as (...args: unknown[]) => unknown;
+      const expected = call({ samples, sampleRate, ...options });
+      for (const rate of [8000, 384000]) {
+        expect(call({ samples, sampleRate: rate, ...options })).toEqual(expected);
+        expect(call(samples, rate, options)).toEqual(expected);
+      }
+      const text = `${name}: sampleRate must be an integer in [8000, 384000]`;
+      expect(() => call({ samples, sampleRate: 7999, ...options })).toThrow(new RangeError(text));
+      expect(() => call(samples, 7999, options)).toThrow(new RangeError(text));
+      expect(() => call({ samples, sampleRate: 'bad', ...options })).toThrow(TypeError);
+    },
+  );
 
   type PositionalSampleCall = (samples: Float32Array, sampleRate: number) => ArrayLike<number>;
   it.each<[string, PositionalSampleCall, ArrayLike<number>]>([

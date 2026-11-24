@@ -121,7 +121,7 @@ export interface DbToAmplitudeRequest<T extends Float32Array | Matrix2D = Float3
 export interface PreemphasisRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Filter coefficient. Default 0.97. */
   coef?: number;
@@ -133,7 +133,7 @@ export interface PreemphasisRequest {
 export interface DeemphasisRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Filter coefficient. Default 0.97. */
   coef?: number;
@@ -145,7 +145,7 @@ export interface DeemphasisRequest {
 export interface TrimSilenceRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Threshold below the peak, in dB. Default 60. */
   topDb?: number;
@@ -159,7 +159,7 @@ export interface TrimSilenceRequest {
 export interface SplitSilenceRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Threshold below the peak, in dB. Default 60. */
   topDb?: number;
@@ -256,7 +256,7 @@ export interface SplitSilenceCommonWithReportResult {
 export interface FrameSignalRequest {
   /** Mono audio samples. */
   samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
+  /** Audio sample rate in Hz, an integer in [8000, 384000]; required for the shared call shape, not read by the computation. */
   sampleRate: number;
   /** Frame size in samples. */
   frameLength: number;
@@ -756,7 +756,7 @@ export function dbToAmplitude(...args: unknown[]): Float32Array | Matrix2D {
   });
 }
 
-/** First-order pre-emphasis filter. */
+/** First-order pre-emphasis filter. `sampleRate` is validated as an audio sample rate but not read. */
 export function preemphasis(request: PreemphasisRequest): Float32Array;
 export function preemphasis(
   samples: Float32Array,
@@ -773,7 +773,7 @@ export function preemphasis(...args: unknown[]): Float32Array {
   });
 }
 
-/** First-order de-emphasis filter, the inverse of {@link preemphasis}. */
+/** First-order de-emphasis filter, the inverse of {@link preemphasis}. `sampleRate` is validated as an audio sample rate but not read. */
 export function deemphasis(request: DeemphasisRequest): Float32Array;
 export function deemphasis(
   samples: Float32Array,
@@ -790,7 +790,7 @@ export function deemphasis(...args: unknown[]): Float32Array {
   });
 }
 
-/** Trim leading and trailing silence. */
+/** Trim leading and trailing silence. `sampleRate` is validated as an audio sample rate but not read. */
 export function trimSilence(request: TrimSilenceRequest): TrimResult;
 export function trimSilence(
   samples: Float32Array,
@@ -812,7 +812,7 @@ export function trimSilence(...args: unknown[]): TrimResult {
   });
 }
 
-/** Non-silent `[start, end)` sample intervals, flattened. */
+/** Non-silent `[start, end)` sample intervals, flattened. `sampleRate` is validated as an audio sample rate but not read. */
 export function splitSilence(request: SplitSilenceRequest): Int32Array;
 export function splitSilence(
   samples: Float32Array,
@@ -904,6 +904,7 @@ export function splitSilenceCommonWithReport(
 
 /**
  * Overlapping frames of a signal.
+ * `sampleRate` is validated as an audio sample rate but not read.
  *
  * @returns {@link Matrix2D} whose rows are the `frameLength` samples of a frame and cols are frames.
  * @throws TypeError when `frameLength` or `hopLength` is missing.
