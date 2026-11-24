@@ -280,6 +280,32 @@ TEST_CASE("vocal project descriptor and rehydrate results require ABI initializa
 }
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
+TEST_CASE("vocal project apply refuses malformed SVE1 before publication",
+          "[project][vocal][apply][vocal_state_format]") {
+  ProjectFixture fixture;
+  SonareProjectVocalEditApplyDesc desc = fixture.apply_desc();
+  std::vector<uint8_t> malformed(desc.sve1, desc.sve1 + desc.sve1_size);
+  REQUIRE_FALSE(malformed.empty());
+  malformed[0] = 'X';
+  desc.sve1 = malformed.data();
+  SonareProjectVocalEditApplyResult result;
+  sonare_project_vocal_edit_apply_result_init(&result);
+  result.derived_source_id = fixture.source_id;
+  const size_t before_depth = fixture.project->history.undo_depth();
+  const size_t before_source_count = fixture.project->audio.sources.size();
+  CHECK(sonare_project_apply_vocal_edit(fixture.project, &desc, &result) ==
+        SONARE_ERROR_INVALID_FORMAT);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) == "state does not have the SVE1 magic");
+  CHECK(result.struct_size == sizeof(result));
+  CHECK(result.derived_source_id == 0);
+  CHECK(fixture.project->history.undo_depth() == before_depth);
+  CHECK(fixture.project->history.project().find_clip(fixture.clip_id)->source_id ==
+        fixture.source_id);
+  CHECK(fixture.project->history.project().assist_sidecars().empty());
+  CHECK(fixture.project->audio.sources.size() == before_source_count);
+}
+
 TEST_CASE("vocal project apply atomically binds derived PCM and undoes exactly",
           "[project][vocal][apply]") {
   ProjectFixture fixture;
@@ -597,6 +623,13 @@ TEST_CASE("vocal project does not publish original PCM for an invalid SVE1",
   auto& payload = fixture.project->history.project().assist_sidecars_mutable()[0].payload;
   REQUIRE(payload.size() > 112);
   payload[112] = 'X';
+
+  SonareProjectVocalEditDependenciesResult dependencies;
+  sonare_project_vocal_edit_dependencies_result_init(&dependencies);
+  REQUIRE(sonare_project_get_vocal_edit_dependencies(fixture.project, &dependencies) == SONARE_OK);
+  REQUIRE(dependencies.dependency_count == 1);
+  CHECK(dependencies.dependencies[0].reason == SONARE_VOCAL_REASON_INVALID_STATE);
+  sonare_free_project_vocal_edit_dependencies_result(&dependencies);
 
   SonareProjectVocalOriginalSource original;
   sonare_project_vocal_original_source_init(&original);

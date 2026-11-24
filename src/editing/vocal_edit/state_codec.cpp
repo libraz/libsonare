@@ -541,7 +541,7 @@ std::vector<uint8_t> encode_vocal_state(const VocalPersistedState& state) {
   return std::move(writer).finish();
 }
 
-VocalPersistedState decode_vocal_state(const uint8_t* bytes, const size_t size) {
+VocalPersistedState decode_vocal_state(const uint8_t* bytes, const size_t size) try {
   Reader reader(bytes, size);
   if (size < 4 || bytes == nullptr || std::memcmp(bytes, "SVE1", 4) != 0) {
     invalid("magic", "state does not have the SVE1 magic");
@@ -603,7 +603,9 @@ VocalPersistedState decode_vocal_state(const uint8_t* bytes, const size_t size) 
   }
 
   const uint32_t profile = reader.u32("render_settings.profile");
-  if (!valid_render_profile(profile)) invalid("render_settings.profile", "unknown render profile");
+  if (!valid_render_profile(profile)) {
+    invalid("render_settings.profile", "unknown render profile");
+  }
   state.render_settings.profile = static_cast<RenderProfile>(profile);
   state.render_settings.algorithm_version = reader.u32("render_settings.algorithm_version");
   state.render_settings.edge_fade_ms = reader.f64("render_settings.edge_fade_ms");
@@ -622,6 +624,12 @@ VocalPersistedState decode_vocal_state(const uint8_t* bytes, const size_t size) 
   reader.require_end();
   validate_for_codec(state);
   return state;
+} catch (const VocalEditException& error) {
+  if (error.code() != ErrorCode::InvalidParameter || (size != 0 && bytes == nullptr)) {
+    throw;
+  }
+  throw VocalEditException(error.reason(), ErrorCode::InvalidFormat, error.what(), error.field(),
+                           error.expected(), error.actual());
 }
 
 }  // namespace sonare::editing::vocal_edit

@@ -702,10 +702,11 @@ target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_eng
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_render.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_timeline.cpp)
 
-# Keep the public retune ABI linked when the feature is disabled, so the
-# existing API test source can exercise its NOT_SUPPORTED stubs.
+# Keep the public retune and voice-changer ABIs linked when the feature is
+# disabled, so the API tests can exercise their NOT_SUPPORTED stubs.
 target_sources(sonare_tests PRIVATE
                ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_streaming_retune.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
 
 if(BUILD_VOICE_CHANGER)
   target_sources(sonare_tests PRIVATE
@@ -728,7 +729,6 @@ if(BUILD_VOICE_CHANGER)
     ${PROJECT_SOURCE_DIR}/tools/voicelab/synthetic_voice.cpp
     ${PROJECT_SOURCE_DIR}/tools/voicelab/metrics.cpp
   )
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare_tests PRIVATE
     SONARE_WITH_PITCH_EDITOR=1

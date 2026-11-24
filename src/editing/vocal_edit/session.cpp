@@ -399,7 +399,15 @@ VocalEditSession VocalEditSession::restore(Audio source, const std::vector<uint8
   const std::vector<float> stored_amplitude = persisted.analysis.amplitude;
   VocalAnalysisData analysis_input = persisted.analysis;
   analysis_input.amplitude.clear();
-  VocalAnalysisData analysis = validate_analysis(source, std::move(analysis_input));
+  VocalAnalysisData analysis;
+  // The source has already passed validation and matched the persisted descriptor.
+  try {
+    analysis = validate_analysis(source, std::move(analysis_input));
+  } catch (const VocalEditException& error) {
+    if (error.code() != ErrorCode::InvalidParameter) throw;
+    throw VocalEditException(error.reason(), ErrorCode::InvalidFormat, error.what(), error.field(),
+                             error.expected(), error.actual());
+  }
   if (!stored_amplitude.empty() && stored_amplitude.size() != analysis.amplitude.size()) {
     throw VocalEditException(VocalReason::kInvalidState,
                              "analysis amplitude length does not match its grid",
@@ -423,7 +431,7 @@ VocalEditSession VocalEditSession::restore(Audio source, const std::vector<uint8
   for (const auto& note : persisted.edit_state.notes)
     maximum_note_id = std::max(maximum_note_id, note.id);
   if (persisted.next_note_id <= static_cast<uint64_t>(maximum_note_id)) {
-    throw VocalEditException(VocalReason::kInvalidState,
+    throw VocalEditException(VocalReason::kInvalidState, ErrorCode::InvalidFormat,
                              "note ID high-water is behind persisted notes", "note_id");
   }
   const uint64_t epoch = issue_session_epoch();

@@ -134,6 +134,7 @@ void sonare_project_vocal_rehydrate_result_init(SonareProjectVocalRehydrateResul
 ///   is replaced by original -> new derived. A state authored against the derived source returns
 ///   SONARE_ERROR_INVALID_STATE. Also SONARE_ERROR_INVALID_STATE while the project is inside
 ///   sonare_project_rehydrate_vocal_edits.
+/// @return SONARE_ERROR_INVALID_FORMAT if the SVE1 document in @p desc cannot be decoded.
 SonareError sonare_project_apply_vocal_edit(SonareProject* project,
                                             const SonareProjectVocalEditApplyDesc* desc,
                                             SonareProjectVocalEditApplyResult* result);

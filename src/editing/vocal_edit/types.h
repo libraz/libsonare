@@ -271,6 +271,8 @@ class VocalEditException : public SonareException {
  public:
   VocalEditException(VocalReason reason, std::string message, std::string field = {},
                      std::string expected = {}, std::string actual = {});
+  VocalEditException(VocalReason reason, ErrorCode code, std::string message,
+                     std::string field = {}, std::string expected = {}, std::string actual = {});
 
   VocalReason reason() const noexcept { return reason_; }
   const std::string& field() const noexcept { return field_; }

@@ -263,6 +263,58 @@ TEST_CASE("SVE1 rejects truncation and trailing bytes", "[vocal_state_codec]") {
   CHECK_THROWS(decode_vocal_state(trailing));
 }
 
+TEST_CASE("SVE1 decode classifies malformed documents without changing vocal detail",
+          "[vocal_state_codec]") {
+  const auto expect_format_refusal = [](const std::vector<uint8_t>& bytes,
+                                        const std::string& expected_field,
+                                        const std::string& expected_message) {
+    try {
+      static_cast<void>(decode_vocal_state(bytes));
+      FAIL("malformed SVE1 document was accepted");
+    } catch (const sonare::editing::vocal_edit::VocalEditException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK(error.reason() == sonare::editing::vocal_edit::VocalReason::kInvalidInput);
+      CHECK(error.field() == expected_field);
+      CHECK(std::string(error.what()) == expected_message);
+      CHECK(error.expected().empty());
+      CHECK(error.actual().empty());
+    }
+  };
+
+  auto bad_magic = encode_vocal_state(fixture());
+  bad_magic[0] = 'X';
+  expect_format_refusal(bad_magic, "magic", "state does not have the SVE1 magic");
+
+  auto truncated = encode_vocal_state(fixture());
+  truncated.resize(5);
+  expect_format_refusal(truncated, "schema", "truncated state");
+
+  try {
+    static_cast<void>(decode_vocal_state(nullptr, 4));
+    FAIL("nonempty null input was accepted");
+  } catch (const sonare::editing::vocal_edit::VocalEditException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(error.reason() == sonare::editing::vocal_edit::VocalReason::kInvalidInput);
+    CHECK(error.field() == "state");
+  }
+
+  auto invalid_encoder_state = fixture();
+  invalid_encoder_state.source.sample_rate = 0;
+  auto invalid_source_rate = encode_vocal_state(fixture());
+  constexpr size_t kSourceSampleRateOffset = 44;
+  write_u32_le(invalid_source_rate, kSourceSampleRateOffset, 0);
+  expect_format_refusal(invalid_source_rate, "source.sample_rate",
+                        "must be a positive native sample rate");
+  try {
+    static_cast<void>(encode_vocal_state(invalid_encoder_state));
+    FAIL("invalid encoder state was accepted");
+  } catch (const sonare::editing::vocal_edit::VocalEditException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(error.reason() == sonare::editing::vocal_edit::VocalReason::kInvalidInput);
+    CHECK(error.field() == "source.sample_rate");
+  }
+}
+
 TEST_CASE("SVE1 rejects unsupported schema, flags, enums, algorithm and malformed bools",
           "[vocal_state_codec]") {
   const auto encoded = encode_vocal_state(fixture());

@@ -261,8 +261,8 @@ static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 72u * sizeof(float),
 ///          realtime command queue layout) so that voice-changer-only
 ///          consumers can pin a narrower compatibility envelope.
 ///
-///          Always equals @ref SONARE_VOICE_CHANGER_ABI_VERSION at the time
-///          libsonare was built.
+///          Returns @ref SONARE_VOICE_CHANGER_ABI_VERSION when the voice changer
+///          is compiled in, or zero otherwise.
 uint32_t sonare_voice_changer_abi_version(void);
 
 /// @brief Populates @p out with the canonical (normalized) defaults for the
@@ -385,7 +385,7 @@ SonareError sonare_realtime_voice_changer_note_off(SonareRealtimeVoiceChanger* h
 SonareError sonare_realtime_voice_changer_all_notes_off(SonareRealtimeVoiceChanger* handle);
 /// @brief Reports the prepared chain's processing latency in samples. With the
 ///        psola engine the dry path, the voice stage and the vocoder are aligned to
-///        max(ceil(sr / voice_engine_f0_min_hz), the vocoder's lowest-band group delay);
+///        max(ceil(sample_rate / voice_engine_f0_min_hz), the vocoder's lowest-band group delay);
 ///        with the grain engine to the retune OLA's fixed one-grain delay. Either way
 ///        the value is independent of `wet_mix`, `retune.mix` and the vocoder switch. When the
 ///        ISP limiter is enabled, it runs after that aligned mix and adds its
@@ -463,9 +463,13 @@ SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** o
 /// @brief Validates a preset JSON document.
 /// @details @p document is a preset as @ref sonare_realtime_voice_changer_preset_json writes it
 ///          (schemas/realtime-voice-changer-preset.schema.json). On success (return SONARE_OK), @p
-///          out_normalized_json receives a canonicalized JSON copy and @p out_error stays NULL. On
-///          failure (return SONARE_ERROR_INVALID_FORMAT), @p out_error receives a human-readable
-///          message and @p out_normalized_json stays NULL.
+///          out_normalized_json receives a canonicalized JSON copy and @p out_error stays NULL.
+///          For malformed document content, returns SONARE_ERROR_INVALID_FORMAT with a diagnostic
+///          in @p out_error and NULL in @p out_normalized_json. NULL arguments return
+///          SONARE_ERROR_INVALID_PARAMETER when voice changer support is enabled. A build without
+///          that support returns SONARE_ERROR_NOT_SUPPORTED. Failure to allocate a returned string
+///          returns SONARE_ERROR_OUT_OF_MEMORY. For these errors, any provided output is set to
+///          NULL.
 /// @note In every case, any non-NULL pointer returned through @p out_normalized_json
 ///       or @p out_error MUST be released with @ref sonare_free_string by the
 ///       caller.

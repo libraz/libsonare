@@ -76,7 +76,12 @@ bool VocalNoteEdit::is_identity(const SampleRange source_range) const noexcept {
 
 VocalEditException::VocalEditException(VocalReason reason, std::string message, std::string field,
                                        std::string expected, std::string actual)
-    : SonareException(error_code_for(reason), std::move(message)),
+    : VocalEditException(reason, error_code_for(reason), std::move(message), std::move(field),
+                         std::move(expected), std::move(actual)) {}
+
+VocalEditException::VocalEditException(VocalReason reason, ErrorCode code, std::string message,
+                                       std::string field, std::string expected, std::string actual)
+    : SonareException(code, std::move(message)),
       reason_(reason),
       field_(std::move(field)),
       expected_(std::move(expected)),

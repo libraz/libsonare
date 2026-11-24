@@ -530,6 +530,8 @@ SonareError sonare_vocal_session_export_state(const SonareVocalSession* session,
 ///   sonare_vocal_session_destroy, which accepts NULL.
 /// @param options Runtime limits, or NULL for the defaults sonare_vocal_restore_options_init
 ///   writes (the same defaults sonare_vocal_create_options_init writes).
+/// @return SONARE_ERROR_INVALID_FORMAT for malformed SVE1 data, or SONARE_ERROR_INVALID_STATE
+///   when the exported state does not match the supplied source audio.
 SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, int channels,
                                          int sample_rate, const uint8_t* state, uint64_t size,
                                          const SonareVocalRestoreOptions* options,

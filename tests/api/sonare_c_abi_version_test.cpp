@@ -33,6 +33,18 @@ TEST_CASE("sonare_abi_version mirrors the compile-time aggregate", "[c_api][abi]
   REQUIRE((sonare_abi_version() & 0xFFu) == SONARE_FEATURE_ABI_VERSION);
 }
 
+#if defined(SONARE_WITH_VOICE_CHANGER)
+TEST_CASE("voice changer ABI probe reports the available feature",
+          "[c_api][abi][voice_changer_abi]") {
+  CHECK(sonare_voice_changer_abi_version() == SONARE_VOICE_CHANGER_ABI_VERSION);
+}
+#else
+TEST_CASE("voice changer ABI probe reports zero without the feature",
+          "[c_api][abi][voice_changer_abi]") {
+  CHECK(sonare_voice_changer_abi_version() == 0u);
+}
+#endif
+
 TEST_CASE("C synth-engine mode count includes the final mode", "[c_api][abi]") {
   CHECK(static_cast<int>(SONARE_SYNTH_ENGINE_SINGING) + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT);
 }

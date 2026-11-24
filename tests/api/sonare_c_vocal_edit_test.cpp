@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include "editing/vocal_edit/analysis.h"
+#include "editing/vocal_edit/state_codec.h"
 #include "support/alloc_guard.h"
 #include "util/constants.h"
 
@@ -264,7 +266,7 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   f.samples[0] = -0.0f;
   restored = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
   CHECK(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
-                                     nullptr, &restored) != SONARE_OK);
+                                     nullptr, &restored) == SONARE_ERROR_INVALID_STATE);
   CHECK(restored == nullptr);
   SonareVocalErrorDetail detail;
   sonare_vocal_error_detail_init(&detail);
@@ -273,6 +275,73 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   CHECK(std::strlen(detail.expected_text) == 64);
   CHECK(std::strlen(detail.actual_text) == 64);
   sonare_free_vocal_state_bytes(&state);
+}
+
+TEST_CASE("vocal C restore classifies malformed SVE1 as a document refusal",
+          "[vocal_c_api][vocal_state_format]") {
+  VocalFixture f;
+  auto session = f.create();
+  SonareVocalStateBytes state;
+  sonare_vocal_state_bytes_init(&state);
+  REQUIRE(sonare_vocal_session_export_state(session.get(), &state) == SONARE_OK);
+  const auto free_state = [](SonareVocalStateBytes* value) {
+    sonare_free_vocal_state_bytes(value);
+  };
+  const std::unique_ptr<SonareVocalStateBytes, decltype(free_state)> owned_state(&state,
+                                                                                 free_state);
+  REQUIRE(state.size > 4);
+  std::vector<uint8_t> malformed(state.data, state.data + state.size);
+  uint64_t size = state.size;
+  const char* field = nullptr;
+  const char* message = nullptr;
+  unsigned reason = SONARE_VOCAL_REASON_INVALID_INPUT;
+  SECTION("bad magic") {
+    malformed[0] = 'X';
+    field = "magic";
+    message = "state does not have the SVE1 magic";
+  }
+  SECTION("truncated schema") {
+    size = 4;
+    field = "schema";
+    message = "truncated state";
+  }
+  SECTION("invalid persisted analysis settings") {
+    namespace vocal = sonare::editing::vocal_edit;
+    auto persisted = vocal::decode_vocal_state(malformed);
+    persisted.analysis.settings.yin_threshold = 0;
+    persisted.analysis.digest = vocal::digest_analysis(persisted.analysis);
+    malformed = vocal::encode_vocal_state(persisted);
+    size = malformed.size();
+    field = "analysis.settings";
+    message = "analysis settings are malformed";
+  }
+  SECTION("invalid note ID high-water mark") {
+    namespace vocal = sonare::editing::vocal_edit;
+    auto persisted = vocal::decode_vocal_state(malformed);
+    REQUIRE(persisted.edit_state.notes.size() == 1);
+    persisted.next_note_id = persisted.edit_state.notes.front().id;
+    malformed = vocal::encode_vocal_state(persisted);
+    size = malformed.size();
+    field = "note_id";
+    message = "note ID high-water is behind persisted notes";
+    reason = SONARE_VOCAL_REASON_INVALID_STATE;
+  }
+  auto* restored = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
+  CHECK(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, malformed.data(), size,
+                                     nullptr, &restored) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(restored == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) == message);
+  SonareVocalErrorDetail detail;
+  sonare_vocal_error_detail_init(&detail);
+  sonare_vocal_last_error_detail(&detail);
+  CHECK(detail.reason == reason);
+  CHECK(std::string(detail.field) == field);
+
+  restored = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
+  CHECK(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, nullptr, size, nullptr,
+                                     &restored) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(restored == nullptr);
 }
 
 TEST_CASE("vocal C mutations publish only after result allocations succeed",
