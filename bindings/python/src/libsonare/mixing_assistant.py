@@ -230,7 +230,7 @@ def _assistant_params(options: dict[str, float | int | bool | None]) -> tuple[An
             continue
         if name in _INTEGER_PARAMS and isinstance(value, bool):
             # A bool is no size; every other value's size domain is the core reader's.
-            raise TypeError(f"{name} must be an integer")
+            raise _refuse_type(f"{name} must be an integer")
         if isinstance(value, bool):
             params[_PARAM_KEYS[name]] = value
             continue
