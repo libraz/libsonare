@@ -45,6 +45,7 @@ typedef enum { SONARE_LAW_SOFT_KNEE = 0, SONARE_LAW_HARD_4P5 = 1 } SonareLaw;
     "ts/values.ts": "const LAW_VALUES: Record<Law, number> = {\n  softKnee: 0,\n  'hard4.5': 1,\n};\n",
     "ts/list.ts": "const LAWS: readonly string[] = ['softKnee', 'hard4.5'];\n",
     "ts/types.ts": "export type Law = 'softKnee' | 'hard4.5';\n",
+    "py/analyzer.pyi": "from .enums import Law as SharedLaw\n",
     "py/enums.py": 'Law = Literal["softKnee", "hard4.5"]\n_LAWS: tuple[str, ...] = get_args(Law)\n',
 }
 
@@ -59,6 +60,7 @@ _ROW = check.TokenSet(
         check.Source("node", "ts/list.ts", "ts_array", "LAWS"),
         check.Source("node", "ts/types.ts", "ts_union", "Law"),
         check.Source("python", "py/enums.py", "py_literal", "Law"),
+        check.Source("python", "py/analyzer.pyi", "py_literal", "SharedLaw"),
         check.Source("python", "py/enums.py", "py_tuple", "_LAWS"),
     ),
 )
@@ -84,6 +86,12 @@ class TokenTableTests(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual((rows, compared), (1, len(_ROW.sources)))
 
+    def test_a_missing_imported_literal_is_named_at_the_stub(self) -> None:
+        problems, _, _ = self.run_with(
+            {"py/analyzer.pyi": ("Law as SharedLaw", "NoSuchLaw as SharedLaw")}
+        )
+        self.assertEqual(problems, ["law: python SharedLaw (py/analyzer.pyi): not found"])
+
     def test_an_extra_token_is_named(self) -> None:
         problems, _, _ = self.run_with({"ts/types.ts": ("'hard4.5';", "'hard4.5' | 'linear';")})
         self.assertEqual(problems, ["law: node Law (ts/types.ts): extra token 'linear'"])
@@ -91,6 +99,7 @@ class TokenTableTests(unittest.TestCase):
     def test_a_missing_token_is_named(self) -> None:
         problems, _, _ = self.run_with({"py/enums.py": ('"softKnee", "hard4.5"]', '"softKnee"]')})
         self.assertIn("law: python Law (py/enums.py): missing token 'hard4.5'", problems)
+        self.assertIn("law: python SharedLaw (py/analyzer.pyi): missing token 'hard4.5'", problems)
         self.assertIn("law: python _LAWS (py/enums.py): missing token 'hard4.5'", problems)
 
     def test_a_reordered_list_fails_on_ordinals_alone(self) -> None:

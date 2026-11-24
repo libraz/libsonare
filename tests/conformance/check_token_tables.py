@@ -27,6 +27,7 @@ Self-tests: python3 -m unittest tests/conformance/test_token_tables.py
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -875,8 +876,7 @@ def evaluate(root: Path, rows: tuple[TokenSet, ...] = ROWS) -> tuple[list[str], 
                     f"{row.name}: {row.c_enum[1]}* ordinals {unmatched} carry no core token"
                 )
         for src in row.sources:
-            text = read(src.path)
-            got = read_source(text, src) if text is not None else None
+            got = _read_declared_source(read, src)
             where = f"{row.name}: {src.surface} {src.symbol} ({src.path})"
             if got is None:
                 problems.append(f"{where}: not found")
@@ -896,6 +896,31 @@ def evaluate(root: Path, rows: tuple[TokenSet, ...] = ROWS) -> tuple[list[str], 
     return problems, len(rows), compared
 
 
+def _read_declared_source(
+    read: typing.Callable[[str], str | None], src: Source
+) -> dict[str, int] | set[str] | None:
+    """Read a literal from its definition or the sibling module a stub imports it from."""
+    text = read(src.path)
+    if text is None:
+        return None
+    found = read_source(text, src)
+    if found is not None or src.kind != "py_literal" or not src.path.endswith(".pyi"):
+        return found
+    for node in ast.parse(text).body:
+        if not isinstance(node, ast.ImportFrom) or node.level != 1 or not node.module:
+            continue
+        for alias in node.names:
+            if (alias.asname or alias.name) != src.symbol:
+                continue
+            module = Path(src.path).parent.joinpath(*node.module.split("."))
+            for suffix in (".pyi", ".py"):
+                path = module.with_suffix(suffix).as_posix()
+                imported = read(path)
+                if imported is not None:
+                    return read_source(imported, src._replace(path=path, symbol=alias.name))
+    return None
+
+
 def _compare_to_c_enum(
     row: TokenSet, read: typing.Callable[[str], str | None], problems: list[str]
 ) -> int:
@@ -910,8 +935,7 @@ def _compare_to_c_enum(
     by_norm = {_norm(k): v for k, v in enumerators.items()}
     compared = 0
     for src in row.sources:
-        text = read(src.path)
-        got = read_source(text, src) if text is not None else None
+        got = _read_declared_source(read, src)
         where = f"{row.name}: {src.surface} {src.symbol} ({src.path})"
         if got is None:
             problems.append(f"{where}: not found")
