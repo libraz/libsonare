@@ -180,13 +180,16 @@ CLAIMS: tuple[Claim, ...] = (
         key="A4 tuning reference range",
         # The trailing guard names the quantity: the range is voiced in Hz or tied to
         # the live setter's range, in words or by the setter's name. A bare `lo..hi`
-        # is also how MIDI program, family and BPM ranges are written.
+        # is also how MIDI program, family and BPM ranges are written. The bracket
+        # form is the live setters' `against [lo, hi] Hz`, held to three digits.
         pattern=(
-            r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)"
+            r"(?:(?:within|outside|range)\s+(?=\d+\.\.)|against\s+\[(?=\d{3}\s*,\s*\d{3}\]))"
+            r"(?P<lo>\d+)(?:\.\.|\s*,\s*)(?P<hi>\d+)\]?"
             r"(?:\s*Hz\b|,\s+the same range|\s+as\s+:meth:`set_reference_hz`)"
         ),
         groups={"lo": ("min_tuning_ref_hz", 0), "hi": ("max_tuning_ref_hz", 0)},
-        floor=10,
+        # The private rate guard and its duplicate claim were removed.
+        floor=9,
     ),
     Claim(
         key="realtime command ring capacity ceiling",
