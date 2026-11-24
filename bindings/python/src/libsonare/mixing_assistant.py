@@ -65,10 +65,7 @@ _PARAM_KEYS = {
     "hop_length": "hopLength",
 }
 
-# The options whose C++ field is an `int`. A param value travels as a double, so
-# without this the two integral options are the only named integer arguments on
-# this surface not narrowed before the call, and a fraction would reach the core
-# to be refused there under the camelCase key rather than the one a caller typed.
+# The STFT sizes refuse a bool as a type; the core checks their integer domains.
 _INTEGER_PARAMS = frozenset({"n_fft", "hop_length"})
 # The core names the STFT sizes by their wire keys; a refusal names the keyword the caller wrote.
 _STFT_RESPELLED = {"nFft": _Respelling("n_fft"), "hopLength": _Respelling("hop_length")}
@@ -228,16 +225,11 @@ def _assistant_params(options: dict[str, float | int | bool | None]) -> tuple[An
     for name, value in options.items():
         if value is None:
             continue
-        if name in _INTEGER_PARAMS and isinstance(value, bool):
-            # A bool is no size; every other value's size domain is the core reader's.
+        if name in _INTEGER_PARAMS and isinstance(value, (bool, np.bool_)):
             raise _refuse_type(f"{name} must be an integer")
-        if isinstance(value, bool):
-            params[_PARAM_KEYS[name]] = value
-            continue
-        number = _narrow_double(value, f"{name}")
-        if not np.isfinite(number):
-            raise _refuse(f"{name} must be finite")
-        params[_PARAM_KEYS[name]] = number
+        params[_PARAM_KEYS[name]] = (
+            value if isinstance(value, bool) else _narrow_double(value, name)
+        )
     return _mastering_params(params)
 
 

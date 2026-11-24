@@ -581,10 +581,14 @@ def test_a_rescaling_relation_names_the_keyword(name, text):
         )
 
 
-def test_a_bool_stft_size_is_a_type_error():
+@pytest.mark.parametrize("name", ("n_fft", "hop_length"))
+@pytest.mark.parametrize("value", (True, np.bool_(True)))
+def test_a_bool_stft_size_is_a_type_error(name, value):
     from libsonare import MixAssistantTrack, mixing_assistant_suggest
 
-    with pytest.raises(TypeError, match="^mixing_assistant_suggest: n_fft must be an integer$"):
+    with pytest.raises(TypeError, match=rf"^mixing_assistant_suggest: {name} must be an integer$"):
         mixing_assistant_suggest(
-            [MixAssistantTrack("bass", [_tone(110.0)])], sample_rate=SAMPLE_RATE, n_fft=True
+            [MixAssistantTrack("bass", [_tone(110.0)])],
+            sample_rate=SAMPLE_RATE,
+            **{name: value},
         )
