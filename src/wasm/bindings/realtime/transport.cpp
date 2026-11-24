@@ -175,11 +175,21 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
   }
   engine_.set_time_signature_segments(std::move(parsed));
 }
-int64_t RealtimeEngineWasm::sampleAtPpq(double ppq) {
+double checkedSampleResult(int64_t value, const char* subject) {
+  constexpr int64_t kMaxSafeJsInteger = 9007199254740991LL;
+  if (value < -kMaxSafeJsInteger || value > kMaxSafeJsInteger) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidFormat,
+        std::string(subject) + " is not exactly representable as a number");
+  }
+  return static_cast<double>(value);
+}
+
+double RealtimeEngineWasm::sampleAtPpq(double ppq) {
   if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
     throw WasmRangeError("ppq must be finite and in [0, 1e12]");
   }
-  return engine_.sample_at_ppq(ppq);
+  return checkedSampleResult(engine_.sample_at_ppq(ppq), "sample");
 }
 void RealtimeEngineWasm::setLoop(double start_ppq, double end_ppq, bool enabled) {
   sonare::transport::check_loop_range(start_ppq, end_ppq, enabled);
@@ -345,11 +355,11 @@ val RealtimeEngineWasm::metronome() const {
   return out;
 }
 
-int64_t RealtimeEngineWasm::countInEndSample(int64_t start_sample, const val& bars_val) const {
+double RealtimeEngineWasm::countInEndSample(int64_t start_sample, const val& bars_val) const {
   const int bars = checkedIntFromVal(bars_val, "bars");
   if (start_sample < 0) throw WasmRangeError("startSample must be an integer of at least 0");
   // bars <= 0 counts nothing and answers start_sample, as the core and the C ABI do.
-  return engine_.count_in_end_sample(start_sample, bars);
+  return checkedSampleResult(engine_.count_in_end_sample(start_sample, bars), "endSample");
 }
 
 val RealtimeEngineWasm::markerToVal(const sonare::transport::Marker& marker) {

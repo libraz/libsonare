@@ -36,6 +36,9 @@ int automationCurveToInt(sonare::automation::CurveType curve);
 // the JS boundary); an unresolvable target or name is a RangeError, never -1.
 double resolvedAutomationId(int64_t id, const std::string& param_name);
 
+// Return a sample position in the JS safe-integer range.
+double checkedSampleResult(int64_t value, const char* subject);
+
 class RealtimeEngineWasm {
  public:
   // Mirror the C-ABI guard (sonare_engine_prepare): reject a non-positive
@@ -75,7 +78,7 @@ class RealtimeEngineWasm {
   void setTimeSignature(const emscripten::val& numerator_val,
                         const emscripten::val& denominator_val);
   void setTimeSignatureSegments(emscripten::val segments);
-  int64_t sampleAtPpq(double ppq);
+  double sampleAtPpq(double ppq);
   void setLoop(double start_ppq, double end_ppq, bool enabled);
   void setMarkers(emscripten::val markers);
   int markerCount() const;
@@ -86,7 +89,7 @@ class RealtimeEngineWasm {
                           const emscripten::val& end_marker_id_val);
   void setMetronome(emscripten::val config);
   emscripten::val metronome() const;
-  int64_t countInEndSample(int64_t start_sample, const emscripten::val& bars_val) const;
+  double countInEndSample(int64_t start_sample, const emscripten::val& bars_val) const;
   emscripten::val getTransportState() const;
   double renderFrame() const;
 
@@ -156,7 +159,7 @@ class RealtimeEngineWasm {
   // avoids embind materialising JS arrays/objects in the render callback.
   bool popExternalMidiToScratch();
   uint32_t externalMidiScratchDestinationId() const;
-  int64_t externalMidiScratchRenderFrame() const;
+  double externalMidiScratchRenderFrame() const;
   uint32_t externalMidiScratchByteWord() const;
   uint32_t externalMidiScratchByteCount() const;
   void consumeExternalMidiScratch();
@@ -418,9 +421,9 @@ class RealtimeEngineWasm {
   bool popTelemetryToScratch();
   uint32_t telemetryScratchType() const;
   uint32_t telemetryScratchError() const;
-  int64_t telemetryScratchRenderFrame() const;
-  int64_t telemetryScratchTimelineSample() const;
-  int64_t telemetryScratchAudibleTimelineSample() const;
+  double telemetryScratchRenderFrame() const;
+  double telemetryScratchTimelineSample() const;
+  double telemetryScratchAudibleTimelineSample() const;
   int32_t telemetryScratchGraphLatencySamplesQ8() const;
   /// Matches sonare_engine_tail_samples; 2147483647 means unbounded.
   int tailSamples() const;
@@ -431,7 +434,7 @@ class RealtimeEngineWasm {
   emscripten::val drainMeterTelemetry(const emscripten::val& max_records_val);
   bool popMeterTelemetryToScratch();
   uint32_t meterScratchTargetId() const;
-  int64_t meterScratchRenderFrame() const;
+  double meterScratchRenderFrame() const;
   float meterScratchValue(const emscripten::val& field_val) const;
   float meterScratchInputPeakDbL() const;
   float meterScratchInputPeakDbR() const;
@@ -443,7 +446,7 @@ class RealtimeEngineWasm {
   emscripten::val drainScopeTelemetry(const emscripten::val& max_records_val);
   bool popScopeTelemetryToScratch();
   uint32_t scopeScratchTargetId() const;
-  int64_t scopeScratchRenderFrame() const;
+  double scopeScratchRenderFrame() const;
   uint32_t scopeScratchBandCount() const;
   float scopeScratchBand(const emscripten::val& index_val) const;
   uint32_t scopeScratchPointCount() const;

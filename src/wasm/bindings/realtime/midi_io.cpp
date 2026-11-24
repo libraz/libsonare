@@ -188,8 +188,8 @@ uint32_t RealtimeEngineWasm::externalMidiScratchDestinationId() const {
   return external_midi_record_scratch_.destination_id;
 }
 
-int64_t RealtimeEngineWasm::externalMidiScratchRenderFrame() const {
-  return external_midi_record_scratch_.event.render_frame;
+double RealtimeEngineWasm::externalMidiScratchRenderFrame() const {
+  return checkedSampleResult(external_midi_record_scratch_.event.render_frame, "renderFrame");
 }
 
 uint32_t RealtimeEngineWasm::externalMidiScratchByteWord() const {

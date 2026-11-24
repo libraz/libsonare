@@ -928,7 +928,7 @@ export class RealtimeEngine {
   /** Read back {@link setControllerNoteTracking} for one dimension. */
   controllerNoteTracking(destinationId: number, dimension: MpeDimension): NoteTracking {
     noOrdinal('dimension', dimension, MPE_DIMENSIONS);
-    return this.native.controllerNoteTracking(destinationId, dimension) as NoteTracking;
+    return this.native.controllerNoteTracking(destinationId, dimension);
   }
 
   /**
@@ -973,7 +973,7 @@ export class RealtimeEngine {
 
   /** Read back {@link setArticulation}. */
   articulation(destinationId: number, channel: number): Articulation {
-    return this.native.articulation(destinationId, channel) as Articulation;
+    return this.native.articulation(destinationId, channel);
   }
 
   /**
@@ -1631,9 +1631,10 @@ export class RealtimeEngine {
    *
    * @param ppq Position in quarter notes (PPQ), in [0, 1e12].
    * @returns Sample index.
+   * @throws SonareError with InvalidFormat if the sample index is outside the safe-integer range.
    */
   sampleAtPpq(ppq: number): number {
-    return Number(this.native.sampleAtPpq(ppq));
+    return this.native.sampleAtPpq(ppq);
   }
 
   /** Sets the loop region between two quarter-note positions and enables or disables it. */
@@ -1814,7 +1815,7 @@ export class RealtimeEngine {
    * Returns `startSample` when `bars <= 0`.
    */
   countInEndSample(startSample: number, bars: number): number {
-    return Number(this.native.countInEndSample(startSample, bars));
+    return this.native.countInEndSample(startSample, bars);
   }
 
   /**

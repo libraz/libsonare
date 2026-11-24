@@ -42,16 +42,16 @@ uint32_t RealtimeEngineWasm::telemetryScratchError() const {
   return static_cast<uint32_t>(telemetry_scratch_.error);
 }
 
-int64_t RealtimeEngineWasm::telemetryScratchRenderFrame() const {
-  return telemetry_scratch_.render_frame;
+double RealtimeEngineWasm::telemetryScratchRenderFrame() const {
+  return checkedSampleResult(telemetry_scratch_.render_frame, "renderFrame");
 }
 
-int64_t RealtimeEngineWasm::telemetryScratchTimelineSample() const {
-  return telemetry_scratch_.timeline_sample;
+double RealtimeEngineWasm::telemetryScratchTimelineSample() const {
+  return checkedSampleResult(telemetry_scratch_.timeline_sample, "timelineSample");
 }
 
-int64_t RealtimeEngineWasm::telemetryScratchAudibleTimelineSample() const {
-  return telemetry_scratch_.audible_timeline_sample;
+double RealtimeEngineWasm::telemetryScratchAudibleTimelineSample() const {
+  return checkedSampleResult(telemetry_scratch_.audible_timeline_sample, "audibleTimelineSample");
 }
 
 int32_t RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8() const {
@@ -98,8 +98,8 @@ uint32_t RealtimeEngineWasm::meterScratchTargetId() const {
   return meter_telemetry_scratch_.target_id;
 }
 
-int64_t RealtimeEngineWasm::meterScratchRenderFrame() const {
-  return meter_telemetry_scratch_.render_frame;
+double RealtimeEngineWasm::meterScratchRenderFrame() const {
+  return checkedSampleResult(meter_telemetry_scratch_.render_frame, "renderFrame");
 }
 
 float RealtimeEngineWasm::meterScratchValue(const val& field_val) const {
@@ -272,8 +272,8 @@ bool RealtimeEngineWasm::popScopeTelemetryToScratch() {
 uint32_t RealtimeEngineWasm::scopeScratchTargetId() const {
   return scope_telemetry_scratch_.target_id;
 }
-int64_t RealtimeEngineWasm::scopeScratchRenderFrame() const {
-  return scope_telemetry_scratch_.render_frame;
+double RealtimeEngineWasm::scopeScratchRenderFrame() const {
+  return checkedSampleResult(scope_telemetry_scratch_.render_frame, "renderFrame");
 }
 uint32_t RealtimeEngineWasm::scopeScratchBandCount() const {
   return scope_telemetry_scratch_.band_count;

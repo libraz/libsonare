@@ -36,5 +36,9 @@ inline sonare::midi::CcBindingKind ccBindingKindProperty(const emscripten::val& 
 
 /// @brief The token @ref ccBindingKindProperty reads for a C ABI kind ordinal.
 inline const char* ccBindingKindToken(uint8_t kind) {
-  return sonare::midi::to_string(static_cast<sonare::midi::CcBindingKind>(kind));
+  if (kind >= sonare::midi::kCcBindingKinds.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "unknown MIDI CC binding kind ordinal: " + std::to_string(kind));
+  }
+  return sonare::midi::to_string(sonare::midi::kCcBindingKinds[kind]);
 }

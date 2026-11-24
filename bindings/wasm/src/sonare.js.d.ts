@@ -878,7 +878,7 @@ export interface WasmMasteringResult {
 }
 
 export interface WasmStreamingLoudnessGainResult {
-  loudnessStaticGainDb: number;
+  loudnessStaticGainDb?: number;
   truePeakDb: number;
   integratedLufs: number;
 }
@@ -1653,7 +1653,7 @@ export interface WasmRealtimeEngine {
   controllerNoteTracking: (
     destinationId: number,
     dimension: import('./instrument_types.js').MpeDimension | number,
-  ) => import('./instrument_types.js').NoteTracking | number;
+  ) => import('./instrument_types.js').NoteTracking;
   setArticulation: (
     destinationId: number,
     channel: number,
@@ -1662,7 +1662,7 @@ export interface WasmRealtimeEngine {
   articulation: (
     destinationId: number,
     channel: number,
-  ) => import('./instrument_types.js').Articulation | number;
+  ) => import('./instrument_types.js').Articulation;
   legatoFallbackCount: (destinationId: number) => number;
   setPartRig: (
     destinationId: number,

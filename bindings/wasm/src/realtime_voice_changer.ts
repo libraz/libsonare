@@ -1,3 +1,4 @@
+import { libraryToken } from './internal/core_tokens.js';
 import {
   assertDeclaredKeys,
   entryClass,
@@ -506,7 +507,9 @@ const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numC
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
   return withEntry('realtimeVoiceChangerPresetNames', () => {
     // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
-    return Array.from(getSonareModule().realtimeVoiceChangerPresetNames() as VoicePresetId[]);
+    return Array.from(getSonareModule().realtimeVoiceChangerPresetNames(), (id) =>
+      libraryToken(VOICE_PRESET_IDS, id, 'voice preset id'),
+    );
   });
 }
 
@@ -543,7 +546,11 @@ export function realtimeVoiceChangerValidatePresetJson(
 export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
   return withEntry('voiceCharacterPresetId', () => {
     assertBoundedInteger(ordinal, 'ordinal', 0, VOICE_PRESET_IDS.length - 1);
-    return getSonareModule().voiceCharacterPresetId(ordinal) as VoicePresetId;
+    return libraryToken(
+      VOICE_PRESET_IDS,
+      getSonareModule().voiceCharacterPresetId(ordinal),
+      'voice preset id',
+    );
   });
 }
 
