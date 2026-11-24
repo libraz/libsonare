@@ -227,11 +227,12 @@ TEST_CASE("CLI normalize preserves retained-layout error ordering", "[cli][ffmpe
       ContainsSubstring(
           "FFmpeg: interleaved decode does not support a channel layout change midstream"));
 
-  // Option validation still wins over that deferred decode failure.
+  // An argv-decidable refusal is a usage error and wins over that deferred decode failure.
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
-  REQUIRE(invalid_code == 3);
+  REQUIRE(invalid_code == 2);
   REQUIRE_THAT(invalid_message, ContainsSubstring("argument --mode: must be one of peak, rms"));
+  REQUIRE_THAT(invalid_message, !ContainsSubstring("FFmpeg"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
   cleanup();
 }

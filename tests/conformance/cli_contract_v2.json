@@ -13643,6 +13643,23 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "mode_unknown",
+          "argv": [
+            "normalize",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "loud",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}
