@@ -173,6 +173,10 @@ inline std::string element_limit_predicate(const std::string& what, unsigned lon
 /// @brief "must name a declared value".
 inline constexpr const char* kDeclaredValuePredicate = "must name a declared value";
 
+/// @brief An offline voice changer cannot supply a separate vocoder carrier.
+inline constexpr const char* kOfflineRenderExternalCarrierPredicate =
+    "external is not supported for the offline render: it has no carrier input";
+
 /// @brief Presence tokens: a refusal text says a value is left out or supplied through these,
 ///        never through the word NULL, and each surface renders them in its own terms
 ///        (presence_phrase in exception.h). The C rendering is given beside each.

@@ -1206,6 +1206,68 @@ void check_spelling_rows(const Overrides& rows, const Spell& spelled_last_refusa
 
 }  // namespace
 
+#if defined(SONARE_WITH_VOICE_CHANGER)
+TEST_CASE("offline voice changer names the typed external carrier field",
+          "[c_api][c_refusal_subjects][voice_carrier_subject]") {
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_VOCODER_STRINGS, &config) ==
+          SONARE_OK);
+  config.vocoder_carrier_source = SONARE_VOCODER_CARRIER_EXTERNAL;
+  const std::vector<float> samples(128, 0.1f);
+  float* output = reinterpret_cast<float*>(std::uintptr_t{1});
+  size_t length = 1;
+  REQUIRE(sonare_realtime_voice_changer_render(samples.data(), samples.size(), 48000, &config, 1,
+                                               &output, &length) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(output == nullptr);
+  CHECK(length == 0);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(last_message() ==
+        "config.vocoder_carrier_source external is not supported for the offline render: "
+        "it has no carrier input");
+  CHECK(last_refusal_subjects() == std::vector<std::string>{"config.vocoder_carrier_source"});
+  const char* entry = sonare_last_refusal_entry();
+  REQUIRE(entry != nullptr);
+  CHECK(std::string_view(entry) == "realtime_voice_changer_render");
+  const auto node = sonare_field_spelling::node::SpelledLastRefusal();
+  const auto wasm = sonare_field_spelling::wasm::SpelledLastRefusal();
+  REQUIRE(node.has_value());
+  REQUIRE(wasm.has_value());
+  CHECK(node->subject() == "vocoderCarrierSource");
+  CHECK(wasm->subject() == "vocoderCarrierSource");
+}
+
+TEST_CASE("voice changer preset refusal retains the written carrier key",
+          "[c_api][c_refusal_subjects][voice_carrier_subject]") {
+  char* preset = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_preset_json("vocoderStrings", &preset) == SONARE_OK);
+  const std::unique_ptr<char, decltype(&sonare_free_string)> owned_preset(preset,
+                                                                          sonare_free_string);
+  REQUIRE(preset != nullptr);
+  std::string invalid_document(preset);
+  constexpr std::string_view key = "\"carrierSource\"";
+  const size_t key_start = invalid_document.find(key);
+  REQUIRE(key_start != std::string::npos);
+  const size_t value_start = invalid_document.find('"', key_start + key.size());
+  REQUIRE(value_start != std::string::npos);
+  const size_t value_end = invalid_document.find('"', value_start + 1);
+  REQUIRE(value_end != std::string::npos);
+  invalid_document.replace(value_start + 1, value_end - value_start - 1, "unrecognised");
+  char* normalized = nullptr;
+  char* diagnostic = nullptr;
+  const SonareError code = sonare_realtime_voice_changer_validate_preset_json(
+      invalid_document.c_str(), &normalized, &diagnostic);
+  const std::unique_ptr<char, decltype(&sonare_free_string)> owned_output(normalized,
+                                                                          sonare_free_string);
+  const std::unique_ptr<char, decltype(&sonare_free_string)> owned_diagnostic(diagnostic,
+                                                                              sonare_free_string);
+  CHECK(code == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(normalized == nullptr);
+  REQUIRE(diagnostic != nullptr);
+  CHECK_THAT(std::string(diagnostic),
+             Catch::Matchers::ContainsSubstring("dsp.vocoder.carrierSource"));
+}
+#endif
+
 TEST_CASE("offline freeze names the refused frame count", "[c_api][c_refusal_subjects]") {
   const EnginePtr engine = prepared_engine();
   SonareEngineFreezeOptions options{};

@@ -1415,11 +1415,11 @@ TEST_CASE("The offline realtime wrapper refuses an external-carrier config befor
           SONARE_OK);
   REQUIRE(sonare_realtime_voice_changer_render(samples.data(), samples.size(), 48000,
                                                &external_config, 1, &out,
-                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+                                               &out_length) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(out == nullptr);
   CHECK(out_length == 0);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("vocoderCarrierSource"));
+             Catch::Matchers::ContainsSubstring("config.vocoder_carrier_source"));
 }
 
 TEST_CASE("Realtime voice changer create refuses a rate or block size outside the ceilings",

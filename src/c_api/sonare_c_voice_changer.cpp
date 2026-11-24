@@ -14,6 +14,7 @@
 #include "core/audio.h"
 #include "sonare_c_internal.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -248,9 +249,9 @@ SonareError sonare_realtime_voice_changer_render(const float* samples, size_t le
 
   // The one-shot has no carrier to hand the vocoder, so refuse before any block is processed.
   if (editing::voice_changer::takes_external_carrier(handle->changer.config())) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "vocoderCarrierSource 'external' needs a carrier; this one-shot supplies none");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    throw SonareParameterRefusal::predicate(ErrorCode::NotSupported,
+                                            "config.vocoder_carrier_source",
+                                            util::refusal::kOfflineRenderExternalCarrierPredicate);
   }
 
   std::unique_ptr<float[]> output(new float[length]);
