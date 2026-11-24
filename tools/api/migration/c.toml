@@ -6089,6 +6089,14 @@ test = "tests/api/sonare_c_mastering_test.cpp::sonare_eq_set_band reads detector
 
 [[entry]]
 kind = "function"
+old = "sonare_eq_magnitude_response"
+changed = "every frequencies_hz[i] must be finite and in [0, Nyquist]; an invalid value returns SONARE_ERROR_INVALID_PARAMETER naming its index and leaves out_db unchanged, where 1.x clamped values outside the range (including infinities) and let NaN through to the output"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/c_bare_refusal_mastering_repair_test.cpp::sonare_eq_magnitude_response refuses indexed frequencies without writing output"
+
+[[entry]]
+kind = "function"
 old = "sonare_mastering_repair_apply"
 changed = "a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT"
 domain = "effects"

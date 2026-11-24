@@ -408,11 +408,14 @@ TEST_CASE("Defect JSON level arrays never spell not measured as a slot",
         json::parse(json::dump(json::Value(assistant::detection_to_json(detected))));
     CHECK(out["harmonicDbfs"].size() == 4);
 
-    // Nothing to measure: no slot holds a level and the array is empty.
-    const repair::HumDetection empty = repair::detect_hum(nullptr, 0, kRate, config);
-    CHECK(empty.measured_harmonics == 0);
-    CHECK(std::isnan(empty.harmonic_dbfs[0]));
-    CHECK(json::Value(assistant::detection_to_json(empty))["harmonicDbfs"].size() == 0);
+    const std::vector<float> short_silence(32, 0.0f);
+    const float* short_channel[] = {short_silence.data()};
+    const assistant::ChannelSetDefects unmeasured =
+        assistant::measure_defects_planar(short_channel, 1, short_silence.size(), kSr);
+    REQUIRE_FALSE(unmeasured.aggregate.measured);
+    REQUIRE(unmeasured.aggregate.hum.measured_harmonics == 0);
+    CHECK(json::Value(assistant::detection_to_json(unmeasured.aggregate.hum))["harmonicDbfs"]
+              .size() == 0);
   }
 }
 

@@ -698,7 +698,9 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
   require_search_window(validated.get(), sample_rate);
   HumDetection detection;
   std::fill(std::begin(detection.harmonic_dbfs), std::end(detection.harmonic_dbfs), kNotMeasured);
-  if (samples == nullptr || size == 0) return detection;
+  if (samples == nullptr || size == 0) {
+    check::refuse("samples", "must be a non-empty buffer");
+  }
 
   const std::vector<float> buffer(samples, samples + size);
   const size_t frame = detection_frame(size, sample_rate);

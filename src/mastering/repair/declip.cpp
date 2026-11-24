@@ -198,8 +198,7 @@ ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
-  if (samples == nullptr || size == 0) return {};
-  // Keep null/empty compatibility; reject non-finite values before scan_clipped_runs.
+  // Reject empty input and non-finite values before scan_clipped_runs.
   validate_offline_audio_input("samples", samples, size, sample_rate);
 
   const std::vector<float> buffer(samples, samples + size);

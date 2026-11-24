@@ -10,6 +10,7 @@
 #include <functional>
 #include <limits>
 #include <random>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -477,21 +479,78 @@ TEST_CASE("Clip detection does not read an unclipped peak as a flat top", "[mast
   REQUIRE(detected.flat_level == 0.0f);
 }
 
+TEST_CASE("direct repair detectors refuse empty sample buffers by name",
+          "[mastering][repair][domain-repair-eq]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> silence(4096, 0.0f);
+  const auto require_refusal = [](auto&& operation, const char* expected) {
+    bool refused = false;
+    try {
+      operation();
+    } catch (const SonareException& error) {
+      refused = true;
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == expected);
+    }
+    CHECK(refused);
+  };
+
+  require_refusal([&] { detect_clicks(nullptr, 0, kSampleRate); },
+                  "samples must be a non-empty buffer");
+  require_refusal([&] { detect_clipping(nullptr, 0, kSampleRate); },
+                  "samples must be a non-empty buffer");
+  require_refusal([&] { detect_crackle(nullptr, 0, kSampleRate); },
+                  "samples must be a non-empty buffer");
+  require_refusal([&] { detect_hum(nullptr, 0, kSampleRate); },
+                  "samples must be a non-empty buffer");
+  require_refusal([&] { detect_trim_range(nullptr, 0, kSampleRate); },
+                  "samples must be a non-empty buffer");
+  require_refusal(
+      [&] { detect_trim_range_stereo(silence.data(), nullptr, silence.size(), kSampleRate); },
+      "right must be a non-empty buffer");
+  require_refusal([&] { detect_trim_range_stereo(silence.data(), silence.data(), 0, kSampleRate); },
+                  "left must be a non-empty buffer");
+
+  const ClickDetection clicks = detect_clicks(silence.data(), silence.size(), kSampleRate);
+  CHECK(clicks.count == 0);
+  CHECK(clicks.rejected == 0);
+  CHECK(clicks.per_second == 0.0f);
+
+  const ClipDetection clipping = detect_clipping(silence.data(), silence.size(), kSampleRate);
+  CHECK(clipping.sample_count == 0);
+  CHECK(clipping.run_count == 0);
+  CHECK(clipping.sample_fraction == 0.0f);
+
+  const CrackleDetection crackle = detect_crackle(silence.data(), silence.size(), kSampleRate);
+  CHECK(crackle.sample_count == 0);
+  CHECK(crackle.sample_fraction == 0.0f);
+
+  const HumDetection hum = detect_hum(silence.data(), silence.size(), kSampleRate);
+  REQUIRE(hum.measured_harmonics > 0);
+  CHECK(hum.harmonics == 0);
+  CHECK(std::isinf(hum.harmonic_dbfs[0]));
+  CHECK(hum.harmonic_dbfs[0] < 0.0f);
+
+  const TrimRange trim = detect_trim_range(silence.data(), silence.size(), kSampleRate);
+  CHECK(trim.first == silence.size());
+  CHECK(trim.last_exclusive == silence.size());
+  const TrimRange stereo_trim =
+      detect_trim_range_stereo(silence.data(), silence.data(), silence.size(), kSampleRate);
+  CHECK(stereo_trim.first == silence.size());
+  CHECK(stereo_trim.last_exclusive == silence.size());
+}
+
 TEST_CASE("Declip rejects non-finite samples at every offline entrypoint",
           "[mastering][repair][validation]") {
   constexpr int kSampleRate = 48000;
   constexpr float kThreshold = 0.8f;
   const DeclipConfig config{kThreshold, 8, 1};
 
-  // Preserve null/empty compatibility and the inclusive finite threshold boundary.
+  // Preserve the inclusive finite threshold boundary.
   const std::vector<float> finite = {0.2f, kThreshold, -kThreshold, 0.1f};
   const ClipDetection control = detect_clipping(finite.data(), finite.size(), kSampleRate, config);
   REQUIRE(control.sample_count == 2);
   REQUIRE(control.run_count == 1);
-  REQUIRE(detect_clipping(nullptr, 0, kSampleRate, config).sample_count == 0);
-  REQUIRE(detect_clipping(nullptr, finite.size(), kSampleRate, config).sample_count == 0);
-  REQUIRE(detect_clipping(finite.data(), 0, kSampleRate, config).sample_count == 0);
-
   const std::array<float, 3> non_finite_values = {std::numeric_limits<float>::quiet_NaN(),
                                                   std::numeric_limits<float>::infinity(),
                                                   -std::numeric_limits<float>::infinity()};

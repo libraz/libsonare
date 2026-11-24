@@ -90,6 +90,9 @@ TrimRange detect_trim_range(const float* samples, size_t size, int sample_rate,
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
+  if (samples == nullptr || size == 0) {
+    check::refuse("samples", "must be a non-empty buffer");
+  }
   return scan(samples, size, sample_rate, validated.get());
 }
 
@@ -99,7 +102,12 @@ TrimRange detect_trim_range_stereo(const float* left, const float* right, size_t
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
-  if (left == nullptr || right == nullptr || size == 0) return {};
+  if (left == nullptr || size == 0) {
+    check::refuse("left", "must be a non-empty buffer");
+  }
+  if (right == nullptr || size == 0) {
+    check::refuse("right", "must be a non-empty buffer");
+  }
   return union_range(scan(left, size, sample_rate, validated.get()),
                      scan(right, size, sample_rate, validated.get()));
 }

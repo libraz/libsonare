@@ -108,8 +108,9 @@ class EqualizerProcessor : public rt::ProcessorBase {
   /// well. Bands placed on a path other than the requested one are left out; a
   /// mid band has no per-channel magnitude to fold into a left or right curve.
   ///
-  /// Frequencies are clamped to [0 Hz, Nyquist]. @p out_db must have room for
-  /// @p frequency_count entries.
+  /// Each frequency must be finite and in [0 Hz, Nyquist]; an invalid entry
+  /// is refused by its index before @p out_db is written. The output must have
+  /// room for @p frequency_count entries.
   /// @throws SonareException on a non-positive sample rate, a null array with a
   ///         non-zero count, or a band whose own frequency is outside
   ///         (0 Hz, Nyquist) — the same bound set_band() enforces.

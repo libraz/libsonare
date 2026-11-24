@@ -1034,7 +1034,8 @@ SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
 /// 2 Right, 3 Mid, 4 Side. A band placed on Stereo is on every path; one placed
 /// elsewhere appears only on its own, a mid band having no per-channel magnitude
 /// to fold into a left or right curve.
-/// @param frequencies_hz @p count frequencies, each clamped to [0 Hz, Nyquist].
+/// @param frequencies_hz @p count frequencies in [0 Hz, Nyquist]. Every value must be
+/// finite; an invalid value is refused by its index before @p out_db is written.
 /// @param out_db Receives @p count values; may alias nothing else.
 SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
                                          const float* frequencies_hz, size_t count, float* out_db);

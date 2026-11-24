@@ -1,7 +1,13 @@
 /// @file eq_processor_test.cpp
 /// @brief EqualizerProcessor routing and dynamic behavior tests.
 
+#include <array>
+#include <cmath>
+#include <limits>
+#include <string>
+
 #include "eq_test_helpers.h"
+#include "util/exception.h"
 
 TEST_CASE("EqualizerProcessor matches ParametricEq for E0 stereo zero-latency bands",
           "[mastering][eq]") {
@@ -788,6 +794,64 @@ float curve_at(const EqualizerProcessor& eq, float hz) {
 }
 
 }  // namespace
+
+TEST_CASE("EQ magnitude response refuses frequencies outside [0, Nyquist] before publishing output",
+          "[mastering][eq][domain-repair-eq]") {
+  constexpr double kSampleRate = 48000.0;
+  const EqBand band{EqBandType::HighPass, 3000.0f, 0.0f, kButterworthQ, true};
+  EqualizerProcessor eq;
+  eq.set_band(0, band);
+  eq.prepare(kSampleRate, 512);
+
+  const std::array<float, 5> invalid_values = {
+      -1.0f, 24001.0f, std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()};
+  const auto require_refusal = [](auto&& operation, const float* output, size_t index) {
+    bool refused = false;
+    try {
+      operation();
+    } catch (const sonare::SonareException& error) {
+      refused = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) ==
+            "frequencies_hz[" + std::to_string(index) + "] must be finite and in [0, 24000]");
+    }
+    CHECK(refused);
+    CHECK(output[0] == 17.0f);
+    CHECK(output[1] == -23.0f);
+  };
+  for (const float invalid : invalid_values) {
+    const float frequencies[] = {1000.0f, invalid};
+    float static_output[] = {17.0f, -23.0f};
+    require_refusal(
+        [&] {
+          EqualizerProcessor::magnitude_response_db(&band, 1, kSampleRate, PhaseMode::NaturalPhase,
+                                                    StereoPlacement::Stereo, frequencies, 2,
+                                                    static_output);
+        },
+        static_output, 1);
+
+    float instance_output[] = {17.0f, -23.0f};
+    require_refusal(
+        [&] { eq.magnitude_response_db(StereoPlacement::Stereo, frequencies, 2, instance_output); },
+        instance_output, 1);
+  }
+
+  const float boundary_frequencies[] = {0.0f, 12000.0f, 24000.0f};
+  float static_boundary_response[] = {0.0f, 0.0f, 0.0f};
+  float instance_boundary_response[] = {0.0f, 0.0f, 0.0f};
+  EqualizerProcessor::magnitude_response_db(&band, 1, kSampleRate, PhaseMode::NaturalPhase,
+                                            StereoPlacement::Stereo, boundary_frequencies, 3,
+                                            static_boundary_response);
+  eq.magnitude_response_db(StereoPlacement::Stereo, boundary_frequencies, 3,
+                           instance_boundary_response);
+  for (const float* curve : {static_boundary_response, instance_boundary_response}) {
+    CHECK(std::isfinite(curve[0]));
+    CHECK(curve[0] < curve[2] - 20.0f);
+    CHECK_THAT(curve[1], WithinAbs(0.0f, 0.1f));
+    CHECK_THAT(curve[2], WithinAbs(0.0f, 0.1f));
+  }
+}
 
 TEST_CASE("the drawn EQ curve is the gain the processor applies", "[mastering][eq]") {
   // Every band type that survives to a single section, at a frequency where its

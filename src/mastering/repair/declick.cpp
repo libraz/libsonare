@@ -281,7 +281,9 @@ ClickDetection detect_clicks(const float* samples, size_t size, int sample_rate,
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
-  if (samples == nullptr || size == 0) return {};
+  if (samples == nullptr || size == 0) {
+    check::refuse("samples", "must be a non-empty buffer");
+  }
 
   const std::vector<float> buffer(samples, samples + size);
   const std::optional<LpcResult> lpc_model = fit_lpc(buffer, validated.get());

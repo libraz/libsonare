@@ -4,7 +4,9 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -26,6 +28,26 @@ TEST_CASE("sonare_eq_set_band names the refused band index", "[c_api][mastering]
   REQUIRE(last_message() == "index must be an integer in [0, 23]");
   REQUIRE(sonare_eq_set_band(eq, SONARE_EQ_MAX_BANDS, "{}") == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "index must be an integer in [0, 23]");
+  sonare_eq_destroy(eq);
+}
+
+TEST_CASE("sonare_eq_magnitude_response refuses indexed frequencies without writing output",
+          "[c_api][mastering][domain-repair-eq]") {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(kRate, 512, &eq) == SONARE_OK);
+  const std::array<float, 5> invalid_values = {
+      -1.0f, 24001.0f, std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()};
+  for (const float invalid : invalid_values) {
+    const float frequencies[] = {1000.0f, invalid};
+    float out_db[] = {17.0f, -23.0f};
+    CHECK(sonare_eq_magnitude_response(eq, 0, frequencies, 2, out_db) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "frequencies_hz[1] must be finite and in [0, 24000]");
+    CHECK(out_db[0] == 17.0f);
+    CHECK(out_db[1] == -23.0f);
+  }
   sonare_eq_destroy(eq);
 }
 

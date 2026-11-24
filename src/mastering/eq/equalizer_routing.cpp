@@ -1,12 +1,14 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 
 #include "mastering/eq/cut_band.h"
 #include "mastering/eq/equalizer.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
 
@@ -132,14 +134,20 @@ void EqualizerProcessor::magnitude_response_impl(const EqBand* bands, size_t ban
     throw SonareException(ErrorCode::InvalidParameter,
                           "EQ magnitude response given a null array with a non-zero count");
   }
+  const double nyquist = sample_rate * 0.5;
+  const auto frequency_domain = sonare::util::check::real_domain(0.0, nyquist);
   for (size_t f = 0; f < frequency_count; ++f) {
-    out_db[f] = 0.0f;
+    if (!sonare::util::check::in_domain(frequencies_hz[f], frequency_domain)) {
+      const std::string subject = "frequencies_hz[" + std::to_string(f) + "]";
+      sonare::util::check::refuse_outside(frequency_domain, subject.c_str());
+    }
   }
   if (frequency_count == 0) {
     return;
   }
-
-  const double nyquist = sample_rate * 0.5;
+  for (size_t f = 0; f < frequency_count; ++f) {
+    out_db[f] = 0.0f;
+  }
   bool any_soloed = false;
   for (size_t i = 0; i < band_count; ++i) {
     if (bands[i].enabled && bands[i].soloed && !bands[i].bypassed) {
@@ -157,7 +165,7 @@ void EqualizerProcessor::magnitude_response_impl(const EqBand* bands, size_t ban
     }
     const BiquadCoefficients c = design_eq_biquad(routed, sample_rate);
     for (size_t f = 0; f < frequency_count; ++f) {
-      const double hz = std::clamp(static_cast<double>(frequencies_hz[f]), 0.0, nyquist);
+      const double hz = static_cast<double>(frequencies_hz[f]);
       out_db[f] += section_magnitude_db(c, sonare::constants::kTwoPiD * hz / sample_rate);
     }
   };
