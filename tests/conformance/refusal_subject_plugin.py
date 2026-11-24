@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 import sys
 from collections import defaultdict
+from functools import wraps
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -105,10 +106,11 @@ def pytest_configure(config) -> None:
 
     original = _runtime._render_as_given
 
-    def recording(lib, root, respelled):
+    @wraps(original)
+    def recording(lib, *args, **kwargs):
         count = lib.sonare_last_refusal_subject_count()
         if count == 0:
-            return original(lib, root, respelled)
+            return original(lib, *args, **kwargs)
         entry = (lib.sonare_last_refusal_entry() or b"").decode("utf-8")
         content = lib.sonare_last_error_code() == _INVALID_FORMAT
         for index in range(count):
@@ -117,7 +119,7 @@ def pytest_configure(config) -> None:
             _seen[pair] += 1
             if content:
                 _content.add(pair)
-        return original(lib, root, respelled)
+        return original(lib, *args, **kwargs)
 
     _runtime._render_as_given = recording
 
