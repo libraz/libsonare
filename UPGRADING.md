@@ -1313,7 +1313,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 ## Python
 
-Keyword arguments and attributes are snake_case, records are frozen dataclasses built from keyword arguments, a closed set is a lowerCamel string token, an option left out is `None`, and a quantity names its unit (`_hz`, `_sec`, `_db`). Every public type imports from `libsonare`.
+Keyword arguments and attributes are snake_case, records are frozen dataclasses built from keyword arguments, a closed set is a lowerCamel string token, an option left out is `None`, and a quantity names its unit (`_hz`, `_sec`, `_db`). Every public type imports from `libsonare` or from the module that defines it at runtime; a name that only a type stub declared and no module defined is gone.
 
 ### Python: Loading, versions, audio buffers and errors
 
