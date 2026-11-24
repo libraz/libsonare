@@ -86,9 +86,8 @@ SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out);
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger,
-                                                 pitch_semitones, mix, grain_size_samples);
+                                                 pitch_semitones, mix, grain_size_samples, out);
 #endif
 }
 

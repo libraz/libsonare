@@ -146,6 +146,8 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 /// @return SONARE_ERROR_INVALID_FORMAT if a supported envelope's source sample count is not
 ///   positive or exceeds the audio buffer limit. The error names the sidecar key and field, and
 ///   the list stays empty.
+/// @return SONARE_ERROR_NOT_SUPPORTED when arrangement is compiled out. An initialized result
+///   holds an empty list on this refusal.
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result);
 

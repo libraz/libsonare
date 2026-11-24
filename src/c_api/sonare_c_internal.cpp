@@ -43,6 +43,22 @@ std::string& last_refusal_entry_storage() noexcept {
   return key;
 }
 
+const char*& last_unavailable_entry_storage() noexcept {
+  static thread_local const char* entry = nullptr;
+  return entry;
+}
+
+void record_error_reason(std::optional<sonare::ErrorReason> reason) noexcept {
+  last_error_reason_storage() = reason;
+  const char* entry =
+      reason == sonare::ErrorReason::NotCompiledIn ? current_entry_storage() : nullptr;
+  constexpr std::string_view prefix = "sonare_";
+  if (entry != nullptr && std::string_view(entry).substr(0, prefix.size()) == prefix) {
+    entry += prefix.size();
+  }
+  last_unavailable_entry_storage() = entry;
+}
+
 /// The c-entry-name key of @p entry: no "sonare_" prefix, a second-form suffix folded away.
 std::string c_entry_key(const char* entry) {
   std::string key(entry != nullptr ? entry : "");
@@ -85,7 +101,7 @@ void set_last_error(SonareError code, const char* msg,
                     std::optional<sonare::ErrorReason> reason) noexcept {
   last_error_code_storage() = code;
   last_refusal_storage().reset();
-  last_error_reason_storage() = reason;
+  record_error_reason(reason);
   last_error_fallback_storage() = nullptr;
   try {
     last_error_storage().assign(msg != nullptr ? msg : "");
@@ -98,7 +114,7 @@ void set_last_error_static(SonareError code, const char* msg,
                            std::optional<sonare::ErrorReason> reason) noexcept {
   last_error_code_storage() = code;
   last_refusal_storage().reset();
-  last_error_reason_storage() = reason;
+  record_error_reason(reason);
   last_error_fallback_storage() = msg;
 }
 
@@ -114,7 +130,7 @@ void leave_c_api() noexcept { current_entry_storage() = nullptr; }
 void clear_last_error() noexcept {
   last_error_code_storage() = SONARE_OK;
   last_refusal_storage().reset();
-  last_error_reason_storage().reset();
+  record_error_reason(std::nullopt);
   last_error_storage().clear();
   last_error_fallback_storage() = nullptr;
 }
@@ -151,7 +167,7 @@ size_t last_refusal_subject_count() noexcept {
 }
 
 const char* last_refusal_entry() noexcept {
-  if (last_parameter_refusal() == nullptr) return nullptr;
+  if (last_parameter_refusal() == nullptr) return last_unavailable_entry_storage();
   return last_refusal_entry_storage().c_str();
 }
 

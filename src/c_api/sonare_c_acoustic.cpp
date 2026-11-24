@@ -523,8 +523,6 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
       });
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_length);
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, samples,
                                                  length, sample_rate, config, out, out_length);
 #endif
@@ -567,10 +565,8 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out_left);
-  SONARE_C_REQUIRE_NONNULL(out_right);
-  SONARE_C_REQUIRE_NONNULL(out_length);
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, left,
-                                                 right, length, sample_rate, config);
+                                                 right, length, sample_rate, config, out_left,
+                                                 out_right, out_length);
 #endif
 }

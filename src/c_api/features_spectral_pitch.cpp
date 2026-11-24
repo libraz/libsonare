@@ -732,7 +732,6 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out);
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kPitchEditor, f0_hz,
                                                  voiced_prob, voiced, n_frames, frame_rate, config,
                                                  out);

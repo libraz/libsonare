@@ -675,12 +675,12 @@ size_t sonare_last_refusal_subject_count(void);
 ///   clears an error on the same thread. Like every sonare_last_* accessor, it records no error.
 const char* sonare_last_refusal_subject(size_t index);
 
-/// @brief Key of the C entry that recorded the last parameter refusal: its name without the
-///        "sonare_" prefix (sonare_mel_to_stft -> "mel_to_stft").
-/// @details NULL exactly when @ref sonare_last_refusal_subject_count is 0. A binding looks up its
-///   own spelling of each subject by (entry, subject). Borrowed and thread-local, valid until the
-///   next API call that records or clears an error on the same thread, like the subjects; like
-///   every sonare_last_* accessor, it records no error and clears none.
+/// @brief Key of the C entry that recorded the last parameter refusal, or the name of the
+///        entry refused as compiled out, without the "sonare_" prefix.
+/// @details NULL when neither cause is recorded. Bindings use the key together with the
+///   parameter subjects to look up their own spelling. A compiled-out refusal has no parameter
+///   subjects. Borrowed and thread-local, valid until the next API call that records or clears an
+///   error on the same thread. This accessor records no error and clears none.
 const char* sonare_last_refusal_entry(void);
 
 /// @brief Renders the last parameter refusal's message with @p subjects in place of its own.

@@ -288,6 +288,7 @@ void sonare_engine_graph_node_init(SonareEngineGraphNode* node) {
 
 SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGraphSpec* spec) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_GRAPH)
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(spec);
   if (const SonareError err = run_validation([&] {
@@ -304,7 +305,6 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
       err != SONARE_OK) {
     return err;
   }
-#if defined(SONARE_WITH_GRAPH)
   SONARE_C_TRY
   auto graph = std::make_unique<graph::Graph>();
   for (size_t i = 0; i < spec->node_count; ++i) {
@@ -382,38 +382,32 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kGraph);
+  return refuse_not_compiled_in(Feature::kGraph, engine, spec);
 #endif
 }
 
 SonareError sonare_engine_graph_node_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_count) *out_count = 0;
+#if defined(SONARE_WITH_GRAPH)
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
-#if defined(SONARE_WITH_GRAPH)
   *out_count = engine->engine.graph_node_count();
   return SONARE_OK;
 #else
-  // Match sonare_engine_set_graph: a feature-off build cannot have a graph, so
-  // report NOT_SUPPORTED rather than SONARE_OK with 0, which a caller cannot
-  // distinguish from "the feature is compiled in and the graph has no nodes".
-  *out_count = 0;
-  return refuse_not_compiled_in(Feature::kGraph);
+  return refuse_not_compiled_in(Feature::kGraph, engine, out_count);
 #endif
 }
 
 SonareError sonare_engine_graph_connection_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_count) *out_count = 0;
+#if defined(SONARE_WITH_GRAPH)
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
-#if defined(SONARE_WITH_GRAPH)
   *out_count = engine->engine.graph_connection_count();
   return SONARE_OK;
 #else
-  // See sonare_engine_graph_node_count.
-  *out_count = 0;
-  return refuse_not_compiled_in(Feature::kGraph);
+  return refuse_not_compiled_in(Feature::kGraph, engine, out_count);
 #endif
 }

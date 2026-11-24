@@ -17,7 +17,7 @@
 /// - `sonare_playback_renderer_process_planar`,
 ///   `sonare_playback_renderer_process_interleaved`,
 ///   `sonare_playback_renderer_process_silence` and
-///   `sonare_playback_renderer_set_head_orientation` are realtime-safe: they
+///   `sonare_playback_renderer_set_head_orientation` are realtime-safe when compiled in: they
 ///   neither allocate nor throw, and they do not touch the thread-local
 ///   `sonare_last_error_message()` channel. They report a rejected argument
 ///   through the return code only.

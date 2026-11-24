@@ -1645,6 +1645,7 @@ TEST_CASE("sonare_phase_vocoder refuses a speed_ratio past the work size limit",
                 element_limit("speed_ratio", "the stretched spectrogram"));
 }
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
 TEST_CASE("sonare_note_stretch refuses a stretch_ratio past the work size limit",
           "[c_api][work_size_limit]") {
   const std::vector<float> samples = sine(8192);
@@ -1654,6 +1655,7 @@ TEST_CASE("sonare_note_stretch refuses a stretch_ratio past the work size limit"
       sonare_note_stretch(samples.data(), samples.size(), kSr, 1000, 6000, 1e6f, &out, &out_length),
       element_limit("stretch_ratio", "the stretched note", "2147483647"));
 }
+#endif
 
 TEST_CASE("the tempogram entries refuse a win_length and an n_bins past the work size limit",
           "[c_api][work_size_limit]") {

@@ -362,11 +362,12 @@ SonareError sonare_mixing_assistant_suggest(
 
 const char* sonare_mixing_assistant_source_class_names(void) {
   SONARE_C_API_ENTRY;
+  (void)refuse_not_compiled_in(Feature::kMixing);
   return "";
 }
 
 int sonare_mixing_assistant_source_class_from_name(const char* name) {
   SONARE_C_API_ENTRY;
-  (void)name;
+  (void)refuse_not_compiled_in(Feature::kMixing, name);
   return -1;
 }

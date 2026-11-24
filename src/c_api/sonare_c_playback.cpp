@@ -158,6 +158,7 @@ SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer
   renderer->renderer->set_head_orientation(yaw_deg, pitch_deg, roll_deg);
   return SONARE_OK;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kPlayback, renderer, yaw_deg, pitch_deg, roll_deg);
 #endif
 }
@@ -231,6 +232,7 @@ SonareError sonare_playback_renderer_process_planar(SonarePlaybackRenderer* rend
   const bool ok = renderer->renderer->process_planar(in, in_channels, out, out_channels, frames);
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kPlayback, renderer, in, in_channels, out, out_channels,
                                 frames);
 #endif
@@ -247,6 +249,7 @@ SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer*
       renderer->renderer->process_interleaved(in, in_channels, out, out_channels, frames);
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kPlayback, renderer, in, in_channels, out, out_channels,
                                 frames);
 #endif
@@ -262,6 +265,7 @@ SonareError sonare_playback_renderer_process_silence(SonarePlaybackRenderer* ren
   const bool ok = renderer->renderer->process_silence(out, num_output_channels, frames);
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kPlayback, renderer, out, num_output_channels, frames);
 #endif
 }

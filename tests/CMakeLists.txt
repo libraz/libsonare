@@ -220,6 +220,7 @@ add_executable(sonare_tests
   api/sonare_c_music_test.cpp
   api/sonare_c_mastering_test.cpp
   api/metadata_and_midi_loss_test.cpp
+  api/feature_off_errors_test.cpp
   api/sonare_c_mastering_streaming_test.cpp
   api/sonare_c_mastering_repair_test.cpp
   api/sonare_c_mastering_repair_detect_test.cpp

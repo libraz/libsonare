@@ -621,10 +621,6 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(result);
-  if (!result_ready) {
-    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
-  }
   return sonare_c_detail::refuse_not_compiled_in(
       sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
                                      sonare_c_detail::Feature::kPitchEditor),
@@ -1047,10 +1043,6 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(result);
-  if (!result_ready) {
-    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
-  }
   return sonare_c_detail::refuse_not_compiled_in(
       sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
                                      sonare_c_detail::Feature::kPitchEditor),

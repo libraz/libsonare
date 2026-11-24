@@ -63,6 +63,7 @@ void clear_percussive_events_result(SonarePercussiveEventsResult& out) {
   out.count = 0;
 }
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
 /// Refuses a note region with no sample inside the buffer, by the C parameter names. An
 /// offset past the end is clamped to it, as the editor does.
 void check_note_region(int64_t onset_sample, int64_t offset_sample, size_t length) {
@@ -75,6 +76,7 @@ void check_note_region(int64_t onset_sample, int64_t offset_sample, size_t lengt
   }
   util::check::integer_within(offset_sample, kNoteSampleIndexDomain, "offset_sample");
 }
+#endif
 
 /// Checks the separation framing of a percussive config and copies it onto the core one.
 SonareError resolve_percussive_separation(int32_t n_fft, size_t hop_length, int32_t kernel_harmonic,
@@ -601,11 +603,11 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = run_validation([&] {
         util::check::in_range(current_midi, 0.0, 127.0, "current_midi");
         util::check::in_range(target_midi, 0.0, 127.0, "target_midi");
@@ -613,10 +615,8 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
       err != SONARE_OK) {
     return err;
   }
-#endif
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-#if defined(SONARE_WITH_PITCH_EDITOR)
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         editing::pitch_editor::PitchCorrector corrector;
@@ -637,11 +637,11 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err =
           check_timevarying_args(f0_hz, voiced_prob, voiced, n_frames, hop_length);
       err != SONARE_OK) {
@@ -657,11 +657,9 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
       err != SONARE_OK) {
     return err;
   }
-#endif
 
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-#if defined(SONARE_WITH_PITCH_EDITOR)
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         editing::pitch_editor::PitchCorrector corrector;
@@ -703,11 +701,11 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err =
           check_timevarying_args(f0_hz, voiced_prob, voiced, n_frames, hop_length);
       err != SONARE_OK) {
@@ -749,11 +747,9 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
     core_config.scale.mode_mask = static_cast<uint16_t>(config->scale_mode_mask);
   }
   const float target_midi = config ? config->target_midi : constants::kMidiA4;
-#endif
 
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-#if defined(SONARE_WITH_PITCH_EDITOR)
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         editing::pitch_editor::PitchCorrector corrector(core_config);
@@ -775,11 +771,11 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_key);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-#if defined(SONARE_WITH_PITCH_EDITOR)
   std::optional<Key> named;
   if (key) {
     named = Key{PitchClass::C, Mode::Major, 1.0f};
@@ -800,12 +796,10 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
       return err;
     }
   }
-#endif
 
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_REQUIRE_NONNULL(out_key);
-#if defined(SONARE_WITH_PITCH_EDITOR)
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         const editing::pitch_editor::AutoTuneResult result =
@@ -828,8 +822,8 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                                 int64_t onset_sample, int64_t offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  // Validated before the gate, so the stub below refuses and zeroes the same way.
   SONARE_C_ZERO_OUTS(out, out_length);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
@@ -843,7 +837,6 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-#if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -866,10 +859,9 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
                                  const SonareNoteExtractorConfig* config,
                                  SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
-  // Refused and cleared before the gate, so the stub below leaves it defined too.
+#if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(out);
   clear_note_objects_result(*out);
-#if defined(SONARE_WITH_PITCH_EDITOR)
 
   const SonareError track_error =
       validate_track_args(f0_hz, voiced_prob, voiced, n_frames, frame_rate);
@@ -892,6 +884,7 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
             editing::note_model::extract_notes(audio, track, extractor_config), out);
       });
 #else
+  if (out != nullptr) clear_note_objects_result(*out);
   return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
                                 voiced_prob, voiced, n_frames, frame_rate, config, out);
 #endif
@@ -912,12 +905,11 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
                                 const SonareNoteRenderConfig* config, float** out,
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
-  // Refused and zeroed before the gate, so the stub below leaves them defined too.
+#if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   *out = nullptr;
   *out_length = 0;
-#if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(notes, note_count);
 
   // The track is optional; only a curve edit reads it.
@@ -989,6 +981,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
         return copy_audio_result(result, out, out_length);
       });
 #else
+  SONARE_C_ZERO_OUTS(out, out_length);
   return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, notes,
                                 note_count, envelopes, envelope_count, f0_hz, voiced, n_frames,
                                 frame_rate, config, out, out_length);
@@ -1069,10 +1062,9 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
                               int32_t frame, SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  // Refused and cleared before the gate, so the stub below leaves it defined too.
+#if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(out);
   clear_note_objects_result(*out);
-#if defined(SONARE_WITH_PITCH_EDITOR)
   if (index >= note_count) {
     return run_validation([&] {
       util::check::refuse_relation({"index", "note_count"}, "{0} must be less than {1}");
@@ -1097,6 +1089,7 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
                                                                     frame, extractor_config);
                            });
 #else
+  if (out != nullptr) clear_note_objects_result(*out);
   return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
                                 voiced_prob, voiced, n_frames, frame_rate, config, notes,
                                 note_count, envelopes, envelope_count, index, frame, out);
@@ -1113,10 +1106,9 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                size_t last, SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  // Refused and cleared before the gate, so the stub below leaves it defined too.
+#if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(out);
   clear_note_objects_result(*out);
-#if defined(SONARE_WITH_PITCH_EDITOR)
   if (!(first < last)) {
     return run_validation(
         [&] { util::check::refuse_relation({"first", "last"}, "{0} must be less than {1}"); });
@@ -1144,6 +1136,7 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                                                      first, last, extractor_config);
                            });
 #else
+  if (out != nullptr) clear_note_objects_result(*out);
   return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
                                 voiced_prob, voiced, n_frames, frame_rate, config, notes,
                                 note_count, envelopes, envelope_count, first, last, out);
@@ -1447,8 +1440,8 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
                              int64_t onset_sample, int64_t offset_sample,
                              int64_t target_onset_sample, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  // Validated before the gate, so the stub below refuses and zeroes the same way.
   SONARE_C_ZERO_OUTS(out, out_length);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
@@ -1466,7 +1459,6 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-#if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(
       "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {

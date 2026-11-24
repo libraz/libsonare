@@ -118,6 +118,7 @@ TEST_CASE("engine graph refuses its spec by name", "[c_api][engine_refusal]") {
   CHECK(sonare_engine_set_graph(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "spec must not be NULL");
 
+#if defined(SONARE_WITH_GRAPH)
   SonareEngineGraphSpec bad = spec;
   bad.nodes = nullptr;
   CHECK(sonare_engine_set_graph(engine, &bad) == SONARE_ERROR_INVALID_PARAMETER);
@@ -144,7 +145,6 @@ TEST_CASE("engine graph refuses its spec by name", "[c_api][engine_refusal]") {
   CHECK(last_message() ==
         "spec.parameter_bindings must not be NULL when spec.parameter_binding_count is not 0");
 
-#if defined(SONARE_WITH_GRAPH)
   SonareEngineGraphNode odd = node;
   bad = spec;
   bad.nodes = &odd;

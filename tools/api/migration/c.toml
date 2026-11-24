@@ -539,7 +539,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "function"
 old = "sonare_note_segments"
-changed = "takes (f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced is non-NULL, and voiced flags read as 0/1 probabilities"
+changed = "takes (f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced is non-NULL, and voiced flags read as 0/1 probabilities; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_features_extra_test.cpp::sonare_note_segments reads voiced flags as 0/1 probabilities"
@@ -547,7 +547,7 @@ test = "tests/api/sonare_c_features_extra_test.cpp::sonare_note_segments reads v
 [[entry]]
 kind = "function"
 old = "sonare_extract_notes"
-changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win"
+changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_note_objects_test.cpp::sonare_extract_notes takes exactly one of voiced_prob and voiced"
@@ -555,7 +555,7 @@ test = "tests/api/sonare_c_note_objects_test.cpp::sonare_extract_notes takes exa
 [[entry]]
 kind = "function"
 old = "sonare_split_note"
-changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win"
+changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries refuse both voicing arrays given together"
@@ -563,7 +563,7 @@ test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries ref
 [[entry]]
 kind = "function"
 old = "sonare_merge_notes"
-changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win"
+changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries refuse both voicing arrays given together"
@@ -571,7 +571,7 @@ test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries ref
 [[entry]]
 kind = "function"
 old = "sonare_pitch_correct_to_midi_timevarying"
-changed = "at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced"
+changed = "at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "tests/feature/pyin_voicing_contract_test.cpp::Both correction APIs refuse voiced flags and voiced_prob given together"
@@ -579,7 +579,7 @@ test = "tests/feature/pyin_voicing_contract_test.cpp::Both correction APIs refus
 [[entry]]
 kind = "function"
 old = "sonare_pitch_correct_timevarying"
-changed = "at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced"
+changed = "at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "tests/feature/pyin_voicing_contract_test.cpp::Both correction APIs refuse voiced flags and voiced_prob given together"
@@ -1069,7 +1069,7 @@ test = "tests/bindings/binding_project_c_surface_test.cpp::NativeSynth enum name
 [[entry]]
 kind = "function"
 old = "sonare_assist_module_ids"
-changed = "names the built-in modules sonare.builtin.chordToneGenerator and sonare.builtin.diatonicHarmonizer"
+changed = "names the built-in modules sonare.builtin.chordToneGenerator and sonare.builtin.diatonicHarmonizer; with the assist seam compiled out, returns NULL with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: NULL with no error)"
 domain = "mastering"
 rule = "token-case"
 test = "tests/api/sonare_c_assist_test.cpp::sonare_assist_module_ids names both built-in modules"
@@ -5261,7 +5261,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_voice_change"
-changed = "takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor"
+changed = "takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor; with the voice changer compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "options-struct"
 test = "tests/editing/voice_changer_formant_mode_test.cpp::sonare_voice_change selects the formant mode"
@@ -5550,7 +5550,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_room_morph_stereo"
-changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_room_morph returns its buffer"
+changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_room_morph returns its buffer; with the acoustic simulation compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "effects"
 rule = "one-entry-per-operation"
 test = "tests/api/sonare_c_acoustic_test.cpp::room_morph_stereo"
@@ -5660,7 +5660,7 @@ test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C restore classifies malfo
 [[entry]]
 kind = "function"
 old = "sonare_project_apply_vocal_edit"
-changed = "refuses a malformed SVE1 payload with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, before anything is published to the project"
+changed = "refuses a malformed SVE1 payload with SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER, before anything is published to the project; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
 domain = "project"
 rule = "error-class-by-cause"
 test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project apply refuses malformed SVE1 before publication"
@@ -7047,3 +7047,163 @@ changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.
 domain = "mastering"
 rule = "individual"
 test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering stereo analysis parameter admission"
+
+[[entry]]
+kind = "function"
+old = "sonare_mixing_assistant_source_class_names"
+changed = "with the mixing assistant compiled out, returns the empty string with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: empty string with no error)"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable mixing assistant records the source-class refusal"
+
+[[entry]]
+kind = "function"
+old = "sonare_mixing_assistant_source_class_from_name"
+changed = "with the mixing assistant compiled out, returns -1 with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: -1 with no error)"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable mixing assistant records the source-class refusal"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_preset_names"
+changed = "with the voice changer compiled out, returns the empty string with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: empty string with no error)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable voice changer records preset metadata refusals"
+
+[[entry]]
+kind = "function"
+old = "sonare_voice_character_preset_id"
+changed = "with the voice changer compiled out, returns NULL with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: NULL with no error)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable voice changer records preset metadata refusals"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_graph"
+changed = "with graph support compiled out, a NULL required pointer or a graph spec with invalid dimensions returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded (1.x returned SONARE_ERROR_INVALID_PARAMETER for both)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable engine graph is refused before inspecting its dimensions"
+
+[[entry]]
+kind = "function"
+old = "sonare_auto_tune"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_note_move"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_note_stretch"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_correct_to_midi"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_render_notes"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_scale_correction_semitones"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_scale_pitch_class_enabled"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_scale_quantize_midi"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable pitch editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_graph_connection_count"
+changed = "with graph support compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable engine graph is refused before inspecting its dimensions"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_graph_node_count"
+changed = "with graph support compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::An unavailable engine graph is refused before inspecting its dimensions"
+
+[[entry]]
+kind = "function"
+old = "sonare_mixing_assistant_suggest"
+changed = "with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable mixing assistant refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_rehydrate_vocal_edits"
+changed = "with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable project vocal editor refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_assist_apply_json"
+changed = "with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable composition assistant refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_assist_preview_json"
+changed = "with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable composition assistant refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_room_morph"
+changed = "with the acoustic simulation compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/api/feature_off_errors_test.cpp::The unavailable acoustic simulation refuses NULL inputs and outputs"

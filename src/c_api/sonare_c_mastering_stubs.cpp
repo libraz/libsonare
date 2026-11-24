@@ -56,7 +56,7 @@ SonareError sonare_mastering_apply_processor_stereo(
 
 const char* sonare_mastering_preset_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out) {
@@ -99,22 +99,22 @@ SonareError sonare_master_audio_stereo(const char* preset, const float* left, co
 
 const char* sonare_mastering_processor_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 const char* sonare_mastering_pair_processor_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 const char* sonare_mastering_pair_analysis_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 const char* sonare_mastering_stereo_analysis_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 SonareError sonare_mastering_processor_catalog(char** out_json) {
@@ -137,7 +137,7 @@ SonareError sonare_capability_catalog_json(char** out_json) {
 
 const char* sonare_mastering_insert_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 const char* sonare_mastering_insert_param_names(const char* insert) {
@@ -257,18 +257,18 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
 
 const char* sonare_mastering_platform_names(void) {
   SONARE_C_API_ENTRY;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering);
 }
 
 int sonare_mastering_platform_from_name(const char* name) {
   SONARE_C_API_ENTRY;
-  (void)name;
+  (void)refuse_not_compiled_in(Feature::kMastering, name);
   return -1;
 }
 
 int sonare_mastering_preset_from_name(const char* name) {
   SONARE_C_API_ENTRY;
-  (void)name;
+  (void)refuse_not_compiled_in(Feature::kMastering, name);
   return -1;
 }
 
@@ -416,7 +416,7 @@ SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
 
 void sonare_eq_clear(SonareEq* eq) {
   SONARE_C_API_ENTRY;
-  (void)eq;
+  (void)refuse_not_compiled_in(Feature::kMastering, eq);
 }
 
 SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
@@ -433,12 +433,13 @@ SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_len
 }
 
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled) {
-  (void)eq;
-  (void)enabled;
+  SONARE_C_API_ENTRY;
+  (void)refuse_not_compiled_in(Feature::kMastering, eq, enabled);
 }
 
 float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
-  (void)eq;
+  SONARE_C_API_ENTRY;
+  (void)refuse_not_compiled_in(Feature::kMastering, eq);
   return 0.0f;
 }
 
@@ -459,7 +460,7 @@ SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
 
 int sonare_eq_latency_samples(const SonareEq* eq) {
   SONARE_C_API_ENTRY;
-  (void)eq;
+  (void)refuse_not_compiled_in(Feature::kMastering, eq);
   return 0;
 }
 
@@ -483,7 +484,7 @@ SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, 
 
 void sonare_eq_clear_sidechain(SonareEq* eq) {
   SONARE_C_API_ENTRY;
-  (void)eq;
+  (void)refuse_not_compiled_in(Feature::kMastering, eq);
 }
 
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
@@ -571,7 +572,7 @@ SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMaster
 
 int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle) {
   SONARE_C_API_ENTRY;
-  (void)handle;
+  (void)refuse_not_compiled_in(Feature::kMastering, handle);
   return 0;
 }
 
@@ -585,8 +586,7 @@ SonareError sonare_streaming_mastering_chain_max_block_size(
 const char* sonare_streaming_mastering_chain_stage_names(
     const SonareStreamingMasteringChain* handle) {
   SONARE_C_API_ENTRY;
-  (void)handle;
-  return "";
+  return refuse_not_compiled_in_handle<const char>(Feature::kMastering, handle);
 }
 
 SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(

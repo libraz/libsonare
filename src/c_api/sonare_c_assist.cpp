@@ -321,7 +321,8 @@ const char* sonare_assist_module_ids(void) {
   ids = std::string(kGeneratorId) + "\n" + kHarmonizerId;
   return ids.c_str();
 #else
-  return nullptr;
+  return sonare_c_detail::refuse_not_compiled_in_handle<const char>(sonare_c_detail::first_missing(
+      sonare_c_detail::Feature::kArrangement, sonare_c_detail::Feature::kAssist));
 #endif
   SONARE_C_CATCH_RETURN("")
 }
@@ -341,7 +342,6 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
   return run_assist(const_cast<SonareProject*>(project), request_json, false, out_json);
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out_json);
   return sonare_c_detail::refuse_not_compiled_in(
       sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
                                      sonare_c_detail::Feature::kAssist),
@@ -359,7 +359,6 @@ SonareError sonare_project_assist_apply_json(SonareProject* project, const char*
   return run_assist(project, request_json, true, out_json);
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out_json);
   return sonare_c_detail::refuse_not_compiled_in(
       sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
                                      sonare_c_detail::Feature::kAssist),

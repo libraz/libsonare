@@ -214,8 +214,6 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
         return copy_audio_result(result, out, out_length);
       });
 #else
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_length);
   return refuse_not_compiled_in(Feature::kVoiceChanger, samples, length, sample_rate, config, out,
                                 out_length);
 #endif
@@ -647,6 +645,7 @@ SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChange
   }
   return process_mono_block(handle, input, carrier, output, num_samples);
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, input, carrier, output,
                                 num_samples);
 #endif
@@ -668,6 +667,7 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
   }
   return process_interleaved_block(handle, input, carrier, output, num_frames, num_channels);
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, input, carrier, output, num_frames,
                                 num_channels);
 #endif
@@ -691,6 +691,7 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
   }
   return process_planar_stereo_block(handle, left, right, carrier, num_frames);
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, left, right, carrier, num_frames);
 #endif
 }
@@ -707,6 +708,7 @@ SonareError sonare_realtime_voice_changer_note_on(SonareRealtimeVoiceChanger* ha
   }
   return handle->changer.note_on(note, velocity) ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, note, velocity);
 #endif
 }
@@ -720,6 +722,7 @@ SonareError sonare_realtime_voice_changer_note_off(SonareRealtimeVoiceChanger* h
   }
   return handle->changer.note_off(note) ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, note);
 #endif
 }
@@ -732,6 +735,7 @@ SonareError sonare_realtime_voice_changer_all_notes_off(SonareRealtimeVoiceChang
   handle->changer.all_notes_off();
   return SONARE_OK;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle);
 #endif
 }
@@ -745,6 +749,7 @@ SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVo
   *out_latency_samples = handle->changer.latency_samples();
   return SONARE_OK;
 #else
+  SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = {};
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, out_latency_samples);
 #endif
@@ -760,6 +765,7 @@ SonareError sonare_realtime_voice_changer_max_block_size(const SonareRealtimeVoi
   *out_max_block_size = handle->max_block_size;
   return SONARE_OK;
 #else
+  SONARE_C_API_ENTRY;
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, out_max_block_size);
 #endif
 }
@@ -773,6 +779,7 @@ SonareError sonare_realtime_voice_changer_non_finite_discard_count(
   *out_count = handle->changer.non_finite_discard_count();
   return SONARE_OK;
 #else
+  SONARE_C_API_ENTRY;
   if (out_count) *out_count = {};
   return refuse_not_compiled_in(Feature::kVoiceChanger, handle, out_count);
 #endif
@@ -801,6 +808,8 @@ const char* sonare_realtime_voice_changer_preset_names(void) {
   // so every binding shares a single source of truth.
   return SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS;
 #else
+  SONARE_C_API_ENTRY;
+  (void)refuse_not_compiled_in(Feature::kVoiceChanger);
   return "";
 #endif
 }
@@ -832,8 +841,8 @@ const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal)
   }
   return nullptr;
 #else
-  (void)ordinal;
-  return nullptr;
+  SONARE_C_API_ENTRY;
+  return refuse_not_compiled_in_handle<const char>(Feature::kVoiceChanger, ordinal);
 #endif
 }
 

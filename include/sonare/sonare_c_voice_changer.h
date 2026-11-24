@@ -14,7 +14,7 @@ extern "C" {
 /// - `sonare_realtime_voice_changer_process_mono`,
 ///   `sonare_realtime_voice_changer_process_interleaved`,
 ///   `sonare_realtime_voice_changer_process_planar_stereo` and
-///   `sonare_realtime_voice_changer_latency_samples` are realtime-safe: they
+///   `sonare_realtime_voice_changer_latency_samples` are realtime-safe when compiled in: they
 ///   neither allocate nor throw. They also do not access or clear the
 ///   thread-local `sonare_last_error_message()` / `sonare_last_diagnostic()`
 ///   channels, because first-touch TLS setup is not realtime-safe: they report
@@ -433,7 +433,8 @@ SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceC
 ///          the returned string on `\n` and drop empty entries. The set of
 ///          preset identifiers is also available at compile time via
 ///          @ref SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS. Never NULL: a build
-///          without voice-changer support returns the empty string.
+///          without voice-changer support returns the empty string and records
+///          SONARE_ERROR_NOT_SUPPORTED.
 const char* sonare_realtime_voice_changer_preset_names(void);
 /// @brief Canonical newline-separated list of voice-changer preset identifiers.
 /// @details Bindings (TS unions, Python enums, etc.) should reference this
@@ -454,7 +455,8 @@ const char* sonare_realtime_voice_changer_preset_names(void);
   "radioVoice"
 /// @brief Returns the canonical id string for a @ref SonareVoiceCharacterPreset enum.
 /// @details Returns NULL for unknown enum values. The pointer is static storage
-///          and must NOT be freed.
+///          and must NOT be freed. A build without voice-changer support returns NULL and
+///          records SONARE_ERROR_NOT_SUPPORTED.
 const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal);
 /// @brief Returns the canonical JSON document for the named preset.
 /// @note The returned string is heap-allocated and MUST be released with

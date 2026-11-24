@@ -56,7 +56,7 @@ extern "C" {
 /// @brief Returns the built-in module ids, separated by '\n'.
 /// @details The pointer is thread-local storage rebuilt on every call: copy it
 ///          before the next call on the same thread. NULL when the library was
-///          built without the assist seam.
+///          built without the assist seam, with SONARE_ERROR_NOT_SUPPORTED recorded.
 const char* sonare_assist_module_ids(void);
 
 /// @brief Runs the built-in assist modules over @p project and reports what they

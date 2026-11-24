@@ -54,6 +54,7 @@ TEST_CASE("the vector-output pitch entries refuse a NULL output by name",
   CHECK(last_message() == "out must not be NULL");
 }
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
 TEST_CASE("the note region entries refuse each position by its parameter name",
           "[c_api][engine_refusal]") {
   const std::vector<float> samples = make_samples();
@@ -127,6 +128,7 @@ TEST_CASE("a refused sample position renders its domain in the unit its caller g
   CHECK(std::string(text) == "offset_sec must be greater than onset_sec");
   sonare_free_string(text);
 }
+#endif
 
 TEST_CASE("the percussive entries refuse their arguments by name", "[c_api][engine_refusal]") {
   const std::vector<float> samples = make_samples();

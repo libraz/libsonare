@@ -656,20 +656,32 @@ vocal::VocalSessionCreateOptions import_options(const SonareVocalCreateOptions* 
 #elif defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
-#define VOCAL_SUPPORTED_BODY(...)      \
-  throw sonare::SonareException(       \
-      sonare::ErrorCode::NotSupported, \
-      sonare_c_detail::not_compiled_in_message(sonare_c_detail::Feature::kPitchEditor))
-#define VOCAL_ACTION(...) return invoke([](const char*&) { VOCAL_SUPPORTED_BODY(__VA_ARGS__); })
+namespace {
+SonareError refuse_vocal_edit_not_compiled_in() noexcept {
+  initialize(&last_detail);
+  last_detail.reason = SONARE_VOCAL_REASON_UNSUPPORTED;
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kPitchEditor);
+}
+template <typename T>
+SonareError refuse_vocal_edit_result_not_compiled_in(T* out) noexcept {
+  if (result_header_valid(out)) initialize(out);
+  return refuse_vocal_edit_not_compiled_in();
+}
+}  // namespace
+#define VOCAL_ACTION(...) return refuse_vocal_edit_not_compiled_in()
 #endif
 // A result struct is caller-versioned, so it is cleared only when its header is valid; each body
 // refuses an invalid header after its earlier arguments have been checked.
+#if defined(SONARE_WITH_PITCH_EDITOR)
 #define VOCAL_OUTPUT_ACTION(out, ...)                                 \
   return invoke([&]([[maybe_unused]] const char*& expected_subject) { \
     const bool result_header_ok = result_header_valid(out);           \
     if (result_header_ok) initialize(out);                            \
     VOCAL_SUPPORTED_BODY(__VA_ARGS__);                                \
   })
+#else
+#define VOCAL_OUTPUT_ACTION(out, ...) return refuse_vocal_edit_result_not_compiled_in(out)
+#endif
 
 SonareError sonare_vocal_session_create(const float* samples, int64_t frames, int channels,
                                         int sample_rate, const SonareVocalCreateOptions* options,

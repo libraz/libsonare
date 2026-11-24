@@ -608,10 +608,11 @@ SonareError sonare_mixing_assistant_suggest(
 /// the mastering *_names getters, whose storage is built once and stays valid
 /// for the thread's lifetime. Copy the string if you need to hold it across
 /// another call. Do NOT cache it across threads or free it. Never NULL: a build
-/// without the assistant returns the empty string.
+/// without the assistant returns the empty string and records SONARE_ERROR_NOT_SUPPORTED.
 const char* sonare_mixing_assistant_source_class_names(void);
 
 /// Resolves a source-class identifier to its enum value, or -1 when unknown.
+/// A build without the assistant returns -1 and records SONARE_ERROR_NOT_SUPPORTED.
 int sonare_mixing_assistant_source_class_from_name(const char* name);
 
 #ifdef __cplusplus

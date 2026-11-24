@@ -170,10 +170,9 @@ SonareError sonare_mixing_assistant_suggest(
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(json_out);
   return refuse_not_compiled_in(Feature::kMixingAssistant, input_left, input_right, track_ids,
                                 track_names, track_lengths, track_sample_rates, input_count,
-                                sample_rate, params, param_count);
+                                sample_rate, params, param_count, json_out);
 #endif
 }
 
@@ -187,6 +186,8 @@ const char* sonare_mixing_assistant_source_class_names(void) {
   static thread_local std::string storage;
   return join_names(assistant::source_class_names(), storage);
 #else
+      (void)
+  refuse_not_compiled_in(Feature::kMixingAssistant);
   return "";
 #endif
   SONARE_C_CATCH_RETURN("")
@@ -207,7 +208,8 @@ int sonare_mixing_assistant_source_class_from_name(const char* name) {
   }
   return -1;
 #else
-  static_cast<void>(name);
+      (void)
+  refuse_not_compiled_in(Feature::kMixingAssistant, name);
   return -1;
 #endif
   SONARE_C_CATCH_RETURN(-1)

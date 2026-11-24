@@ -708,6 +708,8 @@ TEST_CASE("vocal edit dependencies refuse a compiled-out arrangement before thei
   CHECK(sonare_project_get_vocal_edit_dependencies(nullptr, nullptr) == SONARE_ERROR_NOT_SUPPORTED);
   SonareProjectVocalEditDependenciesResult result;
   sonare_project_vocal_edit_dependencies_result_init(&result);
+  SonareProjectVocalEditDependency dependency{};
+  result.dependencies = &dependency;
   result.dependency_count = 99;
   REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &result) ==
           SONARE_ERROR_NOT_SUPPORTED);
