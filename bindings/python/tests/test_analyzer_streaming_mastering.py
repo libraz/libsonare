@@ -450,17 +450,20 @@ def test_master_audio_accepts_annotation_keys() -> None:
 
 def test_streaming_set_parameter_refuses_an_undeclared_parameter() -> None:
     from libsonare import ErrorCode, StreamingMasteringChain
+    from libsonare._runtime import _get_lib
 
-    with (
-        StreamingMasteringChain(
-            {"eq": {"tilt": {"enabled": True}}}, sample_rate=48000, num_channels=1
-        ) as chain,
-        raises_coded(
+    with StreamingMasteringChain(
+        {"eq": {"tilt": {"enabled": True}}}, sample_rate=48000, num_channels=1
+    ) as chain:
+        with raises_coded(
             ErrorCode.INVALID_PARAMETER,
             match=re.escape(chain_unknown_key_text("unknown key eq.tilt.undeclared")) + "$",
-        ),
-    ):
-        chain.set_parameter("eq.tilt.undeclared", 2.0)
+        ):
+            chain.set_parameter("eq.tilt.undeclared", 2.0)
+        lib = _get_lib()
+        assert lib.sonare_last_refusal_entry() == b"streaming_mastering_chain_set_parameter"
+        assert lib.sonare_last_refusal_subject_count() == 1
+        assert lib.sonare_last_refusal_subject(0) == b"key"
 
 
 def test_streaming_mastering_chain_refuses_a_renamed_key_as_any_other_unknown_key() -> None:

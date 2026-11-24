@@ -24,7 +24,7 @@ export function resolveProcessorParams(
       continue;
     }
     const number = withRespelled(
-      { [key]: { name: `params.${key}`, scale: 1 } },
+      { name: { name: `params.${key}`, scale: 1 } },
       () => addon.masteringEnumValue(processor, key, value) as number | null,
     );
     if (number === null) {

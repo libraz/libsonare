@@ -363,6 +363,38 @@ def test_mastering_pair_accepts_differing_reference_length() -> None:
     assert pair.reference_lufs is not None
 
 
+@pytest.mark.parametrize(
+    ("entry", "operation", "expected_key", "planar"),
+    [
+        ("mastering_apply_pair_processor", "match.abCrossfade", "mix", False),
+        ("mastering_apply_pair_processor_stereo", "match.abCrossfade", "mix", True),
+        ("mastering_analyze_pair", "match.estimateReferenceDelaySamples", "maxAbsDelay", False),
+        ("mastering_analyze_pair", "match.estimateReferenceDelaySamples", "maxAbsDelay", True),
+        (
+            "mastering_analyze_stereo",
+            "stereo.monoCompatCheckLogBands",
+            "bandsPerOctave, highHz, lowHz",
+            False,
+        ),
+    ],
+)
+def test_named_mastering_refuses_an_undeclared_parameter_under_params(
+    entry: str, operation: str, expected_key: str, planar: bool
+) -> None:
+    import libsonare
+
+    samples = [0.0] * 512
+    if entry == "mastering_apply_pair_processor_stereo":
+        audio = (samples, samples, samples, samples)
+    elif planar:
+        audio = ([samples, samples], [samples, samples])
+    else:
+        audio = (samples, samples)
+    with pytest.raises(libsonare.SonareValueError) as exc:
+        getattr(libsonare, entry)(operation, *audio, sample_rate=48000, params={"undeclared": 0})
+    assert str(exc.value) == (f"{entry}: unknown key params.undeclared (expected {expected_key})")
+
+
 def test_mastering_pair_and_stereo_analysis() -> None:
     """Pair and stereo mastering APIs return processor output and analysis records."""
     import libsonare

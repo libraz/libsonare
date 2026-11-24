@@ -25,11 +25,10 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
-from ._narrowing import _narrow_double, _resolve_zero_default
+from ._narrowing import _narrow_double, _resolve_zero_default, _Respelling
 from ._runtime import (
     _call_string,
     _check,
-    _coded_error,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -546,13 +545,7 @@ def _enum_value(processor: str | None, key: str, name: str) -> float:
         ctypes.byref(is_enum),
         ctypes.byref(value),
     )
-    if rc == int(ErrorCode.INVALID_PARAMETER):
-        # An unknown name is an out-of-domain argument: the core's text, as a SonareValueError.
-        detail = lib.sonare_last_error_message()
-        if not detail:
-            raise _refuse(f"{key} must name a declared value")
-        raise _coded_error(rc, detail.decode("utf-8"))
-    _check(rc)
+    _check(rc, respelled={"name": _Respelling(key)})
     return value.value if is_enum.value else float(name)
 
 

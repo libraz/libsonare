@@ -25544,6 +25544,14 @@ test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEquali
 
 [[entry]]
 kind = "method"
+old = "StreamingMasteringChain.setParameter"
+changed = "An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/master-audio-flat-overrides.test.ts::refuses an undeclared streaming parameter as an unknown key"
+
+[[entry]]
+kind = "method"
 old = "StreamingMasteringChain.latencySamples"
 changed = "readonly getter latencySamples: number"
 domain = "mastering"
@@ -25565,6 +25573,15 @@ changed = "an enabled stage with an unbounded tail (tape saturation with a bias,
 domain = "mastering"
 rule = "individual"
 test = "bindings/wasm/tests/streaming-processors.test.ts::refuses to flush an unbounded tail"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.setParameter"
+changed = "An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter."
+domain = "mastering"
+rule = "error-class-by-cause"
+entry = "./worklet"
+test = "bindings/wasm/tests/master-audio-flat-overrides.test.ts::refuses an undeclared streaming parameter as an unknown key"
 
 [[entry]]
 kind = "method"
@@ -25841,7 +25858,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::request and positio
 kind = "function"
 old = "masteringPairAnalyze"
 to = "masteringAnalyzePair"
-changed = "renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object)"
+changed = "renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
@@ -25850,7 +25867,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo ana
 kind = "function"
 old = "masteringPairProcess"
 to = "masteringApplyPairProcessor"
-changed = "renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs)"
+changed = "renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
@@ -25859,7 +25876,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringPairProcessStereo"
 to = "masteringApplyPairProcessorStereo"
-changed = "renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only)"
+changed = "renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
@@ -25886,7 +25903,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringStereoAnalyze"
 to = "masteringAnalyzeStereo"
-changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text"
+changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/wasm/tests/mastering-pair-stereo-analysis.test.ts::names stereo log-band params from the caller and keeps their defaults"

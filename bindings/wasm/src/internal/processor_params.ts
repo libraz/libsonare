@@ -23,7 +23,7 @@ export function resolveProcessorParams(
     if (typeof value !== 'string') {
       continue;
     }
-    const number = withRespelled({ [key]: { name: `params.${key}`, scale: 1 } }, () =>
+    const number = withRespelled({ name: { name: `params.${key}`, scale: 1 } }, () =>
       getSonareModule().masteringEnumValue(processor, key, value),
     );
     if (number === null) {

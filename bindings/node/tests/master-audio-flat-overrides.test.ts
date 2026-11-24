@@ -13,6 +13,7 @@ import {
   masteringPresetParams,
   StreamingMasteringChain,
 } from '../src/index.js';
+import { refusalOf } from '../src/internal/entry.js';
 import { addon } from '../src/native.js';
 import { chainUnknownKeyText } from './_helpers.js';
 
@@ -154,15 +155,39 @@ describe('masterAudio overrides in nested, flat and mixed spelling', () => {
       eq: { tilt: { enabled: true } },
     });
     try {
-      expect(() => chain.setParameter('eq.tilt.undeclared', 2)).toThrow(
-        new TypeError(
-          chainUnknownKeyText(
-            'StreamingMasteringChain.setParameter: unknown key eq.tilt.undeclared',
-          ),
-        ),
-      );
+      const key = 'eq.tilt.undeclared';
+      try {
+        chain.setParameter(key, 2);
+        expect.unreachable('expected an unknown-key refusal');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TypeError);
+        expect((error as Error).message).toBe(
+          chainUnknownKeyText(`StreamingMasteringChain.setParameter: unknown key ${key}`),
+        );
+        expect(refusalOf(error)).toMatchObject({
+          form: 'unknownKey',
+          subjects: ['key'],
+          predicate: key,
+        });
+      }
     } finally {
       chain.destroy();
+    }
+  });
+
+  it('records the argument name for a retired scalar enum key', () => {
+    const key = 'dynamics.multibandComp.lowThresholdDb';
+    try {
+      addon.masteringEnumValue('', key, 'nope');
+      expect.unreachable('expected an unknown-key refusal');
+    } catch (error) {
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as Error).message).toContain(chainUnknownKeyText(`unknown key ${key}`));
+      expect(refusalOf(error)).toMatchObject({
+        form: 'unknownKey',
+        subjects: ['key'],
+        predicate: key,
+      });
     }
   });
 

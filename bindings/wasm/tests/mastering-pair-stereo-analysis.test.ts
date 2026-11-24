@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masteringAnalyzePair, masteringAnalyzeStereo } from '../dist/index.js';
+import {
+  init,
+  masteringAnalyzePair,
+  masteringAnalyzeStereo,
+  masteringApplyPairProcessor,
+  masteringApplyPairProcessorStereo,
+} from '../dist/index.js';
 
 beforeAll(async () => {
   await init();
@@ -251,5 +257,88 @@ describe('masteringAnalyzePair planar stereo analysis', () => {
         }),
       'params.highHz',
     );
+  });
+});
+
+describe('named mastering parameter refusals', () => {
+  const samples = new Float32Array(512);
+  const mixParams = { undeclared: 0, mix: 0.5 };
+  const delayParams = { undeclared: 0, maxAbsDelay: 32 };
+  const stereoParams = { undeclared: 0, bandsPerOctave: 3 };
+  const pair = { source: samples, reference: samples, sampleRate: SAMPLE_RATE };
+  const planar = {
+    sourceLeft: samples,
+    sourceRight: samples,
+    referenceLeft: samples,
+    referenceRight: samples,
+    sampleRate: SAMPLE_RATE,
+  };
+  const analysis = 'match.estimateReferenceDelaySamples';
+
+  it.each([
+    [
+      'masteringApplyPairProcessor',
+      'mix',
+      () =>
+        masteringApplyPairProcessor({
+          ...pair,
+          processor: 'match.abCrossfade',
+          params: mixParams,
+        }),
+    ],
+    [
+      'masteringApplyPairProcessorStereo',
+      'mix',
+      () =>
+        masteringApplyPairProcessorStereo({
+          ...planar,
+          processor: 'match.abCrossfade',
+          params: mixParams,
+        }),
+    ],
+    [
+      'masteringAnalyzePair',
+      'maxAbsDelay',
+      () =>
+        masteringAnalyzePair({
+          ...pair,
+          analysis,
+          params: delayParams,
+        }),
+    ],
+    [
+      'masteringAnalyzePair',
+      'maxAbsDelay',
+      () =>
+        masteringAnalyzePair({
+          ...pair,
+          analysis,
+          source: [samples, samples],
+          reference: [samples, samples],
+          params: delayParams,
+        }),
+    ],
+    [
+      'masteringAnalyzeStereo',
+      'bandsPerOctave, highHz, lowHz',
+      () =>
+        masteringAnalyzeStereo({
+          analysis: 'stereo.monoCompatCheckLogBands',
+          left: samples,
+          right: samples,
+          sampleRate: SAMPLE_RATE,
+          params: stereoParams,
+        }),
+    ],
+  ] as const)('%s names the undeclared field under params', (entry, expected, call) => {
+    try {
+      call();
+      expect.unreachable('expected an unknown-key refusal');
+    } catch (error) {
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as Error).message).toBe(
+        `${entry}: unknown key params.undeclared (expected ${expected})`,
+      );
+    }
   });
 });

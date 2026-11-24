@@ -82,7 +82,8 @@ val js_mastering_insert_timing(std::string name, std::string json_params,
 // is not an enum (the facade refuses that as a wrong type). `processor` is empty for a flat chain
 // key. Throws for an unknown choice; see sonare_mastering_enum_value.
 val js_mastering_enum_value(std::string processor, std::string key, std::string choice) {
-  const std::optional<double> value = mastering::api::mastering_enum_value(processor, key, choice);
+  const std::optional<double> value =
+      mastering::api::mastering_enum_argument_value(processor, key, choice);
   return value.has_value() ? val(*value) : val::null();
 }
 

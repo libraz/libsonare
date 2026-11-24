@@ -6586,6 +6586,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MixStereoRequest.width` | removed: Set width on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array. |
 | `SuggestMixSceneRequest.options` | removed: Use MixingAssistantSuggestRequest and put the option fields (targetTrackLufs, suggestionStrength, ...) directly on it. |
 
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingMasteringChain.setParameter` | An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+
 #### Cheap scalar state reads are getters and properties
 
 | 1.x | 2.0.0 |
@@ -6617,12 +6623,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringProcessRequest.processorName` | `MasteringApplyProcessorRequest.processor`: processorName -> processor (SoloProcessor (generic P)) |
 | `MasteringProcessStereoRequest.processorName` | `MasteringApplyProcessorStereoRequest.processor`: processorName -> processor (SoloProcessor (generic P)) |
 | `MasteringStereoAnalyzeRequest.analysisName` | `MasteringAnalyzeStereoRequest.analysis`: analysisName -> analysis (StereoAnalysis (generic A)) |
-| `masteringPairAnalyze` | `masteringAnalyzePair`: renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) |
-| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) |
-| `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) |
+| `masteringPairAnalyze` | `masteringAnalyzePair`: renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
 | `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
-| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text |
+| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
 | `mixSourceClassNames` | `mixingAssistantSourceClassNames`: renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[] |
@@ -11640,6 +11646,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixStereoRequest.width` | removed: Set width on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array. |
 | `SuggestMixSceneRequest.options` | removed: Use MixingAssistantSuggestRequest and put the option fields (targetTrackLufs, suggestionStrength, ...) directly on it. |
 
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingMasteringChain.setParameter` (`./worklet`) | An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `StreamingMasteringChain.setParameter` | An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+
 #### Cheap scalar state reads are getters and properties
 
 | 1.x | 2.0.0 |
@@ -11679,12 +11692,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringProcessRequest.processorName` | `MasteringApplyProcessorRequest.processor`: processorName -> processor (SoloProcessor (generic P)) |
 | `MasteringProcessStereoRequest.processorName` | `MasteringApplyProcessorStereoRequest.processor`: processorName -> processor (SoloProcessor (generic P)) |
 | `MasteringStereoAnalyzeRequest.analysisName` | `MasteringAnalyzeStereoRequest.analysis`: analysisName -> analysis (StereoAnalysis (generic A)) |
-| `masteringPairAnalyze` | `masteringAnalyzePair`: renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) |
-| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) |
-| `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) |
+| `masteringPairAnalyze` | `masteringAnalyzePair`: renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
 | `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
-| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text |
+| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
 | `mixSourceClassNames` | `mixingAssistantSourceClassNames`: renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[] |
