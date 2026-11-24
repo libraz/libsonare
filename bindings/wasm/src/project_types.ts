@@ -471,6 +471,10 @@ export type ProjectAutomationTargetKind =
   | 'trackWidth'
   | 'trackInsertParam';
 
+/**
+ * Descriptor for {@link Project.addAutomationLane} /
+ * {@link Project.editAutomationLane}.
+ */
 export interface ProjectAutomationLanePoints {
   /** Breakpoints. Omit to clear all breakpoints on edit. */
   points?: ReadonlyArray<ProjectAutomationPoint>;
