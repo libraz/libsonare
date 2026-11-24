@@ -725,6 +725,21 @@ describe('resample refusals come from the core', () => {
     expectRefusal(() => resample(samples, item.src_sr, item.target_sr), kind, text);
     expectRefusal(() => addon.resample(samples, item.src_sr, item.target_sr), kind, text);
   });
+
+  it('converts an empty buffer to an empty one', () => {
+    const out = resample(new Float32Array(0), 48000, 44100);
+    expect(out).toBeInstanceOf(Float32Array);
+    expect(out.length).toBe(0);
+  });
+
+  it.each(refused.filter((item) => item.nan_at === undefined))(
+    'refuses $id on an empty buffer',
+    (item) => {
+      const kind = errorClassFor[item.cause as Cause];
+      const text = publicText(item.message as string);
+      expectRefusal(() => resample(new Float32Array(0), item.src_sr, item.target_sr), kind, text);
+    },
+  );
 });
 
 describe('resample takes no validate option', () => {

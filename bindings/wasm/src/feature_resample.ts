@@ -53,8 +53,9 @@ export function resample(...args: unknown[]): Float32Array {
     } else {
       request = requestOnly<ResampleRequest>('resample', args);
     }
-    // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
-    assertAudioSamples(request.samples, { scanFinite: false });
+    // Type only: an empty buffer converts to an empty one, and rate range and non-finite
+    // samples are the core's to refuse.
+    assertAudioSamples(request.samples, { scanFinite: false }, 'samples', true);
     assertInt32(request.sampleRate, 'sampleRate');
     assertInt32(request.targetSampleRate, 'targetSampleRate');
     const { samples, sampleRate, targetSampleRate } = request;

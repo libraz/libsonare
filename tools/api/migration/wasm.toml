@@ -1568,6 +1568,23 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by sour
 
 [[entry]]
 kind = "function"
+old = "resample"
+changed = "an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/core-validation-refusals.test.ts::converts an empty buffer to an empty one"
+
+[[entry]]
+kind = "function"
+old = "resample"
+changed = "an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer')"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/core-validation-refusals.test.ts::converts an empty buffer to an empty one"
+
+[[entry]]
+kind = "function"
 old = "rmsEnergy"
 changed = "one positional form (rmsEnergy(samples, sampleRate, options?: Omit<RmsEnergyRequest,'samples'|'sampleRate'>)); request form takes RmsEnergyRequest"
 domain = "analysis"

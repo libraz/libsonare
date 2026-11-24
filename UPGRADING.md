@@ -10202,6 +10202,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
 | `noteToHz` (`./analysis`) | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
 | `noteToHz` | Invalid note names and out-of-domain frequencies throw RangeError; the 1.x SonareError InvalidParameter code is no longer available. |
+| `resample` (`./analysis`) | an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
+| `resample` | an empty samples buffer returns an empty Float32Array, as on the other surfaces; both rates are still refused out of domain (1.x: refused as 'audio input must be a non-empty buffer') |
 | `samplesToFrames(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `samplesToFrames(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `streamAnalyzerConfigDefaults` | removed: Omit a StreamConfig field; the analyzer reads an absent field as the library default. |

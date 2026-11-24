@@ -314,6 +314,17 @@ def test_resample_accepts_empty_samples_with_valid_rates() -> None:
     assert out.shape == (0,)
 
 
+@pytest.mark.parametrize(
+    "case",
+    [case for case in _RESAMPLE["refused"] if "nan_at" not in case],
+    ids=lambda case: case["id"],
+)
+def test_resample_refuses_an_out_of_domain_rate_on_empty_samples(case: dict) -> None:
+    error_class = _ERROR_CLASS[case["cause"]]
+    with pytest.raises(error_class, match=re.escape(_without_c_entry(case["message"]))):
+        libsonare.resample(np.empty(0, dtype=np.float32), case["src_sr"], case["target_sr"])
+
+
 @pytest.mark.parametrize("case", _RESAMPLE["refused"], ids=lambda case: case["id"])
 def test_resample_refuses(case: dict) -> None:
     error_class = _ERROR_CLASS[case["cause"]]
