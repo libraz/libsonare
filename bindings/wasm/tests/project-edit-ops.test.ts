@@ -237,8 +237,10 @@ describe('Sonare WASM Project edit ops', () => {
       project.clearHistory();
       expect(() => project.undo()).toThrow();
 
-      // The depth is a size_t: 0 is clamped to 1 as the C ABI does, a fraction is refused.
-      expect(() => project.setMaxUndoDepth(0)).not.toThrow();
+      // The library refuses a depth outside [1, 500000000]; the binding refuses a fraction.
+      expect(() => project.setMaxUndoDepth(0)).toThrow(
+        new RangeError('Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'),
+      );
       expect(() => project.setMaxUndoDepth(1.5)).toThrow(
         new RangeError(
           'Project.setMaxUndoDepth: depth must be a finite non-negative integer no greater than ' +

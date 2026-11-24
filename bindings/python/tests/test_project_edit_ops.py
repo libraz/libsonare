@@ -163,6 +163,15 @@ def test_set_max_undo_depth_limits_history() -> None:
         p.set_track_gain(track, gain)
     # Retain only the two most recent edits; older history is evicted.
     p.set_max_undo_depth(2)
+    for invalid in (0, 500_000_001):
+        with pytest.raises(SonareValueError) as refused:
+            p.set_max_undo_depth(invalid)
+        assert refused.value.code == ErrorCode.INVALID_PARAMETER
+        assert str(refused.value).endswith("depth must be an integer in [1, 500000000]")
+
+    # New edits show that neither refusal changed the previous two-entry cap.
+    for gain in (0.6, 0.7, 0.8):
+        p.set_track_gain(track, gain)
     p.undo()
     p.undo()
     with pytest.raises(SonareError):

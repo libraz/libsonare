@@ -1787,8 +1787,10 @@ export class Project {
   }
 
   /**
-   * Cap the undo history to `depth` most-recent edits (clamped to >= 1); older
-   * entries beyond the cap are discarded immediately.
+   * Cap the undo history to `depth` most-recent edits; older entries beyond the
+   * cap are discarded immediately.
+   *
+   * @throws {RangeError} for a `depth` outside [1, 500000000] or not an integer
    */
   setMaxUndoDepth(depth: number): void {
     this.native.setMaxUndoDepth(depth);

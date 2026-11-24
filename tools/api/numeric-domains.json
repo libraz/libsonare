@@ -6414,6 +6414,17 @@
       "sentinel": null
     },
     {
+      "entry": "project_set_max_undo_depth",
+      "param": "depth",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 500000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_set_midi_events",
       "param": "count",
       "kind": "integer",

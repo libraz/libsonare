@@ -902,7 +902,11 @@ export class Project {
     this.native.clearHistory();
   }
 
-  /** Cap the undo history depth (clamped to >= 1); evicts oldest entries beyond the cap. */
+  /**
+   * Cap the undo history depth; evicts oldest entries beyond the cap.
+   *
+   * @throws {RangeError} for a `depth` outside [1, 500000000] or not an integer
+   */
   setMaxUndoDepth(depth: number): void {
     this.native.setMaxUndoDepth(depth);
   }

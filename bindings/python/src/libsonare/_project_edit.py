@@ -1300,7 +1300,10 @@ class _ProjectEditMixin:
 
     @_entry("Project.set_max_undo_depth")
     def set_max_undo_depth(self, depth: int) -> None:
-        """Clamp the undo history to ``depth`` entries (minimum 1), evicting the oldest."""
+        """Set undo depth in [1, 500000000] and evict the oldest excess entries.
+
+        A depth outside this interval raises SonareValueError.
+        """
         _check(
             _get_lib().sonare_project_set_max_undo_depth(
                 self._require_handle(),

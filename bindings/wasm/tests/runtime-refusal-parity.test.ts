@@ -51,10 +51,17 @@ describe('runtime refusal parity (WASM)', () => {
     }
   });
 
-  it('takes an undo depth of 0 and refuses a fractional one with the size_t text', () => {
+  it('refuses an undo depth outside [1, 500000000] and a fractional one with the size_t text', () => {
     const project = new Project();
     try {
-      expect(() => project.setMaxUndoDepth(0)).not.toThrow();
+      for (const depth of [0, 500_000_001]) {
+        expectRefusal(
+          () => project.setMaxUndoDepth(depth),
+          RangeError,
+          exactly('Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'),
+        );
+      }
+      expect(() => project.setMaxUndoDepth(500_000_000)).not.toThrow();
       expectRefusal(
         () => project.setMaxUndoDepth(1.5),
         RangeError,
