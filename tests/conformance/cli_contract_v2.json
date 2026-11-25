@@ -20406,7 +20406,7 @@
                 },
                 "reverb": {
                   "keys": {
-                    "late_decay_ratio_db": "number"
+                    "late_decay_ratio_db": "measured"
                   }
                 }
               }
@@ -20471,7 +20471,7 @@
                 },
                 "reverb": {
                   "keys": {
-                    "late_decay_ratio_db": "number"
+                    "late_decay_ratio_db": "measured"
                   }
                 }
               }
@@ -20535,7 +20535,7 @@
                 },
                 "reverb": {
                   "keys": {
-                    "late_decay_ratio_db": "number"
+                    "late_decay_ratio_db": "measured"
                   }
                 }
               }
@@ -22483,9 +22483,9 @@
                 "duration_sec": "number",
                 "integrated_lufs": "measured:-inf",
                 "loudness_range_lu": "measured",
-                "spectral_centroid_hz": "number",
-                "spectral_flatness": "number",
-                "sustain_ratio": "number",
+                "spectral_centroid_hz": "measured",
+                "spectral_flatness": "measured",
+                "sustain_ratio": "measured",
                 "true_peak_dbtp": "measured:-inf"
               }
             },
