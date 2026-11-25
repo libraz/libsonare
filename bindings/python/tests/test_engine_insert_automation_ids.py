@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from libsonare import RealtimeEngine, SonareError
+from libsonare import RealtimeEngine, SonareError, SonareValueError, SynthPatch
+from libsonare._runtime import _get_lib
 
 from ._helpers import scene_bus, scene_strip
 
@@ -121,3 +122,140 @@ def test_strip_change_overflowing_the_id_table_is_refused() -> None:
             engine.set_strip("master", scene_strip(gain))
         assert _alive(engine, before)
         engine.set_strip("master", scene_strip(tilt))
+
+
+@pytest.mark.parametrize(
+    ("name", "method", "args", "c_entry", "subjects", "public_entry", "message"),
+    [
+        (
+            "track insert",
+            "resolve_strip_insert_automation_id",
+            (10, 0, "noSuchParam"),
+            "engine_resolve_track_insert_automation_id",
+            (b"param_name",),
+            "RealtimeEngine.resolve_strip_insert_automation_id",
+            "param_name must be the name of a parameter of the insert "
+            "that can be set while running",
+        ),
+        (
+            "master insert",
+            "resolve_strip_insert_automation_id",
+            ("master", 0, "noSuchParam"),
+            "engine_resolve_master_insert_automation_id",
+            (b"param_name",),
+            "RealtimeEngine.resolve_strip_insert_automation_id",
+            "param_name must be the name of a parameter of the insert "
+            "that can be set while running",
+        ),
+        (
+            "bus insert",
+            "resolve_bus_insert_automation_id",
+            (1, 0, "noSuchParam"),
+            "engine_resolve_bus_insert_automation_id",
+            (b"param_name",),
+            "RealtimeEngine.resolve_bus_insert_automation_id",
+            "param_name must be the name of a parameter of the insert "
+            "that can be set while running",
+        ),
+        (
+            "track lane kind",
+            "resolve_strip_automation_id",
+            (10, "noSuchParam"),
+            "engine_resolve_track_lane_automation_id",
+            (b"param_name",),
+            "RealtimeEngine.resolve_strip_automation_id",
+            "kind must be the name of a track strip parameter: faderDb or pan",
+        ),
+        (
+            "master strip kind",
+            "resolve_strip_automation_id",
+            ("master", "noSuchParam"),
+            "engine_resolve_master_automation_id",
+            (b"param_name",),
+            "RealtimeEngine.resolve_strip_automation_id",
+            "kind must be the name of a master strip parameter: faderDb, pan or width",
+        ),
+        (
+            "bus strip parameter",
+            "resolve_bus_automation_id",
+            (1, "noSuchParam"),
+            "engine_resolve_bus_automation_id",
+            (b"param_name",),
+            "RealtimeEngine.resolve_bus_automation_id",
+            "param_name must be the name of a bus strip parameter: faderDb",
+        ),
+        (
+            "instrument parameter",
+            "resolve_instrument_automation_id",
+            (5, "noSuchParam"),
+            "engine_resolve_instrument_automation_id",
+            (b"param_name", b"destination_id"),
+            "RealtimeEngine.resolve_instrument_automation_id",
+            "param_name must be the name of a parameter of the instrument bound to destination_id",
+        ),
+    ],
+)
+def test_unknown_automation_names_keep_the_c_refusal(
+    name: str,
+    method: str,
+    args: tuple[object, ...],
+    c_entry: str,
+    subjects: tuple[bytes, ...],
+    public_entry: str,
+    message: str,
+) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
+        engine.set_track_lanes([{"track_id": 10}])
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        engine.set_strip(10, scene_strip(_scene("strips", "track-10", ["utility.gain"])))
+        engine.set_strip("master", scene_strip(_scene("strips", "master", ["utility.gain"])))
+        engine.set_bus_strip(1, scene_bus(_scene("buses", "1", ["utility.gain"])))
+        engine.set_synth_instrument(SynthPatch(), destination_id=5)
+
+        with pytest.raises(SonareValueError) as caught:
+            getattr(engine, method)(*args)
+
+        assert str(caught.value) == f"{public_entry}: {message}", name
+        assert caught.value.entry == public_entry
+        lib = _get_lib()
+        raw_entry = lib.sonare_last_refusal_entry()
+        assert raw_entry == c_entry.encode("utf-8")
+        assert lib.sonare_last_refusal_subject_count() == len(subjects)
+        assert (
+            tuple(lib.sonare_last_refusal_subject(index) for index in range(len(subjects)))
+            == subjects
+        )
+
+
+def test_instrument_unknown_destination_refusal_names_the_destination_subject() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
+        with pytest.raises(SonareValueError) as caught:
+            engine.resolve_instrument_automation_id(99, "gain")
+
+        public_entry = "RealtimeEngine.resolve_instrument_automation_id"
+        assert str(caught.value) == (
+            f"{public_entry}: destination_id must be the id of a destination "
+            "with a MIDI instrument in this engine"
+        )
+        assert caught.value.entry == public_entry
+        lib = _get_lib()
+        assert lib.sonare_last_refusal_entry() == b"engine_resolve_instrument_automation_id"
+        assert lib.sonare_last_refusal_subject_count() == 1
+        assert lib.sonare_last_refusal_subject(0) == b"destination_id"
+
+
+def test_track_width_refusal_uses_the_track_lane_domain() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
+        engine.set_track_lanes([{"track_id": 10}])
+        with pytest.raises(SonareValueError) as caught:
+            engine.resolve_strip_automation_id(10, "width")
+
+        public_entry = "RealtimeEngine.resolve_strip_automation_id"
+        assert str(caught.value) == (
+            f"{public_entry}: kind must be the name of a track strip parameter: faderDb or pan"
+        )
+        assert caught.value.entry == public_entry
+        lib = _get_lib()
+        assert lib.sonare_last_refusal_entry() == b"engine_resolve_track_lane_automation_id"
+        assert lib.sonare_last_refusal_subject_count() == 1
+        assert lib.sonare_last_refusal_subject(0) == b"param_name"

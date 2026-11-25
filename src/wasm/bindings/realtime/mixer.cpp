@@ -25,21 +25,11 @@ namespace {
 }  // namespace
 
 #if defined(SONARE_WITH_MIXING)
+#include "c_api/engine_automation_resolver.h"
 #include "c_api/engine_mixer_refusal.h"
 #include "mixing/channel_strip_eq.h"
 
 namespace {
-
-/// Runs @p body and respells a parameter refusal it throws under the wasm caller's names for C
-/// entry @p entry; every other exception passes through unchanged.
-template <typename Body>
-decltype(auto) withCEntryRefusal(const char* entry, Body&& body) {
-  try {
-    return body();
-  } catch (const sonare::SonareParameterRefusal& refusal) {
-    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry), entry, std::nullopt);
-  }
-}
 
 /// Whether @p track_id names a lane of @p engine's mixer.
 bool trackHasLane(sonare::engine::RealtimeEngine& engine, uint32_t track_id) {
@@ -837,11 +827,16 @@ void RealtimeEngineWasm::restoreBusStripInsertParamByName(const val& bus_id_val,
 double RealtimeEngineWasm::resolveTrackInsertAutomationId(const val& track_id_val,
                                                           const val& insert_index_val,
                                                           const std::string& param_name) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  return resolvedAutomationId(
-      engine_.resolve_track_insert_automation_id(track_id, insert_index, param_name), param_name);
+  return withCEntryRefusal("engine_resolve_track_insert_automation_id", [&] {
+    if (track_id == 0) sonare_c_detail::engine_automation::refuse_track_id();
+    const char* key = wasmCString(param_name, "paramName");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_track_insert(engine_, track_id, insert_index,
+                                                                    key);
+  });
 #else
   (void)track_id;
   (void)insert_index;
@@ -853,10 +848,14 @@ double RealtimeEngineWasm::resolveTrackInsertAutomationId(const val& track_id_va
 
 double RealtimeEngineWasm::resolveTrackLaneAutomationId(const val& track_id_val,
                                                         const std::string& param_name) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
 #if defined(SONARE_WITH_MIXING)
-  return resolvedAutomationId(engine_.resolve_track_lane_automation_id(track_id, param_name),
-                              param_name);
+  return withCEntryRefusal("engine_resolve_track_lane_automation_id", [&] {
+    if (track_id == 0) sonare_c_detail::engine_automation::refuse_track_id();
+    const char* key = wasmCString(param_name, "kind");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_track_lane(engine_, track_id, key);
+  });
 #else
   (void)track_id;
   (void)param_name;
@@ -867,7 +866,11 @@ double RealtimeEngineWasm::resolveTrackLaneAutomationId(const val& track_id_val,
 
 double RealtimeEngineWasm::resolveMasterAutomationId(const std::string& param_name) {
 #if defined(SONARE_WITH_MIXING)
-  return resolvedAutomationId(engine_.resolve_master_automation_id(param_name), param_name);
+  return withCEntryRefusal("engine_resolve_master_automation_id", [&] {
+    const char* key = wasmCString(param_name, "kind");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_master(engine_, key);
+  });
 #else
   (void)param_name;
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
@@ -879,7 +882,12 @@ double RealtimeEngineWasm::resolveBusAutomationId(const val& bus_id_val,
                                                   const std::string& param_name) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
-  return resolvedAutomationId(engine_.resolve_bus_automation_id(bus_id, param_name), param_name);
+  return withCEntryRefusal("engine_resolve_bus_automation_id", [&] {
+    if (bus_id == 0) sonare_c_detail::engine_automation::refuse_bus_id();
+    const char* key = wasmCString(param_name, "paramName");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_bus(engine_, bus_id, key);
+  });
 #else
   (void)bus_id;
   (void)param_name;
@@ -892,8 +900,11 @@ double RealtimeEngineWasm::resolveMasterInsertAutomationId(const val& insert_ind
                                                            const std::string& param_name) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  return resolvedAutomationId(engine_.resolve_master_insert_automation_id(insert_index, param_name),
-                              param_name);
+  return withCEntryRefusal("engine_resolve_master_insert_automation_id", [&] {
+    const char* key = wasmCString(param_name, "paramName");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_master_insert(engine_, insert_index, key);
+  });
 #else
   (void)insert_index;
   (void)param_name;
@@ -908,8 +919,13 @@ double RealtimeEngineWasm::resolveBusInsertAutomationId(const val& bus_id_val,
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  return resolvedAutomationId(
-      engine_.resolve_bus_insert_automation_id(bus_id, insert_index, param_name), param_name);
+  return withCEntryRefusal("engine_resolve_bus_insert_automation_id", [&] {
+    if (bus_id == 0) sonare_c_detail::engine_automation::refuse_bus_id();
+    const char* key = wasmCString(param_name, "paramName");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_bus_insert(engine_, bus_id, insert_index,
+                                                                  key);
+  });
 #else
   (void)bus_id;
   (void)insert_index;

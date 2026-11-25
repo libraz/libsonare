@@ -101,7 +101,10 @@ def test_width_resolves_on_the_master_strip_only() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         assert engine.resolve_strip_automation_id("master", "width") > 0
-        with pytest.raises(SonareValueError, match="'width'"):
+        with pytest.raises(
+            SonareValueError,
+            match="kind must be the name of a track strip parameter: faderDb or pan",
+        ):
             engine.resolve_strip_automation_id(10, "width")
         with pytest.raises(SonareValueError, match="kind"):
             engine.resolve_strip_automation_id("master", "gain")  # type: ignore[arg-type]

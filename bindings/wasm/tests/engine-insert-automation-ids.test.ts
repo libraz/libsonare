@@ -78,8 +78,153 @@ function readyWorkletNode(port: {
   return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
 }
 
+function caught(run: () => unknown): Error {
+  try {
+    run();
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error('expected a refusal');
+}
+
 describe('insert automation ids (WASM)', () => {
   setupWorklet();
+
+  it.each([
+    {
+      name: 'track insert',
+      cEntry: 'engine_resolve_track_insert_automation_id',
+      subjects: ['paramName'],
+      text: 'RealtimeEngine.resolveStripInsertAutomationId: paramName must be the name of a parameter of the insert that can be set while running',
+      run: (engine: RealtimeEngine) => engine.resolveStripInsertAutomationId(10, 0, 'noSuchParam'),
+    },
+    {
+      name: 'master insert',
+      cEntry: 'engine_resolve_master_insert_automation_id',
+      subjects: ['paramName'],
+      text: 'RealtimeEngine.resolveStripInsertAutomationId: paramName must be the name of a parameter of the insert that can be set while running',
+      run: (engine: RealtimeEngine) =>
+        engine.resolveStripInsertAutomationId('master', 0, 'noSuchParam'),
+    },
+    {
+      name: 'bus insert',
+      cEntry: 'engine_resolve_bus_insert_automation_id',
+      subjects: ['paramName'],
+      text: 'RealtimeEngine.resolveBusInsertAutomationId: paramName must be the name of a parameter of the insert that can be set while running',
+      run: (engine: RealtimeEngine) => engine.resolveBusInsertAutomationId(1, 0, 'noSuchParam'),
+    },
+    {
+      name: 'track lane kind',
+      cEntry: 'engine_resolve_track_lane_automation_id',
+      subjects: ['kind'],
+      text: 'RealtimeEngine.resolveStripAutomationId: kind must be the name of a track strip parameter: faderDb or pan',
+      run: (engine: RealtimeEngine) => engine.resolveStripAutomationId(10, 'noSuchParam' as never),
+    },
+    {
+      name: 'master strip kind',
+      cEntry: 'engine_resolve_master_automation_id',
+      subjects: ['kind'],
+      text: 'RealtimeEngine.resolveStripAutomationId: kind must be the name of a master strip parameter: faderDb, pan or width',
+      run: (engine: RealtimeEngine) =>
+        engine.resolveStripAutomationId('master', 'noSuchParam' as never),
+    },
+    {
+      name: 'bus strip parameter',
+      cEntry: 'engine_resolve_bus_automation_id',
+      subjects: ['paramName'],
+      text: 'RealtimeEngine.resolveBusAutomationId: paramName must be the name of a bus strip parameter: faderDb',
+      run: (engine: RealtimeEngine) => engine.resolveBusAutomationId(1, 'noSuchParam' as never),
+    },
+    {
+      name: 'instrument parameter',
+      cEntry: 'engine_resolve_instrument_automation_id',
+      subjects: ['paramName', 'destinationId'],
+      text: 'RealtimeEngine.resolveInstrumentAutomationId: paramName must be the name of a parameter of the instrument bound to destinationId',
+      run: (engine: RealtimeEngine) => engine.resolveInstrumentAutomationId(5, 'noSuchParam'),
+    },
+  ])('uses the native refusal for an unknown $name', ({ cEntry, subjects, text, run }) => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
+    try {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setTrackBuses([{ busId: 1 }]);
+      engine.setStrip(
+        10,
+        JSON.parse(insertScene('strips', 'track-10', ['utility.gain'])).strips[0],
+      );
+      engine.setStrip(
+        'master',
+        JSON.parse(insertScene('strips', 'master', ['utility.gain'])).strips[0],
+      );
+      engine.setBusStrip(1, JSON.parse(insertScene('buses', '1', ['utility.gain'])).buses[0]);
+      engine.setSynthInstrument(5, {});
+
+      const error = caught(() => run(engine));
+      expect(error).toBeInstanceOf(RangeError);
+      expect(error.message).toBe(text);
+      const refusal = (
+        error as never as Record<
+          symbol,
+          {
+            readonly cEntry: string | null;
+            readonly subjects: readonly string[];
+          }
+        >
+      )[Symbol.for('libsonare.refusal')];
+      expect(refusal?.subjects).toEqual(subjects);
+      expect(refusal?.cEntry).toBe(cEntry);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('uses destinationId as the instrument-refusal sibling when no instrument is bound', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
+    try {
+      const error = caught(() => engine.resolveInstrumentAutomationId(99, 'gain'));
+      expect(error).toBeInstanceOf(RangeError);
+      expect(error.message).toBe(
+        'RealtimeEngine.resolveInstrumentAutomationId: destinationId must be the id of a destination with a MIDI instrument in this engine',
+      );
+      const refusal = (
+        error as never as Record<
+          symbol,
+          {
+            readonly cEntry: string | null;
+            readonly subjects: readonly string[];
+          }
+        >
+      )[Symbol.for('libsonare.refusal')];
+      expect(refusal?.subjects).toEqual(['destinationId']);
+      expect(refusal?.cEntry).toBe('engine_resolve_instrument_automation_id');
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('routes track width through the declared track-lane name refusal', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
+    try {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      const error = caught(() => engine.resolveStripAutomationId(10, 'width'));
+      expect(error).toBeInstanceOf(RangeError);
+      expect(error.message).toBe(
+        'RealtimeEngine.resolveStripAutomationId: kind must be the name of a track strip parameter: faderDb or pan',
+      );
+      const refusal = (
+        error as never as Record<
+          symbol,
+          {
+            readonly cEntry: string | null;
+            readonly subjects: readonly string[];
+          }
+        >
+      )[Symbol.for('libsonare.refusal')];
+      expect(refusal?.subjects).toEqual(['kind']);
+      expect(refusal?.cEntry).toBe('engine_resolve_track_lane_automation_id');
+    } finally {
+      engine.destroy();
+    }
+  });
 
   it('keeps a track insert lane on its track when a later lane edit follows a reorder', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });

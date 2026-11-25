@@ -32,9 +32,16 @@
 // shared with the C ABI and other bindings; conversion is a direct cast.
 sonare::automation::CurveType automationCurveFromInt(int curve);
 int automationCurveToInt(sonare::automation::CurveType curve);
-// Returns a resolved automation id as a double (the full uint32 range survives
-// the JS boundary); an unresolvable target or name is a RangeError, never -1.
-double resolvedAutomationId(int64_t id, const std::string& param_name);
+/// Runs @p body and respells a parameter refusal it throws under the wasm caller's names for C
+/// entry @p entry; every other exception passes through unchanged.
+template <typename Body>
+decltype(auto) withCEntryRefusal(const char* entry, Body&& body) {
+  try {
+    return body();
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry), entry, std::nullopt);
+  }
+}
 
 // Return a sample position in the JS safe-integer range.
 double checkedSampleResult(int64_t value, const char* subject);

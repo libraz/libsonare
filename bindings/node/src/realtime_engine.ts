@@ -121,6 +121,7 @@ import {
   assertClosedToken,
   assertFiniteSamples,
   assertFloatValue,
+  assertString,
   requestObject,
   requireBoolean,
   resolveRenderFrame,
@@ -1272,12 +1273,9 @@ export class RealtimeEngine {
    */
   resolveStripAutomationId(ref: StripRef, kind: 'faderDb' | 'pan' | 'width'): number {
     const target = stripTarget(ref);
-    assertClosedToken(kind, ['faderDb', 'pan', 'width'], 'kind');
+    assertString(kind, 'kind');
     if (target.master) {
       return this.native.resolveMasterAutomationId(kind);
-    }
-    if (kind === 'width') {
-      throw refuse(`a track strip has no 'width' parameter`);
     }
     return this.native.resolveTrackLaneAutomationId(target.trackId, kind);
   }

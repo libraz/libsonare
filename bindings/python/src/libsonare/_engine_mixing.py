@@ -33,7 +33,6 @@ from ._runtime import (
     _to_c_int,
     _to_c_uint,
     _to_c_uint32,
-    _token_arg,
     _utf8_arg,
 )
 from ._types_engine import (
@@ -47,7 +46,6 @@ from ._types_engine import (
 from .types import EqBandInput
 
 StripAutomationKind = Literal["faderDb", "pan", "width"]
-_STRIP_AUTOMATION_KINDS: tuple[str, ...] = ("faderDb", "pan", "width")
 
 
 def _strip_target(ref: StripRef) -> int | None:
@@ -891,19 +889,17 @@ class _EngineMixingMixin:
         ``"width"`` is asked of a track.
         """
         track_id = _strip_target(ref)
-        token = _token_arg(kind, _STRIP_AUTOMATION_KINDS, "kind")
+        key = _utf8_arg(kind, "kind")
         out_id = ctypes.c_uint32()
         if track_id is None:
             rc = _get_lib().sonare_engine_resolve_master_automation_id(
-                self._require_handle(), _utf8_arg(token, "kind"), ctypes.byref(out_id)
+                self._require_handle(), key, ctypes.byref(out_id)
             )
         else:
-            if token == "width":
-                raise _refuse("a track strip has no 'width' parameter")
             rc = _get_lib().sonare_engine_resolve_track_lane_automation_id(
                 self._require_handle(),
                 _to_c_uint32(track_id, "ref"),
-                _utf8_arg(token, "kind"),
+                key,
                 ctypes.byref(out_id),
             )
         _check(rc)

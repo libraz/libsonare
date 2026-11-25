@@ -12,6 +12,7 @@
 #include <type_traits>
 
 #include "c_api/checked_insert.h"
+#include "c_api/engine_automation_resolver.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/midi_fx_json.h"
 #include "c_api/midi_instrument_bind_error.h"
@@ -268,8 +269,11 @@ double RealtimeEngineWasm::resolveInstrumentAutomationId(const val& destination_
                                                          const std::string& param_name) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  return resolvedAutomationId(engine_.resolve_instrument_automation_id(destination_id, param_name),
-                              param_name);
+  return withCEntryRefusal("engine_resolve_instrument_automation_id", [&] {
+    const char* key = wasmCString(param_name, "paramName");
+    sonare::util::check::non_empty(key, "param_name");
+    return sonare_c_detail::engine_automation::resolve_instrument(engine_, destination_id, key);
+  });
 #else
   (void)destination_id_val;
   (void)param_name;

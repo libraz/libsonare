@@ -380,15 +380,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripInsertBypassed(const Napi::CallbackIn
 
 namespace {
 
-// An unresolvable name is an argument refusal (RangeError), never an in-band -1.
-Napi::Value AutomationIdResult(Napi::Env env, SonareError err, uint32_t out_id,
-                               const std::string& param_name) {
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    Napi::RangeError::New(
-        env, "paramName '" + param_name + "' does not resolve to an automation id for this target")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+Napi::Value AutomationIdResult(Napi::Env env, SonareError err, uint32_t out_id) {
   ThrowIfError(env, err);
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out_id));
@@ -403,7 +395,7 @@ Napi::Value RealtimeEngineWrap::ResolveTrackInsertAutomationId(const Napi::Callb
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
       !RequiredStringValue(env, info[2], "paramName", &param_name)) {
     return env.Undefined();
@@ -411,7 +403,7 @@ Napi::Value RealtimeEngineWrap::ResolveTrackInsertAutomationId(const Napi::Callb
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_track_insert_automation_id(
       engine_, track_id, insert_index, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
@@ -421,14 +413,14 @@ Napi::Value RealtimeEngineWrap::ResolveTrackLaneAutomationId(const Napi::Callbac
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   std::string param_name;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
-      !RequiredStringValue(env, info[1], "paramName", &param_name)) {
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
+      !RequiredStringValue(env, info[1], "kind", &param_name)) {
     return env.Undefined();
   }
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_track_lane_automation_id(
       engine_, track_id, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
@@ -445,7 +437,7 @@ Napi::Value RealtimeEngineWrap::ResolveBusAutomationId(const Napi::CallbackInfo&
   uint32_t out_id = 0;
   const SonareError err =
       sonare_engine_resolve_bus_automation_id(engine_, bus_id, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
@@ -454,13 +446,13 @@ Napi::Value RealtimeEngineWrap::ResolveMasterAutomationId(const Napi::CallbackIn
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   std::string param_name;
-  if (!RequiredStringValue(env, info[0], "paramName", &param_name)) {
+  if (!RequiredStringValue(env, info[0], "kind", &param_name)) {
     return env.Undefined();
   }
   uint32_t out_id = 0;
   const SonareError err =
       sonare_engine_resolve_master_automation_id(engine_, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
@@ -477,7 +469,7 @@ Napi::Value RealtimeEngineWrap::ResolveMasterInsertAutomationId(const Napi::Call
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_master_insert_automation_id(
       engine_, insert_index, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
@@ -496,7 +488,7 @@ Napi::Value RealtimeEngineWrap::ResolveBusInsertAutomationId(const Napi::Callbac
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_bus_insert_automation_id(
       engine_, bus_id, insert_index, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
@@ -513,7 +505,7 @@ Napi::Value RealtimeEngineWrap::ResolveInstrumentAutomationId(const Napi::Callba
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_instrument_automation_id(
       engine_, destination_id, param_name.c_str(), &out_id);
-  return AutomationIdResult(env, err, out_id, param_name);
+  return AutomationIdResult(env, err, out_id);
   SONARE_NODE_CATCH(env)
 }
 
