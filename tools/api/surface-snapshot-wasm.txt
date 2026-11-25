@@ -500,8 +500,8 @@
 . BuiltinSynthConfig.polyphony property optional : number | undefined
 . BuiltinSynthConfig.releaseMs property optional : number | undefined
 . BuiltinSynthConfig.sustain property optional : number | undefined
-. BuiltinSynthConfig.waveform property optional : BuiltinSynthWaveform | undefined
-. BuiltinSynthWaveform type : export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 | 1 | 2 | 3;
+. BuiltinSynthConfig.waveform property optional : "sine" | "triangle" | "square" | "saw" | "sawtooth" | undefined
+. BuiltinSynthWaveform type : export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number];
 . CHORD_QUALITIES const : readonly ["major", "minor", "diminished", "augmented", "dominant7", "major7", "minor7", "sus2", "sus4", "unknown", "add9", "minorAdd9", "dim7", "halfDim7", "major9", "dominant9", "sus2Add4", "major6", "minor6", "minorMajor7", "dominant7Sus4", "dominant11", "dominant13", "dominant7Flat9", "dominant7Sharp9"]
 . CONTROLLER_AXES const : readonly ["none", "excitation", "position", "brightness", "morph", "loudness", "pitchCents", "vibratoDepth"]
 . CONTROLLER_INPUTS const : readonly ["controlChange", "channelPressure", "polyPressure", "pitchBend", "velocity"]
@@ -1127,7 +1127,7 @@
 . EngineBounceResult interface
 . EngineBounceResult.channels property required readonly : Float32Array<ArrayBufferLike>[]
 . EngineBounceResult.integratedLufs property required readonly : number
-. EngineBounceResult.quantizeClippedSamples property optional : number | undefined
+. EngineBounceResult.quantizeClippedSamples property optional readonly : number | undefined
 . EngineBounceResult.sampleRate property required readonly : number
 . EngineBus interface
 . EngineBus.busId property required : number

@@ -338,43 +338,91 @@ export interface VocalSetEditOperation {
 }
 
 /**
- * Each of the four positions is given in samples or in seconds (rounded to the
- * nearest sample at the session's rate), one spelling each.
+ * Re-spans a note. Each of the four positions is required and given in samples or in
+ * seconds (rounded to the nearest sample at the session's rate), one spelling each.
  */
-export interface VocalSetSourceSpanOperation {
-  /** Operation discriminator: `'setSourceSpan'`. */
+export type VocalSetSourceSpanOperation = {
+  /** Operation discriminator. */
   kind: 'setSourceSpan';
-  /** Note to change. */
+  /** Note to re-span. */
   noteId: number;
-  /** Start of the note in the source. */
-  sourceStartSample?: number;
-  /** Start of the note in the source, in seconds. */
-  sourceStartSec?: number;
-  /** End of the note in the source. */
-  sourceEndSample?: number;
-  /** End of the note in the source, in seconds. */
-  sourceEndSec?: number;
-  /** Start of the note in the output. */
-  destinationStartSample?: number;
-  /** Start of the note in the output, in seconds. */
-  destinationStartSec?: number;
-  /** Length of the note in the output. */
-  destinationLengthSamples?: number;
-  /** Length of the note in the output, in seconds. */
-  destinationLengthSec?: number;
-}
+} & (
+  | {
+      /** Start of the note in the source, in samples. */
+      sourceStartSample: number;
+      /** Start of the note in the source, in seconds. */
+      sourceStartSec?: never;
+    }
+  | {
+      /** Start of the note in the source, in samples. */
+      sourceStartSample?: never;
+      /** Start of the note in the source, in seconds. */
+      sourceStartSec: number;
+    }
+) &
+  (
+    | {
+        /** End of the note in the source, in samples. */
+        sourceEndSample: number;
+        /** End of the note in the source, in seconds. */
+        sourceEndSec?: never;
+      }
+    | {
+        /** End of the note in the source, in samples. */
+        sourceEndSample?: never;
+        /** End of the note in the source, in seconds. */
+        sourceEndSec: number;
+      }
+  ) &
+  (
+    | {
+        /** Start of the note in the output, in samples. */
+        destinationStartSample: number;
+        /** Start of the note in the output, in seconds. */
+        destinationStartSec?: never;
+      }
+    | {
+        /** Start of the note in the output, in samples. */
+        destinationStartSample?: never;
+        /** Start of the note in the output, in seconds. */
+        destinationStartSec: number;
+      }
+  ) &
+  (
+    | {
+        /** Length of the note in the output, in samples. */
+        destinationLengthSamples: number;
+        /** Length of the note in the output, in seconds. */
+        destinationLengthSec?: never;
+      }
+    | {
+        /** Length of the note in the output, in samples. */
+        destinationLengthSamples?: never;
+        /** Length of the note in the output, in seconds. */
+        destinationLengthSec: number;
+      }
+  );
 
-/** The cut position is `sourceSample` or `sourceSec`, not both. */
-export interface VocalSplitOperation {
-  /** Operation discriminator: `'split'`. */
+/** Splits a note in two. The cut position is required: `sourceSample` or `sourceSec`, not both. */
+export type VocalSplitOperation = {
+  /** Operation discriminator. */
   kind: 'split';
   /** Note to split. */
   noteId: number;
-  /** Cut position in the source, in samples. */
-  sourceSample?: number;
-  /** Cut position in the source, in seconds. */
-  sourceSec?: number;
-}
+} & (
+  | {
+      /** Cut position in the source, in samples. */
+      sourceSample: number;
+      /** Cut position in the source, in seconds. */
+      sourceSec?: never;
+    }
+  | {
+      /** Cut position in the source, in samples. */
+      sourceSample?: never;
+      /** Cut position in the source, in seconds. */
+      sourceSec: number;
+    }
+);
 
 /** Merges adjacent notes into one. */
 export interface VocalMergeOperation {

@@ -13991,7 +13991,7 @@
 . ReassignedSpectrogramResult.times property required : Matrix2D
 . RemixRequest interface
 . RemixRequest.alignZeros property optional : boolean | undefined
-. RemixRequest.intervals property required : number[] | Int32Array<ArrayBufferLike>
+. RemixRequest.intervals property required : Int32Array<ArrayBufferLike> | ArrayLike<number>
 . RemixRequest.sampleRate property required : number
 . RemixRequest.samples property required : Float32Array<ArrayBufferLike>
 . RenderNotesRequest interface
@@ -15491,7 +15491,7 @@
 . VocalSetEditOperation.edit property required : VocalNoteEdit
 . VocalSetEditOperation.kind property required : "setEdit"
 . VocalSetEditOperation.noteId property required : number
-. VocalSetSourceSpanOperation interface
+. VocalSetSourceSpanOperation type : export type VocalSetSourceSpanOperation = {\n    kind: 'setSourceSpan';\n    noteId: number;\n} & ({\n    sourceStartSample: number;\n    sourceStartSec?: never;\n} | {\n    sourceStartSample?: never;\n    sourceStartSec: number;\n}) & ({\n    sourceEndSample: number;\n    sourceEndSec?: never;\n} | {\n    sourceEndSample?: never;\n    sourceEndSec: number;\n}) & ({\n    destinationStartSample: number;\n    destinationStartSec?: never;\n} | {\n    destinationStartSample?: never;\n    destinationStartSec: number;\n}) & ({\n    destinationLengthSamples: number;\n    destinationLengthSec?: never;\n} | {\n    destinationLengthSamples?: never;\n    destinationLengthSec: number;\n});
 . VocalSetSourceSpanOperation.destinationLengthSamples property optional : number | undefined
 . VocalSetSourceSpanOperation.destinationLengthSec property optional : number | undefined
 . VocalSetSourceSpanOperation.destinationStartSample property optional : number | undefined
@@ -15505,7 +15505,7 @@
 . VocalSetTransitionOperation interface
 . VocalSetTransitionOperation.kind property required : "setTransition"
 . VocalSetTransitionOperation.transition property required : VocalTransition
-. VocalSplitOperation interface
+. VocalSplitOperation type : export type VocalSplitOperation = {\n    kind: 'split';\n    noteId: number;\n} & ({\n    sourceSample: number;\n    sourceSec?: never;\n} | {\n    sourceSample?: never;\n    sourceSec: number;\n});
 . VocalSplitOperation.kind property required : "split"
 . VocalSplitOperation.noteId property required : number
 . VocalSplitOperation.sourceSample property optional : number | undefined

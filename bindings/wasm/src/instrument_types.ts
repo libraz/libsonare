@@ -10,7 +10,7 @@ import type { SampleBank } from './sample_bank.js';
 export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const;
 
 /** Oscillator waveform for the built-in synth. */
-export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 | 1 | 2 | 3;
+export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number];
 
 /**
  * Built-in synth patch for {@link ProjectBounceOptions.builtinInstruments} and

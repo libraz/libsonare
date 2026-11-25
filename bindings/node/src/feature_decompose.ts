@@ -490,7 +490,7 @@ export interface RemixRequest {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /** Flat (start, end) sample pairs (even length). */
-  intervals: Int32Array | number[];
+  intervals: Int32Array | ArrayLike<number>;
   /** Snap the cut boundaries to zero crossings. Default `true`. */
   alignZeros?: boolean;
 }

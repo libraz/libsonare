@@ -451,7 +451,7 @@ export interface EngineBounceResult {
    * (|x| > 1), summed over the channels; 0 when none clipped. Absent when the bounce
    * did not dither (`dither` omitted).
    */
-  quantizeClippedSamples?: number;
+  readonly quantizeClippedSamples?: number;
 }
 
 /** Settings for {@link RealtimeEngine.freezeOffline}. */
