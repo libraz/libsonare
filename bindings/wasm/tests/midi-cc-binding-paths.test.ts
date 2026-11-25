@@ -34,6 +34,22 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     expect(() => toCc(binding)).toThrow(new RegExp(`^midiParamToCc: bindings\\[1\\]\\.${field} `));
   });
 
+  // RED WHEN: a controller-number field of the wrong type is refused as "a number" on one surface
+  // and "an integer" on the other; the controller numbers name their integer domain.
+  it.each([
+    ['ccNumber', 'an integer'],
+    ['ccLsbNumber', 'an integer'],
+    ['selectorMsb', 'an integer'],
+    ['selectorLsb', 'an integer'],
+    ['channel', 'a number'],
+    ['paramId', 'a number'],
+  ] as const)('midiParamToCc refuses a string bindings[1].%s as %s', (field, kind) => {
+    const binding = { ...good, [field]: '7' };
+    expect(() => toCc(binding)).toThrow(
+      new TypeError(`midiParamToCc: bindings[1].${field} must be ${kind}`),
+    );
+  });
+
   it('midiCcToBreakpoint names the binding by its index', () => {
     expect(() =>
       midiCcToBreakpoint({

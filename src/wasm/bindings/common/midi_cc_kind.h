@@ -63,20 +63,23 @@ inline void requireCcBindingShape(const emscripten::val& object, const std::stri
                           sonare::util::json::schema::expected_keys(accepted) + ")");
     }
   }
-  const auto number = [&](const char* key, bool optional = false) {
+  const auto number = [&](const char* key, bool optional = false, bool integer = false) {
     const emscripten::val value = object[key];
     if (optional && (value.isUndefined() || value.isNull())) return;
-    if (!value.isNumber()) throw WasmTypeError(elementField(at, key) + " must be a number");
+    if (!value.isNumber()) {
+      throw WasmTypeError(elementField(at, key) +
+                          (integer ? " must be an integer" : " must be a number"));
+    }
   };
-  number("ccNumber");
+  number("ccNumber", false, true);
   number("channel", true);
   const emscripten::val kind = object["kind"];
   if (!kind.isUndefined() && !kind.isNull() && !kind.isString()) {
     throw WasmTypeError(elementField(at, "kind") + " must be a string");
   }
-  number("ccLsbNumber", true);
-  number("selectorMsb", true);
-  number("selectorLsb", true);
+  number("ccLsbNumber", true, true);
+  number("selectorMsb", true, true);
+  number("selectorLsb", true, true);
   number("paramId");
   number("minValue", true);
   number("maxValue", true);

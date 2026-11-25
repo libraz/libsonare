@@ -2,7 +2,12 @@ import { assertDeclaredKeys, refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
 import { isAbsent, isNonArrayObject, isPlainRecord } from './value_guards.js';
 
-export type MidiShapeField = readonly [name: string, value: unknown, optional?: boolean];
+export type MidiShapeField = readonly [
+  name: string,
+  value: unknown,
+  optional?: boolean,
+  integer?: boolean,
+];
 
 const typedArrayTagGetter = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype),
@@ -19,12 +24,12 @@ function isUint8ArrayView(value: unknown): value is Uint8Array {
 
 /** Check only JS types for the whole argument list, before any domain check runs. */
 export function assertMidiNumberShapes(fields: readonly MidiShapeField[]): void {
-  for (const [name, value, optional = false] of fields) {
+  for (const [name, value, optional = false, integer = false] of fields) {
     if (optional && isAbsent(value)) {
       continue;
     }
     if (typeof value !== 'number') {
-      throw refuseType(`${name} must be a number`);
+      throw refuseType(`${name} must be ${integer ? 'an integer' : 'a number'}`);
     }
   }
 }
@@ -98,14 +103,14 @@ export function assertMidiCcBindingShape(value: unknown, path: string): void {
   const binding = value as Record<string, unknown>;
   const field = (name: string) => (path === '' ? name : `${path}.${name}`);
   assertMidiNumberShapes([
-    [field('ccNumber'), binding.ccNumber],
+    [field('ccNumber'), binding.ccNumber, false, true],
     [field('channel'), binding.channel, true],
   ]);
   assertMidiStringShape(binding.kind, field('kind'), true);
   assertMidiNumberShapes([
-    [field('ccLsbNumber'), binding.ccLsbNumber, true],
-    [field('selectorMsb'), binding.selectorMsb, true],
-    [field('selectorLsb'), binding.selectorLsb, true],
+    [field('ccLsbNumber'), binding.ccLsbNumber, true, true],
+    [field('selectorMsb'), binding.selectorMsb, true, true],
+    [field('selectorLsb'), binding.selectorLsb, true, true],
     [field('paramId'), binding.paramId],
     [field('minValue'), binding.minValue, true],
     [field('maxValue'), binding.maxValue, true],
