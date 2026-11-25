@@ -61,10 +61,10 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
   // Scale degree names
   // Major scale intervals: 0, 2, 4, 5, 7, 9, 11 (I, II, III, IV, V, VI, VII)
   // Natural minor intervals: 0, 2, 3, 5, 7, 8, 10 (i, ii, bIII, iv, v, bVI, bVII)
-  static const std::vector<std::pair<int, std::string>> major_degrees = {
+  static constexpr std::pair<int, const char*> major_degrees[] = {
       {0, "I"}, {2, "II"}, {4, "III"}, {5, "IV"}, {7, "V"}, {9, "VI"}, {11, "VII"}};
 
-  static const std::vector<std::pair<int, std::string>> minor_degrees = {
+  static constexpr std::pair<int, const char*> minor_degrees[] = {
       {0, "I"}, {2, "II"}, {3, "III"}, {5, "IV"}, {7, "V"}, {8, "VI"}, {10, "VII"}};
 
   // Select scale based on mode
@@ -92,7 +92,8 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     // enharmonic sharp spelling relative to the diatonic scale.
     for (const auto& deg : other_degrees) {
       if (deg.first == interval) {
-        numeral = (mode == Mode::Minor) ? deg.second : "b" + deg.second;
+        if (mode != Mode::Minor) numeral = 'b';
+        numeral += deg.second;
         is_chromatic = false;
         break;
       }
@@ -103,7 +104,8 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     if (numeral.empty()) {
       for (const auto& deg : scale_degrees) {
         if ((deg.first - 1 + 12) % 12 == interval) {
-          numeral = "b" + deg.second;
+          numeral = 'b';
+          numeral += deg.second;
           break;
         }
       }
@@ -111,7 +113,8 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     if (numeral.empty()) {
       for (const auto& deg : scale_degrees) {
         if ((deg.first + 1) % 12 == interval) {
-          numeral = "#" + deg.second;
+          numeral = '#';
+          numeral += deg.second;
           break;
         }
       }
