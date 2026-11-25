@@ -666,6 +666,12 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor, const f
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, SonareMasteringResult* out);
 
+/// @brief Validates a processor name for planar stereo pair processing.
+/// @param processor Registered pair processor name.
+/// @return SONARE_OK for a supported processor, SONARE_ERROR_INVALID_PARAMETER for an
+///         unknown name, or SONARE_ERROR_NOT_SUPPORTED when stereo pairs are unsupported.
+SonareError sonare_validate_mastering_stereo_pair_processor(const char* processor);
+
 /// @brief Stereo counterpart of @ref sonare_mastering_apply_pair_processor.
 /// @details Supports @c match.abCrossfade. An unknown name is refused with
 ///   @c SONARE_ERROR_INVALID_PARAMETER. A registered pair processor with no

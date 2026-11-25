@@ -178,6 +178,11 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor, const f
                                 param_count);
 }
 
+SonareError sonare_validate_mastering_stereo_pair_processor(const char* processor) {
+  SONARE_C_API_ENTRY;
+  return refuse_not_compiled_in(Feature::kMastering, processor);
+}
+
 SonareError sonare_mastering_apply_pair_processor_stereo(
     const char* processor, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,

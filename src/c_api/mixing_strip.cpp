@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <array>
 
 #include "c_api/engine_config_domains.h"
 #include "c_api/mixing_input_domains.h"
@@ -105,13 +104,11 @@ SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
                                        &resolved) != SONARE_OK) {
     return nullptr;
   }
-  if (!sonare::mixing::is_realtime_true_peak_oversample(resolved.true_peak_oversample)) {
-    sonare_c_detail::run_validation([&] {
-      check::one_of(resolved.true_peak_oversample, std::array<int, 2>{4, 8},
-                    "options.true_peak_oversample");
-    });
-    return nullptr;
-  }
+  const SonareError meter_config_err = sonare_c_detail::run_validation([&] {
+    sonare_c_detail::check_mixer_true_peak_oversample(resolved.true_peak_oversample,
+                                                      "options.true_peak_oversample");
+  });
+  if (meter_config_err != SONARE_OK) return nullptr;
   SONARE_C_TRY
   const std::string strip_id = id;
   for (const auto& existing : mixer->strips) {
@@ -374,8 +371,7 @@ SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
   SONARE_C_REQUIRE_NONNULL(destination_bus_id);
   if (const SonareError err = require_finite(send_db, "send_db"); err != SONARE_OK) return err;
   SONARE_C_TRY
-  check::integer_in_range(timing, SONARE_SEND_TIMING_POST_FADER, SONARE_SEND_TIMING_PRE_FADER,
-                          "timing");
+  check::integer_within(timing, sonare_c_detail::kStripSendTimingDomain, "timing");
   sonare::mixing::SendConfig config;
   config.send_db = send_db;
   config.timing = to_send_timing(timing);

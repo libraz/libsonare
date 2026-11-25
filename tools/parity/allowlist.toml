@@ -104,6 +104,8 @@ node = [
   # --params preflight, run before opening audio; the facade validates inside the stereo
   # analysis call it already makes. Expires if this facade ever wraps the validator.
   "validate_mastering_stereo_analysis_params",
+  # The C admission entry serves callers that cannot call the same validator directly in C++.
+  "validate_mastering_stereo_pair_processor",
   # Platform constraint: only the WASM worklet must size its output bus before a
   # renderer exists, so the two playback channel-count probes have no mirror here.
   "playback_config_num_output_channels",
@@ -185,6 +187,8 @@ wasm = [
   # --params preflight, run before opening audio; the facade validates inside the stereo
   # analysis call it already makes. Expires if this facade ever wraps the validator.
   "validate_mastering_stereo_analysis_params",
+  # The C admission entry serves callers that cannot call the same validator directly in C++.
+  "validate_mastering_stereo_pair_processor",
   # Platform constraint: AudioWorkletNode fixes its output channel count before the
   # processor exists, so SonarePlaybackNode reads it from the config and the processor
   # sizes its input planes from the renderer; neither is a public operation of its own.

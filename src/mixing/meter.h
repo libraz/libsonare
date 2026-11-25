@@ -85,6 +85,9 @@ struct MeterSnapshot {
   uint64_t seq = 0;
 };
 
+/// The only oversample factors accepted by the realtime meter.
+inline constexpr std::array<int, 2> kRealtimeTruePeakOversampleFactors{{4, 8}};
+
 /// @brief Optional configuration for the meter processor.
 struct MeterConfig {
   /// @brief When false, all LUFS work is skipped and LUFS fields stay NaN.
@@ -93,14 +96,15 @@ struct MeterConfig {
   /// @brief True-peak oversample factor: 4 (the BS.1770-4 minimum) or 8. Any other
   /// value is refused by prepare() (see is_realtime_true_peak_oversample); 16x is
   /// offline-only, through metering::true_peak.
-  int true_peak_oversample = 4;
+  int true_peak_oversample = kRealtimeTruePeakOversampleFactors[0];
   float mono_compat_correlation_threshold = 0.0f;
 };
 
 /// @brief Whether the realtime meter runs @p factor: 4x (the BS.1770-4 minimum) or 8x.
 ///        The one rule every entry point that accepts a meter oversample request applies.
 constexpr bool is_realtime_true_peak_oversample(int factor) noexcept {
-  return factor == 4 || factor == 8;
+  return factor == kRealtimeTruePeakOversampleFactors[0] ||
+         factor == kRealtimeTruePeakOversampleFactors[1];
 }
 
 /// @brief Refuses a MeterConfig the realtime meter cannot run.

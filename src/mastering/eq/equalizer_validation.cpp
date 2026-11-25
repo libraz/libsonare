@@ -181,8 +181,8 @@ void EqualizerProcessor::validate_dynamic_params(const DynamicParams& dyn) {
   check::within(dyn.release_ms, kEqNonnegativeFloatDomain, "dyn.release_ms");
   check::within(dyn.detector_delay_ms, kEqNonnegativeFloatDomain, "dyn.detector_delay_ms");
   // -1 follows the band frequency.
-  if (dyn.sidechain_freq_hz != -1.0f) {
-    check::within(dyn.sidechain_freq_hz, kEqPositiveFloatDomain, "dyn.sidechain_freq_hz");
+  if (dyn.sidechain_freq_hz != kEqSidechainFrequencyDomain.sentinel) {
+    check::within(dyn.sidechain_freq_hz, kEqSidechainFrequencyDomain, "dyn.sidechain_freq_hz");
   }
 }
 }  // namespace sonare::mastering::eq

@@ -48,6 +48,18 @@ TEST_CASE("CLI sections threshold registry follows the core default", "[cli][sec
   CHECK(std::stof(threshold->stated_default) == kSectionBoundaryThreshold);
 }
 
+TEST_CASE("CLI transcribe help points to the project tempo domain", "[cli][transcribe]") {
+#ifdef SONARE_WITH_ARRANGEMENT
+  const auto options = cli_options_for_command("transcribe");
+  const auto tempo = std::find_if(options.begin(), options.end(), [](const auto& option) {
+    return option.rfind("--tempo-bpm", 0) == 0;
+  });
+  REQUIRE(tempo != options.end());
+  CHECK_THAT(*tempo, ContainsSubstring("An explicit tempo uses the project tempo domain."));
+  CHECK_THAT(*tempo, ContainsSubstring("detected from the audio"));
+#endif
+}
+
 TEST_CASE("CLI rhythm help describes the beat-tracking prior", "[cli][rhythm]") {
   const auto options = cli_options_for_command("rhythm");
   const auto prior = std::find_if(options.begin(), options.end(), [](const auto& option) {

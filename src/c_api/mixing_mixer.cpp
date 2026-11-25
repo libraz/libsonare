@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "c_api/checked_insert.h"
+#include "c_api/mixing_input_domains.h"
 #include "c_api/mixing_internal.h"
 #include "c_api/mixing_meter_defaults.h"
 #include "mastering/api/insert_factory.h"
@@ -891,8 +892,8 @@ SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
   meter.measure_true_peak = resolved.measure_true_peak != 0;
   meter.true_peak_oversample = resolved.true_peak_oversample;
   if (const SonareError err = sonare_c_detail::run_validation([&] {
-        check::one_of(resolved.true_peak_oversample, std::array<int, 2>{4, 8},
-                      "config.true_peak_oversample");
+        sonare_c_detail::check_mixer_true_peak_oversample(resolved.true_peak_oversample,
+                                                          "config.true_peak_oversample");
       });
       err != SONARE_OK) {
     return err;

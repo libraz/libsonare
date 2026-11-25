@@ -12,6 +12,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "numeric_domain_rows_support.h"
@@ -1042,6 +1043,44 @@ SonareError probe_streaming_chain_prepare(const std::string& param, double value
 
 #endif  // SONARE_WITH_MASTERING
 
+#if defined(SONARE_WITH_MIXING)
+SonareError probe_mixer_add_strip(const std::string&, double value) {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  SonareMixerAddStripOptions options{};
+  sonare_mixer_add_strip_options_init(&options);
+  options.true_peak_oversample = as_int(value);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "probe", &options);
+  const SonareError err = strip != nullptr ? SONARE_OK : sonare_last_error_code();
+  sonare_mixer_destroy(mixer);
+  return err;
+}
+
+SonareError probe_mixer_configure_master_meter(const std::string&, double value) {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  SonareMixerMasterMeterConfig config{};
+  sonare_mixer_master_meter_config_init(&config);
+  config.enabled = 1;
+  config.true_peak_oversample = as_int(value);
+  const SonareError err = sonare_mixer_configure_master_meter(mixer, &config);
+  sonare_mixer_destroy(mixer);
+  return err;
+}
+
+SonareError probe_strip_add_send(const std::string&, double value) {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "probe", nullptr);
+  REQUIRE(strip != nullptr);
+  size_t index = 0;
+  const SonareError err =
+      sonare_strip_add_send(strip, "send", "master", 0.0f, as_int(value), &index);
+  sonare_mixer_destroy(mixer);
+  return err;
+}
+#endif  // SONARE_WITH_MIXING
+
 const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"audio_silence_ratio", probe_audio_silence_ratio},
@@ -1061,6 +1100,11 @@ const std::map<std::string, Probe>& probes() {
       {"metering_detect_clipping", probe_metering_detect_clipping},
       {"metering_spectrum", probe_metering_spectrum},
       {"metering_spectrum_frame", probe_metering_spectrum_frame},
+#if defined(SONARE_WITH_MIXING)
+      {"mixer_add_strip", probe_mixer_add_strip},
+      {"mixer_configure_master_meter", probe_mixer_configure_master_meter},
+      {"strip_add_send", probe_strip_add_send},
+#endif
       {"mfcc_to_audio", probe_mfcc_to_audio},
       {"mfcc_to_mel", probe_mfcc_to_mel},
       {"pcen", probe_pcen},
@@ -1142,6 +1186,12 @@ bool compiled_out([[maybe_unused]] const std::string& entry) {
     return true;
   }
 #endif
+#if !defined(SONARE_WITH_MIXING)
+  if (entry == "mixer_add_strip" || entry == "mixer_configure_master_meter" ||
+      entry == "strip_add_send") {
+    return true;
+  }
+#endif
 #if !defined(SONARE_WITH_ACOUSTIC_SIM)
   if (entry == "estimate_room" || entry == "synthesize_rir" || entry == "room_morph" ||
       entry == "room_morph_stereo") {
@@ -1155,7 +1205,11 @@ bool compiled_out([[maybe_unused]] const std::string& entry) {
 std::vector<NumericDomainRow> built_rows() {
   std::vector<NumericDomainRow> rows;
   for (const NumericDomainRow& row : kMasteringDomainRows) {
-    if (!compiled_out(row.entry)) rows.push_back(row);
+    const bool one_of_oversample = (std::string(row.entry) == "mixer_add_strip" &&
+                                    std::string(row.param) == "options.true_peak_oversample") ||
+                                   (std::string(row.entry) == "mixer_configure_master_meter" &&
+                                    std::string(row.param) == "config.true_peak_oversample");
+    if (!compiled_out(row.entry) && !one_of_oversample) rows.push_back(row);
   }
   return rows;
 }
@@ -1245,6 +1299,65 @@ TEST_CASE("dynamic-range percentile rows keep the sentinel and refuse outside [0
   require_outside_refused(table, probes());
   require_inside_accepted(table, probes(), mastering_inside_value);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("mixer and send named domains are registered and probed", "[numeric_domains][c_api]") {
+  const NumericDomainRow* send = nullptr;
+  const NumericDomainRow* add_strip = nullptr;
+  const NumericDomainRow* master_meter = nullptr;
+  for (const NumericDomainRow& row : kMasteringDomainRows) {
+    if (std::string(row.entry) == "strip_add_send" && std::string(row.param) == "timing") {
+      send = &row;
+    }
+    if (std::string(row.entry) == "mixer_add_strip" &&
+        std::string(row.param) == "options.true_peak_oversample") {
+      add_strip = &row;
+    }
+    if (std::string(row.entry) == "mixer_configure_master_meter" &&
+        std::string(row.param) == "config.true_peak_oversample") {
+      master_meter = &row;
+    }
+  }
+  REQUIRE(send != nullptr);
+  CHECK(send->domain.lo == 0.0);
+  CHECK(send->domain.hi == 1.0);
+  REQUIRE(add_strip != nullptr);
+  CHECK(add_strip->domain.lo == 4.0);
+  CHECK(add_strip->domain.hi == 8.0);
+  CHECK(std::string(add_strip->stricter) == "power_of_two");
+  REQUIRE(master_meter != nullptr);
+  CHECK(master_meter->domain.lo == 4.0);
+  CHECK(master_meter->domain.hi == 8.0);
+  CHECK(std::string(master_meter->stricter) == "power_of_two");
+
+  const std::map<std::string, Probe>& entries = probes();
+  const Probe& send_probe = entries.at("strip_add_send");
+  CHECK(send_probe("timing", SONARE_SEND_TIMING_POST_FADER) == SONARE_OK);
+  CHECK(send_probe("timing", SONARE_SEND_TIMING_PRE_FADER) == SONARE_OK);
+  for (double invalid : {-1.0, 2.0}) {
+    INFO("invalid send timing " << invalid);
+    REQUIRE(send_probe("timing", invalid) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_subject() == "timing");
+    CHECK(std::string(sonare_last_error_message()) == "timing must be an integer in [0, 1]");
+  }
+
+  for (const auto& entry_and_subject :
+       {std::pair<const char*, const char*>{"mixer_add_strip", "options.true_peak_oversample"},
+        std::pair<const char*, const char*>{"mixer_configure_master_meter",
+                                            "config.true_peak_oversample"}}) {
+    const char* entry = entry_and_subject.first;
+    const char* subject = entry_and_subject.second;
+    INFO(entry);
+    const Probe& probe = entries.at(entry);
+    CHECK(probe(subject, 4.0) == SONARE_OK);
+    CHECK(probe(subject, 8.0) == SONARE_OK);
+    REQUIRE(probe(subject, 5.0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_subject() == subject);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string(subject) + " must be one of 4, 8");
+  }
+}
+#endif
 
 TEST_CASE("a spectrum FFT size is accepted up to the meter's resource limit and refused past it",
           "[numeric_domains][c_api]") {

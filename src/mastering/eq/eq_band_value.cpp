@@ -204,8 +204,8 @@ EqBand eq_band_from_value(const JsonValue& value, const std::string& path,
                        : json_float(value, "detectorDelayMs", band.dyn.detector_delay_ms, path);
   const double sidechain_frequency =
       json_number(value, "sidechainFreqHz", band.dyn.sidechain_freq_hz, path);
-  if (band.dyn.enabled && sidechain_frequency != -1.0) {
-    validate_domain(sidechain_frequency, kEqPositiveFloatDomain,
+  if (band.dyn.enabled && sidechain_frequency != kEqSidechainFrequencyDomain.sentinel) {
+    validate_domain(sidechain_frequency, kEqSidechainFrequencyDomain,
                     schema::child_path(path, "sidechainFreqHz"));
   }
   float sidechain_frequency_float = 0.0f;

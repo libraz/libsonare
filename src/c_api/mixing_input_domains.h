@@ -8,6 +8,7 @@
 
 #include "core/audio.h"
 #include "mixing/automation_lane.h"
+#include "mixing/meter.h"
 #include "streaming/realtime_limits.h"
 #include "util/parameter_checks.h"
 
@@ -24,6 +25,17 @@ inline constexpr sonare::util::check::NumericDomain kMixingAssistantTrackSampleR
 inline constexpr sonare::util::check::NumericDomain kMixerMaxBlockSizeDomain =
     sonare::util::check::with_sentinel(
         sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize), 0);
+/// @brief What a send's timing selector accepts.
+inline constexpr sonare::util::check::NumericDomain kStripSendTimingDomain =
+    sonare::util::check::integer_domain(SONARE_SEND_TIMING_POST_FADER,
+                                        SONARE_SEND_TIMING_PRE_FADER);
+/// @brief What a meter's true-peak reconstruction factor accepts: 4x or 8x.
+inline constexpr sonare::util::check::NumericDomain kMixerTruePeakOversampleDomain =
+    sonare::util::check::integer_domain(sonare::mixing::kRealtimeTruePeakOversampleFactors[0],
+                                        sonare::mixing::kRealtimeTruePeakOversampleFactors[1]);
+inline void check_mixer_true_peak_oversample(int32_t value, const char* subject) {
+  sonare::util::check::one_of(value, sonare::mixing::kRealtimeTruePeakOversampleFactors, subject);
+}
 inline constexpr sonare::util::check::NumericDomain kStripPanModeDomain =
     sonare::util::check::with_sentinel(
         sonare::util::check::integer_domain(SONARE_PAN_MODE_BALANCE, SONARE_PAN_MODE_DUAL_PAN),

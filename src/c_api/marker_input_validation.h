@@ -17,13 +17,13 @@ inline bool marker_kind_reads_key_signature_fields(uint8_t kind) noexcept {
   return kind == SONARE_MARKER_KIND_KEY_SIGNATURE;
 }
 
-inline void check_marker_key_signature_fields(uint8_t kind, int8_t key_fifths, uint8_t key_minor,
+inline void check_marker_key_signature_fields(uint8_t kind, double key_fifths, uint8_t key_minor,
                                               const std::string& prefix) {
   namespace check = sonare::util::check;
   const std::string fifths_subject = prefix + "key_fifths";
   if (marker_kind_reads_key_signature_fields(kind)) {
     // The SMF key signature `sf` byte holds -7..7 (seven flats to seven sharps).
-    check::integer_within(key_fifths, kMarkerKeyFifthsDomain, fifths_subject.c_str());
+    check::within(key_fifths, kMarkerKeyFifthsDomain, fifths_subject.c_str());
     return;
   }
   const std::string kind_subject = prefix + "kind";

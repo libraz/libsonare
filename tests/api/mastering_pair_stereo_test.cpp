@@ -12,6 +12,24 @@
 #include "sonare_c_test_helpers.h"
 #include "util/json.h"
 
+TEST_CASE("stereo pair processor admission needs no audio", "[c_api][mastering][stereo_pair]") {
+  REQUIRE(sonare_validate_mastering_stereo_pair_processor("match.abCrossfade") == SONARE_OK);
+
+  REQUIRE(sonare_validate_mastering_stereo_pair_processor("unknown") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "processor");
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             Catch::Matchers::StartsWith("processor must be one of "));
+
+  REQUIRE(sonare_validate_mastering_stereo_pair_processor("match.abSwitch") ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "processor");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "processor does not support planar stereo pairs");
+}
+
 TEST_CASE("stereo pair processor admits the name before reading audio",
           "[c_api][mastering][stereo]") {
   SonareMasteringStereoResult out{};

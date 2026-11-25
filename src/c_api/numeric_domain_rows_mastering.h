@@ -10,6 +10,7 @@
 #include "c_api/editing_input_domains.h"
 #include "c_api/inverse_input_domains.h"
 #include "c_api/mastering_input_domains.h"
+#include "c_api/mixing_input_domains.h"
 #include "c_api/numeric_domain_row.h"
 #include "c_api/segment_input_domains.h"
 #include "c_api/sonare_c_internal.h"
@@ -249,6 +250,10 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"mfcc_to_mel", "n_mels", sonare::kInverseMelBandsDomain, nullptr},
     {"mfcc_to_mel", "n_mfcc", sonare::kInverseMfccCountDomain, nullptr},
     {"mfcc_to_mel", "options.lifter", sonare::kMfccLifterDomain, nullptr},
+    {"mixer_add_strip", "options.true_peak_oversample", kMixerTruePeakOversampleDomain,
+     "power_of_two"},
+    {"mixer_configure_master_meter", "config.true_peak_oversample", kMixerTruePeakOversampleDomain,
+     "power_of_two"},
     {"pcen", "n_bins", sonare::kPcenMatrixDimensionDomain, nullptr},
     {"pcen", "n_frames", sonare::kPcenMatrixDimensionDomain, nullptr},
     {"playback_loudness_meter_create", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
@@ -322,6 +327,7 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"streaming_mastering_chain_prepare", "num_channels",
      sonare::mastering::api::kStreamingChainChannelCountDomain, nullptr},
     {"streaming_mastering_chain_prepare", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
+    {"strip_add_send", "timing", kStripSendTimingDomain, nullptr},
     {"synthesize_rir", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain,
      nullptr},
     {"synthesize_rir", "config.crossfade_ms", sonare::effects::common::kRirCrossfadeMsDomain,

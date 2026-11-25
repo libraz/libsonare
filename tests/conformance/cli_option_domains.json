@@ -832,6 +832,7 @@
     {
       "command": "transcribe",
       "option": "tempo-bpm",
+      "reason": "An explicit tempo is written to the project's PPQ grid and uses the project tempo domain.",
       "choices": [],
       "minimum": 1e-06,
       "exclusive_minimum": false,

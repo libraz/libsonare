@@ -5754,6 +5754,28 @@
       "sentinel": null
     },
     {
+      "entry": "mixer_add_strip",
+      "param": "options.true_peak_oversample",
+      "kind": "integer",
+      "lo": 4,
+      "hi": 8,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "power_of_two",
+      "sentinel": null
+    },
+    {
+      "entry": "mixer_configure_master_meter",
+      "param": "config.true_peak_oversample",
+      "kind": "integer",
+      "lo": 4,
+      "hi": 8,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "power_of_two",
+      "sentinel": null
+    },
+    {
       "entry": "mixer_create",
       "param": "max_block_size",
       "kind": "integer",
@@ -8894,6 +8916,17 @@
       "kind": "integer",
       "lo": 8000,
       "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "strip_add_send",
+      "param": "timing",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 1,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

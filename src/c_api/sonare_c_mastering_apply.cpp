@@ -581,6 +581,12 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor, const f
   SONARE_C_CATCH
 }
 
+SonareError sonare_validate_mastering_stereo_pair_processor(const char* processor) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_REQUIRE_NONNULL(processor);
+  return run_validation([&] { sonare::mastering::api::require_stereo_pair_processor(processor); });
+}
+
 SonareError sonare_mastering_apply_pair_processor_stereo(
     const char* processor, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,

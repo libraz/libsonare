@@ -1858,10 +1858,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "transcribe", true,
         {required_output(),
-         with_stated_default(
-             with_domain(number_value("tempo-bpm"), between(sonare::transport::kMinPublicTempoBpm,
-                                                            sonare::transport::kMaxPublicTempoBpm)),
-             "detected from the audio"),
+         described(
+             with_stated_default(with_domain(number_value("tempo-bpm"),
+                                             between(sonare::transport::kMinPublicTempoBpm,
+                                                     sonare::transport::kMaxPublicTempoBpm)),
+                                 "detected from the audio"),
+             "Tempo of the project's PPQ grid. An explicit tempo uses the project tempo domain."),
          flag("polyphonic"),
          library_default(with_domain(number_value("reference-hz"), greater_than(0.0)),
                          transcribe_defaults.reference_hz),
