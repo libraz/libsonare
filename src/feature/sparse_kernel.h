@@ -12,6 +12,18 @@
 
 namespace sonare::detail {
 
+// Unique column indices break magnitude ties in both ranking passes.
+[[gnu::noinline]] inline size_t rank_sparse_columns(std::vector<std::pair<float, int>>& order,
+                                                    double budget, double& discarded) {
+  std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return b < a; });
+  size_t kept = order.size();
+  while (kept > 0 && discarded + order[kept - 1].first <= budget) {
+    discarded += order[kept - 1].first;
+    --kept;
+  }
+  return kept;
+}
+
 /// @brief Appends one dense row using librosa-style cumulative L1 sparsification.
 /// @details The smallest columns, ranked by (magnitude, column), are discarded while their
 ///          running sum fits `sparsity` of the row's L1 norm. Which columns that is does not
@@ -60,15 +72,7 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
       order.emplace_back(magnitude, column);
     }
   }
-  const auto descending = [](const std::pair<float, int>& a, const std::pair<float, int>& b) {
-    return b < a;
-  };
-  std::sort(order.begin(), order.end(), descending);
-  size_t kept = order.size();
-  while (kept > 0 && discarded + order[kept - 1].first <= discard_budget) {
-    discarded += order[kept - 1].first;
-    --kept;
-  }
+  size_t kept = rank_sparse_columns(order, discard_budget, discarded);
 
   // The discarded columns were summed bin by bin, not in rank order.
   const double rounding_margin =
@@ -83,15 +87,8 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
         order.emplace_back(magnitudes[static_cast<size_t>(column)], column);
       }
     }
-    std::sort(order.begin(), order.end());
     double ascending = 0.0;
-    size_t discarded_count = 0;
-    while (discarded_count < n && ascending + order[discarded_count].first <= discard_budget) {
-      ascending += order[discarded_count].first;
-      ++discarded_count;
-    }
-    std::reverse(order.begin(), order.end());
-    kept = n - discarded_count;
+    kept = rank_sparse_columns(order, discard_budget, ascending);
   }
 
   std::vector<int> kept_columns(kept);
