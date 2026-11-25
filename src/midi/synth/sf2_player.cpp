@@ -445,8 +445,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   release_prepared_nodes();
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const auto prepare_splitter = [this](SourceResidualSplitter& s) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
+    prepare_source_residual_splitter(s, sample_rate_, kResidualTauSeconds);
   };
   prepare_splitter(residual_splitter_);
   for (SourceResidualSplitter& s : part_bus_splitters_) prepare_splitter(s);

@@ -217,4 +217,11 @@ class SourceResidualSplitter {
   float tau_seconds_ = 0.5f;
 };
 
+[[gnu::noinline]] inline void prepare_source_residual_splitter(SourceResidualSplitter& splitter,
+                                                               double sample_rate,
+                                                               float tau_seconds) noexcept {
+  splitter.configure(sample_rate, tau_seconds);
+  splitter.reset();
+}
+
 }  // namespace sonare::midi

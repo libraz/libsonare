@@ -170,8 +170,7 @@ EnvelopeTimeScales NativeSynth::gs_tail_scales() const noexcept {
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const auto configure_splitter = [this](SourceResidualSplitter& s) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
+    prepare_source_residual_splitter(s, sample_rate_, kResidualTauSeconds);
   };
   configure_splitter(residual_splitter_);
   configure_splitter(piano_residual_splitter_);
