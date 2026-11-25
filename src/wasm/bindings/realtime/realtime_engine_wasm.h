@@ -32,6 +32,10 @@
 // shared with the C ABI and other bindings; conversion is a direct cast.
 sonare::automation::CurveType automationCurveFromInt(int curve);
 int automationCurveToInt(sonare::automation::CurveType curve);
+/// Respells a direct engine refusal under the WASM caller's names for the C entry.
+[[noreturn]] void throwDirectCEntryRefusal(const sonare::SonareParameterRefusal& refusal,
+                                           const char* entry, const char* root);
+
 /// Runs @p body and respells a parameter refusal it throws under the wasm caller's names for C
 /// entry @p entry; every other exception passes through unchanged.
 template <typename Body>
@@ -39,11 +43,7 @@ decltype(auto) withCEntryRefusal(const char* entry, Body&& body, const char* roo
   try {
     return body();
   } catch (const sonare::SonareParameterRefusal& refusal) {
-    std::optional<sonare::SonareParameterRefusal> raw_refusal;
-    if (captureRefusalMetadataEnabled()) raw_refusal = refusal;
-    std::string flattened = raw_refusal ? root : "";
-    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry, root), entry,
-                        std::nullopt, std::move(raw_refusal), false, std::move(flattened));
+    throwDirectCEntryRefusal(refusal, entry, root);
   }
 }
 

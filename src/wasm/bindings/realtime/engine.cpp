@@ -16,6 +16,15 @@
 #include "wasm/bindings/common/project_timeline_wasm.h"
 #endif
 
+[[noreturn]] void throwDirectCEntryRefusal(const sonare::SonareParameterRefusal& refusal,
+                                           const char* entry, const char* root) {
+  std::optional<sonare::SonareParameterRefusal> raw_refusal;
+  if (captureRefusalMetadataEnabled()) raw_refusal = refusal;
+  std::string flattened = raw_refusal ? root : "";
+  throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry, root), entry,
+                      std::nullopt, std::move(raw_refusal), false, std::move(flattened));
+}
+
 void RealtimeEngineWasm::validatePrepare(double sample_rate) {
   if (!sonare::is_supported_sample_rate(sample_rate)) {
     throw WasmRangeError("sampleRate " +
