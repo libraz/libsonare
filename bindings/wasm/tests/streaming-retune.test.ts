@@ -297,7 +297,7 @@ describe('StreamingRetune prepare and empty blocks', () => {
         'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
       );
       expect(wrongSecondShape.message).toBe(
-        'StreamingRetune.prepare: maxBlockSize must be a number',
+        'StreamingRetune.prepare: maxBlockSize must be an integer',
       );
       expect(expectRefusalOf(() => retune.prepare(SR, 0)).message).toBe(
         'StreamingRetune.prepare: maxBlockSize must be an integer in [1, 1048576]',

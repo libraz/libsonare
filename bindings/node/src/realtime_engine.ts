@@ -180,7 +180,7 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
 type MidiPushShape = {
   name: string;
   value: unknown;
-  shape: 'number' | 'object' | 'bank' | 'wordList';
+  shape: 'number' | 'integer' | 'object' | 'bank' | 'wordList';
   optional?: boolean;
 };
 
@@ -219,7 +219,7 @@ function resolveEngineConfig(
   const request = requestObject(requestName, config, 'config', true);
   const sampleRate = request.sampleRate;
   if (typeof sampleRate !== 'number') {
-    throw refuseType(`sampleRate must be a number`);
+    throw refuseType(`sampleRate must be an integer`);
   }
   // The engine refuses a rate outside its supported integer range in its own text.
   return {
@@ -2549,9 +2549,9 @@ export class RealtimeEngine {
    */
   pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
     assertMidiPushShapes([
-      { name: 'destinationId', value: destinationId, shape: 'number' },
+      { name: 'destinationId', value: destinationId, shape: 'integer' },
       { name: 'words', value: words, shape: 'wordList' },
-      { name: 'renderFrame', value: renderFrame, shape: 'number', optional: true },
+      { name: 'renderFrame', value: renderFrame, shape: 'integer', optional: true },
     ]);
     if (Array.isArray(words)) {
       requireListBudget(words, 'words');
@@ -2587,12 +2587,12 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiPushShapes([
-      { name: 'destinationId', value: destinationId, shape: 'number' },
-      { name: 'group', value: group, shape: 'number' },
-      { name: 'channel', value: channel, shape: 'number' },
-      { name: 'program', value: program, shape: 'number' },
+      { name: 'destinationId', value: destinationId, shape: 'integer' },
+      { name: 'group', value: group, shape: 'integer' },
+      { name: 'channel', value: channel, shape: 'integer' },
+      { name: 'program', value: program, shape: 'integer' },
       { name: 'bank', value: bank, shape: 'bank', optional: true },
-      { name: 'renderFrame', value: renderFrame, shape: 'number', optional: true },
+      { name: 'renderFrame', value: renderFrame, shape: 'integer', optional: true },
     ]);
     const { bankValid, msb, lsb } = bankFields('pushMidiProgram', bank);
     this.native.pushMidiProgram(
@@ -2621,14 +2621,14 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiPushShapes([
-      { name: 'group', value: group, shape: 'number' },
-      { name: 'channel', value: channel, shape: 'number' },
-      { name: 'program', value: program, shape: 'number' },
+      { name: 'group', value: group, shape: 'integer' },
+      { name: 'channel', value: channel, shape: 'integer' },
+      { name: 'program', value: program, shape: 'integer' },
       { name: 'bank', value: bank, shape: 'bank', optional: true },
       {
         name: 'offsetInBlockSamples',
         value: offsetInBlockSamples,
-        shape: 'number',
+        shape: 'integer',
         optional: true,
       },
     ]);
@@ -2653,7 +2653,7 @@ export class RealtimeEngine {
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
     assertMidiPushShapes([
       { name: 'words', value: words, shape: 'wordList' },
-      { name: 'offsetInBlockSamples', value: offsetInBlockSamples, shape: 'number' },
+      { name: 'offsetInBlockSamples', value: offsetInBlockSamples, shape: 'integer' },
     ]);
     if (Array.isArray(words)) {
       requireListBudget(words, 'words');

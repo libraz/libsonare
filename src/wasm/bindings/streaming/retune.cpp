@@ -91,8 +91,8 @@ class StreamingRetuneWrapper {
 
   void prepare(const val& sample_rate_val, const val& max_block_size_val) {
     // Check every argument's shape before any domain reader can refuse a value.
-    if (!sample_rate_val.isNumber()) throw WasmTypeError("sampleRate must be a number");
-    if (!max_block_size_val.isNumber()) throw WasmTypeError("maxBlockSize must be a number");
+    if (!sample_rate_val.isNumber()) throw WasmTypeError("sampleRate must be an integer");
+    if (!max_block_size_val.isNumber()) throw WasmTypeError("maxBlockSize must be an integer");
     const int sample_rate =
         domainNumberFromVal<int>(sample_rate_val, "sampleRate", sonare::kAudioSampleRateDomain);
     const int max_block_size = domainNumberFromVal<int>(max_block_size_val, "maxBlockSize",

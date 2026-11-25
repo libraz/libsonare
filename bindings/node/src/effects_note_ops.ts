@@ -225,7 +225,7 @@ function assertNoteSetEntries(notes: readonly NoteSetEntry[]): void {
     for (const key of ['frameStart', 'frameEnd'] as const) {
       const at = `notes[${index}].${key}`;
       if (typeof note[key] !== 'number') {
-        throw refuseType(`${at} must be a number`);
+        throw refuseType(`${at} must be an integer`);
       }
       assertIntegerValue(note[key], at);
     }
@@ -630,10 +630,16 @@ export function splitNote(...args: unknown[]): NoteObject[] {
     const hasFrame = !isAbsent(requestFrame);
     const hasFrameSec = !isAbsent(frameSec);
     requireOneOf(['frame', 'frameSec'], [hasFrame, hasFrameSec]);
+    if (hasFrame && typeof requestFrame !== 'number') {
+      throw refuseType('frame must be an integer');
+    }
     assertFloatValue(hasFrame ? requestFrame : frameSec, hasFrame ? 'frame' : 'frameSec');
     const frame = hasFrame ? requestFrame : Math.round((frameSec as number) * frameRate);
     if (!Array.isArray(notes)) {
       throw refuseType('notes must be an array');
+    }
+    if (typeof index !== 'number') {
+      throw refuseType('index must be an integer');
     }
     assertFloatValue(index, 'index');
     assertNoteSetEntries(notes);
@@ -719,6 +725,14 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
     const nativeVoiced = assertNoteTrackRequest(request);
     if (!Array.isArray(notes)) {
       throw refuseType('notes must be an array');
+    }
+    for (const [value, name] of [
+      [first, 'first'],
+      [last, 'last'],
+    ] as const) {
+      if (typeof value !== 'number') {
+        throw refuseType(`${name} must be an integer`);
+      }
     }
     assertFloatValue(first, 'first');
     assertFloatValue(last, 'last');

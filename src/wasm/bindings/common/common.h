@@ -779,6 +779,10 @@ double checkedDoubleFromVal(const val& value, const char* key);
 ///          arrive as a value; every checked narrowing above starts here.
 /// @throws WasmArgumentError naming @p key.
 double numberFromVal(const val& value, const char* key);
+/// @brief @ref numberFromVal for an integer-valued field: a non-number is a WasmTypeError
+///        "<key> must be an integer", as the field's domain refusals word it. The value is
+///        returned unnarrowed for the owning range check.
+double integerNumberFromVal(const val& value, const char* key);
 /// @brief Presence- AND type-checked double reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number.
@@ -905,8 +909,10 @@ val requireTypedProperty(const val& object, const char* key, const char* subject
 
 /// @brief The numeric half of @ref requireProperty, shared by every arithmetic
 ///        instantiation so the validation is compiled once rather than per type.
-inline double requireNumberProperty(const val& object, const char* key, const char* subject) {
-  const val value = requireTypedProperty(object, key, subject, "number", "a number");
+inline double requireNumberProperty(const val& object, const char* key, const char* subject,
+                                    bool integer = false) {
+  const val value =
+      requireTypedProperty(object, key, subject, "number", integer ? "an integer" : "a number");
   const double number = value.as<double>();
   if (!std::isfinite(number)) {
     throw WasmRangeError(sonare::util::json::schema::child_path(subject, key) + " must be finite");
@@ -920,7 +926,7 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
 ///        name again for a fraction or a value outside the 64-bit integer
 ///        range rather than truncated or cast into undefined behavior.
 inline int64_t requireInt64Property(const val& object, const char* key, const char* subject) {
-  const val value = requireTypedProperty(object, key, subject, "number", "a number");
+  const val value = requireTypedProperty(object, key, subject, "number", "an integer");
   return checkedInt64FromVal(value, sonare::util::json::schema::child_path(subject, key).c_str());
 }
 
@@ -930,7 +936,7 @@ inline int64_t requireInt64Property(const val& object, const char* key, const ch
 ///          @ref checkedIntFromVal without truncation or saturation.
 /// @throws WasmArgumentError naming @p subject and @p key.
 inline int requireIntProperty(const val& object, const char* key, const char* subject) {
-  const val value = requireTypedProperty(object, key, subject, "number", "a number");
+  const val value = requireTypedProperty(object, key, subject, "number", "an integer");
   return checkedIntFromVal(value, sonare::util::json::schema::child_path(subject, key).c_str());
 }
 
@@ -953,7 +959,7 @@ T requireProperty(const val& object, const char* key, const char* subject) {
   if constexpr (std::is_same_v<T, bool>) {
     return requireBoolProperty(object, key, subject);
   } else {
-    return static_cast<T>(requireNumberProperty(object, key, subject));
+    return static_cast<T>(requireNumberProperty(object, key, subject, std::is_integral_v<T>));
   }
 }
 /// @brief Converts a JS object of {name -> number|boolean} into mastering params.

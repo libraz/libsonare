@@ -156,7 +156,7 @@ export const ROWS: Row[] = [
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
     oneOf: [
-      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be a number' },
+      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be an integer' },
       { fields: ['values'], error: 'TypeError: padCenter: values must be a Float32Array' },
     ],
   },
@@ -168,7 +168,7 @@ export const ROWS: Row[] = [
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
     oneOf: [
-      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be a number' },
+      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be an integer' },
       { fields: ['values'], error: 'TypeError: fixLength: values must be a Float32Array' },
     ],
   },
@@ -287,7 +287,7 @@ export const ROWS: Row[] = [
       },
       {
         fields: ['sampleRate'],
-        error: 'TypeError: cyclicTempogram: sampleRate must be a number',
+        error: 'TypeError: cyclicTempogram: sampleRate must be an integer',
       },
     ],
   },

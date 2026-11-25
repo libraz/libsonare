@@ -386,7 +386,7 @@ describe('SonareEngine track MIDI timing options', () => {
     const { engine, live, posted } = await bridgedEngine();
     try {
       posted.length = 0;
-      expect(() => push(engine)).toThrow(new TypeError(`${entry}: channel must be a number`));
+      expect(() => push(engine)).toThrow(new TypeError(`${entry}: channel must be an integer`));
       expect(posted).toEqual([]);
     } finally {
       engine.destroy();

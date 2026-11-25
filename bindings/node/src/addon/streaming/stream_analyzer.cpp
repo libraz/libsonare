@@ -107,19 +107,6 @@ Napi::Object QuantizedFrameBufferToObject(Napi::Env env, const Buffer& buffer) {
   return out;
 }
 
-// Narrows an already-read config value to a native int, rejecting anything the
-// target type cannot hold exactly. Takes the value rather than (object, key) so
-// the key stays visible at the call site on the shared DoubleProperty
-// reader, which is what the option scanner counts.
-int CheckedConfigInt(double value, const char* key) {
-  int narrowed = 0;
-  if (!sonare::numeric::checked_integral_cast(value, &narrowed)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(key) + " must be an integer within the int range");
-  }
-  return narrowed;
-}
-
 bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::WindowType* out) {
   const Napi::Value value = options.Get("window");
   if (value.IsUndefined()) return true;
@@ -211,22 +198,20 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
     sonare::StreamConfig config;
     if (info.Length() >= 1 && info[0].IsObject()) {
       Napi::Object opts = info[0].As<Napi::Object>();
-      // Every field narrowed to a native int goes through checked_integral_cast:
-      // an unchecked static_cast of an out-of-int-range double is undefined
+      // Every field narrowed to a native int is range-checked by its reader: an
+      // unchecked static_cast of an out-of-int-range double is undefined
       // behaviour, and on ARM64 it saturates to INT_MAX, which slips past the
       // core's positivity checks instead of being rejected here.
       config.sample_rate = DomainProperty<int>(opts, "sampleRate", config.sample_rate,
                                                sonare::kAudioSampleRateDomain);
-      config.n_fft = CheckedConfigInt(DoubleProperty(opts, "nFft", config.n_fft), "nFft");
-      config.hop_length =
-          CheckedConfigInt(DoubleProperty(opts, "hopLength", config.hop_length), "hopLength");
+      config.n_fft = IntProperty(opts, "nFft", config.n_fft);
+      config.hop_length = IntProperty(opts, "hopLength", config.hop_length);
       // Every field from here down is a plain quantity or flag, none documented
       // (types_features.ts's StreamAnalyzerConfig) as reading a wrong-typed
       // value as "unspecified" -- StreamAnalyzerConfig's own doc comment
       // requires the count fields to be refused rather than truncated, which
-      // DoubleProperty/BoolProperty give by refusing a wrong TYPE by name before
-      // CheckedConfigInt sees it.
-      config.n_mels = CheckedConfigInt(DoubleProperty(opts, "nMels", config.n_mels), "nMels");
+      // IntProperty gives by refusing a wrong type and a fraction by name.
+      config.n_mels = IntProperty(opts, "nMels", config.n_mels);
       config.fmin = FloatProperty(opts, "fmin", config.fmin);
       config.fmax = FloatProperty(opts, "fmax", config.fmax);
       config.tuning_ref_hz = FloatProperty(opts, "referenceHz", config.tuning_ref_hz);
@@ -235,8 +220,8 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.compute_chroma = BoolProperty(opts, "computeChroma", config.compute_chroma);
       config.compute_onset = BoolProperty(opts, "computeOnset", config.compute_onset);
       config.compute_spectral = BoolProperty(opts, "computeSpectral", config.compute_spectral);
-      config.emit_every_n_frames = CheckedConfigInt(
-          DoubleProperty(opts, "emitEveryNFrames", config.emit_every_n_frames), "emitEveryNFrames");
+      config.emit_every_n_frames =
+          IntProperty(opts, "emitEveryNFrames", config.emit_every_n_frames);
       config.max_pending_frames =
           DomainProperty<size_t>(opts, "maxPendingFrames", config.max_pending_frames,
                                  sonare::kStreamConfigMaxPendingFramesDomain);

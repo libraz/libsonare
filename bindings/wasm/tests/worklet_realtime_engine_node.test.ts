@@ -698,7 +698,7 @@ describe('SonareRealtimeEngineNode', () => {
       const incompleteSeek = { type: SonareEngineCommandType.TransportSeekSample };
       expect(node.canSendCommand(incompleteSeek)).toBe(false);
       expect(() => node.sendCommand(incompleteSeek)).toThrow(
-        new TypeError('SonareRealtimeEngineNode.sendCommand: argInt must be a number'),
+        new TypeError('SonareRealtimeEngineNode.sendCommand: argInt must be an integer'),
       );
       expect(popSonareEngineCommandRingBuffer(commandRing)).toBeNull();
       // Every command carries its targetId through the same uint32 slot, so the

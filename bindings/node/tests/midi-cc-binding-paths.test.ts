@@ -38,8 +38,8 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     ['ccLsbNumber', 'an integer'],
     ['selectorMsb', 'an integer'],
     ['selectorLsb', 'an integer'],
-    ['channel', 'a number'],
-    ['paramId', 'a number'],
+    ['channel', 'an integer'],
+    ['paramId', 'an integer'],
   ] as const)('midiParamToCc refuses a string bindings[1].%s as %s', (field, kind) => {
     const binding = { ...good, [field]: '7' };
     expect(() => toCc(binding)).toThrow(
@@ -192,11 +192,11 @@ it('copies the SysEx byte range including an embedded zero', () => {
 it('checks binding shapes across the entire request before binding domains', () => {
   const bad = { ccNumber: 200, paramId: 1, channel: 'not a channel' } as never;
   expect(() => midiCcToBreakpoint({ bindings: [bad], event })).toThrow(
-    new TypeError('midiCcToBreakpoint: bindings[0].channel must be a number'),
+    new TypeError('midiCcToBreakpoint: bindings[0].channel must be an integer'),
   );
   expect(() =>
     midiParamToCc({ bindings: [good, bad], paramId: 1, unitValue: 0.5, group: 0 }),
-  ).toThrow(new TypeError('midiParamToCc: bindings[1].channel must be a number'));
+  ).toThrow(new TypeError('midiParamToCc: bindings[1].channel must be an integer'));
   expect(() =>
     midiParamToCc({
       bindings: [{ ...good, ccLsbNumber: 128 }],
@@ -209,7 +209,7 @@ it('checks binding shapes across the entire request before binding domains', () 
   const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
   try {
     expect(() => engine.bindMidiCc(bad)).toThrow(
-      new TypeError('RealtimeEngine.bindMidiCc: channel must be a number'),
+      new TypeError('RealtimeEngine.bindMidiCc: channel must be an integer'),
     );
   } finally {
     engine.destroy();
@@ -230,7 +230,7 @@ it('checks every routed event shape before any event domain', () => {
       events: [{ ppq: 0, word0: 4294967296 }],
       filterGroup: 'wrong' as never,
     }),
-  ).toThrow(new TypeError('midiRouteEvents: filterGroup must be a number'));
+  ).toThrow(new TypeError('midiRouteEvents: filterGroup must be an integer'));
 });
 
 it('accepts a cross-realm Uint8Array through the native event reader', () => {

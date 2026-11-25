@@ -573,7 +573,7 @@ describe('Project edit ops (new bindings)', () => {
       project.setTrackRoute(track, 'strip-1', 'master');
       const before = project.toJson();
       expect(() => project.setTrackRoute(undefined as never)).toThrow(
-        new TypeError('Project.setTrackRoute: trackId must be a number'),
+        new TypeError('Project.setTrackRoute: trackId must be an integer'),
       );
       expect(() => project.setTrackRoute(track, '', 'master')).toThrow(
         new RangeError('Project.setTrackRoute: channelStripRef must not be empty'),

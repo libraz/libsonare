@@ -810,7 +810,7 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() => project.renameTrack(trackId, 'renamed')).not.toThrow();
       expect(() => project.setTrackRoute(trackId, 'strip-1', 'master')).not.toThrow();
       expect(() => project.setTrackRoute(undefined as never)).toThrow(
-        new TypeError('Project.setTrackRoute: trackId must be a number'),
+        new TypeError('Project.setTrackRoute: trackId must be an integer'),
       );
       expect(() => project.setTrackRoute(trackId, '', 'master')).toThrow(/channelStripRef.*empty/);
       expect(() => project.setTrackRoute(trackId, 'strip-1', '')).toThrow(/outputTarget.*empty/);

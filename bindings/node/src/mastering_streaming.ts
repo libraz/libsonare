@@ -655,7 +655,7 @@ export class StreamAnalyzer {
   process(samples: Float32Array, startSample?: number): void {
     try {
       if (startSample !== undefined && typeof startSample !== 'number') {
-        throw refuseType('startSample must be a number');
+        throw refuseType('startSample must be an integer');
       }
     } catch (error) {
       throw nameNativeError(error, 'StreamAnalyzer.process');

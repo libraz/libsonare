@@ -162,10 +162,10 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
                        const val& hop_length_val, const val& n_mels_val, const val& fmin_val,
                        const val& fmax_val, bool htk) {
   const auto length = wasmFloat32ArrayLength(samples, "samples");
-  (void)numberFromVal(sample_rate_val, "sampleRate");
-  (void)numberFromVal(n_fft_val, "nFft");
-  (void)numberFromVal(hop_length_val, "hopLength");
-  (void)numberFromVal(n_mels_val, "nMels");
+  (void)integerNumberFromVal(sample_rate_val, "sampleRate");
+  (void)integerNumberFromVal(n_fft_val, "nFft");
+  (void)integerNumberFromVal(hop_length_val, "hopLength");
+  (void)integerNumberFromVal(n_mels_val, "nMels");
   const float fmin = domainFloatFromVal(fmin_val, "fminHz");
   const float fmax = domainFloatFromVal(fmax_val, "fmaxHz");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");

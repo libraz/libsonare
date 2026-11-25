@@ -38,7 +38,7 @@ const entries: Array<{
     run: (o) => masteringRepairDeclick(samples, SR, o as never),
     fields: [
       { key: 'threshold', wrong: '4', type: 'number' },
-      { key: 'lpcOrder', wrong: '8', type: 'number' },
+      { key: 'lpcOrder', wrong: '8', type: 'integer' },
     ],
   },
   {
@@ -46,7 +46,7 @@ const entries: Array<{
     run: (o) => masteringRepairDeclip(samples, SR, o as never),
     fields: [
       { key: 'clipThresholdDb', wrong: '0.9', type: 'number' },
-      { key: 'iterations', wrong: '3', type: 'number' },
+      { key: 'iterations', wrong: '3', type: 'integer' },
     ],
   },
   {
@@ -67,7 +67,7 @@ const entries: Array<{
     run: (o) => masteringRepairDenoiseClassical(samples, SR, o as never),
     fields: [
       { key: 'reductionDb', wrong: '12', type: 'number' },
-      { key: 'nFft', wrong: '1024', type: 'number' },
+      { key: 'nFft', wrong: '1024', type: 'integer' },
       { key: 'speechPresenceGain', wrong: 1, type: 'boolean' },
     ],
   },

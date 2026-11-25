@@ -504,7 +504,7 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, boo
 
 bool ReadWholeHertzSampleRate(Napi::Env env, const Napi::Value& value, int* out) {
   if (out == nullptr || !value.IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return false;
   }
   const double sample_rate = value.As<Napi::Number>().DoubleValue();

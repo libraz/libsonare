@@ -436,7 +436,7 @@ val ProjectWasm::positionAtPpq(const val& ppq_val) const {
 }
 
 double ProjectWasm::barStartPpq(const val& bar_index_val) const {
-  const double requested_bar_index = numberFromVal(bar_index_val, "barIndex");
+  const double requested_bar_index = integerNumberFromVal(bar_index_val, "barIndex");
   if (std::isfinite(requested_bar_index) &&
       std::trunc(requested_bar_index) != requested_bar_index) {
     throw WasmTypeError("barIndex must be an integer");

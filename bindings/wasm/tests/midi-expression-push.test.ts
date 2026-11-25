@@ -126,7 +126,7 @@ describe('Sonare WASM live per-note expression', () => {
   it('preflights live push shapes before domain checks, including direct embind calls', () => {
     withEngine((engine) => {
       expect(() => engine.pushMidiInputNoteOn(16, '0' as never, 60, 100)).toThrow(
-        new TypeError('RealtimeEngine.pushMidiInputNoteOn: channel must be a number'),
+        new TypeError('RealtimeEngine.pushMidiInputNoteOn: channel must be an integer'),
       );
       const native = (
         engine as unknown as {
@@ -146,7 +146,7 @@ describe('Sonare WASM live per-note expression', () => {
         TypeError,
       );
       expect(() => native.pushMidiPitchBend(DESTINATION, 16, '0' as never, 8192, -1)).toThrow(
-        /channel must be a number/,
+        /channel must be an integer/,
       );
 
       const byteArray = [0xf0, 0xf7] as never;

@@ -215,7 +215,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
       'splitNote: notes[0].frameEnd must be an integer in [-2147483648, 2147483647]',
     );
     expect(() => withBound('10' as unknown as number)).toThrow(
-      new TypeError('splitNote: notes[0].frameEnd must be a number'),
+      new TypeError('splitNote: notes[0].frameEnd must be an integer'),
     );
 
     // A non-finite bound is a number outside the domain, refused the same way.

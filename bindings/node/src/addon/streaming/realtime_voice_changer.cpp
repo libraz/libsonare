@@ -139,7 +139,7 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -453,7 +453,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
     return env.Undefined();
   }
   if (!info[channels_index].IsNumber()) {
-    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "channels must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (into && !IsFloat32Array(info[output_index])) {

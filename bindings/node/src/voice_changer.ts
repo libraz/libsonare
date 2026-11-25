@@ -463,7 +463,7 @@ export function realtimeVoiceChangerRender(
     const fnName = 'realtimeVoiceChangerRender';
     const req = requestOnly<RealtimeVoiceChangerRenderRequest>(fnName, [request]);
     if (isAbsent(req.sampleRate)) {
-      throw refuseType(`sampleRate must be a number`);
+      throw refuseType(`sampleRate must be an integer`);
     }
     assertAudioChannels(req.channels, req.sampleRate, req);
     const planes = assertPlanes(req.channels);

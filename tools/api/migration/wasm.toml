@@ -29778,7 +29778,7 @@ old = "CyclicTempogramRequest.sampleRate"
 changed = "required (was optional with a 22050 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be a number"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be an integer"
 
 [[entry]]
 kind = "field"
@@ -29787,7 +29787,7 @@ changed = "required (was optional with a 22050 default)"
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be a number"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be an integer"
 
 [[entry]]
 kind = "field"

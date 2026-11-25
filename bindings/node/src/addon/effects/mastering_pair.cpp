@@ -222,11 +222,12 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[4].IsNumber()) {
-    Napi::TypeError::New(env, "referenceSampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "referenceSampleRate must be an integer")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -275,11 +276,12 @@ Napi::Value SonareWrap::MasteringAbMatchLoudness(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "referenceSampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "referenceSampleRate must be an integer")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -326,11 +328,12 @@ Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   if (!info[5].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[6].IsNumber()) {
-    Napi::TypeError::New(env, "referenceSampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "referenceSampleRate must be an integer")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const bool has_params = info.Length() >= 8 && !info[7].IsUndefined() && !info[7].IsNull();
@@ -397,11 +400,12 @@ Napi::Value SonareWrap::MasteringAbMatchLoudnessStereo(const Napi::CallbackInfo&
     return env.Undefined();
   }
   if (!info[4].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[5].IsNumber()) {
-    Napi::TypeError::New(env, "referenceSampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "referenceSampleRate must be an integer")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int sample_rate = node_narrow_int(env, info[4], "sampleRate");
@@ -535,7 +539,7 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

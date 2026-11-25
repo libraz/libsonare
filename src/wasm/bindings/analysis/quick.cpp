@@ -644,7 +644,8 @@ template <typename Field>
 void setNumberOption(const val& options, const char* key, Field* field) {
   const val value = options[key];
   if (value.isUndefined() || value.isNull()) return;
-  const double raw = numberFromVal(value, key);
+  const double raw =
+      std::is_integral_v<Field> ? integerNumberFromVal(value, key) : numberFromVal(value, key);
   Field converted{};
   bool converted_ok = false;
   if constexpr (std::is_integral_v<Field>) {
@@ -673,7 +674,8 @@ std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const ch
   out.reserve(length);
   for (int i = 0; i < static_cast<int>(length); ++i) {
     int converted = 0;
-    if (!sonare::numeric::checked_round_cast(numberFromVal(numerators[i], subject), &converted)) {
+    const double raw = integerNumberFromVal(numerators[i], subject);
+    if (!sonare::numeric::checked_round_cast(raw, &converted)) {
       throw WasmRangeError(std::string(subject) + " entries must be finite in-range numbers");
     }
     out.push_back(converted);

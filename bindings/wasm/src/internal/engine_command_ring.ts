@@ -105,7 +105,9 @@ export function requireCommandOperand<K extends CommandOperand>(
 ): NonNullable<SonareEngineCommandRecord[K]> {
   const value = command[field];
   if (value == null || !hasCommandOperand(command, field)) {
-    throw refuseType(`${field} must be a number`);
+    throw refuseType(
+      `${field} must be ${field === 'targetId' || field === 'argInt' ? 'an integer' : 'a number'}`,
+    );
   }
   return value;
 }

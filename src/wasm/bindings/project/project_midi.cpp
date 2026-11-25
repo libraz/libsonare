@@ -635,7 +635,7 @@ double ProjectWasm::snapToGrid(const val& ppq_val, const val& strength_val,
                                const val& division_val) {
   const double ppq = numberFromVal(ppq_val, "ppq");
   const double strength = numberFromVal(strength_val, "strength");
-  const double division_value = numberFromVal(division_val, "division");
+  const double division_value = integerNumberFromVal(division_val, "division");
   const int division = sonare_c_detail::narrow_snap_division(ppq, strength, division_value);
   double out = 0.0;
   SonareProjectSnapToGridOptions options;
@@ -662,7 +662,7 @@ namespace {
 // Reads a scaler input at the width of @p In, refusing what the narrowing cast would wrap.
 template <typename In>
 In scaleInput(const val& value, const char* key) {
-  const double number = numberFromVal(value, key);
+  const double number = integerNumberFromVal(value, key);
   constexpr double kMax = static_cast<double>(std::numeric_limits<In>::max());
   if (!(number >= 0.0) || number > kMax || std::floor(number) != number) {
     throw WasmRangeError(std::string(key) + " must be an integer in [0, " +
@@ -800,9 +800,12 @@ val js_midi_bank_program(const val& ppq_val, const val& group_val, const val& ch
 
 void check_midi_event_payload(const val& sysex, const std::string& subject);
 
-void requireMidiNumberShape(const val& value, const std::string& subject, bool optional = false) {
+void requireMidiNumberShape(const val& value, const std::string& subject, bool optional = false,
+                            bool integer = false) {
   if (optional && (value.isUndefined() || value.isNull())) return;
-  if (!value.isNumber()) throw WasmTypeError(subject + " must be a number");
+  if (!value.isNumber()) {
+    throw WasmTypeError(subject + (integer ? " must be an integer" : " must be a number"));
+  }
 }
 
 void requireMidiBooleanShape(const val& value, const std::string& subject, bool optional = false) {
@@ -837,8 +840,8 @@ void requireMidiEventShape(const val& event, const std::string& path) {
   }
   requireKnownMidiObjectKeys(event, {"ppq", "word0", "word1", "sysex"}, path);
   requireMidiNumberShape(event["ppq"], elementField(path, "ppq"));
-  requireMidiNumberShape(event["word0"], elementField(path, "word0"));
-  requireMidiNumberShape(event["word1"], elementField(path, "word1"), true);
+  requireMidiNumberShape(event["word0"], elementField(path, "word0"), false, true);
+  requireMidiNumberShape(event["word1"], elementField(path, "word1"), true, true);
   check_midi_event_payload(event["sysex"], elementField(path, "sysex"));
 }
 
@@ -870,9 +873,9 @@ void requireMidiRouteConfigShapes(const val& config) {
   }
   requireKnownMidiObjectKeys(config, {"filterGroup", "filterChannel", "remapChannel", "thru"},
                              "config");
-  requireMidiNumberShape(config["filterGroup"], "filterGroup", true);
-  requireMidiNumberShape(config["filterChannel"], "filterChannel", true);
-  requireMidiNumberShape(config["remapChannel"], "remapChannel", true);
+  requireMidiNumberShape(config["filterGroup"], "filterGroup", true, true);
+  requireMidiNumberShape(config["filterChannel"], "filterChannel", true, true);
+  requireMidiNumberShape(config["remapChannel"], "remapChannel", true, true);
   requireMidiBooleanShape(config["thru"], "thru", true);
 }
 
@@ -958,10 +961,10 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
 val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_val,
                      const val& max_value_val, const val& min_movement_val) {
   const size_t count = requireMidiEventListShapes(events, "events");
-  requireMidiNumberShape(param_id_val, "paramId");
+  requireMidiNumberShape(param_id_val, "paramId", false, true);
   requireMidiNumberShape(min_value_val, "minValue");
   requireMidiNumberShape(max_value_val, "maxValue");
-  requireMidiNumberShape(min_movement_val, "minMovement");
+  requireMidiNumberShape(min_movement_val, "minMovement", false, true);
   const uint32_t param_id = domainNumberFromVal<uint32_t>(
       param_id_val, "paramId", sonare_c_detail::kMidiTargetParamIdDomain);
   const float min_value = checkedFloatFromVal(min_value_val, "minValue");
@@ -1013,9 +1016,9 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
 val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, const val& group_val,
                         const val& ppq_val) {
   requireMidiCcBindingListShapes(bindings);
-  requireMidiNumberShape(param_id, "paramId");
+  requireMidiNumberShape(param_id, "paramId", false, true);
   requireMidiNumberShape(unit_value_val, "unitValue");
-  requireMidiNumberShape(group_val, "group");
+  requireMidiNumberShape(group_val, "group", false, true);
   requireMidiNumberShape(ppq_val, "ppq");
   const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
   const uint32_t requested_param_id =

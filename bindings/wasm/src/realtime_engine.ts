@@ -235,7 +235,7 @@ function assertUmpWords(words: UmpWords, count: number): UmpWords {
   for (let i = 0; i < count; i++) {
     const word = words[i];
     if (typeof word !== 'number') {
-      throw refuseType(`words[${i}] must be a number`);
+      throw refuseType(`words[${i}] must be an integer`);
     }
     if (!Number.isInteger(word) || word < UMP_WORD_MIN || word > UINT32_MAX) {
       throw refuse(`words[${i}] must be an integer in [${UMP_WORD_MIN}, ${UINT32_MAX}]`);
@@ -295,7 +295,7 @@ function normalizeEngineConfig(
   const request = requestObject(requestName, config as RealtimeEngineConfig, 'config', true);
   const sampleRate = request.sampleRate;
   if (typeof sampleRate !== 'number') {
-    throw refuseType(`sampleRate must be a number`);
+    throw refuseType(`sampleRate must be an integer`);
   }
   // The engine refuses a rate outside its supported integer range in its own text.
   return {
@@ -379,7 +379,7 @@ function engineCount(path: string, value: unknown, max?: number): number | undef
   }
   const name = path.slice(path.lastIndexOf('.') + 1);
   if (typeof value !== 'number') {
-    throw refuseType(`${name} must be a number`);
+    throw refuseType(`${name} must be an integer`);
   }
   if (!Number.isInteger(value)) {
     throw refuse(`${name} must be an integer`);
@@ -1109,11 +1109,11 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['note', note],
-      ['velocity', velocity],
-      ['offsetInBlockSamples', offsetInBlockSamples],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['note', note, false, true],
+      ['velocity', velocity, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, false, true],
     ]);
     this.native.pushMidiInputNoteOn(group, channel, note, velocity, offsetInBlockSamples);
   }
@@ -1133,11 +1133,11 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['note', note],
-      ['velocity', velocity],
-      ['offsetInBlockSamples', offsetInBlockSamples],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['note', note, false, true],
+      ['velocity', velocity, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, false, true],
     ]);
     this.native.pushMidiInputNoteOff(group, channel, note, velocity, offsetInBlockSamples);
   }
@@ -1157,11 +1157,11 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['controller', controller],
-      ['value', value],
-      ['offsetInBlockSamples', offsetInBlockSamples],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['controller', controller, false, true],
+      ['value', value, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, false, true],
     ]);
     this.native.pushMidiInputCc(group, channel, controller, value, offsetInBlockSamples);
   }
@@ -1184,10 +1184,10 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['bend14', bend14],
-      ['offsetInBlockSamples', offsetInBlockSamples],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['bend14', bend14, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, false, true],
     ]);
     this.native.pushMidiInputPitchBend(group, channel, bend14, offsetInBlockSamples);
   }
@@ -1208,10 +1208,10 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['pressure', pressure],
-      ['offsetInBlockSamples', offsetInBlockSamples],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['pressure', pressure, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, false, true],
     ]);
     this.native.pushMidiInputChannelPressure(group, channel, pressure, offsetInBlockSamples);
   }
@@ -1232,11 +1232,11 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['note', note],
-      ['pressure', pressure],
-      ['offsetInBlockSamples', offsetInBlockSamples],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['note', note, false, true],
+      ['pressure', pressure, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, false, true],
     ]);
     this.native.pushMidiInputPolyPressure(group, channel, note, pressure, offsetInBlockSamples);
   }
@@ -1260,12 +1260,12 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['note', note],
-      ['velocity', velocity],
-      ['renderFrame', renderFrame, true],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['note', note, false, true],
+      ['velocity', velocity, false, true],
+      ['renderFrame', renderFrame, true, true],
     ]);
     this.native.pushMidiNoteOn(
       destinationId,
@@ -1296,12 +1296,12 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['note', note],
-      ['velocity', velocity],
-      ['renderFrame', renderFrame, true],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['note', note, false, true],
+      ['velocity', velocity, false, true],
+      ['renderFrame', renderFrame, true, true],
     ]);
     this.native.pushMidiNoteOff(
       destinationId,
@@ -1328,12 +1328,12 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['controller', controller],
-      ['value', value],
-      ['renderFrame', renderFrame, true],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['controller', controller, false, true],
+      ['value', value, false, true],
+      ['renderFrame', renderFrame, true, true],
     ]);
     this.native.pushMidiCc(
       destinationId,
@@ -1359,11 +1359,11 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['bend14', bend14],
-      ['renderFrame', renderFrame, true],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['bend14', bend14, false, true],
+      ['renderFrame', renderFrame, true, true],
     ]);
     this.native.pushMidiPitchBend(
       destinationId,
@@ -1387,11 +1387,11 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['pressure', pressure],
-      ['renderFrame', renderFrame, true],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['pressure', pressure, false, true],
+      ['renderFrame', renderFrame, true, true],
     ]);
     this.native.pushMidiChannelPressure(
       destinationId,
@@ -1417,12 +1417,12 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['note', note],
-      ['pressure', pressure],
-      ['renderFrame', renderFrame, true],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['note', note, false, true],
+      ['pressure', pressure, false, true],
+      ['renderFrame', renderFrame, true, true],
     ]);
     this.native.pushMidiPolyPressure(
       destinationId,
@@ -1444,9 +1444,9 @@ export class RealtimeEngine {
    * apply (omit for immediate).
    */
   pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
-    assertMidiNumberShapes([['destinationId', destinationId]]);
+    assertMidiNumberShapes([['destinationId', destinationId, false, true]]);
     const wordCount = assertMidiWordListShapes(words);
-    assertMidiNumberShapes([['renderFrame', renderFrame, true]]);
+    assertMidiNumberShapes([['renderFrame', renderFrame, true, true]]);
     this.native.pushMidiUmp(
       destinationId,
       assertUmpWords(words, wordCount),
@@ -1479,13 +1479,13 @@ export class RealtimeEngine {
     renderFrame?: number,
   ): void {
     assertMidiNumberShapes([
-      ['destinationId', destinationId],
-      ['group', group],
-      ['channel', channel],
-      ['program', program],
+      ['destinationId', destinationId, false, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['program', program, false, true],
     ]);
     assertMidiBankShape(bank);
-    assertMidiNumberShapes([['renderFrame', renderFrame, true]]);
+    assertMidiNumberShapes([['renderFrame', renderFrame, true, true]]);
     const { bankValid, bankMsb, bankLsb } = programBank('pushMidiProgram', bank);
     this.native.pushMidiProgram(
       destinationId,
@@ -1513,12 +1513,12 @@ export class RealtimeEngine {
     offsetInBlockSamples = 0,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['program', program],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['program', program, false, true],
     ]);
     assertMidiBankShape(bank);
-    assertMidiNumberShapes([['offsetInBlockSamples', offsetInBlockSamples]]);
+    assertMidiNumberShapes([['offsetInBlockSamples', offsetInBlockSamples, false, true]]);
     const { bankValid, bankMsb, bankLsb } = programBank('pushMidiInputProgram', bank);
     this.native.pushMidiInputProgram(
       group,
@@ -1539,7 +1539,7 @@ export class RealtimeEngine {
    */
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
     const wordCount = assertMidiWordListShapes(words);
-    assertMidiNumberShapes([['offsetInBlockSamples', offsetInBlockSamples]]);
+    assertMidiNumberShapes([['offsetInBlockSamples', offsetInBlockSamples, false, true]]);
     this.native.pushMidiInputUmp(assertUmpWords(words, wordCount), offsetInBlockSamples);
   }
 
@@ -1553,9 +1553,9 @@ export class RealtimeEngine {
    * Mirrors the Node/Python/C-ABI `pushMidiSysex`.
    */
   pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame?: number): void {
-    assertMidiNumberShapes([['destinationId', destinationId]]);
+    assertMidiNumberShapes([['destinationId', destinationId, false, true]]);
     assertMidiByteShape(data, 'data');
-    assertMidiNumberShapes([['renderFrame', renderFrame, true]]);
+    assertMidiNumberShapes([['renderFrame', renderFrame, true, true]]);
     this.native.pushMidiSysex(destinationId, data, resolveRenderFrame(renderFrame));
   }
 
@@ -1564,7 +1564,7 @@ export class RealtimeEngine {
    * `renderFrame` (omitted = immediate). Mirrors the C-ABI `pushMidiPanic`.
    */
   pushMidiPanic(renderFrame?: number): void {
-    assertMidiNumberShapes([['renderFrame', renderFrame, true]]);
+    assertMidiNumberShapes([['renderFrame', renderFrame, true, true]]);
     this.native.pushMidiPanic(resolveRenderFrame(renderFrame));
   }
 

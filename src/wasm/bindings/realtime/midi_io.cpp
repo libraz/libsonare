@@ -14,7 +14,7 @@
 namespace {
 
 void requireLiveMidiNumberShape(const val& value, const std::string& subject) {
-  if (!value.isNumber()) throw WasmTypeError(subject + " must be a number");
+  if (!value.isNumber()) throw WasmTypeError(subject + " must be an integer");
 }
 
 void requireLiveMidiOptionalNumberShape(const val& value, const char* subject) {

@@ -125,7 +125,9 @@ function nativeRoomOptions(options: object): Record<string, unknown> {
       return undefined;
     }
     if (typeof value !== 'number') {
-      throw refuseType(`${field} must be a number`);
+      throw refuseType(
+        `${field} must be ${field === 'seed' || field === 'nOctaveBands' ? 'an integer' : 'a number'}`,
+      );
     }
     return value;
   };

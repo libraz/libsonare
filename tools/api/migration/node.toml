@@ -16702,7 +16702,7 @@ old = "CyclicTempogramRequest.sampleRate"
 changed = "required (was optional with a 22050 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: cyclicTempogram: sampleRate must be a number"
+test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: cyclicTempogram: sampleRate must be an integer"
 
 [[entry]]
 kind = "field"

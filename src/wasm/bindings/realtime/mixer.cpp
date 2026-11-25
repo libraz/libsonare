@@ -45,7 +45,7 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
   for (int send_index = 0; send_index < send_count; ++send_index) {
     const val send = requiredElementObject(sends, send_index, "sends");
     const std::string at = elementAt("sends", send_index);
-    const uint32_t bus_id = checkedUintFromVal(requiredNumberElementProperty(send, "busId", at),
+    const uint32_t bus_id = checkedUintFromVal(requiredDomainIntProperty(send, "busId", at),
                                                elementField(at, "busId").c_str());
     const sonare::engine::TrackLaneConfig::Send defaults{};
     // Wire timing is 0 = post-fader, 1 = pre-fader, the reverse of the core enum's order.
@@ -104,7 +104,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     } else {
       lane_val = requiredElementObject(lanes, i, "lanes");
       const std::string at = elementAt("lanes", i);
-      track_id = checkedUintFromVal(requiredNumberElementProperty(lane_val, "trackId", at),
+      track_id = checkedUintFromVal(requiredDomainIntProperty(lane_val, "trackId", at),
                                     elementField(at, "trackId").c_str());
     }
     sonare::engine::TrackLaneConfig config{track_id};
@@ -220,9 +220,9 @@ val RealtimeEngineWasm::inputTrack() const {
 /// alignment past the delay ceiling. Matches sonare_engine_set_lane_sidechain.
 void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& insert_index_val,
                                           const val& source_track_id_val) {
-  if (!track_id_val.isNumber()) throw WasmTypeError("ref must be a number");
-  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be a number");
-  if (!source_track_id_val.isNumber()) throw WasmTypeError("source.id must be a number");
+  if (!track_id_val.isNumber()) throw WasmTypeError("ref must be an integer");
+  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be an integer");
+  if (!source_track_id_val.isNumber()) throw WasmTypeError("source.id must be an integer");
   const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "source.id");
@@ -252,9 +252,9 @@ void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& in
 /// sonare_engine_can_set_lane_sidechain; a build without mixing throws, as the setter does.
 int RealtimeEngineWasm::canSetLaneSidechain(const val& track_id_val, const val& insert_index_val,
                                             const val& source_track_id_val) const {
-  if (!track_id_val.isNumber()) throw WasmTypeError("ref must be a number");
-  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be a number");
-  if (!source_track_id_val.isNumber()) throw WasmTypeError("source.id must be a number");
+  if (!track_id_val.isNumber()) throw WasmTypeError("ref must be an integer");
+  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be an integer");
+  if (!source_track_id_val.isNumber()) throw WasmTypeError("source.id must be an integer");
   const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "source.id");
@@ -277,7 +277,7 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
   for (int i = 0; i < count; ++i) {
     const val bus = requiredElementObject(buses, i, "buses");
     const std::string at = elementAt("buses", i);
-    const uint32_t bus_id = checkedUintFromVal(requiredNumberElementProperty(bus, "busId", at),
+    const uint32_t bus_id = checkedUintFromVal(requiredDomainIntProperty(bus, "busId", at),
                                                elementField(at, "busId").c_str());
     const int layout_value = intProperty(bus, "channelLayout", 1);
     // The full-range bound is checked BEFORE narrowing to uint8_t, the same
@@ -311,10 +311,10 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
 /// sonare_engine_set_bus_sidechain). source.id 0 removes the binding.
 void RealtimeEngineWasm::setBusSidechain(const val& bus_id_val, const val& insert_index_val,
                                          const val& source_kind_val, const val& source_id_val) {
-  if (!bus_id_val.isNumber()) throw WasmTypeError("busId must be a number");
-  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be a number");
-  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be a number");
-  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be a number");
+  if (!bus_id_val.isNumber()) throw WasmTypeError("busId must be an integer");
+  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be an integer");
+  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be an integer");
+  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be an integer");
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const int source_kind = checkedIntFromVal(source_kind_val, "source.kind");
@@ -346,10 +346,10 @@ void RealtimeEngineWasm::setBusSidechain(const val& bus_id_val, const val& inser
 int RealtimeEngineWasm::canSetBusSidechain(const val& bus_id_val, const val& insert_index_val,
                                            const val& source_kind_val,
                                            const val& source_id_val) const {
-  if (!bus_id_val.isNumber()) throw WasmTypeError("busId must be a number");
-  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be a number");
-  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be a number");
-  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be a number");
+  if (!bus_id_val.isNumber()) throw WasmTypeError("busId must be an integer");
+  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be an integer");
+  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be an integer");
+  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be an integer");
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const int source_kind = checkedIntFromVal(source_kind_val, "source.kind");
@@ -372,9 +372,9 @@ int RealtimeEngineWasm::canSetBusSidechain(const val& bus_id_val, const val& ins
 int RealtimeEngineWasm::canSetMasterSidechain(const val& insert_index_val,
                                               const val& source_kind_val,
                                               const val& source_id_val) const {
-  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be a number");
-  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be a number");
-  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be a number");
+  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be an integer");
+  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be an integer");
+  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be an integer");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const int source_kind = checkedIntFromVal(source_kind_val, "source.kind");
   const uint32_t source_id = checkedUintFromVal(source_id_val, "source.id");
@@ -394,9 +394,9 @@ int RealtimeEngineWasm::canSetMasterSidechain(const val& insert_index_val,
 /// sonare_engine_set_master_sidechain). source.id 0 removes the binding.
 void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const val& source_kind_val,
                                             const val& source_id_val) {
-  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be a number");
-  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be a number");
-  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be a number");
+  if (!insert_index_val.isNumber()) throw WasmTypeError("insertIndex must be an integer");
+  if (!source_kind_val.isNumber()) throw WasmTypeError("source.kind must be an integer");
+  if (!source_id_val.isNumber()) throw WasmTypeError("source.id must be an integer");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const int source_kind = checkedIntFromVal(source_kind_val, "source.kind");
   const uint32_t source_id = checkedUintFromVal(source_id_val, "source.id");

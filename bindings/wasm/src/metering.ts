@@ -13,8 +13,8 @@ import { getSonareModule } from './module_state.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertIntegerType,
   assertNonNegativeSafeInteger,
-  assertNumber,
   assertPositiveFloatValue,
   assertSamplesInWindow,
   requestOnly,
@@ -31,7 +31,7 @@ const DEFAULT_SPECTRUM_N_FFT = 2048;
 
 /** True-peak oversampling factors the library accepts: 1, 2, 4, 8 or 16. */
 function assertOversampleFactor(factor: unknown): void {
-  assertNumber(factor, 'oversampleFactor');
+  assertIntegerType(factor, 'oversampleFactor');
   const value = factor as number;
   if (!Number.isInteger(value) || value < 1 || value > 16 || (value & (value - 1)) !== 0) {
     throw refuse('oversampleFactor must be one of 1, 2, 4, 8, 16');

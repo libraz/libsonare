@@ -77,6 +77,8 @@ const capture = (run: () => string): string | Error => {
  * magnitude the wrong-typed values below carry, so a reader that coerced one
  * would land on a result this file can name.
  */
+const INTEGER_KEYS = ['preMax', 'postMax', 'wait'];
+
 const FIELDS = [
   { key: 'delta', low: 8, high: 30 },
   { key: 'threshold', low: 8, high: 20 },
@@ -127,7 +129,9 @@ describe.each(FIELDS)('detectOnsets reads $key the same way on both surfaces', (
     for (const value of wrongTyped(high)) {
       const caught = capture(() => withValue(s, value));
       expect(caught, `${key} ${JSON.stringify(value)} on ${s}`).toBeInstanceOf(Error);
-      expect((caught as Error).message).toBe(`detectOnsets: ${key} must be a number`);
+      expect((caught as Error).message).toBe(
+        `detectOnsets: ${key} must be ${INTEGER_KEYS.includes(key) ? 'an integer' : 'a number'}`,
+      );
     }
   });
 
@@ -156,7 +160,9 @@ describe.each(FIELDS)('detectOnsets reads $key the same way on both surfaces', (
     for (const s of SURFACES) {
       const caught = capture(() => withValue(s, true));
       expect(caught, `${key} true on ${s}`).toBeInstanceOf(Error);
-      expect((caught as Error).message).toBe(`detectOnsets: ${key} must be a number`);
+      expect((caught as Error).message).toBe(
+        `detectOnsets: ${key} must be ${INTEGER_KEYS.includes(key) ? 'an integer' : 'a number'}`,
+      );
     }
   });
 

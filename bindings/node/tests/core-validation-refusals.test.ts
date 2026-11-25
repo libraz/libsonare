@@ -657,12 +657,12 @@ describe('streaming retune prepare refusals come from the core', () => {
       expectRefusal(
         () => retune.prepare(7999, 'invalid' as unknown as number),
         TypeError,
-        'StreamingRetune.prepare: maxBlockSize must be a number',
+        'StreamingRetune.prepare: maxBlockSize must be an integer',
       );
       expectRefusal(
         () => raw.prepare(null as unknown as number, 16),
         TypeError,
-        'StreamingRetune.prepare: sampleRate must be a number',
+        'StreamingRetune.prepare: sampleRate must be an integer',
       );
       expectRefusal(
         () => retune.prepare(7999, 0.5),

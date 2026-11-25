@@ -1433,11 +1433,11 @@ export class SonareEngine {
     options: SonareEngineMidiTimingOptions | undefined,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['data0', data0],
-      ['data1', data1],
-      ['offsetInBlockSamples', offsetInBlockSamples, true],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['data0', data0, false, true],
+      ['data1', data1, false, true],
+      ['offsetInBlockSamples', offsetInBlockSamples, true, true],
     ]);
     assertMidiTimingShape('offsetInBlockSamples', offsetInBlockSamples, options);
     const timing = resolveMidiInputTiming(
@@ -1658,9 +1658,9 @@ export class SonareEngine {
     options?: SonareEngineMidiTimingOptions,
   ): void {
     assertMidiNumberShapes([
-      ['group', group],
-      ['channel', channel],
-      ['program', program],
+      ['group', group, false, true],
+      ['channel', channel, false, true],
+      ['program', program, false, true],
     ]);
     assertMidiBankShape(bank);
     assertMidiTimingShape('offsetInBlockSamples', offsetInBlockSamples, options);

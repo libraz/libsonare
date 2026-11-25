@@ -830,11 +830,11 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (info.Length() < 3) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (info.Length() < 4) {
-    Napi::TypeError::New(env, "takeSampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "takeSampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Float32Array reference = info[0].As<Napi::Float32Array>();

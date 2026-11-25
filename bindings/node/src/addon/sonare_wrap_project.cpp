@@ -1213,11 +1213,11 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (info.Length() < 3) {
-    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "channels must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (info.Length() < 4) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   uint32_t source_id = 0;

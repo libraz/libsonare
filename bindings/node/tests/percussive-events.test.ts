@@ -717,7 +717,7 @@ describe('renderPercussiveEvents', () => {
       expect(caught, `expected a TypeError for ${JSON.stringify(event)}`).toBeInstanceOf(TypeError);
       // The addon's event reader names the field; the core's refusal does not.
       expect((caught as Error).message).toMatch(
-        /^renderPercussiveEvents: events\[0\]\.\w+ must be a number$/,
+        /^renderPercussiveEvents: events\[0\]\.\w+ must be an integer$/,
       );
     }
 

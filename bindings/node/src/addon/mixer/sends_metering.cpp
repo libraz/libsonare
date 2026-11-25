@@ -62,7 +62,7 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sendIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sendIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
@@ -88,7 +88,7 @@ Napi::Value MixerWrap::RemoveSend(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sendIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sendIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const unsigned int send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");
@@ -111,7 +111,7 @@ Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
   int tap = SONARE_METER_TAP_POST_FADER;
   if (!info[1].IsUndefined() && !info[1].IsNull()) {
     if (!info[1].IsNumber()) {
-      Napi::TypeError::New(env, "tap must be a number").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "tap must be an integer").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     tap = sonare_node::node_narrow_int(env, info[1], "tap");

@@ -886,7 +886,9 @@ describe('Sonare worklet ring buffers', () => {
           delete partial[field];
           const write = () => pushSonareEngineCommandRingBuffer(ring, partial as never);
           expect(write).toThrow(TypeError);
-          expect(write).toThrow(`${field} must be a number`);
+          expect(write).toThrow(
+            `${field} must be ${field === 'argFloat' || field === 'argFloat2' ? 'a number' : 'an integer'}`,
+          );
           expect(popSonareEngineCommandRingBuffer(ring)).toBeNull();
         }
         expect(pushSonareEngineCommandRingBuffer(ring, { type, ...payload })).toBe(true);

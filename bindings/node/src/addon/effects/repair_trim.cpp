@@ -121,7 +121,7 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -194,7 +194,7 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::Callbac
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

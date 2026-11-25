@@ -98,15 +98,16 @@ uint32_t nextSampleBankId() { return g_next_sample_bank_id++; }
 
 /// Optional numeric field: absent keeps @p fallback, present-but-not-a-finite-
 /// number throws rather than coercing.
-double numberField(val object, const char* key, const char* subject, double fallback) {
+double numberField(val object, const char* key, const char* subject, double fallback,
+                   bool integer = false) {
   if (!hasProperty(object, key)) return fallback;
-  return requireNumberProperty(object, key, subject);
+  return requireNumberProperty(object, key, subject, integer);
 }
 
 /// Optional unsigned-integer field, rejected before it is narrowed — a bare
 /// cast would wrap 128 to 0 and 4294967296 to nothing at all.
 double integerField(val object, const char* key, const char* subject, double max) {
-  const double value = numberField(object, key, subject, 0.0);
+  const double value = numberField(object, key, subject, 0.0, true);
   if (value < 0.0 || value > max || std::floor(value) != value) {
     throw WasmRangeError(std::string(subject) + "." + key + " must be an integer in [0, " +
                          std::to_string(static_cast<long long>(max)) + "]");

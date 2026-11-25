@@ -73,6 +73,14 @@ function num(value: unknown, name: string): number {
   return value;
 }
 
+/** A required integer-valued field: a non-number is a `TypeError`; its domain is checked natively. */
+function int(value: unknown, name: string): number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${name} must be an integer`);
+  }
+  return value;
+}
+
 /** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
 function boundedInt(value: unknown, argName: string, max: number): number {
   assertBoundedInteger(value, argName, 0, max);
@@ -826,11 +834,11 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
     const bank = bankPair(r.bank, num);
     return projectModule().midiBankProgram(
       num(r.ppq, 'ppq'),
-      num(r.group, 'group'),
-      num(r.channel, 'channel'),
+      int(r.group, 'group'),
+      int(r.channel, 'channel'),
       bank.msb,
       bank.lsb,
-      num(r.program, 'program'),
+      int(r.program, 'program'),
     );
   });
 }
@@ -844,9 +852,9 @@ export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRou
     const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
     assertMidiCcEventPayloads(events);
     assertMidiNumberShapes([
-      ['filterGroup', config.filterGroup, true],
-      ['filterChannel', config.filterChannel, true],
-      ['remapChannel', config.remapChannel, true],
+      ['filterGroup', config.filterGroup, true, true],
+      ['filterChannel', config.filterChannel, true, true],
+      ['remapChannel', config.remapChannel, true, true],
     ]);
     assertMidiBooleanShape(config.thru, 'thru', true);
     const present: Record<string, unknown> = {};
@@ -867,10 +875,10 @@ export function midiCcLearn(
     const r = requestObject('midiCcLearn', request, 'request', true);
     assertMidiCcEventPayloads(r.events);
     assertMidiNumberShapes([
-      ['paramId', r.paramId],
+      ['paramId', r.paramId, false, true],
       ['minValue', r.minValue, true],
       ['maxValue', r.maxValue, true],
-      ['minMovement', r.minMovement, true],
+      ['minMovement', r.minMovement, true, true],
     ]);
     return projectModule().midiCcLearn(
       r.events,
@@ -907,17 +915,17 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
     const r = requestObject(fn, request, 'request', true);
     assertMidiCcBindingListShapes(r.bindings);
     assertMidiNumberShapes([
-      ['paramId', r.paramId],
+      ['paramId', r.paramId, false, true],
       ['unitValue', r.unitValue],
-      ['group', r.group],
+      ['group', r.group, false, true],
       ['ppq', r.ppq, true],
     ]);
     assertMidiCcBindingListBytes(r.bindings);
     return projectModule().midiParamToCc(
       r.bindings,
-      num(r.paramId, 'paramId'),
+      int(r.paramId, 'paramId'),
       num(r.unitValue, 'unitValue'),
-      num(r.group, 'group'),
+      int(r.group, 'group'),
       isAbsent(r.ppq) ? 0 : num(r.ppq, 'ppq'),
     );
   });

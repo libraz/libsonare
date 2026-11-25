@@ -689,11 +689,11 @@ describe('live MIDI push argument and state rule', () => {
         ...args: unknown[]
       ) => void;
       expect(() => pushInputNoteOn(300, 0, '60', 100)).toThrow(
-        new TypeError('RealtimeEngine.pushMidiInputNoteOn: note must be a number'),
+        new TypeError('RealtimeEngine.pushMidiInputNoteOn: note must be an integer'),
       );
       // Before shape admission the omitted note reached the native byte reader as its zero fallback.
       expect(() => pushInputNoteOn(0, 0, undefined, 100)).toThrow(
-        new TypeError('RealtimeEngine.pushMidiInputNoteOn: note must be a number'),
+        new TypeError('RealtimeEngine.pushMidiInputNoteOn: note must be an integer'),
       );
       const native = (
         engine as unknown as {
@@ -701,7 +701,7 @@ describe('live MIDI push argument and state rule', () => {
         }
       ).native;
       expect(() => native.pushMidiInputPitchBend(0, 0, undefined, 0)).toThrow(
-        new TypeError('RealtimeEngine.pushMidiInputPitchBend: bend14 must be a number'),
+        new TypeError('RealtimeEngine.pushMidiInputPitchBend: bend14 must be an integer'),
       );
       engine.setMidiInputSource(0);
       expect(() => engine.pushMidiInputNoteOff(0, 0, 60)).not.toThrow();
@@ -716,7 +716,7 @@ describe('live MIDI push argument and state rule', () => {
     try {
       const pushUmp = engine.pushMidiUmp.bind(engine) as unknown as (...args: unknown[]) => void;
       expect(() => pushUmp(0, [4294967296, 'bad'], -1)).toThrow(
-        new TypeError('RealtimeEngine.pushMidiUmp: words[1] must be a number'),
+        new TypeError('RealtimeEngine.pushMidiUmp: words[1] must be an integer'),
       );
       const pushSysex = engine.pushMidiSysex.bind(engine) as unknown as (
         ...args: unknown[]

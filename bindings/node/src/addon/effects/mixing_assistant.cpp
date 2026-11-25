@@ -55,7 +55,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     return false;
   }
   if (!info[5].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return false;
   }
 

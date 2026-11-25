@@ -316,12 +316,12 @@ describe('Sonare WASM part rig request form', () => {
     [
       'a non-numeric part',
       { part: 'x' },
-      new TypeError('Project.setPartRig: part must be a number'),
+      new TypeError('Project.setPartRig: part must be an integer'),
     ],
     [
       'a non-numeric destination',
       { destinationId: 'x' },
-      new TypeError('Project.setPartRig: destinationId must be a number'),
+      new TypeError('Project.setPartRig: destinationId must be an integer'),
     ],
     [
       'a non-array inserts',

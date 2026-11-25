@@ -72,7 +72,7 @@ inline void requireCcBindingShape(const emscripten::val& object, const std::stri
     }
   };
   number("ccNumber", false, true);
-  number("channel", true);
+  number("channel", true, true);
   const emscripten::val kind = object["kind"];
   if (!kind.isUndefined() && !kind.isNull() && !kind.isString()) {
     throw WasmTypeError(elementField(at, "kind") + " must be a string");
@@ -80,7 +80,7 @@ inline void requireCcBindingShape(const emscripten::val& object, const std::stri
   number("ccLsbNumber", true, true);
   number("selectorMsb", true, true);
   number("selectorLsb", true, true);
-  number("paramId");
+  number("paramId", false, true);
   number("minValue", true);
   number("maxValue", true);
   const emscripten::val consume = object["consume"];

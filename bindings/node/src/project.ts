@@ -2103,8 +2103,10 @@ export class Project {
   autoTempo(...args: unknown[]): ProjectAutoTempoResult {
     const fnName = 'autoTempo';
     const request = sampleOneShot<ProjectAutoTempoRequest>(fnName, args, (value) => {
+      if (!isAbsent(value.candidateIndex) && typeof value.candidateIndex !== 'number') {
+        throw refuseType('candidateIndex must be an integer');
+      }
       for (const [name, field] of [
-        ['candidateIndex', value.candidateIndex],
         ['tempoUpdateIntervalBeats', value.tempoUpdateIntervalBeats],
         ['rampThreshold', value.rampThreshold],
       ] as const) {

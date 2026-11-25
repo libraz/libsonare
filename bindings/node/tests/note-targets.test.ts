@@ -391,7 +391,7 @@ describe('assignNoteTargets refuses what it cannot act on', () => {
         sampleRate: SR,
         targets: targets(),
       }),
-    ).toThrow(/^assignNoteTargets: notes\[0\]\.onsetSample must be a number$/);
+    ).toThrow(/^assignNoteTargets: notes\[0\]\.onsetSample must be an integer$/);
     expect(() =>
       assignNoteTargets({
         notes: notes(),

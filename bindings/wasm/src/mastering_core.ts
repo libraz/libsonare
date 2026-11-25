@@ -50,8 +50,8 @@ import {
   assertClosedToken,
   assertFloat32Array,
   assertFloatValue,
+  assertIntegerType,
   assertIntegerValue,
-  assertNumber,
   assertPositiveFloatValue,
   assertSampleRate,
   assertString,
@@ -748,10 +748,10 @@ export function masteringApplyPairProcessorStereo(
     assertFloat32Array(r.sourceRight, 'sourceRight');
     assertFloat32Array(r.referenceLeft, 'referenceLeft');
     assertFloat32Array(r.referenceRight, 'referenceRight');
-    assertNumber(r.sampleRate, 'sampleRate');
+    assertIntegerType(r.sampleRate, 'sampleRate');
     const referenceRate = r.referenceSampleRate ?? r.sampleRate;
     if (!isAbsent(r.referenceSampleRate)) {
-      assertNumber(r.referenceSampleRate, 'referenceSampleRate');
+      assertIntegerType(r.referenceSampleRate, 'referenceSampleRate');
     }
     return withHeapNeed(
       sampleNeed(

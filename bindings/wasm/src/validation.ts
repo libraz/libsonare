@@ -436,7 +436,8 @@ export function assertBoundedInteger(
   assertIntegerRange(value, argName, min, max);
 }
 
-function assertIntegerType(value: unknown, argName: string): asserts value is number {
+/** An integer-valued argument: `TypeError` "must be an integer" unless a number; the domain is the caller's. */
+export function assertIntegerType(value: unknown, argName: string): asserts value is number {
   if (typeof value !== 'number') {
     throw refuseType(`${argName} must be an integer`);
   }
@@ -668,7 +669,7 @@ export function resolveRenderFrame(renderFrame: number | null | undefined): numb
     return C_ABSENT;
   }
   if (typeof renderFrame !== 'number') {
-    throw refuseType(`renderFrame must be a number`);
+    throw refuseType(`renderFrame must be an integer`);
   }
   if (!(Number.isFinite(renderFrame) && renderFrame >= 0)) {
     throw refuse(`renderFrame must be finite and at least 0; omit it to apply immediately`);

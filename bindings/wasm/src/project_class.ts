@@ -1215,7 +1215,9 @@ export class Project {
         ] as const) {
           const value = request[key];
           if (!isAbsent(value) && typeof value !== 'number') {
-            throw refuseType(`${key} must be a number`);
+            throw refuseType(
+              `${key} must be ${key === 'rampThreshold' ? 'a number' : 'an integer'}`,
+            );
           }
         }
         for (const key of [

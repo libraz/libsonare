@@ -457,7 +457,7 @@ inline int IntProperty(const Napi::Object& obj, const char* key, int fallback,
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   const std::string name = node_element_field(at, key);
-  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "an integer");
   return node_narrow_int(obj.Env(), value, name.c_str());
 }
 
@@ -466,7 +466,7 @@ inline int IntProperty(const Napi::Object& obj, const char* key, int fallback,
 inline int IntProperty(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return 0;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_int(obj.Env(), value, key);
 }
@@ -484,7 +484,7 @@ struct AbsentIsSentinel {
 inline int IntProperty(const Napi::Object& obj, const char* key, AbsentIsSentinel<int> sentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return sentinel.value;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   const int read = node_narrow_int(obj.Env(), value, key);
   return read == sentinel.value ? 0 : read;
 }
@@ -494,7 +494,7 @@ inline int IntProperty(const Napi::Object& obj, const char* key, AbsentIsSentine
 inline uint32_t WordProperty(const Napi::Object& obj, const char* key, uint32_t fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   return node_narrow_word(obj.Env(), value, key);
 }
 
@@ -503,7 +503,7 @@ inline uint32_t WordProperty(const Napi::Object& obj, const char* key, uint32_t 
 inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_t fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   return node_narrow_uint32(obj.Env(), value, key);
 }
 
@@ -512,7 +512,7 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_
 inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return 0;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_uint32(obj.Env(), value, key);
 }
@@ -531,7 +531,7 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, ZeroIsS
 inline uint8_t MidiByteValue(Napi::Env env, const Napi::Value& value, const std::string& name,
                              uint8_t fallback) {
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(env, value.IsNumber(), name.c_str(), "a number");
+  node_require_property_type(env, value.IsNumber(), name.c_str(), "an integer");
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!(number >= 0.0) || number > 255.0 || std::floor(number) != number) {
     throw Napi::RangeError::New(env, name + " must be an integer in [0, 255]");
@@ -551,7 +551,7 @@ inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const ch
 inline int IntInRangeOrAbsentValue(Napi::Env env, const Napi::Value& value, const std::string& name,
                                    int lo, int hi, int absent) {
   if (value.IsUndefined() || value.IsNull()) return absent;
-  node_require_property_type(env, value.IsNumber(), name.c_str(), "a number");
+  node_require_property_type(env, value.IsNumber(), name.c_str(), "an integer");
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!(number >= lo) || number > hi || std::floor(number) != number) {
     throw Napi::RangeError::New(env, name + " must be an integer in [" + std::to_string(lo) + ", " +
@@ -574,7 +574,7 @@ inline int IntInRangeOrAbsentProperty(const Napi::Object& obj, const char* key, 
 inline std::optional<int8_t> Int8Property(const Napi::Object& obj, const char* key) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return std::nullopt;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   return static_cast<int8_t>(node_narrow_number(
       obj.Env(), value, key, static_cast<double>(std::numeric_limits<int8_t>::min()),
       static_cast<double>(std::numeric_limits<int8_t>::max())));
@@ -587,7 +587,7 @@ inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t f
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   const std::string name = node_element_field(at, key);
-  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "an integer");
   return node_narrow_int64(obj.Env(), value, name.c_str());
 }
 
@@ -596,7 +596,7 @@ inline int64_t Int64Property(const Napi::Object& obj, const char* key,
                              AbsentIsSentinel<int64_t> sentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return sentinel.value;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   const int64_t read = node_narrow_int64(obj.Env(), value, key);
   return read == sentinel.value ? 0 : read;
 }
@@ -606,7 +606,7 @@ inline int64_t Int64Property(const Napi::Object& obj, const char* key,
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return 0;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
   node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_int64(obj.Env(), value, key);
 }
@@ -1012,10 +1012,22 @@ inline bool RequireNumberValue(Napi::Env env, const Napi::Value& value, const st
   return true;
 }
 
+/// @brief Integer-valued counterpart of @ref RequireNumberValue: a wrong type is refused as
+///        "must be an integer", the wording of every reader whose field is a whole number.
+inline bool RequireIntegerTypeValue(Napi::Env env, const Napi::Value& value,
+                                    const std::string& label) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, label + " must be an integer").ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
 /// @brief Read a required int value.
 inline bool RequiredIntValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                              int* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   *out = node_narrow_int(env, value, label.c_str());
   return true;
 }
@@ -1023,7 +1035,7 @@ inline bool RequiredIntValue(Napi::Env env, const Napi::Value& value, const std:
 /// @brief Read a required uint32 value.
 inline bool RequiredUint32Value(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 uint32_t* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   *out = node_narrow_uint32(env, value, label.c_str());
   return true;
 }
@@ -1031,7 +1043,7 @@ inline bool RequiredUint32Value(Napi::Env env, const Napi::Value& value, const s
 /// @brief Read a required raw 32-bit word value (@ref node_narrow_word).
 inline bool RequiredWordValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                               uint32_t* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   *out = node_narrow_word(env, value, label.c_str());
   return true;
 }
@@ -1090,7 +1102,7 @@ inline bool RequiredDoubleValue(Napi::Env env, const Napi::Value& value, const s
 /// @brief Read a required int64 value.
 inline bool RequiredInt64Value(Napi::Env env, const Napi::Value& value, const std::string& label,
                                int64_t* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   *out = node_narrow_int64(env, value, label.c_str());
   return true;
 }
@@ -1158,7 +1170,7 @@ inline bool RequiredSafeIntegerValue(Napi::Env env, const Napi::Value& value,
                                      const std::string& label, int64_t* out,
                                      int64_t minimum = -static_cast<int64_t>(kMaxSafeInteger),
                                      int64_t maximum = static_cast<int64_t>(kMaxSafeInteger)) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   constexpr int64_t kSafe = static_cast<int64_t>(kMaxSafeInteger);
   *out = static_cast<int64_t>(node_narrow_number(env, value, label.c_str(),
                                                  static_cast<double>(std::max(minimum, -kSafe)),
@@ -1234,7 +1246,7 @@ inline bool RequiredUint8ArrayValue(Napi::Env env, const Napi::Value& value,
 ///        non-integer or out-of-[0,255] number a RangeError.
 inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                   uint8_t* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   const double number = value.As<Napi::Number>().DoubleValue();
   if (env.IsExceptionPending()) return false;
   if (!(number >= 0.0) || number > 255.0 || std::floor(number) != number) {
@@ -1258,7 +1270,7 @@ inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const
 ///          for the byte reader.
 inline bool RequiredUint16Value(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 uint16_t* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
+  if (!RequireIntegerTypeValue(env, value, label)) return false;
   const double number = value.As<Napi::Number>().DoubleValue();
   if (env.IsExceptionPending()) return false;
   if (!(number >= 0.0) || number > 65535.0 || std::floor(number) != number) {
@@ -1289,7 +1301,8 @@ inline bool RequiredUint16Value(Napi::Env env, const Napi::Value& value, const s
 inline bool Int32Value(Napi::Env env, const Napi::Value& value, const char* name, int* out) {
   if (env.IsExceptionPending()) return false;
   if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, std::string(name) + " must be an integer")
+        .ThrowAsJavaScriptException();
     return false;
   }
 
@@ -1569,7 +1582,7 @@ inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
     *out = 0;
     return true;
   }
-  if (!RequireNumberValue(env, value, name)) return false;
+  if (!RequireIntegerTypeValue(env, value, name)) return false;
   if (node_is_fraction(value)) {
     Napi::RangeError::New(env, node_fraction_message(name)).ThrowAsJavaScriptException();
     return false;
@@ -1631,7 +1644,7 @@ inline bool OptionalUint32Arg(Napi::Env env, const Napi::CallbackInfo& info, siz
     *out = 0;
     return true;
   }
-  if (!RequireNumberValue(env, value, name)) return false;
+  if (!RequireIntegerTypeValue(env, value, name)) return false;
   if (node_is_fraction(value)) {
     Napi::RangeError::New(env, node_fraction_message(name)).ThrowAsJavaScriptException();
     return false;
@@ -1837,7 +1850,8 @@ inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, s
                                 const char* name, size_t* out) {
   if (env.IsExceptionPending()) return false;
   if (info.Length() <= index || !info[index].IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, std::string(name) + " must be an integer")
+        .ThrowAsJavaScriptException();
     return false;
   }
   return node_read_size_t_domain(env, info[index], name, out);

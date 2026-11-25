@@ -71,7 +71,7 @@ class SampleBankWasm {
     if (!hasProperty(desc, "sampleBankId")) return nullptr;
     // Asked for its TYPE check: checkedUintFromVal reads through as<double>(),
     // which coerces a numeric string into an id rather than refusing it.
-    requireNumberProperty(desc, "sampleBankId", "synth instrument");
+    requireNumberProperty(desc, "sampleBankId", "synth instrument", true);
     const uint32_t id = checkedUintFromVal(desc["sampleBankId"], "synth instrument sampleBankId");
     if (id == 0) return nullptr;
     SonareSampleBank* bank = lookup(id);

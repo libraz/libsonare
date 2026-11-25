@@ -459,7 +459,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     // string is the one input requireInt64Property refuses that int64Property
     // would silently coerce.
     // @ts-expect-error deliberately wrong type
-    expect(() => editWithStart('2048')).toThrow(/must be a number/);
+    expect(() => editWithStart('2048')).toThrow(/must be an integer/);
   });
 });
 

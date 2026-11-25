@@ -270,7 +270,7 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samplePos must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
@@ -300,7 +300,7 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samplePos must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
@@ -330,7 +330,7 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samplePos must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
@@ -360,11 +360,11 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sendIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sendIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samplePos must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {

@@ -104,7 +104,7 @@ describe('a refusal about a list element names it by its index', () => {
           last: 1,
         }),
       TypeError,
-      'mergeNotes: notes[1].frameStart must be a number',
+      'mergeNotes: notes[1].frameStart must be an integer',
     ],
     [
       'a fractional note frame bound',
@@ -139,7 +139,7 @@ describe('a refusal about a list element names it by its index', () => {
           notes: loose(patched(spans, { onsetSample: undefined })),
         }),
       TypeError,
-      'renderNotes: notes[1].onsetSample must be a number',
+      'renderNotes: notes[1].onsetSample must be an integer',
     ],
     [
       'a fractional rendered note sample bound',
@@ -193,7 +193,7 @@ describe('a refusal about a list element names it by its index', () => {
           events: loose([{ onsetSample: 0, offsetSample: 4410 }, { offsetSample: 9000 }]),
         }),
       TypeError,
-      'renderPercussiveEvents: events[1].onsetSample must be a number',
+      'renderPercussiveEvents: events[1].onsetSample must be an integer',
     ],
     [
       'a percussive event edit field of the wrong type',

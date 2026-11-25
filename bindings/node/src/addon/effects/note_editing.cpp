@@ -124,7 +124,7 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
 /// same two fields. @p at names the row, e.g. "notes[0]".
 void RequireSpanKey(const std::string& at, const Napi::Object& row, const char* key) {
   if (!row.Get(key).IsNumber()) {
-    throw Napi::TypeError::New(row.Env(), node_element_field(at, key) + " must be a number");
+    throw Napi::TypeError::New(row.Env(), node_element_field(at, key) + " must be an integer");
   }
 }
 
@@ -558,11 +558,11 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[5].IsNumber()) {
-    Napi::TypeError::New(env, "index must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "index must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[6].IsNumber()) {
-    Napi::TypeError::New(env, "frame must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "frame must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -618,11 +618,11 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[5].IsNumber()) {
-    Napi::TypeError::New(env, "first must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "first must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[6].IsNumber()) {
-    Napi::TypeError::New(env, "last must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "last must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

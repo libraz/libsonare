@@ -218,7 +218,7 @@ function nativeLimits(limits: VocalSessionLimits): object {
       continue;
     }
     if (typeof value !== 'number') {
-      throw refuseType(`limits.${key} must be a number`);
+      throw refuseType(`limits.${key} must be an integer`);
     }
     if (!Number.isSafeInteger(value) || value < 0) {
       throw refuse(`limits.${key} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);

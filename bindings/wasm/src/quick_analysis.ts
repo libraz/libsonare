@@ -100,6 +100,9 @@ const ZERO_IS_DEFAULT_FIELDS = [
   'noiseFloorMarginDb',
 ] as const;
 
+/** Room fields that are integer-valued: a wrong type is refused as "must be an integer". */
+const ROOM_INTEGER_FIELDS: readonly string[] = ['nOctaveBands', 'seed'];
+
 /** Reads the room fields of one call: `undefined` and `null` are absent, a non-number is a `TypeError`. */
 function optionalRoomNumber(options: object, field: string): number | undefined {
   const value = (options as Record<string, unknown>)[field];
@@ -107,7 +110,9 @@ function optionalRoomNumber(options: object, field: string): number | undefined 
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw refuseType(`${field} must be a number`);
+    throw refuseType(
+      `${field} must be ${ROOM_INTEGER_FIELDS.includes(field) ? 'an integer' : 'a number'}`,
+    );
   }
   return value;
 }

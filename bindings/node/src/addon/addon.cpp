@@ -261,8 +261,8 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   if (!sonare_node::PreflightNodeArgumentShapes(
           env, info,
           {{"ppq", sonare_node::NodeInputShape::kNumber},
-           {"group", sonare_node::NodeInputShape::kNumber},
-           {"channel", sonare_node::NodeInputShape::kNumber},
+           {"group", sonare_node::NodeInputShape::kInteger},
+           {"channel", sonare_node::NodeInputShape::kInteger},
            {"bankMsb", sonare_node::NodeInputShape::kInteger},
            {"bankLsb", sonare_node::NodeInputShape::kInteger},
            {"program", sonare_node::NodeInputShape::kInteger}})) {
@@ -314,8 +314,8 @@ bool MidiEventShapeFromValue(Napi::Env env, const Napi::Value& event, const std:
   return sonare_node::PreflightNodeObjectShapes(
       env, event.As<Napi::Object>(),
       {{"ppq", sonare_node::NodeInputShape::kNumber},
-       {"word0", sonare_node::NodeInputShape::kNumber},
-       {"word1", sonare_node::NodeInputShape::kNumber, true},
+       {"word0", sonare_node::NodeInputShape::kInteger},
+       {"word1", sonare_node::NodeInputShape::kInteger, true},
        {"sysex", sonare_node::NodeInputShape::kUint8Array, true}},
       at);
 }
@@ -391,7 +391,7 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   if (!MidiEventArrayShapesFromArray(env, array, "events") ||
       !sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"paramId", sonare_node::NodeInputShape::kNumber},
+          {{"paramId", sonare_node::NodeInputShape::kInteger},
            {"minValue", sonare_node::NodeInputShape::kNumber, true},
            {"maxValue", sonare_node::NodeInputShape::kNumber, true},
            {"minMovement", sonare_node::NodeInputShape::kInteger, true,
@@ -479,7 +479,7 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   if (!sonare_node::CcBindingListShapesFromArray(env, info[0].As<Napi::Array>()) ||
       !sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"paramId", sonare_node::NodeInputShape::kNumber},
+          {{"paramId", sonare_node::NodeInputShape::kInteger},
            {"unitValue", sonare_node::NodeInputShape::kNumber},
            {"group", sonare_node::NodeInputShape::kInteger, false,
             sonare_node::node_domain_type_text(sonare_c_detail::kMidiUmpGroupDomain)},
@@ -538,9 +538,9 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
     object = info[1].As<Napi::Object>();
     if (!sonare_node::PreflightNodeObjectShapes(
             env, object,
-            {{"filterGroup", sonare_node::NodeInputShape::kNumber, true},
-             {"filterChannel", sonare_node::NodeInputShape::kNumber, true},
-             {"remapChannel", sonare_node::NodeInputShape::kNumber, true},
+            {{"filterGroup", sonare_node::NodeInputShape::kInteger, true},
+             {"filterChannel", sonare_node::NodeInputShape::kInteger, true},
+             {"remapChannel", sonare_node::NodeInputShape::kInteger, true},
              {"thru", sonare_node::NodeInputShape::kBoolean, true}})) {
       return env.Undefined();
     }

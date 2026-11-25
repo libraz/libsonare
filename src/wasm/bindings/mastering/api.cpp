@@ -59,7 +59,7 @@ std::string js_mastering_insert_param_info(std::string name, const val& sample_r
     return mastering::api::insert_param_info_json(name);
   }
   return mastering::api::insert_param_info_json_at_rate(
-      name, numberFromVal(sample_rate_val, "sampleRate"));
+      name, integerNumberFromVal(sample_rate_val, "sampleRate"));
 }
 
 // Latency and tail an insert reports once built from `json_params` and
@@ -72,7 +72,7 @@ val js_mastering_insert_timing(std::string name, std::string json_params,
   wasmRefuseEmbeddedNul(name, "name");
   // The library refuses the name, the parameter bag under `params`, then the rate.
   const mastering::api::InsertTiming timing = mastering::api::insert_timing(
-      name, json_params, numberFromVal(sample_rate_val, "sampleRate"));
+      name, json_params, integerNumberFromVal(sample_rate_val, "sampleRate"));
   val out = val::object();
   out.set("latencySamples", timing.latency_samples);
   out.set("tailSamples", timing.tail_samples);
@@ -400,8 +400,8 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
       accumulateWasmFloat32ArrayLength(reference_left_samples, "referenceLeft", &budget);
   const std::size_t reference_right_count =
       accumulateWasmFloat32ArrayLength(reference_right_samples, "referenceRight", &budget);
-  (void)numberFromVal(sample_rate_val, "sampleRate");
-  (void)numberFromVal(reference_sample_rate_val, "referenceSampleRate");
+  (void)integerNumberFromVal(sample_rate_val, "sampleRate");
+  (void)integerNumberFromVal(reference_sample_rate_val, "referenceSampleRate");
   if (!params.isNull() && !params.isUndefined() &&
       (params.typeOf().as<std::string>() != "object" ||
        val::global("Array").call<bool>("isArray", params))) {

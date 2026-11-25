@@ -275,7 +275,7 @@ Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "numSamples must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "numSamples must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // Unify the accepted range with the WASM and Python facades: numSamples must be
@@ -334,19 +334,19 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "strip must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "strip must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "paramId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "paramId must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samplePos must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[4].IsNumber()) {

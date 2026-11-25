@@ -255,7 +255,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
     return env.Undefined();
   }
   if (!info[4].IsNumber()) {
-    Napi::TypeError::New(env, "hopLength must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "hopLength must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -321,7 +321,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "hopLength must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "hopLength must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -472,11 +472,11 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
 
   if (!RequireMonoArgs(info)) return env.Undefined();
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "onsetSample must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "onsetSample must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "offsetSample must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "offsetSample must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[4].IsNumber()) {
@@ -509,15 +509,15 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!RequireMonoArgs(info)) return env.Undefined();
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "onsetSample must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "onsetSample must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "offsetSample must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "offsetSample must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[4].IsNumber()) {
-    Napi::TypeError::New(env, "targetOnsetSample must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "targetOnsetSample must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -585,7 +585,7 @@ Napi::Value SonareWrap::RealtimeVoiceChangerRender(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "channels must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

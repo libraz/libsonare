@@ -963,14 +963,16 @@ Napi::Value StreamingRetuneWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
-  double sample_rate_value = 0.0;
-  if (!RequiredDomainDoubleValue(env, info[0], "sampleRate", &sample_rate_value)) {
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  double max_block_size_value = 0.0;
-  if (!RequiredDomainDoubleValue(env, info[1], "maxBlockSize", &max_block_size_value)) {
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "maxBlockSize must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  const double sample_rate_value = info[0].As<Napi::Number>().DoubleValue();
+  const double max_block_size_value = info[1].As<Napi::Number>().DoubleValue();
   int sample_rate = 0;
   if (!RequiredDomainValue(env, Napi::Number::New(env, sample_rate_value), "sampleRate",
                            sonare::kAudioSampleRateDomain, &sample_rate)) {

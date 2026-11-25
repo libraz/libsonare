@@ -30,11 +30,11 @@ Napi::Value SonareWrap::Tonnetz(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "chromagram must be a Float32Array")) return env.Undefined();
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "nChroma must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "nChroma must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "nFrames must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -350,11 +350,11 @@ Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
 
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "srcSr must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "srcSr must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "targetSr must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "targetSr must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

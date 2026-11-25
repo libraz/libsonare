@@ -358,10 +358,10 @@ describe('mixing assistant STFT sizes', () => {
     ).toThrow(new RangeError(`mixingAssistantSuggest: ${text}`));
   });
 
-  it.each(['nFft', 'hopLength'])('refuses a %s that is not a number', (key) => {
+  it.each(['nFft', 'hopLength'])('refuses a %s that is not an integer', (key) => {
     for (const value of [true, '1024']) {
       expect(() => suggest({ [key]: value })).toThrow(
-        new TypeError(`mixingAssistantSuggest: ${key} must be a number`),
+        new TypeError(`mixingAssistantSuggest: ${key} must be an integer`),
       );
     }
   });

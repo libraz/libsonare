@@ -192,7 +192,7 @@ describe('SonareRealtimeEngineNode integer ring options', () => {
       }),
     ).rejects.toMatchObject({
       name: 'TypeError',
-      message: expect.stringContaining('sampleRate must be a number'),
+      message: expect.stringContaining('sampleRate must be an integer'),
     });
   });
 

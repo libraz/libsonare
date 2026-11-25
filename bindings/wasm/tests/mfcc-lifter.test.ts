@@ -122,7 +122,7 @@ describe('Mel bridge input ownership', () => {
     invalid[1] = Number.NaN;
     expect(() =>
       melSpectrogram({ ...geometry, samples: invalid, nFft: '512' as unknown as number }),
-    ).toThrow(new TypeError('melSpectrogram: nFft must be a number'));
+    ).toThrow(new TypeError('melSpectrogram: nFft must be an integer'));
   });
 
   it.each([0, 1e-50])(

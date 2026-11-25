@@ -319,7 +319,7 @@ inline bool RequireFloat32Array(const Napi::CallbackInfo& info, size_t index, co
 inline bool RequireMonoArgs(const Napi::CallbackInfo& info) {
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return false;
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(info.Env(), "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(info.Env(), "sampleRate must be an integer").ThrowAsJavaScriptException();
     return false;
   }
   return true;

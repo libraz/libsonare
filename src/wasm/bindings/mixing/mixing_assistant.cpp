@@ -111,7 +111,7 @@ AssistantInputShape inspectAssistantInput(val left_channels, val right_channels,
   requireJsArray(track_ids, "trackIds");
   if (!isAbsent(track_names)) requireJsArray(track_names, "trackNames");
   if (!isAbsent(track_sample_rates)) requireJsArray(track_sample_rates, "trackSampleRates");
-  (void)numberFromVal(sample_rate_value, "sampleRate");
+  (void)integerNumberFromVal(sample_rate_value, "sampleRate");
 
   if (wasmArrayLength(track_ids, "trackIds") != shape.count) {
     throw WasmRangeError("trackIds must have one entry per track");

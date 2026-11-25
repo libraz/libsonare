@@ -204,7 +204,7 @@ Napi::Value SonareWrap::MasteringInsertTiming(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

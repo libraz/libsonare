@@ -31078,6 +31078,7 @@ default vocal_edit_worker_client.ts:VocalEditWorkerSession.beginEdit options = {
 default vocal_edit_worker_client.ts:VocalEditWorkerSession.preview options = {}
 default vocal_edit_worker_client.ts:VocalEditWorkerSession.redo options = {}
 default vocal_edit_worker_client.ts:VocalEditWorkerSession.undo options = {}
+default vocal_project.ts:finite integer = false
 default vocal_project.ts:projectRehydrateVocalEdits options = {}
 default vocal_project.ts:requestUint32 allowZero = true
 default vocal_project.ts:resultProjectId allowZero = true

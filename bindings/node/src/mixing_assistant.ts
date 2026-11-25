@@ -224,7 +224,12 @@ function normalizeOptions(
     }
     const expectsBoolean = key.startsWith('enable');
     if (expectsBoolean ? typeof value !== 'boolean' : typeof value !== 'number') {
-      throw refuseType(`${key} must be a ${expectsBoolean ? 'boolean' : 'number'}`);
+      const expected = expectsBoolean
+        ? 'a boolean'
+        : key === 'nFft' || key === 'hopLength'
+          ? 'an integer'
+          : 'a number';
+      throw refuseType(`${key} must be ${expected}`);
     }
   }
   return params;

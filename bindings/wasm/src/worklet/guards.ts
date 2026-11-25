@@ -580,10 +580,6 @@ export function assertEngineProcessorOptionTypes(
       case 'sampleRate':
       case 'engineAbiVersion':
       case 'expectedEngineAbiVersion':
-        if (typeof value !== 'number') {
-          expected = 'a number';
-        }
-        break;
       case 'offlineBlockSize':
       case 'offlineNumChannels':
       case 'maxBlockSize':

@@ -511,7 +511,7 @@ export function assertNonNegativeSafeInteger(value: number, argName: string): vo
 /** A whole safe JS integer, with fractions refused as an argument shape. */
 export function assertSafeInteger(value: unknown, argName: string): asserts value is number {
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (!Number.isFinite(value) || !Number.isSafeInteger(value)) {
     if (Number.isFinite(value) && !Number.isInteger(value)) {
@@ -675,7 +675,7 @@ export function resolveRenderFrame(renderFrame: number | null | undefined): numb
     return RENDER_FRAME_IMMEDIATE;
   }
   if (typeof renderFrame !== 'number') {
-    throw refuseType(`renderFrame must be a number`);
+    throw refuseType(`renderFrame must be an integer`);
   }
   if (!(Number.isFinite(renderFrame) && renderFrame >= 0)) {
     throw refuse(`renderFrame must be finite and at least 0; omit it to apply immediately`);

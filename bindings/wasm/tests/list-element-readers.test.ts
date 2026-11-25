@@ -66,13 +66,13 @@ const graphCases: ReadonlyArray<
     'an absent source port',
     { connections: [{ sourceNode: 'a', destNode: 'b', destPort: 0 }] },
     TypeError,
-    'connections[0].sourcePort must be a number',
+    'connections[0].sourcePort must be an integer',
   ],
   [
     'an absent destination port',
     { connections: [{ sourceNode: 'a', sourcePort: 0, destNode: 'b' }] },
     TypeError,
-    'connections[0].destPort must be a number',
+    'connections[0].destPort must be an integer',
   ],
   [
     'a source port outside the integer range at the second element',
@@ -90,7 +90,7 @@ const graphCases: ReadonlyArray<
     'an absent parameter id',
     { parameterBindings: [{ nodeId: 'a' }] },
     TypeError,
-    'parameterBindings[0].paramId must be a number',
+    'parameterBindings[0].paramId must be an integer',
   ],
   [
     'an absent binding node',
@@ -136,7 +136,7 @@ const mixerCases: ReadonlyArray<
     'setTrackBuses',
     (e) => e.setTrackBuses([{ busId: 1, sends: [{}] }] as never),
     TypeError,
-    'sends[0].busId must be a number',
+    'sends[0].busId must be an integer',
   ],
   [
     'a negative send bus at the second element',
@@ -150,7 +150,7 @@ const mixerCases: ReadonlyArray<
     'setTrackLanes',
     (e) => e.setTrackLanes([{ trackId: 1 }, {}] as never),
     TypeError,
-    'lanes[1].trackId must be a number',
+    'lanes[1].trackId must be an integer',
   ],
   [
     'a negative lane track at the second element',
@@ -164,7 +164,7 @@ const mixerCases: ReadonlyArray<
     'setTrackBuses',
     (e) => e.setTrackBuses([{ busId: 1 }, {}] as never),
     TypeError,
-    'buses[1].busId must be a number',
+    'buses[1].busId must be an integer',
   ],
   [
     'a negative bus id at the second element',
@@ -402,7 +402,7 @@ describe('Project.addLoopRecordingTakes', () => {
         } as never),
       );
       expect(error).toBeInstanceOf(TypeError);
-      expect(error.message).toBe('Project.addLoopRecordingTakes: audioChannels must be a number');
+      expect(error.message).toBe('Project.addLoopRecordingTakes: audioChannels must be an integer');
     });
   });
 });

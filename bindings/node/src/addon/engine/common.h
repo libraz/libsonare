@@ -75,7 +75,7 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
   // parameter. Validate it explicitly instead.
   const Napi::Value id_val = obj.Get("id");
   if (!id_val.IsNumber()) {
-    Napi::TypeError::New(env, "parameter id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "parameter id must be an integer").ThrowAsJavaScriptException();
     return false;
   }
   out->id = node_narrow_uint32(env, id_val, "id");

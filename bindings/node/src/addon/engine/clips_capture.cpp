@@ -420,15 +420,15 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "ref must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "ref must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t track_id = sonare_node::node_narrow_uint32(env, info[0], "ref");
@@ -513,19 +513,19 @@ Napi::Value RealtimeEngineWrap::SetBusSidechain(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "busId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "busId must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.kind must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t bus_id = sonare_node::node_narrow_uint32(env, info[0], "busId");
@@ -543,15 +543,15 @@ Napi::Value RealtimeEngineWrap::SetMasterSidechain(const Napi::CallbackInfo& inf
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.kind must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[0], "insertIndex");
@@ -568,15 +568,15 @@ Napi::Value RealtimeEngineWrap::CanSetLaneSidechain(const Napi::CallbackInfo& in
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "ref must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "ref must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t track_id = sonare_node::node_narrow_uint32(env, info[0], "ref");
@@ -594,19 +594,19 @@ Napi::Value RealtimeEngineWrap::CanSetBusSidechain(const Napi::CallbackInfo& inf
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "busId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "busId must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.kind must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t bus_id = sonare_node::node_narrow_uint32(env, info[0], "busId");
@@ -625,15 +625,15 @@ Napi::Value RealtimeEngineWrap::CanSetMasterSidechain(const Napi::CallbackInfo& 
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "insertIndex must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.kind must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[0], "insertIndex");

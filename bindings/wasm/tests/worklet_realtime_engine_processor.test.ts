@@ -308,7 +308,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           maxBlockSize: '128' as unknown as number,
           numChannels: 2,
         });
-      expect(create).toThrow(new TypeError('sampleRate must be a number'));
+      expect(create).toThrow(new TypeError('sampleRate must be an integer'));
     });
 
     it('refuses external scope descriptors beyond the native band limit', () => {

@@ -1378,6 +1378,11 @@ describe('StreamAnalyzer quantize-config override', () => {
     expect(() => new StreamAnalyzer({ sampleRate: 0 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 0 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, nMels: 0 })).toThrow();
+    for (const key of ['nFft', 'hopLength', 'nMels', 'emitEveryNFrames']) {
+      expect(() => new StreamAnalyzer({ sampleRate: SR, [key]: '8' as never })).toThrow(
+        new TypeError(`StreamAnalyzer: ${key} must be an integer`),
+      );
+    }
     expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 1024, hopLength: 2048 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, fminHz: 8000, fmaxHz: 4000 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxProgressionEntries: 0 })).toThrow();

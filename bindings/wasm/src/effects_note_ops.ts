@@ -33,6 +33,7 @@ import {
   assertAudioInput,
   assertFiniteScalar,
   assertFloatValue,
+  assertIntegerType,
   requestObject,
   requireSampleBound,
   resolveSampleBound,
@@ -664,11 +665,15 @@ export function splitNote(...args: unknown[]): NoteObject[] {
     const hasFrame = !isAbsent(request.frame);
     const hasFrameSec = !isAbsent(request.frameSec);
     requireOneOf(['frame', 'frameSec'], [hasFrame, hasFrameSec]);
-    assertFloatValue(hasFrame ? request.frame : request.frameSec, hasFrame ? 'frame' : 'frameSec');
+    if (hasFrame) {
+      assertIntegerType(request.frame, 'frame');
+    } else {
+      assertFloatValue(request.frameSec, 'frameSec');
+    }
     const frame = hasFrame
       ? (request.frame as number)
       : Math.round((request.frameSec as number) * request.frameRate);
-    assertFloatValue(request.index, 'index');
+    assertIntegerType(request.index, 'index');
     if (!Array.isArray(request.notes)) {
       throw refuseType('notes must be an array');
     }
@@ -751,8 +756,8 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
   return withEntry('mergeNotes', () => {
     const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
     const voicedF32 = assertNoteTrack(request);
-    assertFloatValue(request.first, 'first');
-    assertFloatValue(request.last, 'last');
+    assertIntegerType(request.first, 'first');
+    assertIntegerType(request.last, 'last');
     if (!Array.isArray(request.notes)) {
       throw refuseType('notes must be an array');
     }

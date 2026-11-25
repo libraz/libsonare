@@ -2319,7 +2319,9 @@ describe('Sonare WASM Project', () => {
       expect(() => midiBankProgram({ ...validHead, bank: { msb: 0, lsb: 0 } })).toThrow(
         new RangeError('midiBankProgram: program must be an integer in [0, 127]'),
       );
-      expect(() => midiBankProgram({ ...request, program: '128' as never })).toThrow(TypeError);
+      expect(() => midiBankProgram({ ...request, program: '128' as never })).toThrow(
+        new TypeError('midiBankProgram: program must be an integer'),
+      );
     });
 
     it('refuses an unknown name or an out-of-range number from every lookup', () => {

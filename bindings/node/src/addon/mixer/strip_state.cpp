@@ -215,7 +215,7 @@ Napi::Value MixerWrap::SetPanLaw(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "panLaw must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "panLaw must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SonareError err =
@@ -236,7 +236,7 @@ Napi::Value MixerWrap::SetChannelDelaySamples(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "delaySamples must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "delaySamples must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SonareError err = sonare_strip_set_channel_delay_samples(

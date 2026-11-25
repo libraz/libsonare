@@ -182,7 +182,7 @@ class StreamAnalyzerWrapper {
     // past the addressable range is reported instead of saturating onto the last
     // address and corrupting the initial timestamp base.
     const size_t offset =
-        wasmIndexArg(numberFromVal(sample_offset_val, "startSample"), "startSample");
+        wasmIndexArg(integerNumberFromVal(sample_offset_val, "startSample"), "startSample");
     std::vector<float> data = float32ArrayToVector(samples, "samples");
     analyzer_->process(data.data(), data.size(), offset);
   }

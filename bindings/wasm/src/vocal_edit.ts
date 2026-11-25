@@ -491,7 +491,7 @@ function nativeSessionLimits(
     const bytes = limits[field];
     if (bytes !== undefined) {
       if (typeof bytes !== 'number') {
-        throw refuseType(`limits.${field} must be a number`);
+        throw refuseType(`limits.${field} must be an integer`);
       }
       native[field] = String(requireSample(bytes, `limits.${field}`));
     }

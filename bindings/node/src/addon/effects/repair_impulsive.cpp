@@ -219,7 +219,7 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -314,7 +314,7 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -411,7 +411,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

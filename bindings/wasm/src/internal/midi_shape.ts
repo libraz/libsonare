@@ -60,8 +60,8 @@ export function assertMidiEventShape(value: unknown, path: string): void {
   const event = value as Record<string, unknown>;
   assertMidiNumberShapes([
     [`${path}.ppq`, event.ppq],
-    [`${path}.word0`, event.word0],
-    [`${path}.word1`, event.word1, true],
+    [`${path}.word0`, event.word0, false, true],
+    [`${path}.word1`, event.word1, true, true],
   ]);
   const sysex = event.sysex;
   if (!isAbsent(sysex) && !isUint8ArrayView(sysex)) {
@@ -104,14 +104,14 @@ export function assertMidiCcBindingShape(value: unknown, path: string): void {
   const field = (name: string) => (path === '' ? name : `${path}.${name}`);
   assertMidiNumberShapes([
     [field('ccNumber'), binding.ccNumber, false, true],
-    [field('channel'), binding.channel, true],
+    [field('channel'), binding.channel, true, true],
   ]);
   assertMidiStringShape(binding.kind, field('kind'), true);
   assertMidiNumberShapes([
     [field('ccLsbNumber'), binding.ccLsbNumber, true, true],
     [field('selectorMsb'), binding.selectorMsb, true, true],
     [field('selectorLsb'), binding.selectorLsb, true, true],
-    [field('paramId'), binding.paramId],
+    [field('paramId'), binding.paramId, false, true],
     [field('minValue'), binding.minValue, true],
     [field('maxValue'), binding.maxValue, true],
   ]);
@@ -137,7 +137,7 @@ export function assertMidiWordListShapes(value: unknown, path = 'words'): number
   const count = requireListBudget(words, path);
   for (let index = 0; index < count; index++) {
     if (typeof words[index] !== 'number') {
-      throw refuseType(`${path}[${index}] must be a number`);
+      throw refuseType(`${path}[${index}] must be an integer`);
     }
   }
   return count;
@@ -160,8 +160,8 @@ export function assertMidiBankShape(value: unknown, path = 'bank', optional = tr
   assertDeclaredKeys(value, ['msb', 'lsb'], path);
   const bank = value as Record<string, unknown>;
   assertMidiNumberShapes([
-    [`${path}.msb`, bank.msb],
-    [`${path}.lsb`, bank.lsb],
+    [`${path}.msb`, bank.msb, false, true],
+    [`${path}.lsb`, bank.lsb, false, true],
   ]);
 }
 

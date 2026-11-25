@@ -98,7 +98,7 @@ describe('analyze() downbeats and meter options', () => {
     it('rejects a non-numeric meterCandidateNumerators entry', () => {
       const malformed = [3, 'four'] as unknown as number[];
       expect(() => analyze(samples, SR, { meterCandidateNumerators: malformed })).toThrow(
-        /meterCandidateNumerators\[1\] must be a number/,
+        /meterCandidateNumerators\[1\] must be an integer/,
       );
     });
 

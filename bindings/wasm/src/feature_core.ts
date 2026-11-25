@@ -18,6 +18,7 @@ import {
   assertFloat32Array,
   assertFloatFields,
   assertFloatValue,
+  assertIntegerType,
   assertIntegerValue,
   assertMatrix2D,
   assertNonNegativeSafeInteger,
@@ -602,8 +603,8 @@ export function noteToHz(note: string): number {
  */
 export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512): number {
   return withEntry('framesToTime', () => {
-    assertNumber(frames, 'frames');
-    assertNumber(sampleRate, 'sampleRate');
+    assertIntegerType(frames, 'frames');
+    assertIntegerType(sampleRate, 'sampleRate');
     return getSonareModule().framesToTime(frames, sampleRate, hopLength);
   });
 }
@@ -619,7 +620,7 @@ export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512
 export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 512): number {
   return withEntry('timeToFrames', () => {
     assertNumber(timeSec, 'timeSec');
-    assertNumber(sampleRate, 'sampleRate');
+    assertIntegerType(sampleRate, 'sampleRate');
     return getSonareModule().timeToFrames(timeSec, sampleRate, hopLength);
   });
 }
@@ -645,7 +646,7 @@ function resolveOptionalFft(nFft: number | undefined | null): number {
  */
 export function framesToSamples(frames: number, hopLength = 512, nFft?: number): number {
   return withEntry('framesToSamples', () => {
-    assertNumber(frames, 'frames');
+    assertIntegerType(frames, 'frames');
     assertPositiveInteger(hopLength, 'hopLength');
     const fft = resolveOptionalFft(nFft);
     return getSonareModule().framesToSamples(frames, hopLength, fft);
@@ -660,7 +661,7 @@ export function framesToSamples(frames: number, hopLength = 512, nFft?: number):
  */
 export function samplesToFrames(samples: number, hopLength = 512, nFft?: number): number {
   return withEntry('samplesToFrames', () => {
-    assertNumber(samples, 'samples');
+    assertIntegerType(samples, 'samples');
     assertPositiveInteger(hopLength, 'hopLength');
     const fft = resolveOptionalFft(nFft);
     return getSonareModule().samplesToFrames(samples, hopLength, fft);

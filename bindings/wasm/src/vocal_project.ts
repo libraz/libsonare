@@ -147,9 +147,9 @@ function requestNumber(value: unknown, field: string): number {
   return value;
 }
 
-function finite(value: unknown, field: string): number {
+function finite(value: unknown, field: string, integer = false): number {
   if (typeof value !== 'number') {
-    throw refuseType(`${field} must be a number`);
+    throw refuseType(`${field} must be ${integer ? 'an integer' : 'a number'}`);
   }
   if (!Number.isFinite(value)) {
     throw refuse(`${field} must be finite`);
@@ -241,9 +241,10 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
   const expectedSourceSampleRate = finite(
     source.expectedSourceSampleRate,
     'expectedSourceSampleRate',
+    true,
   );
   assertSampleRate(expectedSourceSampleRate);
-  const renderedSampleRate = finite(source.renderedSampleRate, 'renderedSampleRate');
+  const renderedSampleRate = finite(source.renderedSampleRate, 'renderedSampleRate', true);
   assertSampleRate(renderedSampleRate, 'renderedSampleRate');
   if (renderedSampleRate !== expectedSourceSampleRate) {
     throw refuse('renderedSampleRate must equal expectedSourceSampleRate');
@@ -356,7 +357,7 @@ function copyOriginalSources(
       throw refuse(`originals contains duplicate sourceId ${sourceId}`);
     }
     seen.add(sourceId);
-    const sampleRate = finite(source.sampleRate, `originals[${index}].sampleRate`);
+    const sampleRate = finite(source.sampleRate, `originals[${index}].sampleRate`, true);
     assertSampleRate(sampleRate, `originals[${index}].sampleRate`);
     return {
       sourceId,

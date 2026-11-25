@@ -894,7 +894,7 @@ const ROWS: Row[] = [
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
     oneOf: [
-      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be a number' },
+      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be an integer' },
       { fields: ['values'], error: 'TypeError: fixLength: values must be a Float32Array' },
     ],
   },
@@ -906,7 +906,7 @@ const ROWS: Row[] = [
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
     oneOf: [
-      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be a number' },
+      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be an integer' },
       { fields: ['values'], error: 'TypeError: padCenter: values must be a Float32Array' },
     ],
   },
@@ -1424,7 +1424,7 @@ const ROWS: Row[] = [
       },
       {
         fields: ['sampleRate'],
-        error: 'TypeError: cyclicTempogram: sampleRate must be a number',
+        error: 'TypeError: cyclicTempogram: sampleRate must be an integer',
       },
     ],
   },
@@ -1992,7 +1992,7 @@ const ROWS: Row[] = [
         error: 'TypeError: splitNote: voicedProb and voiced must not both be omitted',
       },
       { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
-      { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
+      { fields: ['index'], error: 'TypeError: splitNote: index must be an integer' },
       {
         fields: ['frame', 'frameSec'],
         error: 'TypeError: splitNote: give frame or frameSec',
@@ -2017,8 +2017,8 @@ const ROWS: Row[] = [
         error: 'TypeError: mergeNotes: voicedProb and voiced must not both be omitted',
       },
       { fields: ['notes'], error: 'TypeError: mergeNotes: notes must be an array' },
-      { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },
-      { fields: ['last'], error: 'TypeError: mergeNotes: last must be a number' },
+      { fields: ['first'], error: 'TypeError: mergeNotes: first must be an integer' },
+      { fields: ['last'], error: 'TypeError: mergeNotes: last must be an integer' },
     ],
   },
   {

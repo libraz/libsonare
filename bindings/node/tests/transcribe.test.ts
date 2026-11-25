@@ -339,7 +339,7 @@ describe('transcribe', () => {
     expect(bad({ fixedVelocity: 'loud' })).toThrow(/fixedVelocity must be an integer$/);
     expect(bad({ referenceHz: 'high' })).toThrow(/referenceHz must be a number/);
     expect(bad({ polyphonic: 'yes' })).toThrow(/polyphonic must be a boolean/);
-    expect(bad({ group: {} })).toThrow(/group must be a number/);
+    expect(bad({ group: {} })).toThrow(/group must be an integer/);
     // A fraction is refused as a fraction rather than as a magnitude: the
     // narrowing guards the C int, the [1, 127] bound guards the library domain,
     // and a caller can only act on the mistake they made.
@@ -533,7 +533,7 @@ describe('Project.transcribeToClip', () => {
   it('rejects an out-of-domain request', () => {
     withProject((project, clipId) => {
       expect(() => project.transcribeToClip({ samples: audio, sampleRate: SR } as never)).toThrow(
-        /clipId must be a number/,
+        /clipId must be an integer/,
       );
       expect(() =>
         project.transcribeToClip({ clipId: 9999, samples: audio, sampleRate: SR }),

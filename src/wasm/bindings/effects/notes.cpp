@@ -178,14 +178,14 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, std::size_
     // The note's pitch curve is the caller's own track sliced by its bounds.
     const std::string start_name = at + ".frameStart";
     const std::string end_name = at + ".frameEnd";
-    const int frame_start = noteFrameArg(hasProperty(row, "frameStart")
-                                             ? requireNumberProperty(row, "frameStart", at.c_str())
-                                             : note.frame_start,
-                                         start_name.c_str());
-    const int frame_end = noteFrameArg(hasProperty(row, "frameEnd")
-                                           ? requireNumberProperty(row, "frameEnd", at.c_str())
-                                           : note.frame_end,
-                                       end_name.c_str());
+    const int frame_start = noteFrameArg(
+        hasProperty(row, "frameStart") ? requireNumberProperty(row, "frameStart", at.c_str(), true)
+                                       : note.frame_start,
+        start_name.c_str());
+    const int frame_end = noteFrameArg(
+        hasProperty(row, "frameEnd") ? requireNumberProperty(row, "frameEnd", at.c_str(), true)
+                                     : note.frame_end,
+        end_name.c_str());
     // Checked in the C ABI's order and words (sonare_render_notes).
     sonare::util::check::integer_within(frame_start, sonare_c_detail::kNoteFrameStartDomain,
                                         start_name.c_str());
@@ -235,9 +235,9 @@ std::vector<NoteSetEntry> noteSetFromVal(const val& notes, std::size_t* cumulati
     const val row = notes[i];
     const std::string at = "notes[" + std::to_string(i) + "]";
     NoteSetEntry entry;
-    entry.frame_start = noteFrameArg(requireNumberProperty(row, "frameStart", at.c_str()),
+    entry.frame_start = noteFrameArg(requireNumberProperty(row, "frameStart", at.c_str(), true),
                                      (at + ".frameStart").c_str());
-    entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", at.c_str()),
+    entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", at.c_str(), true),
                                    (at + ".frameEnd").c_str());
     entry.edit = noteRowEditFromVal(row, at, cumulative_count);
     if (!editing::note_model::is_valid_note_edit(entry.edit)) {

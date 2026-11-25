@@ -491,7 +491,7 @@ export const ROWS: Row[] = [
       { fields: ['frame'], error: 'TypeError: splitNote: give frame or frameSec' },
       { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
       { fields: ['f0Hz'], error: 'TypeError: splitNote: f0Hz must be a Float32Array' },
-      { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
+      { fields: ['index'], error: 'TypeError: splitNote: index must be an integer' },
     ],
   },
   {
@@ -516,8 +516,8 @@ export const ROWS: Row[] = [
     oneOf: [
       { fields: ['notes'], error: 'TypeError: mergeNotes: notes must be an array' },
       { fields: ['f0Hz'], error: 'TypeError: mergeNotes: f0Hz must be a Float32Array' },
-      { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },
-      { fields: ['last'], error: 'TypeError: mergeNotes: last must be a number' },
+      { fields: ['first'], error: 'TypeError: mergeNotes: first must be an integer' },
+      { fields: ['last'], error: 'TypeError: mergeNotes: last must be an integer' },
     ],
   },
   {

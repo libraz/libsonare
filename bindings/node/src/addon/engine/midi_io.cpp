@@ -52,7 +52,7 @@ bool CheckUmpWordsShape(Napi::Env env, const Napi::Value& value, const std::stri
   *out_length = length;
   for (uint32_t i = 0; i < length; ++i) {
     if (!sonare_node::CheckNodeInputShape(env, array.Get(i), name + "[" + std::to_string(i) + "]",
-                                          sonare_node::NodeInputShape::kNumber)) {
+                                          sonare_node::NodeInputShape::kInteger)) {
       return false;
     }
   }
@@ -94,13 +94,14 @@ struct LiveVoiceArgs {
 bool ReadLiveVoiceArgs(Napi::Env env, const Napi::CallbackInfo& info, bool with_destination,
                        const char* first_name, const char* second_name, LiveVoiceArgs* args) {
   std::vector<sonare_node::NodeInputShapeField> shapes;
-  if (with_destination) shapes.push_back({"destinationId", sonare_node::NodeInputShape::kNumber});
-  shapes.push_back({"group", sonare_node::NodeInputShape::kNumber});
-  shapes.push_back({"channel", sonare_node::NodeInputShape::kNumber});
-  shapes.push_back({first_name, sonare_node::NodeInputShape::kNumber});
-  if (second_name != nullptr) shapes.push_back({second_name, sonare_node::NodeInputShape::kNumber});
+  if (with_destination) shapes.push_back({"destinationId", sonare_node::NodeInputShape::kInteger});
+  shapes.push_back({"group", sonare_node::NodeInputShape::kInteger});
+  shapes.push_back({"channel", sonare_node::NodeInputShape::kInteger});
+  shapes.push_back({first_name, sonare_node::NodeInputShape::kInteger});
+  if (second_name != nullptr)
+    shapes.push_back({second_name, sonare_node::NodeInputShape::kInteger});
   shapes.push_back({with_destination ? "renderFrame" : "offsetInBlockSamples",
-                    sonare_node::NodeInputShape::kNumber, true});
+                    sonare_node::NodeInputShape::kInteger, true});
   if (!sonare_node::PreflightNodeArgumentShapes(env, info, shapes)) return false;
 
   size_t index = 0;
@@ -237,10 +238,10 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPitchBend(const Napi::CallbackInfo&
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"group", sonare_node::NodeInputShape::kNumber},
-           {"channel", sonare_node::NodeInputShape::kNumber},
-           {"bend14", sonare_node::NodeInputShape::kNumber},
-           {"offsetInBlockSamples", sonare_node::NodeInputShape::kNumber, true}})) {
+          {{"group", sonare_node::NodeInputShape::kInteger},
+           {"channel", sonare_node::NodeInputShape::kInteger},
+           {"bend14", sonare_node::NodeInputShape::kInteger},
+           {"offsetInBlockSamples", sonare_node::NodeInputShape::kInteger, true}})) {
     return env.Undefined();
   }
   uint8_t group = 0;
@@ -340,11 +341,11 @@ Napi::Value RealtimeEngineWrap::PushMidiPitchBend(const Napi::CallbackInfo& info
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"destinationId", sonare_node::NodeInputShape::kNumber},
-           {"group", sonare_node::NodeInputShape::kNumber},
-           {"channel", sonare_node::NodeInputShape::kNumber},
-           {"bend14", sonare_node::NodeInputShape::kNumber},
-           {"renderFrame", sonare_node::NodeInputShape::kNumber, true}})) {
+          {{"destinationId", sonare_node::NodeInputShape::kInteger},
+           {"group", sonare_node::NodeInputShape::kInteger},
+           {"channel", sonare_node::NodeInputShape::kInteger},
+           {"bend14", sonare_node::NodeInputShape::kInteger},
+           {"renderFrame", sonare_node::NodeInputShape::kInteger, true}})) {
     return env.Undefined();
   }
   uint32_t destination_id = 0;
@@ -409,7 +410,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!sonare_node::PreflightNodeArgumentShapes(
-          env, info, {{"renderFrame", sonare_node::NodeInputShape::kNumber, true}})) {
+          env, info, {{"renderFrame", sonare_node::NodeInputShape::kInteger, true}})) {
     return env.Undefined();
   }
   int64_t deadline = -1;
@@ -426,9 +427,9 @@ Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"destinationId", sonare_node::NodeInputShape::kNumber},
+          {{"destinationId", sonare_node::NodeInputShape::kInteger},
            {"data", sonare_node::NodeInputShape::kUint8Array},
-           {"renderFrame", sonare_node::NodeInputShape::kNumber, true}})) {
+           {"renderFrame", sonare_node::NodeInputShape::kInteger, true}})) {
     return env.Undefined();
   }
   uint32_t destination_id = 0;
@@ -450,10 +451,10 @@ Napi::Value RealtimeEngineWrap::PushMidiUmp(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   if (!sonare_node::CheckNodeInputShape(env, info[0], "destinationId",
-                                        sonare_node::NodeInputShape::kNumber) ||
+                                        sonare_node::NodeInputShape::kInteger) ||
       !CheckUmpWordsShape(env, info[1], "words", &count) ||
       !sonare_node::CheckNodeInputShape(env, info[2], "renderFrame",
-                                        sonare_node::NodeInputShape::kNumber, true)) {
+                                        sonare_node::NodeInputShape::kInteger, true)) {
     return env.Undefined();
   }
   uint32_t destination_id = 0;
@@ -483,7 +484,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info)
   size_t count = 0;
   if (!CheckUmpWordsShape(env, info[0], "words", &count) ||
       !sonare_node::CheckNodeInputShape(env, info[1], "offsetInBlockSamples",
-                                        sonare_node::NodeInputShape::kNumber, true)) {
+                                        sonare_node::NodeInputShape::kInteger, true)) {
     return env.Undefined();
   }
   std::array<uint32_t, kMaxUmpWords> words{};
@@ -510,14 +511,14 @@ Napi::Value RealtimeEngineWrap::PushMidiProgram(const Napi::CallbackInfo& info) 
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"destinationId", sonare_node::NodeInputShape::kNumber},
-           {"group", sonare_node::NodeInputShape::kNumber},
-           {"channel", sonare_node::NodeInputShape::kNumber},
-           {"program", sonare_node::NodeInputShape::kNumber},
+          {{"destinationId", sonare_node::NodeInputShape::kInteger},
+           {"group", sonare_node::NodeInputShape::kInteger},
+           {"channel", sonare_node::NodeInputShape::kInteger},
+           {"program", sonare_node::NodeInputShape::kInteger},
            {"bankValid", sonare_node::NodeInputShape::kBoolean},
-           {"bankMsb", sonare_node::NodeInputShape::kNumber},
-           {"bankLsb", sonare_node::NodeInputShape::kNumber},
-           {"renderFrame", sonare_node::NodeInputShape::kNumber, true}})) {
+           {"bankMsb", sonare_node::NodeInputShape::kInteger},
+           {"bankLsb", sonare_node::NodeInputShape::kInteger},
+           {"renderFrame", sonare_node::NodeInputShape::kInteger, true}})) {
     return env.Undefined();
   }
   uint32_t destination_id = 0;
@@ -555,13 +556,13 @@ Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& i
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!sonare_node::PreflightNodeArgumentShapes(
           env, info,
-          {{"group", sonare_node::NodeInputShape::kNumber},
-           {"channel", sonare_node::NodeInputShape::kNumber},
-           {"program", sonare_node::NodeInputShape::kNumber},
+          {{"group", sonare_node::NodeInputShape::kInteger},
+           {"channel", sonare_node::NodeInputShape::kInteger},
+           {"program", sonare_node::NodeInputShape::kInteger},
            {"bankValid", sonare_node::NodeInputShape::kBoolean},
-           {"bankMsb", sonare_node::NodeInputShape::kNumber},
-           {"bankLsb", sonare_node::NodeInputShape::kNumber},
-           {"offsetInBlockSamples", sonare_node::NodeInputShape::kNumber, true}})) {
+           {"bankMsb", sonare_node::NodeInputShape::kInteger},
+           {"bankLsb", sonare_node::NodeInputShape::kInteger},
+           {"offsetInBlockSamples", sonare_node::NodeInputShape::kInteger, true}})) {
     return env.Undefined();
   }
   uint8_t group = 0;

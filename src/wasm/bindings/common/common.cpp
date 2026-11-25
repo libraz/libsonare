@@ -471,11 +471,11 @@ namespace {
 // The property readers' shared half: undefined or null reads as absent (returned
 // as undefined), and any JS type other than @p type is refused by name.
 val typedPropertyValue(const val& object, const char* key, const char* type,
-                       const std::string& name) {
+                       const std::string& name, bool integer = false) {
   val value = objectProperty(object, key);
   if (value.isUndefined() || value.isNull()) return val::undefined();
   if (value.typeOf().as<std::string>() != type) {
-    throw WasmTypeError(name + " must be a " + type);
+    throw WasmTypeError(integer ? name + " must be an integer" : name + " must be a " + type);
   }
   return value;
 }
@@ -490,6 +490,13 @@ double numberFromVal(const val& value, const char* key) {
   // isNumber() compares the JS type in place; typeOf() would build a std::string per call.
   if (!value.isNumber()) {
     throw WasmTypeError(std::string(key) + " must be a number");
+  }
+  return value.as<double>();
+}
+
+double integerNumberFromVal(const val& value, const char* key) {
+  if (!value.isNumber()) {
+    throw WasmTypeError(std::string(key) + " must be an integer");
   }
   return value.as<double>();
 }
@@ -513,7 +520,8 @@ float domainFloatProperty(val object, const char* key, float default_value) {
 float domainFloatProperty(val object, const char* key, float default_value,
                           const sonare::util::check::NumericDomain& domain, const std::string& at) {
   const std::string subject = elementField(at, key);
-  const val value = typedPropertyValue(object, key, "number", subject);
+  const val value = typedPropertyValue(object, key, "number", subject,
+                                       domain.kind == sonare::util::check::NumberKind::Integer);
   if (value.isUndefined()) return default_value;
   return domainNumberFromVal<float>(value, wasmCString(subject, key), domain);
 }
@@ -555,7 +563,7 @@ namespace {
 // The unsigned narrowings share a [0, max] range on top of that, so they share
 // the whole body and pass their own bound.
 double checkedUnsignedNumber(const val& value, const char* key, double max) {
-  const double number = numberFromVal(value, key);
+  const double number = integerNumberFromVal(value, key);
   if (!std::isfinite(number) || number != std::trunc(number) || number < 0.0 || number > max) {
     throw WasmRangeError(std::string(key) + " must be an integer in [0, " +
                          std::to_string(static_cast<long long>(max)) + "]");
@@ -574,7 +582,7 @@ int checkedIntFromVal(const val& value, const char* key) {
   // and the existing guards reject them. Rejecting here is what makes the two
   // agree; widening the positional path to match the saturating one would look
   // consistent and remove the only range check this surface has.
-  const double number = numberFromVal(value, key);
+  const double number = integerNumberFromVal(value, key);
   // One text for a non-finite, fractional or out-of-range value, as the Node integer reader.
   if (!std::isfinite(number) || number != std::trunc(number) ||
       number < static_cast<double>(std::numeric_limits<int>::min()) ||
@@ -585,7 +593,7 @@ int checkedIntFromVal(const val& value, const char* key) {
 }
 
 int wholeHertzSampleRateFromVal(const val& value) {
-  const double sample_rate = numberFromVal(value, "sampleRate");
+  const double sample_rate = integerNumberFromVal(value, "sampleRate");
   if (!sonare::is_supported_sample_rate(sample_rate)) {
     throw WasmRangeError("sampleRate " +
                          sonare::util::refusal::integer_range_predicate(
@@ -602,7 +610,7 @@ int resynthesisHopFromVal(const val& value) {
 
 int checkedMidiNoteFromVal(const val& note) {
   if (!note.isNumber()) {
-    throw WasmTypeError("note must be a number");
+    throw WasmTypeError("note must be an integer");
   }
   const int note_number = checkedIntFromVal(note, "note");
   if (const char* error = sonare::midi::live_push_note_error(0, 0, note_number, 0)) {
@@ -628,14 +636,14 @@ Mode modeFromVal(const val& value, const char* what) {
 }
 
 int intProperty(val object, const char* key, int default_value) {
-  val value = typedPropertyValue(object, key, "number");
+  val value = typedPropertyValue(object, key, "number", key, true);
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
 
 int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent,
                                const std::string& at) {
   const std::string name = elementField(at, key);
-  val value = typedPropertyValue(object, key, "number", name);
+  val value = typedPropertyValue(object, key, "number", name, true);
   if (value.isUndefined()) return absent;
   const double number = value.as<double>();
   if (!(number >= lo) || number > hi || std::floor(number) != number) {
@@ -652,7 +660,7 @@ uint32_t checkedUintFromVal(const val& value, const char* key) {
 
 std::size_t checkedSizeTFromVal(const val& value, const char* key) {
   if (!value.isNumber()) {
-    throw WasmTypeError(std::string(key) + " must be a number");
+    throw WasmTypeError(std::string(key) + " must be an integer");
   }
   return sizeTFromNumber(value.as<double>(), key);
 }
@@ -670,14 +678,14 @@ std::size_t sizeTFromNumber(double number, const char* key) {
 }
 
 uint32_t uintProperty(val object, const char* key, uint32_t default_value) {
-  val value = typedPropertyValue(object, key, "number");
+  val value = typedPropertyValue(object, key, "number", key, true);
   return value.isUndefined() ? default_value : checkedUintFromVal(value, key);
 }
 
 uint32_t checkedWordFromVal(const val& value, const char* key) {
   static constexpr double kSignedMin = -2147483648.0;   // -2^31
   static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
-  const double number = numberFromVal(value, key);
+  const double number = integerNumberFromVal(value, key);
   if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax ||
       std::floor(number) != number) {
     throw WasmRangeError(std::string(key) + " must be an integer in [-2147483648, 4294967295]");
@@ -687,7 +695,7 @@ uint32_t checkedWordFromVal(const val& value, const char* key) {
 }
 
 uint32_t wordProperty(val object, const char* key, uint32_t default_value) {
-  val value = typedPropertyValue(object, key, "number");
+  val value = typedPropertyValue(object, key, "number", key, true);
   return value.isUndefined() ? default_value : checkedWordFromVal(value, key);
 }
 
@@ -703,14 +711,14 @@ uint16_t checkedUint16FromVal(const val& value, const char* key) {
 
 uint8_t byteProperty(val object, const char* key, uint8_t default_value, const std::string& at) {
   const std::string name = elementField(at, key);
-  val value = typedPropertyValue(object, key, "number", name);
+  val value = typedPropertyValue(object, key, "number", name, true);
   return value.isUndefined() ? default_value : checkedByteFromVal(value, name.c_str());
 }
 
 int64_t checkedInt64FromVal(const val& value, const char* key) {
   // The safe-integer range: past it a JS number no longer names one integer.
   constexpr double kMaxSafeInteger = 9007199254740991.0;
-  const double number = numberFromVal(value, key);
+  const double number = integerNumberFromVal(value, key);
   if (!std::isfinite(number) || number != std::trunc(number) || number < -kMaxSafeInteger ||
       number > kMaxSafeInteger) {
     throw WasmRangeError(std::string(key) +
@@ -752,7 +760,7 @@ int64_t renderFrameFromVal(const val& value) {
 }
 
 int64_t int64Property(val object, const char* key, int64_t default_value) {
-  val value = typedPropertyValue(object, key, "number");
+  val value = typedPropertyValue(object, key, "number", key, true);
   return value.isUndefined() ? default_value : checkedInt64FromVal(value, key);
 }
 

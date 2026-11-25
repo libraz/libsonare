@@ -41,8 +41,8 @@ describe('a MIDI CC binding inside a list is named by its index', () => {
     ['ccLsbNumber', 'an integer'],
     ['selectorMsb', 'an integer'],
     ['selectorLsb', 'an integer'],
-    ['channel', 'a number'],
-    ['paramId', 'a number'],
+    ['channel', 'an integer'],
+    ['paramId', 'an integer'],
   ] as const)('midiParamToCc refuses a string bindings[1].%s as %s', (field, kind) => {
     const binding = { ...good, [field]: '7' };
     expect(() => toCc(binding)).toThrow(
@@ -239,7 +239,7 @@ it('preflights every CC request shape before any numeric domain', () => {
       events: [{ ppq: 0, word0: 4294967296 }, malformedEvent],
       paramId: 1,
     }),
-  ).toThrow(new TypeError('midiCcLearn: events[1].word1 must be a number'));
+  ).toThrow(new TypeError('midiCcLearn: events[1].word1 must be an integer'));
   expect(() => midiCcLearn({ events: [], paramId: 0, minValue: 'wrong' as never })).toThrow(
     new TypeError('midiCcLearn: minValue must be a number'),
   );
@@ -249,7 +249,7 @@ it('preflights every CC request shape before any numeric domain', () => {
       bindings: [{ ccNumber: 7, paramId: 1, ccLsbNumber: 128 } as never],
       event: malformedEvent,
     }),
-  ).toThrow(new TypeError('midiCcToBreakpoint: event.word1 must be a number'));
+  ).toThrow(new TypeError('midiCcToBreakpoint: event.word1 must be an integer'));
   expect(() =>
     midiParamToCc({
       bindings: [{ ccNumber: 7, paramId: 1, ccLsbNumber: 128 }],
@@ -263,18 +263,18 @@ it('preflights every CC request shape before any numeric domain', () => {
       events: [{ ppq: 0, word0: 4294967296 }],
       filterGroup: 'wrong' as never,
     }),
-  ).toThrow(new TypeError('midiRouteEvents: filterGroup must be a number'));
+  ).toThrow(new TypeError('midiRouteEvents: filterGroup must be an integer'));
 
   const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
   try {
     expect(() => engine.bindMidiCc({ ccNumber: 200, paramId: 'wrong' } as never)).toThrow(
-      new TypeError('RealtimeEngine.bindMidiCc: paramId must be a number'),
+      new TypeError('RealtimeEngine.bindMidiCc: paramId must be an integer'),
     );
     const native = (engine as unknown as { native: { bindMidiCc: (binding: unknown) => void } })
       .native;
     expect(() => native.bindMidiCc({ ccNumber: 200, paramId: 'wrong' })).toThrow(TypeError);
     expect(() => native.bindMidiCc({ ccNumber: 200, paramId: 'wrong' })).toThrow(
-      /paramId must be a number/,
+      /paramId must be an integer/,
     );
   } finally {
     engine.destroy();

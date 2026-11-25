@@ -409,7 +409,7 @@ describe('shared public-input conformance corpus', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 1, channel: '3' } as never)).toThrow(
-        /^RealtimeEngine\.bindMidiCc: channel must be a number$/,
+        /^RealtimeEngine\.bindMidiCc: channel must be an integer$/,
       );
       expect(engine.midiCcBindings().length).toBe(0);
     } finally {

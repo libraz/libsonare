@@ -84,7 +84,7 @@ Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "presetOrdinal must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "presetOrdinal must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int ordinal = node_narrow_int(env, info[0], "ordinal");
@@ -99,7 +99,7 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "presetOrdinal must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "presetOrdinal must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int ordinal = node_narrow_int(env, info[0], "ordinal");
@@ -278,11 +278,11 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "nFeatures must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "nFeatures must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "nFrames must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();

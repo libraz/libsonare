@@ -198,7 +198,7 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
     const Napi::Value value = obj.Get(key);
     if (env.IsExceptionPending() || value.IsUndefined() || value.IsNull()) return;
     const std::string subject = node_element_field(root, key);
-    node_require_property_type(env, value.IsNumber(), subject.c_str(), "a number");
+    node_require_property_type(env, value.IsNumber(), subject.c_str(), "an integer");
     node_refuse_fraction(env, value, subject.c_str());
     *out = node_narrow_int(env, value, subject.c_str());
     patch->present_fields |= bit;

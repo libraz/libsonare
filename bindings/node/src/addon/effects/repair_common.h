@@ -130,7 +130,7 @@ inline bool CheckLinkedArgs(Napi::Env env, const Napi::CallbackInfo& info) {
   Napi::Array channels;
   if (!RequiredPlaneListValue(env, info[0], "channels", &channels)) return false;
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return false;
   }
   return true;

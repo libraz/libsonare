@@ -136,11 +136,11 @@ void RealtimeEngineWasm::setGraph(val spec) {
     sonare::graph::Connection graph_connection{};
     graph_connection.source_node = requiredStringElementProperty(connection, "sourceNode", at);
     graph_connection.source_port =
-        checkedIntFromVal(requiredNumberElementProperty(connection, "sourcePort", at),
+        checkedIntFromVal(requiredDomainIntProperty(connection, "sourcePort", at),
                           elementField(at, "sourcePort").c_str());
     graph_connection.dest_node = requiredStringElementProperty(connection, "destNode", at);
     graph_connection.dest_port =
-        checkedIntFromVal(requiredNumberElementProperty(connection, "destPort", at),
+        checkedIntFromVal(requiredDomainIntProperty(connection, "destPort", at),
                           elementField(at, "destPort").c_str());
     // 0 = Replace, 1 = Add (the default when omitted); anything else is refused, not read as Add.
     const int mix = intProperty(connection, "mix", 1);
@@ -168,9 +168,8 @@ void RealtimeEngineWasm::setGraph(val spec) {
     for (int i = 0; i < binding_count; ++i) {
       const val binding = requiredElementObject(bindings, i, "parameterBindings");
       const std::string at = elementAt("parameterBindings", i);
-      const uint32_t param_id =
-          checkedUintFromVal(requiredNumberElementProperty(binding, "paramId", at),
-                             elementField(at, "paramId").c_str());
+      const uint32_t param_id = checkedUintFromVal(
+          requiredDomainIntProperty(binding, "paramId", at), elementField(at, "paramId").c_str());
       parameter_bindings.push_back(
           {param_id, requiredStringElementProperty(binding, "nodeId", at)});
     }

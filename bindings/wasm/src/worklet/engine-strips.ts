@@ -502,10 +502,10 @@ export function pushMidiNoteOn(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['note', note],
-    ['velocity', velocity],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['note', note, false, true],
+    ['velocity', velocity, false, true],
   ]);
   assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiNoteOn', renderFrame, options);
@@ -534,10 +534,10 @@ export function pushMidiNoteOff(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['note', note],
-    ['velocity', velocity],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['note', note, false, true],
+    ['velocity', velocity, false, true],
   ]);
   assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiNoteOff', renderFrame, options);
@@ -566,10 +566,10 @@ export function pushMidiCc(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['controller', controller],
-    ['value', value],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['controller', controller, false, true],
+    ['value', value, false, true],
   ]);
   assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiCc', renderFrame, options);
@@ -597,9 +597,9 @@ export function pushMidiPitchBend(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['bend14', bend14],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['bend14', bend14, false, true],
   ]);
   assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiPitchBend', renderFrame, options);
@@ -627,9 +627,9 @@ export function pushMidiChannelPressure(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['pressure', pressure],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['pressure', pressure, false, true],
   ]);
   assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming(
@@ -662,10 +662,10 @@ export function pushMidiPolyPressure(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['note', note],
-    ['pressure', pressure],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['note', note, false, true],
+    ['pressure', pressure, false, true],
   ]);
   assertMidiTimingShape('renderFrame', renderFrame, options);
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiPolyPressure', renderFrame, options);
@@ -736,9 +736,9 @@ export function pushMidiProgram(
 ): void {
   assertMidiTrackIdShape(trackId);
   assertMidiNumberShapes([
-    ['group', group],
-    ['channel', channel],
-    ['program', program],
+    ['group', group, false, true],
+    ['channel', channel, false, true],
+    ['program', program, false, true],
   ]);
   assertMidiBankShape(bank);
   assertMidiTimingShape('renderFrame', renderFrame, options);
