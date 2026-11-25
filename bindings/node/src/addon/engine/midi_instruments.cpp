@@ -45,8 +45,7 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
 std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Value value,
                                                         const std::string& clip_path) {
   if (!value.IsArray()) {
-    Napi::TypeError::New(env, clip_path + ".events must be an array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, clip_path + ".events must be an array").ThrowAsJavaScriptException();
     return {};
   }
   Napi::Array input = value.As<Napi::Array>();

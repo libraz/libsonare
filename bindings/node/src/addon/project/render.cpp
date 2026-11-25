@@ -785,8 +785,8 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   // the callback's pending exception is dropped to report it.
   if (job.error != SONARE_OK) {
     if (env.IsExceptionPending()) (void)env.GetAndClearPendingException();
-    Napi::Error error = sonare_node::MakeSonareError(
-        env, job.error, job.detail, job.shape_refusal, job.reason ? job.reason->c_str() : nullptr);
+    Napi::Error error = sonare_node::MakeSonareError(env, job.error, job.detail, job.shape_refusal,
+                                                     job.reason ? job.reason->c_str() : nullptr);
     if (job.refusal) {
       sonare_node::AttachRefusal(env, error.Value().As<Napi::Object>(), *job.refusal,
                                  job.refusal_entry);

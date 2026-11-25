@@ -301,9 +301,7 @@ class PlaybackRenderer:
 
     @property
     def non_finite_discard_count(self) -> int:
-        """Non-finite input samples replaced with 0 since creation.
-
-        """
+        """Non-finite input samples replaced with 0 since creation."""
         handle = self._require_handle()
         out = ctypes.c_size_t()
         _check(

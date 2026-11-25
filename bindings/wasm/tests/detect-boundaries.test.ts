@@ -100,7 +100,9 @@ describe('detectBoundaries', () => {
     const samples = threeSections();
     const found = detectBoundaries({ samples, sampleRate: SAMPLE_RATE });
     expect(found.boundaries.length).toBeGreaterThan(0);
-    if (found.noveltyPeak === undefined) throw new Error('expected a measured novelty peak');
+    if (found.noveltyPeak === undefined) {
+      throw new Error('expected a measured novelty peak');
+    }
 
     // The floor is applied to the raw response, whose maximum is noveltyPeak, so
     // a floor above it can admit nothing. The pair is the control: the same

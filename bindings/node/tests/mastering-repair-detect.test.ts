@@ -15,8 +15,8 @@
 import { assert, describe, expect, it } from 'vitest';
 import {
   masteringAudioProfile,
-  masteringRepairDetectClicks,
   masteringRepairAnalyze,
+  masteringRepairDetectClicks,
   masteringRepairDetectClipping,
   masteringRepairDetectCrackle,
   masteringRepairDetectHum,

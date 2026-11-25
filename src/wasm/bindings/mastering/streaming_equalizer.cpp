@@ -127,10 +127,9 @@ mastering::eq::EqBand eqBandFromVal(val band, double sample_rate) {
   const val sidechain_frequency = band["sidechainFreqHz"];
   const bool sidechain_frequency_given =
       !sidechain_frequency.isUndefined() && !sidechain_frequency.isNull();
-  const bool follows_band_frequency = sidechain_frequency_given &&
-                                      sidechain_frequency.typeOf().as<std::string>() == "number" &&
-                                      sidechain_frequency.as<double>() ==
-                                          mastering::eq::kEqSidechainFrequencyDomain.sentinel;
+  const bool follows_band_frequency =
+      sidechain_frequency_given && sidechain_frequency.typeOf().as<std::string>() == "number" &&
+      sidechain_frequency.as<double>() == mastering::eq::kEqSidechainFrequencyDomain.sentinel;
   result.dyn.sidechain_freq_hz =
       result.dyn.enabled && sidechain_frequency_given && !follows_band_frequency
           ? domainFloatProperty(band, "sidechainFreqHz", result.dyn.sidechain_freq_hz,

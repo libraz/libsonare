@@ -331,8 +331,8 @@ inline void rethrowLastCRefusal(std::optional<std::string> reason_override = std
   const auto code = sonare_c_detail::error_code_from_c_error(err);
   if (subjects == CErrorSubjectMode::kDocument) {
     if (const auto* refusal = sonare_c_detail::last_parameter_refusal()) {
-      const auto shown = refusal->respelled(
-          code, [](const std::string& subject) { return subject; }, true);
+      const auto shown =
+          refusal->respelled(code, [](const std::string& subject) { return subject; }, true);
       throwCEntryRefusal(shown, std::move(reason_override), "", cErrorMessage(err));
     }
   } else {

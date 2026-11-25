@@ -544,7 +544,7 @@ void RealtimeEngineWasm::setMasterStripJson(const std::string& settings_json) {
   withCEntryRefusal("engine_set_master_strip_json", [&] {
     if (!engine_.set_master_strip(settings)) {
       sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts, &settings.eq,
-                                               /*prepare_inserts=*/true);
+                                                /*prepare_inserts=*/true);
     }
   });
 #else

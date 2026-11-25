@@ -125,9 +125,10 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object, doubl
   const Napi::Value sidechain_frequency = object.Get("sidechainFreqHz");
   const bool sidechain_frequency_given =
       !sidechain_frequency.IsUndefined() && !sidechain_frequency.IsNull();
-  const bool follows_band_frequency = sidechain_frequency_given && sidechain_frequency.IsNumber() &&
-                                      sidechain_frequency.As<Napi::Number>().DoubleValue() ==
-                                          sonare::mastering::eq::kEqSidechainFrequencyDomain.sentinel;
+  const bool follows_band_frequency =
+      sidechain_frequency_given && sidechain_frequency.IsNumber() &&
+      sidechain_frequency.As<Napi::Number>().DoubleValue() ==
+          sonare::mastering::eq::kEqSidechainFrequencyDomain.sentinel;
   band.dyn.sidechain_freq_hz =
       band.dyn.enabled && sidechain_frequency_given && !follows_band_frequency
           ? DomainProperty<float>(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz,

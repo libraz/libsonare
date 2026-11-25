@@ -45,9 +45,9 @@ void CheckOneShotSetter(Napi::Env env, SonareError err, size_t index, const char
   if (const auto refusal = ShownLastRefusal()) {
     const std::string path = "strips[" + std::to_string(index) + "].";
     const auto shown = refusal->respelled(
-        refusal->code(), [&](const std::string& subject) {
-          return path + (subject == "db" ? field : subject);
-        }, true);
+        refusal->code(),
+        [&](const std::string& subject) { return path + (subject == "db" ? field : subject); },
+        true);
     Napi::Error error = MakeSonareError(env, err, RefusalText(shown), shown.shape_error(),
                                         sonare_last_error_reason());
     AttachRefusal(env, error.Value(), shown, LastRefusalEntry());

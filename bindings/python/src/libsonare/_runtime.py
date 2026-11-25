@@ -344,9 +344,7 @@ def _check(
             shape = bool(
                 typed_document and is_format and argument and lib.sonare_last_refusal_is_shape()
             )
-            error = _coded_error(
-                rc, detail_str, argument=argument, native_reason=True, shape=shape
-            )
+            error = _coded_error(rc, detail_str, argument=argument, native_reason=True, shape=shape)
             if rendered is not None and rendered[2]:
                 vars(error)["_cli_error_message"] = detail_str
             raise error

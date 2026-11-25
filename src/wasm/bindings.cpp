@@ -375,7 +375,7 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
       const sonare::SonareParameterRefusal shown = sonare::util::check::camel_spelled(*refusal);
       const auto* from_c = dynamic_cast<const CEntryRefusal*>(refusal);
       message = from_c != nullptr && from_c->native_message() ? *from_c->native_message()
-                                                             : refusal_text(shown);
+                                                              : refusal_text(shown);
       val record = refusal_object(shown);
       if (from_c != nullptr && from_c->native_message()) {
         record.set("text", message.substr(sonare_c_entries::CEntryPrefixLength(message)));

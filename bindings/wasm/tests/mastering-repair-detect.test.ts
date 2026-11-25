@@ -18,8 +18,8 @@ import { assert, beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
   masteringAudioProfile,
-  masteringRepairDetectClicks,
   masteringRepairAnalyze,
+  masteringRepairDetectClicks,
   masteringRepairDetectClipping,
   masteringRepairDetectCrackle,
   masteringRepairDetectHum,

@@ -84,7 +84,9 @@ describe('detectBoundaries', () => {
     const samples = threeSections();
     const found = detectBoundaries({ samples, sampleRate: SR });
     expect(found.boundaries.length).toBeGreaterThan(0);
-    if (found.noveltyPeak === undefined) throw new Error('expected a measured novelty peak');
+    if (found.noveltyPeak === undefined) {
+      throw new Error('expected a measured novelty peak');
+    }
 
     const raised = detectBoundaries({
       samples,

@@ -297,9 +297,9 @@ void checkOneShotSetter(SonareError err, int index, const char* field) {
   if (const auto refusal = sonare_field_spelling::wasm::SpelledLastRefusal()) {
     const std::string path = "strips[" + std::to_string(index) + "].";
     const auto shown = refusal->respelled(
-        refusal->code(), [&](const std::string& subject) {
-          return path + (subject == "db" ? field : subject);
-        }, true);
+        refusal->code(),
+        [&](const std::string& subject) { return path + (subject == "db" ? field : subject); },
+        true);
     throwCEntryRefusal(shown);
   }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err));
@@ -402,9 +402,10 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       const bool has_pan_mode = !pan_mode.isUndefined() && !pan_mode.isNull();
       const auto pan = optionalNumberAt(options, "pan", index);
       if (pan || has_pan_mode) {
-        checkOneShotSetter(sonare_strip_set_pan(
-            strip, pan.value_or(0.0f),
-            has_pan_mode ? panModeOrdinalFromVal(pan_mode) : SONARE_PAN_MODE_KEEP), index, "pan");
+        checkOneShotSetter(sonare_strip_set_pan(strip, pan.value_or(0.0f),
+                                                has_pan_mode ? panModeOrdinalFromVal(pan_mode)
+                                                             : SONARE_PAN_MODE_KEEP),
+                           index, "pan");
       }
       if (auto v = optionalNumberAt(options, "width", index)) {
         checkOneShotSetter(sonare_strip_set_width(strip, *v), index, "width");
