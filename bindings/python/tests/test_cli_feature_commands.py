@@ -10,6 +10,7 @@ import inspect
 import json
 import math
 import os
+import random
 import struct
 import subprocess
 import sys
@@ -108,6 +109,32 @@ def _json(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
     assert result.returncode == 0, result.stderr
     payload: dict[str, Any] = json.loads(result.stdout)
     return payload
+
+
+def test_mel_json_retains_quiet_power(
+    run_cli: Callable[[list[str]], subprocess.CompletedProcess[str]], tmp_path: Path
+) -> None:
+    from libsonare import mel_spectrogram
+
+    rng = random.Random(173)
+    path = _write(tmp_path / "quiet.wav", [rng.uniform(-2e-4, 2e-4) for _ in range(SR // 8)])
+    samples, rate = _load(path)
+    power = mel_spectrogram(samples, rate, n_fft=256, hop_length=64, n_mels=16).power
+    assert 0 < float(power.min()) <= float(power.max()) < 5e-7
+    result = _json(
+        run_cli(
+            ["mel", str(path), "--n-fft", "256", "--hop-length", "64", "--n-mels", "16", "--json"]
+        )
+    )
+    assert result["stats"] == pytest.approx(
+        {
+            "min": float(power.min()),
+            "max": float(power.max()),
+            "mean": float(power.mean(dtype="float64")),
+        },
+        rel=1e-6,
+        abs=0.0,
+    )
 
 
 def test_mastering_profile_omits_unmeasured_fields_and_nests_defects(

@@ -474,9 +474,9 @@ def cmd_mel(args: argparse.Namespace) -> int:
                     "sample_rate": result.sample_rate,
                     "hop_length": result.hop_length,
                     "stats": {
-                        "min": round(min(power), 6) if power else 0.0,
-                        "max": round(max(power), 6) if power else 0.0,
-                        "mean": round(sum(power) / len(power), 6) if power else 0.0,
+                        "min": min(power) if power else 0.0,
+                        "max": max(power) if power else 0.0,
+                        "mean": sum(power) / len(power) if power else 0.0,
                     },
                 }
             )
