@@ -103,17 +103,18 @@ namespace {
 // Replicates Python's floor-division semantics for floats: `floor(x / 2)`.
 int python_floordiv_by2(float x) { return static_cast<int>(std::floor(x * 0.5f)); }
 
-bool checked_floor_by2(float value, int* out) {
-  const long double floored = std::floor(-static_cast<long double>(value) * 0.5L);
-  const long double ceiled = std::floor(static_cast<long double>(value) * 0.5L);
-  if (!std::isfinite(floored) || !std::isfinite(ceiled) ||
-      floored < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
-      floored > static_cast<long double>(std::numeric_limits<int>::max()) ||
-      ceiled < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
-      ceiled > static_cast<long double>(std::numeric_limits<int>::max())) {
+bool checked_wavelet_bounds(float length, int& start, int& end) {
+  const long double start_wide = std::floor(-static_cast<long double>(length) * 0.5L);
+  const long double end_wide = std::floor(static_cast<long double>(length) * 0.5L);
+  if (!std::isfinite(start_wide) || !std::isfinite(end_wide) ||
+      start_wide < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
+      start_wide > static_cast<long double>(std::numeric_limits<int>::max()) ||
+      end_wide < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
+      end_wide > static_cast<long double>(std::numeric_limits<int>::max())) {
     return false;
   }
-  if (out != nullptr) *out = python_floordiv_by2(value);
+  start = python_floordiv_by2(-length);
+  end = python_floordiv_by2(length);
   return true;
 }
 
@@ -136,7 +137,7 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
     const float ilen = lengths[i];
     int s = 0;
     int e = 0;
-    if (!checked_floor_by2(-ilen, &s) || !checked_floor_by2(ilen, &e)) {
+    if (!checked_wavelet_bounds(ilen, s, e)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "derived length is outside the integer range");
     }
