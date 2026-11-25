@@ -32,8 +32,10 @@ def main() -> int:
 
     repo_root = REPO_ROOT
     build_dir = repo_root / args.build_dir
-    if not build_dir.exists():
-        print(f"Build directory not found: {build_dir}", file=sys.stderr)
+    executable = "sonare_tests.exe" if os.name == "nt" else "sonare_tests"
+    test_binary = build_dir / "bin" / executable
+    if not test_binary.is_file():
+        print(f"Test binary not found: {test_binary}", file=sys.stderr)
         return 2
 
     temp_root = Path(tempfile.mkdtemp(prefix="sonare-librosa-reference-"))
@@ -47,14 +49,9 @@ def main() -> int:
         env = os.environ.copy()
         env["SONARE_LIBROSA_REFERENCE_DIR"] = str(reference_dir)
 
-        command = [
-            "ctest",
-            "--test-dir",
-            str(build_dir),
-            "--output-on-failure",
-            "-R",
-            "reference compatibility",
-        ]
+        # CI registers whole shards in CTest, so individual case names are only
+        # available from Catch2. Keep the default exclusion of hidden cases.
+        command = [str(test_binary), '"*reference compatibility*"~[.]']
         return subprocess.run(command, cwd=repo_root, env=env, check=False).returncode
     finally:
         if args.keep:
