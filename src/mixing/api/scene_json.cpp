@@ -948,10 +948,7 @@ Scene scene_from_json(const std::string& json) {
 
 namespace {
 
-// One settings object read by @p read at @p root, every refusal coded as the caller's argument.
-template <typename Read>
-auto settings_from_json(const std::string& json, const std::string& root,
-                        const Read& read) -> decltype(read(JsonValue(), root)) {
+JsonValue admit_settings_object(const std::string& json, const std::string& root) {
   JsonValue value;
   try {
     value = sonare::util::json::admit_strict(json);
@@ -964,6 +961,14 @@ auto settings_from_json(const std::string& json, const std::string& root,
         ErrorCode::InvalidParameter, root,
         std::string("must be ") + schema::kind_text(schema::Kind::Object));
   }
+  return value;
+}
+
+// One settings object read by @p read at @p root, every refusal coded as the caller's argument.
+template <typename Read>
+auto settings_from_json(const std::string& json, const std::string& root,
+                        const Read& read) -> decltype(read(JsonValue(), root)) {
+  const JsonValue value = admit_settings_object(json, root);
   try {
     return read(value, root);
   } catch (const SonareParameterRefusal& e) {
