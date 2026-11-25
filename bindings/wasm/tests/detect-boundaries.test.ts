@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { detectBoundaries, init } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers.js';
 
 const SAMPLE_RATE = 22050;
 const HOP = 512;
@@ -213,24 +214,20 @@ describe('detectBoundaries', () => {
 
   it('refuses non-positive sizing and a non-finite threshold', () => {
     const samples = tone(220, 1);
-    expect(() => detectBoundaries({ samples, sampleRate: SAMPLE_RATE, nFft: 0 })).toThrow(
-      RangeError,
-    );
-    expect(() => detectBoundaries({ samples, sampleRate: SAMPLE_RATE, kernelSize: -1 })).toThrow(
-      RangeError,
-    );
-    expect(() => detectBoundaries({ samples, sampleRate: SAMPLE_RATE, nMfcc: 0 })).toThrow(
-      RangeError,
-    );
-    expect(() =>
-      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, threshold: Number.NaN }),
-    ).toThrow(RangeError);
-    expect(() =>
-      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, peakDistanceSec: -1 }),
-    ).toThrow(RangeError);
-    expect(() =>
-      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, referenceWindowSec: -1 }),
-    ).toThrow(RangeError);
+    const invalid = {
+      nFft: 0,
+      kernelSize: -1,
+      nMfcc: 0,
+      threshold: Number.NaN,
+      peakDistanceSec: -1,
+      referenceWindowSec: -1,
+    };
+    for (const [field, value] of Object.entries(invalid)) {
+      const error = expectRefusalOf(() =>
+        detectBoundaries({ samples, sampleRate: SAMPLE_RATE, [field]: value }),
+      );
+      expect(error.message).toMatch(new RegExp(`^detectBoundaries: ${field}\\b`));
+    }
     expect(() =>
       detectBoundaries({
         samples,
