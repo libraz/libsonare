@@ -173,6 +173,26 @@ def test_project_ppq_time_and_position_readers() -> None:
         project.close()
 
 
+# RED WHEN: a bar index past the int64 range is refused as below the domain ("at least 0") or in
+# this surface's number width instead of in the core's terms, which every surface states alike.
+@pytest.mark.parametrize(
+    ("bar_index", "domain"),
+    [
+        (2**63, r"must identify a bar with a representable PPQ start in \[0, 1000000000000\]"),
+        (-(2**63) - 1, r"must be an integer of at least 0"),
+        (-1, r"must be an integer of at least 0"),
+    ],
+)
+def test_bar_start_ppq_states_the_core_domain_past_the_int64_range(
+    bar_index: int, domain: str
+) -> None:
+    with (
+        Project() as project,
+        pytest.raises(SonareValueError, match=rf"^Project\.bar_start_ppq: bar_index {domain}$"),
+    ):
+        project.bar_start_ppq(bar_index)
+
+
 def test_project_end_ppq_tracks_the_last_audible_clip() -> None:
     project = Project()
     try:

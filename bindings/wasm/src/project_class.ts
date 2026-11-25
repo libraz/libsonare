@@ -518,6 +518,26 @@ export class ProjectTimeline {
 }
 
 /**
+ * Refuse a bar index past the safe-integer range in the core's own domain terms: no such bar has a
+ * representable start, and a negative one is below the domain, so neither states this surface's
+ * number width.
+ */
+function refuseUnsafeBarIndex(barIndex: unknown): void {
+  if (
+    typeof barIndex === 'number' &&
+    !Number.isNaN(barIndex) &&
+    (Number.isInteger(barIndex) || !Number.isFinite(barIndex)) &&
+    !Number.isSafeInteger(barIndex)
+  ) {
+    throw refuse(
+      barIndex < 0
+        ? 'barIndex must be an integer of at least 0'
+        : 'barIndex must identify a bar with a representable PPQ start in [0, 1000000000000]',
+    );
+  }
+}
+
+/**
  * Headless DAW project (control-thread-only arrangement model).
  *
  * Wraps the embind `Project` class over the C-ABI keystone
@@ -1934,6 +1954,7 @@ export class Project {
    * @throws {RangeError} when `barIndex` is unsafe or does not name a supported bar
    */
   barStartPpq(barIndex: number): number {
+    refuseUnsafeBarIndex(barIndex);
     return this.native.barStartPpq(barIndex);
   }
 

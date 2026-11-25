@@ -1092,6 +1092,26 @@ export class ProjectTimeline {
 }
 
 /**
+ * Refuse a bar index past the safe-integer range in the core's own domain terms: no such bar has a
+ * representable start, and a negative one is below the domain, so neither states this surface's
+ * number width.
+ */
+function refuseUnsafeBarIndex(barIndex: unknown): void {
+  if (
+    typeof barIndex === 'number' &&
+    !Number.isNaN(barIndex) &&
+    (Number.isInteger(barIndex) || !Number.isFinite(barIndex)) &&
+    !Number.isSafeInteger(barIndex)
+  ) {
+    throw refuse(
+      barIndex < 0
+        ? 'barIndex must be an integer of at least 0'
+        : 'barIndex must identify a bar with a representable PPQ start in [0, 1000000000000]',
+    );
+  }
+}
+
+/**
  * Headless arrangement / DAW project (the curated `sonare_project_*` C ABI).
  *
  * Wraps an opaque native project handle over the arrangement control plane
@@ -1367,8 +1387,9 @@ export class Project {
     return this.native.positionAtPpq(ppq);
   }
 
-  /** Read the PPQ start of a zero-based bar. The index must be a safe integer. */
+  /** Read the PPQ start of a zero-based bar. */
   barStartPpq(barIndex: number): number {
+    refuseUnsafeBarIndex(barIndex);
     assertSafeInteger(barIndex, 'barIndex');
     return this.native.barStartPpq(barIndex);
   }

@@ -165,15 +165,20 @@ describe('Sonare WASM Project', () => {
       expect(expectRefusalOf(() => project.barStartPpq(-1), RangeError).message).toContain(
         'barIndex',
       );
-      // The safe-integer domain is spelled as its bounds, as every integer domain is.
+      // Past the safe-integer range the index is refused in the core's domain terms, as every
+      // surface states it, not in this surface's number width.
       expect(expectRefusalOf(() => project.barStartPpq(1.5), TypeError).message).toBe(
         'Project.barStartPpq: barIndex must be an integer',
       );
       expect(
         expectRefusalOf(() => project.barStartPpq(Number.MAX_SAFE_INTEGER + 1), RangeError).message,
       ).toBe(
-        'Project.barStartPpq: barIndex must be an integer in [-9007199254740991, 9007199254740991]',
+        'Project.barStartPpq: barIndex must identify a bar with a representable PPQ start in [0, 1000000000000]',
       );
+      expect(
+        expectRefusalOf(() => project.barStartPpq(-Number.MAX_SAFE_INTEGER - 2), RangeError)
+          .message,
+      ).toBe('Project.barStartPpq: barIndex must be an integer of at least 0');
     } finally {
       project.destroy();
     }

@@ -40,6 +40,7 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _INT64_MAX,
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
     SONARE_AUTOMATION_INSERT_INDEX_NONE,
@@ -1267,6 +1268,15 @@ class _ProjectInspectionMixin:
     @_entry("Project.bar_start_ppq")
     def bar_start_ppq(self, bar_index: int) -> float:
         """Read the PPQ start of a zero-based project bar."""
+        # No bar past the int64 range has a representable start, so it is refused in the core's terms.
+        if (
+            isinstance(bar_index, numbers.Integral)
+            and not isinstance(bar_index, bool)
+            and int(bar_index) > _INT64_MAX
+        ):
+            raise _refuse(
+                "bar_index must identify a bar with a representable PPQ start in [0, 1000000000000]"
+            )
         out_ppq = ctypes.c_double()
         _check(
             _get_lib().sonare_project_bar_start_ppq(
