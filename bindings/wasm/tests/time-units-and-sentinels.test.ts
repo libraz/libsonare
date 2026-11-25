@@ -321,6 +321,25 @@ describe('trim padding in seconds', () => {
 describe('engine punch-in window', () => {
   const capacityFrames = 128;
 
+  it('respells reversed PPQ punch endpoints as the caller gave them', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    let refusal: unknown;
+    try {
+      engine.configureCapture({
+        capacityFrames,
+        punch: { startPpq: 4, endPpq: 2 },
+      });
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(RangeError);
+    expect(refusal).toHaveProperty(
+      'message',
+      'RealtimeEngine.configureCapture: punch.endPpq must not be before punch.startPpq',
+    );
+    engine.destroy();
+  });
+
   it('seconds equal samples at the engine rate, and bounds are required and non-negative', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {

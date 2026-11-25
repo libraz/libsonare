@@ -99,6 +99,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
   out->lengths.reserve(count);
 
   for (uint32_t index = 0; index < count; ++index) {
+    const std::string at = "tracks[" + std::to_string(index) + "]";
     Napi::Value left_value = left_input.Get(index);
     if (!IsFloat32Array(left_value)) {
       Napi::TypeError::New(env, "every track's left channel must be a Float32Array")
@@ -109,12 +110,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     out->lengths.push_back(out->left_handles.back().ElementLength());
 
     Napi::Value id_value = id_input.Get(index);
-    if (!id_value.IsString()) {
-      Napi::TypeError::New(env, "every trackIds entry must be a string")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    out->ids.push_back(node_narrow_string(env, id_value, "trackIds"));
+    out->ids.push_back(node_narrow_string(env, id_value, at + ".id"));
 
     if (has_right_array) {
       Napi::Value right_value = right_input.Get(index);
@@ -133,12 +129,11 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     if (has_name_array) {
       Napi::Value name_value = name_input.Get(index);
       if (name_value.IsString()) {
-        out->names[index] = node_narrow_string(env, name_value, "trackNames");
+        out->names[index] = node_narrow_string(env, name_value, at + ".name");
         out->has_name[index] = true;
         out->any_name = true;
       } else if (!name_value.IsUndefined() && !name_value.IsNull()) {
-        Napi::TypeError::New(env, "every trackNames entry must be a string or null")
-            .ThrowAsJavaScriptException();
+        Napi::TypeError::New(env, at + ".name must be a string").ThrowAsJavaScriptException();
         return false;
       }
     }

@@ -79,6 +79,44 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('names the supplied partial-tail policy when it drops a short recording', () => {
+    const project = new Project();
+    const trackId = project.addTrack({ kind: 'audio' });
+    try {
+      const options = {
+        trackId,
+        startPpq: 0,
+        loopLengthPpq: 4,
+        audioSampleRate: 48000,
+        audio: new Float32Array(12000),
+        audioChannels: 1,
+      };
+      expect(() => project.addLoopRecordingTakes({ ...options, partialTail: 'drop' })).toThrow(
+        new RangeError(
+          'Project.addLoopRecordingTakes: audio.length / audioChannels is shorter than one loop and partialTail drops the partial tail',
+        ),
+      );
+      expect(project.addLoopRecordingTakes(options).takeCount).toBe(1);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('names the flat fade fields on domain refusal', () => {
+    const project = new Project();
+    const track = project.addTrack({ kind: 'audio' });
+    const clipId = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
+    try {
+      for (const field of ['fadeInPpq', 'fadeOutPpq'] as const) {
+        expect(() => project.setClipFade(clipId, { [field]: -1 })).toThrow(
+          new RangeError(`Project.setClipFade: ${field} must be finite and in [0, 1e12]`),
+        );
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('setClipFade accepts named fade curves', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });

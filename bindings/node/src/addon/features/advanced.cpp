@@ -17,6 +17,7 @@
 #include "feature/spectral.h"
 #include "feature/vqt.h"
 #include "features/common.h"
+#include "field_spelling.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -266,9 +267,9 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   int n_mels{};
-  if (!RequiredIntArg(env, info, 1, "nMels", &n_mels)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "power.rows", &n_mels)) return env.Undefined();
   int n_frames{};
-  if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "power.cols", &n_frames)) return env.Undefined();
   int sr{};
   if (!OptionalIntArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate, &sr)) {
     return env.Undefined();
@@ -318,9 +319,9 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   int n_mels{};
-  if (!RequiredIntArg(env, info, 1, "nMels", &n_mels)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "power.rows", &n_mels)) return env.Undefined();
   int n_frames{};
-  if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "power.cols", &n_frames)) return env.Undefined();
   int sr{};
   if (!OptionalIntArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate, &sr)) {
     return env.Undefined();

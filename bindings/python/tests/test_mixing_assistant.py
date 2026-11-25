@@ -734,3 +734,12 @@ def test_a_bool_stft_size_is_a_type_error(name, value):
             sample_rate=SAMPLE_RATE,
             **{name: value},
         )
+
+
+def test_track_name_with_nul_names_the_indexed_input() -> None:
+    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+
+    track = MixAssistantTrack("voice", [np.zeros(16, dtype=np.float32)], "a\0b")
+    with pytest.raises(SonareValueError) as refused:
+        mixing_assistant_suggest([track], sample_rate=SAMPLE_RATE)
+    assert str(refused.value) == ("mixing_assistant_suggest: tracks[0].name must not contain NUL")

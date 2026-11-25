@@ -156,8 +156,21 @@ const PARAM = { name: 'thresholdDb', value: 0 };
 /** A sidechain source whose `kind` or `id` (named by the spelling) is the swept value. */
 const source = (spelling: string, value: unknown) =>
   spelling === 'source.kind' ? { kind: value, id: 2 } : { kind: 'track', id: value };
-/** An insert parameter whose `name` is the swept value. */
-const param = (_spelling: string, value: unknown) => ({ ...PARAM, name: value }) as never;
+/** An insert parameter whose named field is the swept value. */
+const param = (spelling: string, value: unknown) =>
+  ({ ...PARAM, [spelling === 'param.value' ? 'value' : 'name']: value }) as never;
+const given = (base: Record<string, unknown>, spelling: string, value: unknown) => {
+  const parts = spelling.split('.');
+  const result = { ...base };
+  let target = result;
+  for (const part of parts.slice(0, -1)) {
+    const child = target[part];
+    target[part] = { ...(typeof child === 'object' && child !== null ? child : {}) };
+    target = target[part] as Record<string, unknown>;
+  }
+  target[parts[parts.length - 1]!] = value;
+  return result;
+};
 const PAIR = { sampleRate: RATE, source: TONE, reference: TONE };
 const STEREO_PAIR = {
   sampleRate: RATE,
@@ -226,8 +239,10 @@ const DRIVERS: Record<string, Driver> = {
     withEngine((engine) => engine.setMidiDestinationExternal(0, value as boolean)),
   engine_set_track_output_bus: (_spelling, value) =>
     withEngine((engine) => engine.setTrackOutputBus(1, value as number)),
-  mel_to_audio: (spelling, value) => melToAudio({ power: MEL, [spelling]: value } as never),
-  mel_to_stft: (spelling, value) => melToStft({ power: MEL, [spelling]: value } as never),
+  mel_to_audio: (spelling, value) =>
+    melToAudio(given({ power: MEL, sampleRate: RATE }, spelling, value) as never),
+  mel_to_stft: (spelling, value) =>
+    melToStft(given({ power: MEL, sampleRate: RATE }, spelling, value) as never),
   pcen: (spelling, value) =>
     pcen({
       values: { data: new Float32Array(0), rows: 1, cols: 1, [spelling.split('.')[1]]: value },
@@ -289,8 +304,10 @@ const DRIVERS: Record<string, Driver> = {
       sampleRate: 48000,
       [spelling]: value,
     } as never),
-  chord_functions: (_spelling, value) =>
-    chordFunctions({ chords: value, key: { root: 7, mode: 'major' } } as never),
+  chord_functions: (spelling, value) =>
+    chordFunctions(
+      given({ chords: [], key: { root: 7, mode: 'major' } }, spelling, value) as never,
+    ),
   decompose_note_pitch: (spelling, value) =>
     decomposeNotePitch({
       f0Hz: new Float32Array(4),
@@ -508,6 +525,11 @@ const DRIVERS: Record<string, Driver> = {
     withProject((project) =>
       project.importExternalStems({ sampleRate: RATE, stems: value } as never),
     ),
+  project_set_midi_events: (_spelling, value) =>
+    withProject((project) => {
+      const { clipId } = project.addMidiClip(0, 4);
+      return project.setMidiEvents(clipId, value as never);
+    }),
   project_set_assist_sidecar: (_spelling, value) =>
     withProject((project) =>
       project.setAssistSidecar({ moduleId: 'module', payload: value } as never),

@@ -556,3 +556,11 @@ describe('mixing assistant (WASM)', () => {
     });
   });
 });
+
+it('names the indexed track name when its type is wrong', async () => {
+  await init();
+  const track = { id: 'voice', channels: [new Float32Array(16)], name: 5 };
+  expect(() => mixingAssistantSuggest({ tracks: [track] as never, sampleRate: SR })).toThrow(
+    new TypeError('mixingAssistantSuggest: tracks[0].name must be a string when present'),
+  );
+});

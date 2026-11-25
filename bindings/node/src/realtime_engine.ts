@@ -270,12 +270,17 @@ function sidechainSourcePair(
     return { kind: SIDECHAIN_SOURCE_KIND.track, id: 0 };
   }
   const record = requestObject(requestName, source, 'source', true);
+  if (typeof record.kind !== 'string') {
+    throw refuseType(`source.kind must be one of track, bus`);
+  }
+  if (typeof record.id !== 'number') {
+    throw refuseType(`source.id must be an integer`);
+  }
   const kind = tokenOrdinal(record.kind, SIDECHAIN_SOURCE_KIND, 'source.kind');
-  const id = requireFiniteInteger(record.id, 'source.id');
-  if (id === 0) {
+  if (record.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
-  return { kind, id };
+  return { kind, id: record.id };
 }
 
 /** A strip target: a track id, or the master strip. */
@@ -1585,7 +1590,15 @@ export class RealtimeEngine {
         if (ppq < 0) {
           throw refuse(`punch.${ppqName} must be at least 0`);
         }
-        return { value: Math.round(this.native.sampleAtPpq(ppq)), respelled: {} };
+        return {
+          value: Math.round(this.native.sampleAtPpq(ppq)),
+          respelled: {
+            [`punch${edge === 'start' ? 'Start' : 'End'}Sample`]: {
+              name: `punch.${ppqName}`,
+              scale: 1,
+            },
+          },
+        };
       }
       return resolveSampleBound(
         request[sampleName] as number | undefined,

@@ -20,14 +20,18 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 91> kOverrides = {{
+inline constexpr std::array<Override, 105> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
+    {"chord_functions", "key_root", "key.root"},
     {"encode_audio", "num_channels", "channels"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "param_name", "param.name"},
+    {"engine_apply_bus_strip_insert_param_by_name_now", "value", "param.value"},
     {"engine_apply_master_strip_insert_param_by_name_now", "param_name", "param.name"},
+    {"engine_apply_master_strip_insert_param_by_name_now", "value", "param.value"},
     {"engine_apply_track_strip_insert_param_by_name_now", "param_name", "param.name"},
     {"engine_apply_track_strip_insert_param_by_name_now", "track_id", "ref"},
+    {"engine_apply_track_strip_insert_param_by_name_now", "value", "param.value"},
     {"engine_can_set_bus_sidechain", "source_id", "source.id"},
     {"engine_can_set_bus_sidechain", "source_kind", "source.kind"},
     {"engine_can_set_lane_sidechain", "source_track_id", "source.id"},
@@ -41,13 +45,17 @@ inline constexpr std::array<Override, 91> kOverrides = {{
     {"engine_resolve_track_lane_automation_id", "param_name", "kind"},
     {"engine_resolve_track_lane_automation_id", "track_id", "ref"},
     {"engine_restore_bus_strip_insert_param_by_name", "param_name", "param.name"},
+    {"engine_restore_bus_strip_insert_param_by_name", "value", "param.value"},
     {"engine_restore_master_strip_insert_param_by_name", "param_name", "param.name"},
+    {"engine_restore_master_strip_insert_param_by_name", "value", "param.value"},
     {"engine_restore_track_strip_insert_param_by_name", "param_name", "param.name"},
     {"engine_restore_track_strip_insert_param_by_name", "track_id", "ref"},
+    {"engine_restore_track_strip_insert_param_by_name", "value", "param.value"},
     {"engine_set_bus_sidechain", "source_id", "source.id"},
     {"engine_set_bus_sidechain", "source_kind", "source.kind"},
     {"engine_set_bus_strip_eq_band_json", "band_json", "band"},
     {"engine_set_bus_strip_insert_param_by_name", "param_name", "param.name"},
+    {"engine_set_bus_strip_insert_param_by_name", "value", "param.value"},
     {"engine_set_bus_strip_json", "settings_json", "settings"},
     {"engine_set_controller_velocity_meaningful", "meaningful", "controllerVelocityMeaningful"},
     {"engine_set_external_midi_clock_enabled", "enabled", "externalMidiClockEnabled"},
@@ -57,6 +65,7 @@ inline constexpr std::array<Override, 91> kOverrides = {{
     {"engine_set_master_sidechain", "source_kind", "source.kind"},
     {"engine_set_master_strip_eq_band_json", "band_json", "band"},
     {"engine_set_master_strip_insert_param_by_name", "param_name", "param.name"},
+    {"engine_set_master_strip_insert_param_by_name", "value", "param.value"},
     {"engine_set_master_strip_json", "settings_json", "settings"},
     {"engine_set_midi_destination_external", "external", "midiDestinationExternal"},
     {"engine_set_part_rig", "inserts_json", "inserts"},
@@ -69,6 +78,7 @@ inline constexpr std::array<Override, 91> kOverrides = {{
     {"engine_set_track_strip_insert_bypassed", "track_id", "ref"},
     {"engine_set_track_strip_insert_param_by_name", "param_name", "param.name"},
     {"engine_set_track_strip_insert_param_by_name", "track_id", "ref"},
+    {"engine_set_track_strip_insert_param_by_name", "value", "param.value"},
     {"engine_set_track_strip_json", "settings_json", "settings"},
     {"engine_set_track_strip_json", "track_id", "ref"},
     {"engine_set_track_strip_pan", "track_id", "ref"},
@@ -79,7 +89,11 @@ inline constexpr std::array<Override, 91> kOverrides = {{
     {"lufs_interleaved", "num_channels", "channels"},
     {"lufs_series_interleaved", "num_channels", "channels"},
     {"mel_to_audio", "mel", "power"},
+    {"mel_to_audio", "n_frames", "power.cols"},
+    {"mel_to_audio", "n_mels", "power.rows"},
     {"mel_to_stft", "mel", "power"},
+    {"mel_to_stft", "n_frames", "power.cols"},
+    {"mel_to_stft", "n_mels", "power.rows"},
     {"metering_spectrum_frame", "frame_offset", "startSample"},
     {"mixer_add_strip", "enable_metering", "enabled"},
     {"mixer_add_strip", "measure_lufs", "lufs"},
@@ -115,7 +129,7 @@ inline constexpr std::array<Override, 91> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 65> kLengths = {{
+inline constexpr std::array<Override, 66> kLengths = {{
     {"align_take_to_reference", "reference_len", "reference"},
     {"align_take_to_reference", "take_len", "take"},
     {"chord_functions", "count", "chords"},
@@ -163,6 +177,7 @@ inline constexpr std::array<Override, 65> kLengths = {{
     {"project_edit_automation_lane", "point_count", "points"},
     {"project_import_external_stems", "stem_count", "stems"},
     {"project_set_assist_sidecar", "payload_len", "payload"},
+    {"project_set_midi_events", "count", "events"},
     {"project_set_warp_map", "anchor_count", "anchors"},
     {"realtime_voice_changer_process_mono", "num_samples", "samples"},
     {"render_notes", "n_frames", "f0Hz"},

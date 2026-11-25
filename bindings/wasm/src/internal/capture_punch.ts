@@ -35,5 +35,9 @@ export function capturePunchBound(
   if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
     throw refuse(`punch.${ppqName} must be finite and at least 0`);
   }
-  return { value: sampleAtPpq(ppq), respelled: {} };
+  const subject = `punch${sampleName.charAt(0).toUpperCase()}${sampleName.slice(1)}`;
+  return {
+    value: sampleAtPpq(ppq),
+    respelled: { [subject]: { name: `punch.${ppqName}`, scale: 1 } },
+  };
 }

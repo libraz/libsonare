@@ -1300,3 +1300,11 @@ def test_mel_refuses_a_supplied_edge_that_rounds_to_zero(edge: float) -> None:
     samples = np.full(2048, 0.1, dtype=np.float32)
     with pytest.raises(libsonare.SonareValueError, match="omit it for the default"):
         libsonare.mel_spectrogram(samples, sample_rate=22050, fmax_hz=edge)
+
+
+@pytest.mark.parametrize("entry", ["mel_to_stft", "mel_to_audio"])
+def test_inverse_mel_refusal_names_the_supplied_column_count(entry: str) -> None:
+    mel = np.zeros((1, 4097), dtype=np.float32)
+    with pytest.raises(libsonare.SonareValueError) as refused:
+        getattr(libsonare, entry)(mel, sr=48000)
+    assert str(refused.value) == (f"{entry}: mel.shape[1] must be an integer in [1, 4096]")

@@ -115,6 +115,18 @@ def test_track_only_strip_setters_refuse_the_master_strip(call) -> None:
         call(engine)
 
 
+def test_surround_pan_refusal_names_the_flat_keyword() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
+        engine.set_track_lanes([{"track_id": 10}])
+        engine.set_strip(10, {"id": "track-10"})
+        engine.set_strip_surround_pan(10, azimuth=0)
+        with pytest.raises(SonareValueError) as refused:
+            engine.set_strip_surround_pan(10, azimuth=181.0)
+        assert str(refused.value) == (
+            "RealtimeEngine.set_strip_surround_pan: azimuth must be finite and in [-180, 180]"
+        )
+
+
 def test_width_resolves_on_the_master_strip_only() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])

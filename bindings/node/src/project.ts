@@ -33,7 +33,7 @@ import {
   tokenOrdinal,
   WARP_MODE,
 } from './internal/project_tokens.js';
-import { respellRefusal } from './internal/respell.js';
+import { respellRefusal, withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals, refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, isPlainRecord } from './internal/value_guards.js';
 import { addon } from './native.js';
@@ -1443,7 +1443,16 @@ export class Project {
    * `"partial": true` in its `takes[]` entry of `toJson()`.
    */
   addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
-    return this.native.addLoopRecordingTakes(interleaveLoopRecording(desc));
+    const framesName = Array.isArray(desc.audio)
+      ? 'audio[0].length'
+      : 'audio.length / audioChannels';
+    return withRespelled(
+      {
+        audioFrames: { name: framesName, scale: 1 },
+        flags: { name: 'partialTail', scale: 1 },
+      },
+      () => this.native.addLoopRecordingTakes(interleaveLoopRecording(desc)),
+    );
   }
 
   /**
@@ -1666,10 +1675,14 @@ export class Project {
         curve: isAbsent(curve) ? FADE_CURVE.linear : tokenOrdinal(curve, FADE_CURVE, curveName),
       };
     };
-    this.native.setClipFade(
-      clipId,
-      side(record.fadeInPpq, record.fadeInCurve, 'fadeInPpq', 'fadeInCurve'),
-      side(record.fadeOutPpq, record.fadeOutCurve, 'fadeOutPpq', 'fadeOutCurve'),
+    const fadeIn = side(record.fadeInPpq, record.fadeInCurve, 'fadeInPpq', 'fadeInCurve');
+    const fadeOut = side(record.fadeOutPpq, record.fadeOutCurve, 'fadeOutPpq', 'fadeOutCurve');
+    withRespelled(
+      {
+        'fadeIn.lengthPpq': { name: 'fadeInPpq', scale: 1 },
+        'fadeOut.lengthPpq': { name: 'fadeOutPpq', scale: 1 },
+      },
+      () => this.native.setClipFade(clipId, fadeIn, fadeOut),
     );
   }
 

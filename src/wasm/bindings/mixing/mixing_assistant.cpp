@@ -55,11 +55,11 @@ void requireJsArray(const val& value, const char* subject) {
 std::string requireTrackId(const val& ids, std::size_t index) {
   const val value = ids[index];
   if (isAbsent(value) || value.typeOf().as<std::string>() != "string") {
-    throw WasmTypeError("trackIds[" + std::to_string(index) + "] must be a non-empty string");
+    throw WasmTypeError("tracks[" + std::to_string(index) + "].id must be a non-empty string");
   }
   std::string id = value.as<std::string>();
   if (id.empty()) {
-    throw WasmTypeError("trackIds[" + std::to_string(index) + "] must be a non-empty string");
+    throw WasmTypeError("tracks[" + std::to_string(index) + "].id must be a non-empty string");
   }
   return id;
 }
@@ -71,7 +71,7 @@ std::string optionalTrackName(const val& names, std::size_t index) {
   const val value = names[index];
   if (isAbsent(value)) return {};
   if (value.typeOf().as<std::string>() != "string") {
-    throw WasmTypeError("trackNames[" + std::to_string(index) + "] must be a string");
+    throw WasmTypeError("tracks[" + std::to_string(index) + "].name must be a string");
   }
   return value.as<std::string>();
 }

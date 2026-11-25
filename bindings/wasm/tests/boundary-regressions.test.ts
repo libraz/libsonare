@@ -5,7 +5,6 @@ import {
   BLOCK,
   configureDynamicEq,
   INVALID_DRAIN_COUNTS,
-  INVERSE_OVERFLOW_SHAPES,
   rms,
   SR,
   sine,
@@ -30,26 +29,34 @@ describe('boundary regressions (WASM)', () => {
     }
   });
 
-  it('rejects inverse matrix overflow shapes before copying or entering the core', () => {
+  it('rejects inverse matrix products over the shared audio-buffer cap before copying', () => {
     const module = getSonareModule();
     const tiny = new Float32Array(1);
-    for (const [rows, frames] of INVERSE_OVERFLOW_SHAPES) {
-      expect(() => module.melToStft(tiny, rows, frames, SR, 1024, 0, 0, false)).toThrow(
-        /matrix shape exceeds WASM budget|nFrames must be an integer in \[1, 4096\]/,
+    const productLimit = 500_000_000;
+
+    // Both products are admitted; the tiny buffer then proves the product check did not reject.
+    for (const [rows, frames] of [
+      [productLimit - 1, 1],
+      [productLimit, 1],
+    ]) {
+      expect(() => module.melToStft(tiny, rows, frames, SR, 2, 0, 0, false)).toThrow(
+        new RangeError('melToStft: inputLength must equal power.rows * power.cols'),
       );
     }
 
-    // A shape is bounded by the float32 elements the 2 GiB maximum heap could hold.
-    const capacity = 2 ** 31 / 4;
-    expect(() => module.melToStft(tiny, capacity - 1, 1, SR, 2, 0, 0, false)).toThrow(
-      /length must equal/,
+    expect(() => module.melToStft(tiny, 1, 4097, SR, 2, 0, 0, false)).toThrow(
+      /power\.cols must be an integer in \[1, 4096\]/,
     );
-    expect(() => module.melToStft(tiny, capacity, 1, SR, 2, 0, 0, false)).toThrow(
-      /length must equal/,
-    );
-    expect(() => module.melToStft(tiny, capacity + 1, 1, SR, 2, 0, 0, false)).toThrow(
-      /matrix shape exceeds WASM budget/,
-    );
+
+    // This product also wraps to zero in a 32-bit multiplication.
+    for (const [rows, frames] of [
+      [productLimit + 1, 1],
+      [2 ** 30, 4],
+    ]) {
+      expect(() => module.melToStft(tiny, rows, frames, SR, 2, 0, 0, false)).toThrow(
+        /melToStft: power\.rows \* power\.cols must be at most 500000000/,
+      );
+    }
 
     const valid = module.melToStft(new Float32Array([1]), 1, 1, SR, 2, 0, 0, false);
     expect(valid.magnitude).toBeInstanceOf(Float32Array);

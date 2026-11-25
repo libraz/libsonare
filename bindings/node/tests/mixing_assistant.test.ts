@@ -570,3 +570,10 @@ describe('mixing assistant input validation', () => {
     );
   });
 });
+
+it.each(['id', 'name'] as const)('names the track %s containing an embedded NUL', (field) => {
+  const track = { id: 'voice', channels: [new Float32Array(16)], [field]: 'a\0b' };
+  expect(() => mixingAssistantSuggest({ tracks: [track], sampleRate: SR })).toThrow(
+    new RangeError(`mixingAssistantSuggest: tracks[0].${field} must not contain NUL`),
+  );
+});

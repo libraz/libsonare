@@ -346,8 +346,8 @@ val js_mel_frequencies(const val& n_mels_val, const val& fmin_val, const val& fm
 val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val,
                    const val& sample_rate_val, const val& n_fft_val, const val& fmin_val,
                    const val& fmax_val, bool htk) {
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_mels = checkedIntFromVal(n_mels_val, "power.rows");
+  const int n_frames = checkedIntFromVal(n_frames_val, "power.cols");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const float fmin = domainFloatFromVal(fmin_val, "fminHz");
@@ -381,8 +381,8 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
 val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_val,
                     const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
                     const val& fmin_val, const val& fmax_val, const val& n_iter_val, bool htk) {
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_mels = checkedIntFromVal(n_mels_val, "power.rows");
+  const int n_frames = checkedIntFromVal(n_frames_val, "power.cols");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
@@ -413,7 +413,7 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
                    const val& n_iter_val, const val& momentum_val) {
   const int n_bins = domainNumberFromVal<int>(n_bins_val, "nBins",
                                               sonare_c_detail::kInverseSpectrogramExtentDomain);
-  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames",
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "power.cols",
                                                 sonare_c_detail::kInverseSpectrogramExtentDomain);
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");

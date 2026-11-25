@@ -176,11 +176,15 @@ def derive(
     renames = renames or {}
     c_params = c_params or {}
     names: dict[tuple[str, str], set[str]] = defaultdict(set)
+    member_paths: dict[tuple[str, str], set[str]] = defaultdict(set)
     for surface, entries in request_fields.items():
         for row in entries:
             for key in entry_keys(row["entry"]):
                 names[(surface, key)].update(row["fields"])
                 names[(surface, key)].add(row["param"])
+                member_paths[(surface, key)].update(
+                    f"{row['param']}.{field}" for field in row["fields"]
+                )
     for b in bindings:
         if b.surface_spelling is not None:
             names[(b.surface, b.c_key)].add(b.surface_spelling)
@@ -216,6 +220,10 @@ def derive(
         if s != "document_roots"
     }
 
+    def rename_key(surface: str, entry: str, subject: str) -> str:
+        scoped = f"{entry}.{subject}"
+        return scoped if scoped in renames.get(surface, {}) else subject
+
     def spellings(surface: str, subject: str) -> list[str]:
         value = renames.get(surface, {}).get(subject, [])
         return [value] if isinstance(value, str) else list(value)
@@ -224,17 +232,34 @@ def derive(
         if spelling != mechanical(subject, surface):
             rows[surface].add(Row(key, subject, spelling))
 
+    def takes_array(surface: str, key: str, array: str) -> bool:
+        return array in names[(surface, key)] or any(
+            mechanical(c, surface) == array for c in c_params.get(key, ())
+        )
+
     for b in bindings:
         if b.surface not in rows or b.c_subject is None:
             continue
+        subject_key = rename_key(b.surface, b.c_key, b.c_subject)
         if b.surface_spelling is not None:
-            bind(b.surface, b.c_key, b.c_subject, b.surface_spelling)
+            # A folded member can pair by its leaf; a ruled path preserves its declared root.
+            paths = member_paths[(b.surface, b.c_key)]
+            rooted = [
+                candidate
+                for candidate in spellings(b.surface, subject_key)
+                if candidate in paths and candidate.rsplit(".", 1)[1] == b.surface_spelling
+            ]
+            if len(rooted) == 1:
+                bind(b.surface, b.c_key, b.c_subject, rooted[0])
+                used.add((b.surface, subject_key, rooted[0]))
+            else:
+                bind(b.surface, b.c_key, b.c_subject, b.surface_spelling)
             continue
         known = names[(b.surface, b.c_key)]
         by_canonical = {camel_to_snake(f): f for f in known}
         # A dotted spelling names a member of an object the facade takes, so it binds on the root.
         renamed = [
-            r for r in spellings(b.surface, b.c_subject) if r in known or r.split(".")[0] in known
+            r for r in spellings(b.surface, subject_key) if r in known or r.split(".")[0] in known
         ]
         member = members[b.surface].get(f"{b.c_key}.{b.c_subject}")
         if member is not None and member.partition(".")[0] in known:
@@ -249,13 +274,13 @@ def derive(
             dividend, divisor = quotient
             rows[b.surface].add(Row(b.c_key, b.c_subject, dividend, True, divisor))
             used.add((b.surface, f"quotient_of.{b.c_key}.{b.c_subject}", " / ".join(quotient)))
-        elif array is not None and array in known:
+        elif array is not None and takes_array(b.surface, b.c_key, array):
             # An entry's own length_of row outranks a rename ruled for the subject on every entry.
             rows[b.surface].add(Row(b.c_key, b.c_subject, array, True))
             used.add((b.surface, f"length_of.{b.c_key}.{b.c_subject}", array))
         elif len(renamed) == 1:
             bind(b.surface, b.c_key, b.c_subject, renamed[0])
-            used.add((b.surface, b.c_subject, renamed[0]))
+            used.add((b.surface, subject_key, renamed[0]))
         else:
             unbound.append(Unbound(b.surface, b.c_key, b.c_subject, b.kind, f"{b.file}:{b.line}"))
     paired = {(b.surface, b.c_key, b.c_subject) for b in bindings if b.c_subject is not None}
@@ -277,10 +302,11 @@ def derive(
             declared = c_params.get(key, set())
             # An array the extractors leave unpaired (a caller-filled record list) still counts
             # when the C declaration takes it under the spelling the surface gives it by rule.
-            takes_array = array in names[(surface, key)] or any(
-                mechanical(c, surface) == array for c in declared
-            )
-            if (surface, key, subject) not in paired and subject in declared and takes_array:
+            if (
+                (surface, key, subject) not in paired
+                and subject in declared
+                and takes_array(surface, key, array)
+            ):
                 rows[surface].add(Row(key, subject, array, True))
                 used.add((surface, f"length_of.{name}", array))
     # A C entry the facade calls to resolve another argument (a strip index into a strip

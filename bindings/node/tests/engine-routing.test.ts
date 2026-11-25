@@ -480,6 +480,40 @@ describe('RealtimeEngine bus and master sidechain', () => {
   });
 });
 
+describe('RealtimeEngine sidechain source fields', () => {
+  it('reports sidechain source transport refusals under the caller fields', () => {
+    const engine = makeKeyedRig();
+    const tooWide = { kind: 'track', id: 4294967296 } as const;
+    const idRefusal = (entry: string) =>
+      new RangeError(`RealtimeEngine.${entry}: source.id must be an integer in [0, 4294967295]`);
+    const badKind = { kind: 'sideways' as never, id: 30 };
+    const badKindAndId = { kind: 'sideways' as never, id: 'bad' as never };
+    expect(() => engine.setStripSidechain(10, 0, tooWide)).toThrow(idRefusal('setStripSidechain'));
+    expect(() => engine.canSetStripSidechain(10, 0, tooWide)).toThrow(
+      idRefusal('canSetStripSidechain'),
+    );
+    expect(() => engine.setStripSidechain('master', 0, tooWide)).toThrow(
+      idRefusal('setStripSidechain'),
+    );
+    expect(() => engine.canSetStripSidechain('master', 0, tooWide)).toThrow(
+      idRefusal('canSetStripSidechain'),
+    );
+    expect(() => engine.setBusSidechain(2, 0, tooWide)).toThrow(idRefusal('setBusSidechain'));
+    expect(() => engine.canSetBusSidechain(2, 0, tooWide)).toThrow(idRefusal('canSetBusSidechain'));
+
+    const kindRefusal = (entry: string) =>
+      new RangeError(`RealtimeEngine.${entry}: source.kind must be one of track, bus`);
+    expect(() => engine.setBusSidechain(2, 0, badKind)).toThrow(kindRefusal('setBusSidechain'));
+    expect(() => engine.canSetStripSidechain('master', 0, badKind)).toThrow(
+      kindRefusal('canSetStripSidechain'),
+    );
+    expect(() => engine.setBusSidechain(2, 0, badKindAndId)).toThrow(
+      new TypeError('RealtimeEngine.setBusSidechain: source.id must be an integer'),
+    );
+    engine.destroy();
+  });
+});
+
 describe('RealtimeEngine sidechain pre-check', () => {
   it('reports ok for a binding the setter accepts', () => {
     const engine = makeKeyedRig();

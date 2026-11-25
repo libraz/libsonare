@@ -149,7 +149,6 @@ import type {
 import {
   assertFloatValue,
   assertString,
-  assertSurroundPan,
   optionalBoolean,
   requestObject,
   requireBoolean,
@@ -428,10 +427,13 @@ function sidechainSourceArg(
   source: SidechainSource,
 ): { kind: number; id: number } {
   requestObject(requestName, source, 'source', true);
-  const kind = sidechainSourceKindCode(source.kind, 'source.kind');
+  if (typeof source.kind !== 'string') {
+    throw refuseType(`source.kind must be one of track, bus`);
+  }
   if (typeof source.id !== 'number') {
     throw refuseType(`source.id must be an integer`);
   }
+  const kind = sidechainSourceKindCode(source.kind, 'source.kind');
   if (source.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
@@ -2559,7 +2561,6 @@ export class RealtimeEngine {
   setStripSurroundPan(ref: StripRef, pan: SurroundPan): void {
     const trackId = trackOnly(ref);
     requestObject('setStripSurroundPan', pan, 'pan', true);
-    assertSurroundPan(pan);
     this.native.setTrackStripSurroundPan(trackId, pan);
   }
 

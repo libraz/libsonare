@@ -35,11 +35,12 @@ int automationCurveToInt(sonare::automation::CurveType curve);
 /// Runs @p body and respells a parameter refusal it throws under the wasm caller's names for C
 /// entry @p entry; every other exception passes through unchanged.
 template <typename Body>
-decltype(auto) withCEntryRefusal(const char* entry, Body&& body) {
+decltype(auto) withCEntryRefusal(const char* entry, Body&& body, const char* root = "") {
   try {
     return body();
   } catch (const sonare::SonareParameterRefusal& refusal) {
-    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry), entry, std::nullopt);
+    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry, root), entry,
+                        std::nullopt);
   }
 }
 

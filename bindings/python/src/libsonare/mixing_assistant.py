@@ -175,7 +175,9 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack]) -> _TrackArrays:
         id_buffers.append(_utf8_arg(track_id, f"tracks[{index}].id"))
         if track.name is not None and not isinstance(track.name, str):
             raise _refuse_type(f"tracks[{index}].name must be a string when present")
-        name_buffers.append(_utf8_arg(track.name, "name") if track.name is not None else None)
+        name_buffers.append(
+            _utf8_arg(track.name, f"tracks[{index}].name") if track.name is not None else None
+        )
         if track.sample_rate is not None and not _is_number(track.sample_rate):
             raise _refuse_type(f"tracks[{index}].sample_rate must be an integer")
         raw_sample_rates.append(track.sample_rate)

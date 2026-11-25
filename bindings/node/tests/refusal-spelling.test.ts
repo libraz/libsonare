@@ -229,10 +229,18 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
 };
 
 /** The request with every key valid except `spelling`, which carries `value`. */
-const given = (base: Record<string, unknown>, spelling: string, value: unknown) => ({
-  ...base,
-  [spelling]: value,
-});
+const given = (base: Record<string, unknown>, spelling: string, value: unknown) => {
+  const parts = spelling.split('.');
+  const result = { ...base };
+  let target = result;
+  for (const part of parts.slice(0, -1)) {
+    const child = target[part];
+    target[part] = { ...(typeof child === 'object' && child !== null ? child : {}) };
+    target = target[part] as Record<string, unknown>;
+  }
+  target[parts[parts.length - 1]!] = value;
+  return result;
+};
 
 /** Runs `fn` against a handle and releases the handle whether or not the call throws. */
 function withHandle<T extends { destroy(): void }>(handle: T, fn: (h: T) => unknown): unknown {
@@ -315,8 +323,9 @@ const PARAM = { name: 'x', value: 0 };
 /** A sidechain source whose `kind` or `id` (named by the spelling) is the swept value. */
 const source = (spelling: string, value: unknown) =>
   spelling === 'source.kind' ? { kind: value, id: 2 } : { kind: 'track', id: value };
-/** An insert parameter whose `name` is the swept value. */
-const param = (_spelling: string, value: unknown) => ({ ...PARAM, name: value }) as never;
+/** An insert parameter whose named field is the swept value. */
+const param = (spelling: string, value: unknown) =>
+  ({ ...PARAM, [spelling === 'param.value' ? 'value' : 'name']: value }) as never;
 const RIG = { destinationId: 0, part: 0, mode: 'chain' } as const;
 const SCENE_STRIP = { id: 'a' };
 
@@ -326,8 +335,8 @@ const SCENE_STRIP = { id: 'a' };
  * the row.
  */
 const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
-  chord_functions: (_s, v) =>
-    chordFunctions({ chords: v, key: { root: 0, mode: 'major' } } as never),
+  chord_functions: (s, v) =>
+    chordFunctions(given({ chords: [], key: { root: 0, mode: 'major' } }, s, v) as never),
   decompose_note_pitch: (s, v) =>
     decomposeNotePitch(given({ f0Hz: F0, frameRate: 40, medianHz: 220 }, s, v) as never),
   detect_key: (s, v) => detectKey(given({ samples: TONE, sampleRate: SR }, s, v) as never),
@@ -496,6 +505,11 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   project_import_external_stems: (_s, v) =>
     withProject((project) => project.importExternalStems({ sampleRate: 48000, stems: v } as never)),
+  project_set_midi_events: (_s, v) =>
+    withProject((project) => {
+      const { clipId } = project.addMidiClip(0, 4);
+      return project.setMidiEvents(clipId, v as never);
+    }),
   project_set_assist_sidecar: (_s, v) =>
     withProject((project) => project.setAssistSidecar({ moduleId: 'm', payload: v } as never)),
   project_set_part_rig: (_s, v) =>
@@ -569,8 +583,8 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     withEngine((engine) => engine.setMidiDestinationExternal(0, v as boolean)),
   engine_set_track_output_bus: (_s, v) =>
     withEngine((engine) => engine.setTrackOutputBus(1, v as number)),
-  mel_to_audio: (s, v) => melToAudio(given({ sampleRate: SR }, s, v) as never),
-  mel_to_stft: (s, v) => melToStft(given({ sampleRate: SR }, s, v) as never),
+  mel_to_audio: (s, v) => melToAudio(given({ power: MEL, sampleRate: SR }, s, v) as never),
+  mel_to_stft: (s, v) => melToStft(given({ power: MEL, sampleRate: SR }, s, v) as never),
   pcen: (spelling, value) =>
     pcen({
       values: { data: new Float32Array(0), rows: 1, cols: 1, [spelling.split('.')[1]]: value },
@@ -666,11 +680,11 @@ const UNDRIVEN: Record<string, string> = {
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Whether `text` names `word` where a refusal puts its subject, not inside its prose. */
-function names(text: string, word: string): boolean {
+function names(text: string, word: string, allowRoot = true): boolean {
   const path = '(?:[A-Za-z_]+(?:\\[\\d+\\])?\\.)*';
-  return new RegExp(`(?:^[A-Za-z_.]+: |^|unknown key |, |\\{)${path}${escapeRegExp(word)}\\b`).test(
-    text,
-  );
+  return new RegExp(
+    `(?:^[A-Za-z_.]+: |^|unknown key |, |\\{)${allowRoot ? path : ''}${escapeRegExp(word)}\\b`,
+  ).test(text);
 }
 
 function refusals(row: Row): string[] {
@@ -726,7 +740,9 @@ describe('refusal spelling sweep', () => {
         `table row ${key(row)} -> ${row.spelling} has no driver and is not in UNDRIVEN`,
       ).toBeTypeOf('function');
       const texts = refusals(row);
-      const leaked = texts.filter((t) => names(t, row.subject));
+      const leaked = texts.filter((t) =>
+        names(t, row.subject, !row.spelling.endsWith(`.${row.subject}`)),
+      );
       expect(leaked, `${key(row)} refusals name the C subject`).toEqual([]);
       expect(
         texts.some((t) => names(t, row.spelling)),

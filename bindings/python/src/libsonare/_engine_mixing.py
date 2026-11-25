@@ -742,7 +742,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_surround_pan(
                 self._require_handle(), _to_c_uint32(track_id, "ref"), ctypes.byref(pan)
-            )
+            ),
+            flattened="pan",
         )
 
     @_entry("RealtimeEngine.set_strip_channel_delay_samples")

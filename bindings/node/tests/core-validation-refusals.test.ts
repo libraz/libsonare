@@ -10,6 +10,7 @@ import {
   masterAudioStereo,
   masterAudioStereoAsync,
   melToAudio,
+  melToStft,
   mfccToAudio,
   mfccToMel,
   Project,
@@ -1151,4 +1152,14 @@ describe('MIDI-FX config is refused as a call argument by the core', () => {
       message as string,
     );
   });
+});
+
+it.each([
+  ['melToStft', melToStft],
+  ['melToAudio', melToAudio],
+] as const)('%s names the supplied power column count', (entry, run) => {
+  const power = { data: new Float32Array(4097), rows: 1, cols: 4097 };
+  expect(() => run({ power, sampleRate: 48000 })).toThrow(
+    new RangeError(`${entry}: power.cols must be an integer in [1, 4096]`),
+  );
 });

@@ -852,6 +852,14 @@ def test_add_loop_recording_takes_drop_policy_and_short_capture() -> None:
     assert active == 1
     with pytest.raises(ValueError, match="partial_tail"):
         _capture(100, partial_tail="activate")
+    with pytest.raises(
+        SonareValueError,
+        match=(
+            r"^Project\.add_loop_recording_takes: audio length is shorter than one loop "
+            r"and partial_tail drops the partial tail$"
+        ),
+    ):
+        _capture(12000, partial_tail="drop")
 
 
 def test_add_loop_recording_takes_one_frame_remainder_is_not_partial() -> None:

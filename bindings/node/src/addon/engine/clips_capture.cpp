@@ -428,13 +428,14 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sourceTrackId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_set_lane_sidechain(
-                        engine_, sonare_node::node_narrow_uint32(env, info[0], "ref"),
-                        sonare_node::node_narrow_uint32(env, info[1], "insertIndex"),
-                        sonare_node::node_narrow_uint32(env, info[2], "sourceTrackId")));
+  const uint32_t track_id = sonare_node::node_narrow_uint32(env, info[0], "ref");
+  const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
+  const uint32_t source_track_id = sonare_node::node_narrow_uint32(env, info[2], "source.id");
+  ThrowIfError(env,
+               sonare_engine_set_lane_sidechain(engine_, track_id, insert_index, source_track_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -520,18 +521,19 @@ Napi::Value RealtimeEngineWrap::SetBusSidechain(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sourceKind must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "sourceId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_set_bus_sidechain(
-                        engine_, sonare_node::node_narrow_uint32(env, info[0], "busId"),
-                        sonare_node::node_narrow_uint32(env, info[1], "insertIndex"),
-                        sonare_node::node_narrow_int(env, info[2], "sourceKind"),
-                        sonare_node::node_narrow_uint32(env, info[3], "sourceId")));
+  const uint32_t bus_id = sonare_node::node_narrow_uint32(env, info[0], "busId");
+  const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
+  const int source_kind = sonare_node::node_narrow_int(env, info[2], "source.kind");
+  const uint32_t source_id = sonare_node::node_narrow_uint32(env, info[3], "source.id");
+  ThrowIfError(
+      env, sonare_engine_set_bus_sidechain(engine_, bus_id, insert_index, source_kind, source_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -545,17 +547,18 @@ Napi::Value RealtimeEngineWrap::SetMasterSidechain(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sourceKind must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sourceId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_set_master_sidechain(
-                        engine_, sonare_node::node_narrow_uint32(env, info[0], "insertIndex"),
-                        sonare_node::node_narrow_int(env, info[1], "sourceKind"),
-                        sonare_node::node_narrow_uint32(env, info[2], "sourceId")));
+  const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[0], "insertIndex");
+  const int source_kind = sonare_node::node_narrow_int(env, info[1], "source.kind");
+  const uint32_t source_id = sonare_node::node_narrow_uint32(env, info[2], "source.id");
+  ThrowIfError(env,
+               sonare_engine_set_master_sidechain(engine_, insert_index, source_kind, source_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -564,14 +567,21 @@ Napi::Value RealtimeEngineWrap::CanSetLaneSidechain(const Napi::CallbackInfo& in
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t track_id = 0;
-  uint32_t insert_index = 0;
-  uint32_t source_track_id = 0;
-  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
-      !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredUint32Arg(env, info, 2, "sourceTrackId", &source_track_id)) {
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "ref must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t track_id = sonare_node::node_narrow_uint32(env, info[0], "ref");
+  const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
+  const uint32_t source_track_id = sonare_node::node_narrow_uint32(env, info[2], "source.id");
   int refusal = 0;
   ThrowIfError(env, sonare_engine_can_set_lane_sidechain(engine_, track_id, insert_index,
                                                          source_track_id, &refusal));
@@ -579,21 +589,30 @@ Napi::Value RealtimeEngineWrap::CanSetLaneSidechain(const Napi::CallbackInfo& in
   return Napi::Number::New(env, static_cast<double>(refusal));
   SONARE_NODE_CATCH(env)
 }
-
 Napi::Value RealtimeEngineWrap::CanSetBusSidechain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t bus_id = 0;
-  uint32_t insert_index = 0;
-  int source_kind = 0;
-  uint32_t source_id = 0;
-  if (!RequiredUint32Arg(env, info, 0, "busId", &bus_id) ||
-      !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredIntArg(env, info, 2, "sourceKind", &source_kind) ||
-      !RequiredUint32Arg(env, info, 3, "sourceId", &source_id)) {
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "busId must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t bus_id = sonare_node::node_narrow_uint32(env, info[0], "busId");
+  const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
+  const int source_kind = sonare_node::node_narrow_int(env, info[2], "source.kind");
+  const uint32_t source_id = sonare_node::node_narrow_uint32(env, info[3], "source.id");
   int refusal = 0;
   ThrowIfError(env, sonare_engine_can_set_bus_sidechain(engine_, bus_id, insert_index, source_kind,
                                                         source_id, &refusal));
@@ -601,19 +620,25 @@ Napi::Value RealtimeEngineWrap::CanSetBusSidechain(const Napi::CallbackInfo& inf
   return Napi::Number::New(env, static_cast<double>(refusal));
   SONARE_NODE_CATCH(env)
 }
-
 Napi::Value RealtimeEngineWrap::CanSetMasterSidechain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t insert_index = 0;
-  int source_kind = 0;
-  uint32_t source_id = 0;
-  if (!RequiredUint32Arg(env, info, 0, "insertIndex", &insert_index) ||
-      !RequiredIntArg(env, info, 1, "sourceKind", &source_kind) ||
-      !RequiredUint32Arg(env, info, 2, "sourceId", &source_id)) {
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "source.kind must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "source.id must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t insert_index = sonare_node::node_narrow_uint32(env, info[0], "insertIndex");
+  const int source_kind = sonare_node::node_narrow_int(env, info[1], "source.kind");
+  const uint32_t source_id = sonare_node::node_narrow_uint32(env, info[2], "source.id");
   int refusal = 0;
   ThrowIfError(env, sonare_engine_can_set_master_sidechain(engine_, insert_index, source_kind,
                                                            source_id, &refusal));
@@ -621,7 +646,6 @@ Napi::Value RealtimeEngineWrap::CanSetMasterSidechain(const Napi::CallbackInfo& 
   return Napi::Number::New(env, static_cast<double>(refusal));
   SONARE_NODE_CATCH(env)
 }
-
 Napi::Value RealtimeEngineWrap::ClipCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

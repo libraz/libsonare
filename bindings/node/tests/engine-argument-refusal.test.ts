@@ -38,6 +38,36 @@ function withEngine(body: (engine: RealtimeEngine) => void): void {
   }
 }
 
+describe('RealtimeEngine insert parameter bags', () => {
+  const tooWide = { name: 'levelDb', value: Number.MAX_VALUE };
+
+  it.each([
+    ['setStripInsertParam', (e: RealtimeEngine) => e.setStripInsertParam(10, 0, tooWide)],
+    ['setStripInsertParam', (e: RealtimeEngine) => e.setStripInsertParam('master', 0, tooWide)],
+    ['setBusInsertParam', (e: RealtimeEngine) => e.setBusInsertParam(1, 0, tooWide)],
+    ['applyStripInsertParamNow', (e: RealtimeEngine) => e.applyStripInsertParamNow(10, 0, tooWide)],
+    [
+      'applyStripInsertParamNow',
+      (e: RealtimeEngine) => e.applyStripInsertParamNow('master', 0, tooWide),
+    ],
+    ['applyBusInsertParamNow', (e: RealtimeEngine) => e.applyBusInsertParamNow(1, 0, tooWide)],
+    ['restoreStripInsertParam', (e: RealtimeEngine) => e.restoreStripInsertParam(10, 0, tooWide)],
+    [
+      'restoreStripInsertParam',
+      (e: RealtimeEngine) => e.restoreStripInsertParam('master', 0, tooWide),
+    ],
+    ['restoreBusInsertParam', (e: RealtimeEngine) => e.restoreBusInsertParam(1, 0, tooWide)],
+  ] as const)('names param.value when %s cannot lower the value', (method, run) => {
+    withEngine((engine) => {
+      expect(() => run(engine)).toThrow(
+        new RangeError(
+          `RealtimeEngine.${method}: param.value must be finite and in [-3.4028235e38, 3.4028235e38]`,
+        ),
+      );
+    });
+  });
+});
+
 describe('RealtimeEngine value refusals are RangeError, not SonareError', () => {
   const cases: Array<[string, (e: RealtimeEngine) => void]> = [
     [

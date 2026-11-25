@@ -848,6 +848,49 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
         )
 
 
+def test_engine_strip_eq_band_dsp_frequency_refusal_names_the_band_field() -> None:
+    def band_at(frequency_hz: int) -> dict[str, object]:
+        return {"type": "peak", "frequencyHz": frequency_hz, "enabled": True}
+
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        engine.set_strip(
+            10,
+            scene_strip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
+        )
+        engine.set_bus_strip(
+            1,
+            scene_bus('{"version":1,"strips":[],"buses":[{"id":"1"}],"connections":[]}'),
+        )
+        engine.set_strip(
+            "master",
+            scene_strip('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
+        )
+
+        routes = [
+            (
+                "RealtimeEngine.set_strip_eq_band",
+                lambda band: engine.set_strip_eq_band(10, 0, band),
+            ),
+            (
+                "RealtimeEngine.set_strip_eq_band",
+                lambda band: engine.set_strip_eq_band("master", 0, band),
+            ),
+            (
+                "RealtimeEngine.set_bus_eq_band",
+                lambda band: engine.set_bus_eq_band(1, 0, band),
+            ),
+        ]
+        for entry, set_band in routes:
+            with pytest.raises(SonareValueError) as refusal:
+                set_band(band_at(24000))
+            assert str(refusal.value) == (
+                f"{entry}: band.frequencyHz must be finite and in (0, 24000)"
+            )
+            set_band(band_at(23999))
+
+
 def test_engine_track_lane_send_timing_is_optional() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])

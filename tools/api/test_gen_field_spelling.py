@@ -128,6 +128,26 @@ class RequestFieldTest(unittest.TestCase):
         )
         self.assertEqual((unbound, idle), ([], []))
 
+    def test_a_declared_object_path_can_restore_a_paired_members_root(self) -> None:
+        key = "engine_set_track_strip_insert_param_by_name"
+        facts = [Fact(key, "value", "param", "node", "value")]
+        rule = {"node": {"value": "param.value"}}
+        request = {
+            "node": [
+                {
+                    "entry": "RealtimeEngine.setStripInsertParam",
+                    "param": "param",
+                    "fields": ["name", "value"],
+                }
+            ]
+        }
+        rows, unbound, idle = gen.derive(facts, request, rule)
+        self.assertEqual(rows["node"], [gen.Row(key, "value", "param.value")])
+        self.assertEqual((unbound, idle), ([], []))
+        rows, _, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["node"], [])
+        self.assertEqual(idle, [("node", "value", "param.value")])
+
     def test_a_free_function_answers_to_the_c_entries_parity_aliases_to_it(self) -> None:
         facts = [Fact("playback_render_interleaved", "in_channels", "param", "node", None)]
         request = {
@@ -460,6 +480,13 @@ class RenderTest(unittest.TestCase):
     def test_a_struct_parameter_declares_its_fields(self) -> None:
         params = gen.load_c_params(gen.ROOT)["project_set_warp_map"]
         self.assertTrue({"desc", "anchors", "anchor_count"} <= params)
+
+    def test_a_length_of_row_binds_when_the_array_and_unbound_count_are_declared(self) -> None:
+        facts = [Fact("set_events", "count", "param", "node", None)]
+        rule = {"node": {"length_of": {"set_events.count": "events"}}}
+        rows, unbound, idle = gen.derive(facts, {}, rule, {"set_events": {"count", "events"}})
+        self.assertEqual(rows["node"], [gen.Row("set_events", "count", "events", True)])
+        self.assertEqual((unbound, idle), ([], []))
 
     def test_a_length_of_row_needs_the_array_on_that_entry(self) -> None:
         facts = [Fact("apply", "rendered_count", "param", "python", None)]

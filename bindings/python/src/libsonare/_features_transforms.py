@@ -259,8 +259,8 @@ def mel_to_stft(
     rc = lib.sonare_mel_to_stft(
         c_array,
         _to_c_size_t(n_mels * n_frames, "input_length"),
-        _to_c_int(n_mels, "mel row count"),
-        _to_c_int(n_frames, "mel length"),
+        _to_c_int(n_mels, "mel.shape[0]"),
+        _to_c_int(n_frames, "mel.shape[1]"),
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_float(fmin, "fmin"),
@@ -337,8 +337,8 @@ def mel_to_audio(
         c_array,
         n_mels * n_frames,
         (
-            _to_c_int(n_mels, "mel row count"),
-            _to_c_int(n_frames, "mel length"),
+            _to_c_int(n_mels, "mel.shape[0]"),
+            _to_c_int(n_frames, "mel.shape[1]"),
             _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_size_t(_effect_hop(hop_length), "hop_length"),

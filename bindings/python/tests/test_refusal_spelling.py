@@ -10,7 +10,7 @@ from __future__ import annotations
 import inspect
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -27,6 +27,10 @@ _TONE = (0.5 * np.sin(2 * np.pi * 440 * np.arange(_SR // 2) / _SR)).astype(np.fl
 # A valid value for each required argument the swept entries take.
 _REQUIRED: dict[str, Any] = {
     "samples": _TONE,
+    "channels": [_TONE[:128]],
+    "format": "wav",
+    "chords": [],
+    "key": {"root": 0, "mode": "major"},
     "reference": _TONE,
     "take": _TONE,
     "onset_envelope": np.abs(_TONE[:2048]),
@@ -55,6 +59,10 @@ _REASONS = frozenset(
 
 # Rows no facade call can make the library refuse under their subject.
 _UNDRIVEN = {
+    ("mel_to_audio", "n_mels"): "no value refuses it",
+    ("mel_to_audio", "n_frames"): "no value refuses it",
+    ("mel_to_stft", "n_mels"): "no value refuses it",
+    ("mel_to_stft", "n_frames"): "no value refuses it",
     ("note_targets_from_smf", "bytes"): "content refusal carries no subject",
 }
 
@@ -70,6 +78,30 @@ def _mixer_with_send() -> libsonare.Mixer:
     mixer.add_bus("b")
     mixer.add_send("a", "s", "b")
     return mixer
+
+
+def _midi_events() -> tuple[Callable[..., Any], dict[str, Any]]:
+    project = libsonare.Project()
+    clip = project.add_midi_clip(0.0, 4.0)
+    return project.set_midi_events, {"clip_id": clip.clip_id, "events": []}
+
+
+def _engine_part_rig() -> tuple[Callable[..., Any], dict[str, Any]]:
+    return _engine().set_part_rig, {
+        "destination_id": 1,
+        "part": 0,
+        "mode": "chain",
+        "inserts": [],
+    }
+
+
+def _project_part_rig() -> tuple[Callable[..., Any], dict[str, Any]]:
+    return libsonare.Project().set_part_rig, {
+        "destination_id": 1,
+        "part": 0,
+        "mode": "chain",
+        "inserts": [],
+    }
 
 
 def _loop_takes() -> tuple[Callable[..., Any], dict[str, Any]]:
@@ -251,6 +283,7 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
         _engine().configure_capture,
         {"capacity_frames": 1024},
     ),
+    "engine_set_part_rig": _engine_part_rig,
     "engine_set_record_offset_samples": lambda: (
         _engine().configure_capture,
         {"capacity_frames": 1024},
@@ -278,6 +311,8 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "polyphonic_set_note_edit": _set_note_edit,
     "project_add_clip": _clip,
     "project_add_loop_recording_takes": _loop_takes,
+    "project_set_midi_events": _midi_events,
+    "project_set_part_rig": _project_part_rig,
     "project_import_clip_file": lambda: (libsonare.Project().import_clip_file, {}),
     "project_import_smf": lambda: (libsonare.Project().import_smf, {}),
     "project_set_marker": lambda: (libsonare.Project().set_marker, {"ppq": 0.0}),
@@ -316,7 +351,8 @@ def _call(entry: str, spelling: str) -> tuple[Callable[..., Any], dict[str, Any]
     """The facade call reaching ``entry``, with every argument but ``spelling`` given."""
     if entry in _METHODS:
         fn, given = _METHODS[entry]()
-        return fn, {k: v for k, v in given.items() if k != spelling}
+        root, _, field = spelling.partition(".")
+        return fn, {k: v for k, v in given.items() if k != root or bool(field)}
     fn = getattr(libsonare, entry)
     params = inspect.signature(fn).parameters
     given = {
@@ -333,7 +369,12 @@ def _refusals(entry: str, spelling: str) -> list[str]:
     for value in (*_OUTSIDE, *((_MALFORMED,) if spelling in _BUFFERS else ())):
         fn, given = _call(entry, spelling)
         try:
-            given[root] = replace(given[root], **{field: value}) if field else value
+            if field and isinstance(given[root], Mapping):
+                nested = dict(given[root])
+                nested[field] = value
+                given[root] = nested
+            else:
+                given[root] = replace(given[root], **{field: value}) if field else value
             fn(**given)
         except (SonareError, TypeError, ValueError) as exc:
             texts.append(str(exc))

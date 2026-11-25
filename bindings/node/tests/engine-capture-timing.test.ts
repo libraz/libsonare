@@ -18,6 +18,25 @@ function armedLoop() {
 const PUNCH = { startSample: 0, endSample: 1000 };
 
 describe('configureCapture applies the record offset and the punch window together', () => {
+  it('respells reversed PPQ punch endpoints as the caller gave them', () => {
+    const { engine } = armedLoop();
+    let refusal: unknown;
+    try {
+      engine.configureCapture({
+        capacityFrames: 128,
+        punch: { startPpq: 4, endPpq: 2 },
+      });
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(RangeError);
+    expect(refusal).toHaveProperty(
+      'message',
+      'RealtimeEngine.configureCapture: punch.endPpq must not be before punch.startPpq',
+    );
+    engine.destroy();
+  });
+
   it('refuses a shorter loop or faster tempo that invalidates the armed capture offset', () => {
     const { engine } = armedLoop();
     try {

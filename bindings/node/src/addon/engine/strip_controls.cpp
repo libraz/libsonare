@@ -150,8 +150,8 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertParamByName(const Napi::Callb
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[2], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 3, "value", &value)) {
+      !RequiredStringValue(env, info[2], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 3, "param.value", &value)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_track_strip_insert_param_by_name(
@@ -168,8 +168,8 @@ Napi::Value RealtimeEngineWrap::SetMasterStripInsertParamByName(const Napi::Call
   std::string param_name;
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[1], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 2, "value", &value)) {
+      !RequiredStringValue(env, info[1], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 2, "param.value", &value)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_master_strip_insert_param_by_name(engine_, insert_index,
@@ -188,8 +188,8 @@ Napi::Value RealtimeEngineWrap::SetBusStripInsertParamByName(const Napi::Callbac
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "busId", &bus_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[2], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 3, "value", &value)) {
+      !RequiredStringValue(env, info[2], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 3, "param.value", &value)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_bus_strip_insert_param_by_name(engine_, bus_id, insert_index,
@@ -209,8 +209,8 @@ Napi::Value RealtimeEngineWrap::ApplyTrackStripInsertParamByNameNow(
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[2], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 3, "value", &value)) {
+      !RequiredStringValue(env, info[2], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 3, "param.value", &value)) {
     return env.Undefined();
   }
   int applied = 0;
@@ -231,8 +231,8 @@ Napi::Value RealtimeEngineWrap::RestoreTrackStripInsertParamByName(const Napi::C
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[2], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 3, "value", &value)) {
+      !RequiredStringValue(env, info[2], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 3, "param.value", &value)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_restore_track_strip_insert_param_by_name(
@@ -250,8 +250,8 @@ Napi::Value RealtimeEngineWrap::ApplyMasterStripInsertParamByNameNow(
   std::string param_name;
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[1], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 2, "value", &value)) {
+      !RequiredStringValue(env, info[1], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 2, "param.value", &value)) {
     return env.Undefined();
   }
   int applied = 0;
@@ -271,8 +271,8 @@ Napi::Value RealtimeEngineWrap::RestoreMasterStripInsertParamByName(
   std::string param_name;
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[1], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 2, "value", &value)) {
+      !RequiredStringValue(env, info[1], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 2, "param.value", &value)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_restore_master_strip_insert_param_by_name(
@@ -291,8 +291,8 @@ Napi::Value RealtimeEngineWrap::ApplyBusStripInsertParamByNameNow(const Napi::Ca
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "busId", &bus_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[2], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 3, "value", &value)) {
+      !RequiredStringValue(env, info[2], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 3, "param.value", &value)) {
     return env.Undefined();
   }
   int applied = 0;
@@ -313,8 +313,8 @@ Napi::Value RealtimeEngineWrap::RestoreBusStripInsertParamByName(const Napi::Cal
   float value = 0.0f;
   if (!RequiredUint32Arg(env, info, 0, "busId", &bus_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
-      !RequiredStringValue(env, info[2], "paramName", &param_name) ||
-      !RequiredFloatArg(env, info, 3, "value", &value)) {
+      !RequiredStringValue(env, info[2], "param.name", &param_name) ||
+      !RequiredFloatArg(env, info, 3, "param.value", &value)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_restore_bus_strip_insert_param_by_name(

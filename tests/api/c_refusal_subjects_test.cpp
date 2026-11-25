@@ -762,6 +762,29 @@ void refuse_pcen_dimension(int bins, int frames) {
                       &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+template <typename Invoke>
+SpellingDriver engine_spelling_refusal(Invoke invoke) {
+  return {[invoke] {
+    const EnginePtr engine = prepared_engine();
+    REQUIRE(invoke(engine.get()) == SONARE_ERROR_INVALID_PARAMETER);
+  }};
+}
+
+void refuse_mel_to_stft_dimensions(int n_mels, int n_frames) {
+  const float mel = 0.0f;
+  SonareInverseResult out{};
+  REQUIRE(sonare_mel_to_stft(&mel, 1, n_mels, n_frames, 22050, 512, 0.0f, 0.0f, nullptr, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
+
+void refuse_mel_to_audio_dimensions(int n_mels, int n_frames) {
+  const float mel = 0.0f;
+  float* out = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_mel_to_audio(&mel, 1, n_mels, n_frames, 22050, 512, 128, 0.0f, 0.0f, 1, nullptr,
+                              &out, &length) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 /// Drives one C entry to a refusal naming the subject its spelling-table row renames, keyed
 /// "<entry>.<subject>"; null for a row no value of that subject is refused under.
 const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
@@ -776,6 +799,13 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          size_t count = 0;
          sonare_align_take_to_reference(audio.data(), audio.size(), 8000, audio.data(),
                                         audio.size(), 8000, &config, &anchors, &count, nullptr);
+       }}},
+      {"chord_functions.key_root", {[] {
+         SonareStringArray roman{};
+         SonareStringArray functions{};
+         REQUIRE(sonare_chord_functions(nullptr, 0, static_cast<SonarePitchClass>(12),
+                                        SONARE_MODE_MAJOR, &roman,
+                                        &functions) == SONARE_ERROR_INVALID_PARAMETER);
        }}},
       // Every offset is accepted (one past the end reads silence), so no refusal names it.
       {"audio_spectrum_frame.frame_offset", {nullptr}},
@@ -900,19 +930,82 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          SonareSurroundPan pan{};
          sonare_engine_set_track_strip_surround_pan(engine.get(), 0, &pan);
        }}},
-      {"engine_set_bus_strip_json.scene_json", {[] {
+      {"engine_set_bus_strip_json.settings_json", {[] {
          const EnginePtr engine = prepared_engine();
          sonare_engine_set_bus_strip_json(engine.get(), 1, nullptr);
        }}},
-      {"engine_set_master_strip_json.scene_json", {[] {
+      {"engine_set_master_strip_json.settings_json", {[] {
          const EnginePtr engine = prepared_engine();
          sonare_engine_set_master_strip_json(engine.get(), nullptr);
        }}},
+      {"engine_set_bus_strip_eq_band_json.band_json",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         return sonare_engine_set_bus_strip_eq_band_json(engine, 1, 0, nullptr);
+       })},
+      {"engine_set_master_strip_eq_band_json.band_json",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         return sonare_engine_set_master_strip_eq_band_json(engine, 0, nullptr);
+       })},
+      {"engine_set_track_strip_eq_band_json.band_json",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         return sonare_engine_set_track_strip_eq_band_json(engine, 1, 0, nullptr);
+       })},
+      {"engine_set_bus_strip_insert_param_by_name.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         return sonare_engine_set_bus_strip_insert_param_by_name(engine, 1, 0, "gain", value);
+       })},
+      {"engine_set_master_strip_insert_param_by_name.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         return sonare_engine_set_master_strip_insert_param_by_name(engine, 0, "gain", value);
+       })},
+      {"engine_set_track_strip_insert_param_by_name.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         return sonare_engine_set_track_strip_insert_param_by_name(engine, 1, 0, "gain", value);
+       })},
+      {"engine_restore_bus_strip_insert_param_by_name.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         return sonare_engine_restore_bus_strip_insert_param_by_name(engine, 1, 0, "gain", value);
+       })},
+      {"engine_restore_master_strip_insert_param_by_name.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         return sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "gain", value);
+       })},
+      {"engine_restore_track_strip_insert_param_by_name.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         return sonare_engine_restore_track_strip_insert_param_by_name(engine, 1, 0, "gain", value);
+       })},
+      {"engine_apply_bus_strip_insert_param_by_name_now.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         int applied = 0;
+         return sonare_engine_apply_bus_strip_insert_param_by_name_now(engine, 1, 0, "gain", value,
+                                                                       &applied);
+       })},
+      {"engine_apply_master_strip_insert_param_by_name_now.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         int applied = 0;
+         return sonare_engine_apply_master_strip_insert_param_by_name_now(engine, 0, "gain", value,
+                                                                          &applied);
+       })},
+      {"engine_apply_track_strip_insert_param_by_name_now.value",
+       engine_spelling_refusal([](SonareEngine* engine) {
+         const float value = std::numeric_limits<float>::quiet_NaN();
+         int applied = 0;
+         return sonare_engine_apply_track_strip_insert_param_by_name_now(engine, 1, 0, "gain",
+                                                                         value, &applied);
+       })},
       {"engine_set_part_rig.inserts_json", {[] {
          const EnginePtr engine = prepared_engine();
          sonare_engine_set_part_rig(engine.get(), 1, 0, SONARE_PART_RIG_CHAIN, nullptr);
        }}},
-      {"engine_set_track_strip_json.scene_json", {[] {
+      {"engine_set_track_strip_json.settings_json", {[] {
          const EnginePtr engine = prepared_engine();
          sonare_engine_set_track_strip_json(engine.get(), 1, nullptr);
        }}},
@@ -1010,6 +1103,20 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          REQUIRE(sonare_engine_set_track_lanes(engine.get(), lane, 1) == SONARE_OK);
          sonare_engine_set_track_output_bus(engine.get(), 1, 99);
        }}},
+#if defined(SONARE_WITH_MASTERING)
+      {"eq_set_band.band_json", {[] {
+         SonareEq* raw = nullptr;
+         REQUIRE(sonare_eq_create(48000, 256, &raw) == SONARE_OK);
+         const std::unique_ptr<SonareEq, decltype(&sonare_eq_destroy)> eq(raw, sonare_eq_destroy);
+         REQUIRE(sonare_eq_set_band(eq.get(), 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+       }}},
+#else
+      {"eq_set_band.band_json", {nullptr}},
+#endif
+      {"mel_to_audio.n_frames", {[] { refuse_mel_to_audio_dimensions(1, 0); }}},
+      {"mel_to_audio.n_mels", {[] { refuse_mel_to_audio_dimensions(0, 1); }}},
+      {"mel_to_stft.n_frames", {[] { refuse_mel_to_stft_dimensions(1, 0); }}},
+      {"mel_to_stft.n_mels", {[] { refuse_mel_to_stft_dimensions(0, 1); }}},
       {"lufs_interleaved.num_channels", {[] {
          const float samples[2] = {0.1f, 0.1f};
          SonareLufsResult result{};

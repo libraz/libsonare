@@ -1112,6 +1112,15 @@ def test_process_stereo_input_count_rule(mixer) -> None:
         )
     with pytest.raises(SonareValueError, match=r"left_inputs\[0\]"):
         mixer.process_stereo(left_inputs=[[[0.0]]], right_inputs=[[0.0]])
+    too_long = [0.0] * (mixer.max_block_size + 1)
+    with pytest.raises(
+        SonareValueError,
+        match=(
+            rf"^Mixer\.process_stereo: left_inputs\[0\]\.length must be an integer in "
+            rf"\[0, {mixer.max_block_size}\]$"
+        ),
+    ):
+        mixer.process_stereo([too_long], [too_long])
 
 
 def test_mixing_scene_preset_returns_a_scene_document_mapping() -> None:

@@ -407,6 +407,47 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('names engine strip EQ DSP frequency refusals under band.frequencyHz', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+      try {
+        engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+        engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+        engine.setStrip(
+          10,
+          JSON.parse('{"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
+            .strips[0],
+        );
+        engine.setBusStrip(
+          1,
+          JSON.parse('{"version":2,"strips":[],"buses":[{"id":"1"}],"connections":[]}').buses[0],
+        );
+        engine.setStrip(
+          'master',
+          JSON.parse('{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}')
+            .strips[0],
+        );
+
+        const bandAt = (frequencyHz: number) => ({
+          type: 'peak' as const,
+          frequencyHz,
+          enabled: true,
+        });
+        const routes: Array<[string, (band: ReturnType<typeof bandAt>) => void]> = [
+          ['RealtimeEngine.setStripEqBand', (band) => engine.setStripEqBand(10, 0, band)],
+          ['RealtimeEngine.setStripEqBand', (band) => engine.setStripEqBand('master', 0, band)],
+          ['RealtimeEngine.setBusEqBand', (band) => engine.setBusEqBand(1, 0, band)],
+        ];
+        for (const [entry, setBand] of routes) {
+          expect(() => setBand(bandAt(24000))).toThrow(
+            new RangeError(`${entry}: band.frequencyHz must be finite and in (0, 24000)`),
+          );
+          expect(() => setBand(bandAt(23999))).not.toThrow();
+        }
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('updates bus strip pan and EQ band', () => {
       // Four whole 1 kHz periods per block, so a block's RMS is phase-independent.
       const blockSize = 192;

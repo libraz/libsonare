@@ -57,6 +57,100 @@ beforeAll(async () => {
   await init();
 });
 
+describe('RealtimeEngine insert parameter bags', () => {
+  const tooWide = { name: 'levelDb', value: Number.MAX_VALUE };
+
+  it.each([
+    ['setStripInsertParam', (e: RealtimeEngine) => e.setStripInsertParam(10, 0, tooWide)],
+    ['setStripInsertParam', (e: RealtimeEngine) => e.setStripInsertParam('master', 0, tooWide)],
+    ['setBusInsertParam', (e: RealtimeEngine) => e.setBusInsertParam(1, 0, tooWide)],
+    ['applyStripInsertParamNow', (e: RealtimeEngine) => e.applyStripInsertParamNow(10, 0, tooWide)],
+    [
+      'applyStripInsertParamNow',
+      (e: RealtimeEngine) => e.applyStripInsertParamNow('master', 0, tooWide),
+    ],
+    ['applyBusInsertParamNow', (e: RealtimeEngine) => e.applyBusInsertParamNow(1, 0, tooWide)],
+    ['restoreStripInsertParam', (e: RealtimeEngine) => e.restoreStripInsertParam(10, 0, tooWide)],
+    [
+      'restoreStripInsertParam',
+      (e: RealtimeEngine) => e.restoreStripInsertParam('master', 0, tooWide),
+    ],
+    ['restoreBusInsertParam', (e: RealtimeEngine) => e.restoreBusInsertParam(1, 0, tooWide)],
+  ] as const)('names param.value when %s cannot lower the value', (method, run) => {
+    withEngine((engine) => {
+      expect(() => run(engine)).toThrow(
+        new RangeError(
+          `RealtimeEngine.${method}: param.value must be finite and in [-3.4028235e38, 3.4028235e38]`,
+        ),
+      );
+    });
+  });
+});
+
+describe('RealtimeEngine mixer targets', () => {
+  const busPanners = [
+    ['setBusPan', (e: RealtimeEngine, id: number) => e.setBusPan(id, 0)],
+    ['setBusPanLaw', (e: RealtimeEngine, id: number) => e.setBusPanLaw(id, 'const3Db')],
+    ['setBusPanMode', (e: RealtimeEngine, id: number) => e.setBusPanMode(id, 'balance')],
+    ['setBusDualPan', (e: RealtimeEngine, id: number) => e.setBusDualPan(id, 0, 0)],
+  ] as const;
+
+  it.each(busPanners)('names the busId refused by %s', (method, run) => {
+    withEngine((engine) => {
+      engine.setTrackBuses([{ busId: 10 }, { busId: 20, channelLayout: '5.1' }]);
+      run(engine, 10);
+      expect(() => run(engine, 99)).toThrow(
+        new RangeError(`RealtimeEngine.${method}: busId must be the id of a bus in this engine`),
+      );
+      expect(() => run(engine, 20)).toThrow(
+        new RangeError(
+          `RealtimeEngine.${method}: busId must be the id of a bus with at most two channels`,
+        ),
+      );
+    });
+  });
+
+  it('names a ref whose declared lane has no strip', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expect(() => engine.setStripPanLaw(10, 'const3Db')).toThrow(
+        new RangeError(
+          'RealtimeEngine.setStripPanLaw: ref must be the id of a track that has a channel strip',
+        ),
+      );
+    });
+  });
+
+  it('checks all surround pan field types before their domains', () => {
+    withEngine((engine) => {
+      expect(() => engine.setStripSurroundPan(10, { azimuth: 181, lfe: 'no' } as never)).toThrow(
+        new TypeError('RealtimeEngine.setStripSurroundPan: lfe must be a number'),
+      );
+    });
+  });
+
+  it('names the missing insert index, unknown parameter and lookup id', () => {
+    withEngine((engine) => {
+      engine.setStrip('master', JSON.parse(LIMITER_MASTER).strips[0]);
+      expect(() => engine.setStripInsertBypassed('master', 99, { bypassed: true })).toThrow(
+        new RangeError(
+          'RealtimeEngine.setStripInsertBypassed: insertIndex must be less than the number of inserts on the master strip',
+        ),
+      );
+      expect(() => engine.setStripInsertParam('master', 0, { name: 'unknown', value: 0 })).toThrow(
+        new RangeError(
+          'RealtimeEngine.setStripInsertParam: param.name must be the name of a parameter of the insert that can be set while running',
+        ),
+      );
+      expect(() => engine.insertParameterConstructedValue(0)).toThrow(
+        new RangeError(
+          'RealtimeEngine.insertParameterConstructedValue: paramId must be an insert parameter automation id',
+        ),
+      );
+    });
+  });
+});
+
 describe('RealtimeEngine value refusals are RangeErrors', () => {
   it('names the ref of a missing track strip', () => {
     withEngine((engine) => {

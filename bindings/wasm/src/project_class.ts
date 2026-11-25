@@ -694,7 +694,16 @@ export class Project {
    * `"partial": true` in its `takes[]` entry of `toJson()`.
    */
   addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
-    return this.native.addLoopRecordingTakes(interleaveLoopRecording(desc));
+    const framesName = Array.isArray(desc.audio)
+      ? 'audio[0].length'
+      : 'audio.length / audioChannels';
+    return withRespelled(
+      {
+        audioFrames: { name: framesName, scale: 1 },
+        flags: { name: 'partialTail', scale: 1 },
+      },
+      () => this.native.addLoopRecordingTakes(interleaveLoopRecording(desc)),
+    );
   }
 
   /**
@@ -1447,16 +1456,20 @@ export class Project {
       'input',
       true,
     );
-    this.native.setClipFade(
-      clipId,
+    const fadeIn = {
+      lengthPpq: fadeInPpq ?? 0,
+      curve: projectFadeCurveValue('fadeInCurve', fadeInCurve),
+    };
+    const fadeOut = {
+      lengthPpq: fadeOutPpq ?? 0,
+      curve: projectFadeCurveValue('fadeOutCurve', fadeOutCurve),
+    };
+    withRespelled(
       {
-        lengthPpq: fadeInPpq ?? 0,
-        curve: projectFadeCurveValue('fadeInCurve', fadeInCurve),
+        'fadeIn.lengthPpq': { name: 'fadeInPpq', scale: 1 },
+        'fadeOut.lengthPpq': { name: 'fadeOutPpq', scale: 1 },
       },
-      {
-        lengthPpq: fadeOutPpq ?? 0,
-        curve: projectFadeCurveValue('fadeOutCurve', fadeOutCurve),
-      },
+      () => this.native.setClipFade(clipId, fadeIn, fadeOut),
     );
   }
 

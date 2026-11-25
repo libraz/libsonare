@@ -14,7 +14,7 @@ import numpy.typing as npt
 from ._errors import _entry, _refuse, _refuse_type, _require_open
 from ._ffi import SonareMixerAddStripOptions, SonareMixGoniometerPoint, SonareSurroundPan
 from ._ffi_types_analysis import SonareMixerMasterMeterConfig
-from ._narrowing import _resolve_zero_default
+from ._narrowing import _resolve_zero_default, _Respelling
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -1066,7 +1066,8 @@ class Mixer:
                 out_left,
                 out_right,
                 _to_c_size_t(length, "length"),
-            )
+            ),
+            respelled={"num_samples": _Respelling("left_inputs[0].length")},
         )
         return MixerStereoResult(
             left=_from_c_float_array(out_left, length),
