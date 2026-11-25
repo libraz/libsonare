@@ -670,8 +670,11 @@ _BINDING_DECLARATION = re.compile(r"\.(?:restype|argtypes)\b|\bhasattr\s*\(|#\s*
 
 def _binding_call_site(key: str, surface: str, sources: list[tuple[str, str]]) -> str | None:
     """Where a surface's own native or ctypes layer uses the C entry ``key``, or None."""
-    use = re.compile(rf"\bsonare_{re.escape(key)}\b")
+    symbol = f"sonare_{key}"
+    use = re.compile(rf"\b{re.escape(symbol)}\b")
     for path, text in sources:
+        if symbol not in text:
+            continue
         if surface == "python" and Path(path).name.startswith("_ffi_signatures"):
             continue
         for lineno, code in _code_lines(path, text):
@@ -771,6 +774,8 @@ def _balanced(text: str, start: int, open_ch: str, close_ch: str) -> int:
 
 def _constructor_body(path: str, text: str, cls: str) -> str | None:
     """The body of ``cls``'s constructor (TS ``constructor``, Python ``__init__``)."""
+    if f"class {cls}" not in text:
+        return None
     if path.endswith(".py"):
         m = re.search(rf"^class {re.escape(cls)}\b.*:$", text, re.MULTILINE)
         init = m and re.compile(r"^(\s+)def __init__\(", re.MULTILINE).search(text, m.end())
@@ -831,12 +836,18 @@ def _seeder_evidence(
     """Whether the native code calls ``sonare_<key>``, and where it first passes the
     struct to an entry that reads it. Comments are dropped so prose is not a call.
     """
-    call = re.compile(rf"\bsonare_{re.escape(key)}\s*\(")
+    symbol = f"sonare_{key}"
+    call = re.compile(rf"\b{re.escape(symbol)}\s*\(")
+    read_symbols = tuple(f"sonare_{reader}" for reader in readers)
     read = (
         re.compile(rf"\bsonare_(?:{'|'.join(map(re.escape, readers))})\s*\(") if readers else None
     )
     calls, read_at = False, None
     for path, text in sources:
+        if symbol not in text and (
+            read_at is not None or not any(reader in text for reader in read_symbols)
+        ):
+            continue
         for lineno, code in _code_lines(path, text):
             if call.search(code):
                 calls = True

@@ -29,6 +29,7 @@ import tarfile
 import tempfile
 import tomllib
 import types
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -317,10 +318,11 @@ def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> l
 def extract_ts(root: Path) -> tuple[list[dict], dict[str, int]]:
     labels = wasm_entries(root)
     by_file = {v: k for k, v in labels.items()}
-    rows = _run_ts(root, "bindings/wasm", sorted(by_file))
-    recs = ts_records("wasm", rows, by_file)
-    nrows = _run_ts(root, "bindings/node", list(NODE_ENTRIES))
-    recs += ts_records("node", nrows, {e: "." for e in NODE_ENTRIES})
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        wasm = pool.submit(_run_ts, root, "bindings/wasm", sorted(by_file))
+        node = pool.submit(_run_ts, root, "bindings/node", list(NODE_ENTRIES))
+        recs = ts_records("wasm", wasm.result(), by_file)
+        recs += ts_records("node", node.result(), {e: "." for e in NODE_ENTRIES})
     files = {
         "wasm": len({r["file"] for r in recs if r["surface"] == "wasm"}),
         "node": len({r["file"] for r in recs if r["surface"] == "node"}),
@@ -1206,13 +1208,6 @@ def _c_param_docs(doc: str) -> dict[str, str]:
     return {m[1]: m[2].strip() for m in _C_PARAM_DOC.finditer(doc)}
 
 
-def _c_decl_line(raw: str, pattern: str) -> int:
-    """First line matching pattern that is not inside a comment, or 0."""
-    stripped = _blank_comments(raw)
-    m = re.search(pattern, stripped)
-    return _line_of(raw, m.start()) if m else 0
-
-
 def _blank_comments(raw: str) -> str:
     """Replace comments with spaces, keeping offsets and newlines."""
 
@@ -1228,6 +1223,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
     header_set = {str(h.relative_to(root)) for h in headers if h.exists()}
     header_set |= {str(p.relative_to(root)) for p in sorted((root / "include/sonare").glob("*.h"))}
     raw_by_file = {f: (root / f).read_text(encoding="utf-8") for f in sorted(header_set)}
+    stripped_by_file = {f: _blank_comments(raw) for f, raw in raw_by_file.items()}
     lines_by_file = {f: t.split("\n") for f, t in raw_by_file.items()}
     out: list[dict] = []
 
@@ -1235,8 +1231,11 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
         return line > 0 and _c_doc_before(lines_by_file[file], line - 1)
 
     for f in ex.functions:
-        raw = raw_by_file.get(f.file, "")
-        line = _c_decl_line(raw, rf"\b{re.escape(f.raw_name)}\s*\(") or f.line
+        line = f.line
+        stripped = stripped_by_file.get(f.file, "")
+        m = re.search(rf"\b{re.escape(f.raw_name)}\s*\(", stripped)
+        if m:
+            line = _line_of(stripped, m.start())
         rec = _record(
             "c",
             "function",
@@ -1289,7 +1288,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
     declared_types: set[str] = set()
     for r in ex.records:
         raw = raw_by_file.get(r.file, "")
-        stripped = _blank_comments(raw)
+        stripped = stripped_by_file.get(r.file, "")
         m = re.search(rf"\}}\s*{re.escape(r.raw_name)}\s*;", stripped)
         start = stripped.rfind("typedef", 0, m.start()) if m else -1
         line = _line_of(raw, start) if start >= 0 else r.line
@@ -1336,7 +1335,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
                 )
             )
     for file, raw in raw_by_file.items():
-        stripped = _blank_comments(raw)
+        stripped = stripped_by_file[file]
         for m in _C_TYPEDEF_ENUM.finditer(stripped):
             name = m.group("name")
             if name in declared_types:

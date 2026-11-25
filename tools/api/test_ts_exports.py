@@ -11,6 +11,7 @@ import json
 import shutil
 import subprocess
 import unittest
+from functools import cache
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -18,17 +19,28 @@ ROOT = HERE.parents[1]
 PKG = ROOT / "bindings" / "wasm"
 FIXTURE = HERE / "testdata" / "ts" / "optional_method.ts"
 NESTED = HERE / "testdata" / "ts" / "nested_object.ts"
+PLATFORM = HERE / "testdata" / "ts" / "platform_mirror.ts"
 
 
-def _extract(fixture: Path) -> list[dict]:
-    entry = Path("..", "..", "..", fixture.relative_to(ROOT)).as_posix()
+def _entry(fixture: Path) -> str:
+    return Path("..", "..", "..", fixture.relative_to(ROOT)).as_posix()
+
+
+@cache
+def _extract_fixtures() -> dict[str, list[dict]]:
+    entries = [_entry(fixture) for fixture in (FIXTURE, NESTED, PLATFORM)]
     proc = subprocess.run(
-        ["node", str(HERE / "ts_exports.cjs"), str(PKG), entry],
+        ["node", str(HERE / "ts_exports.cjs"), str(PKG), *entries],
         capture_output=True,
         text=True,
         check=True,
     )
-    return json.loads(proc.stdout)
+    rows = json.loads(proc.stdout)
+    return {entry: [row for row in rows if row["entry"] == entry] for entry in entries}
+
+
+def _extract(fixture: Path) -> list[dict]:
+    return _extract_fixtures()[_entry(fixture)]
 
 
 @unittest.skipUnless(
@@ -91,9 +103,7 @@ if __name__ == "__main__":
 )
 class PlatformMirrors(unittest.TestCase):
     def test_a_tagged_type_lists_only_the_members_the_platform_interface_declares(self) -> None:
-        rows = {
-            row["name"]: row for row in _extract(HERE / "testdata" / "ts" / "platform_mirror.ts")
-        }
+        rows = {row["name"]: row for row in _extract(PLATFORM)}
         self.assertEqual(
             rows["AudioClockLike"]["platformMirror"],
             {"interface": "AudioContext", "members": ["outputLatency"]},

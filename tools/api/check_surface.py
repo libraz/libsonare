@@ -37,6 +37,7 @@ import shlex
 import sys
 import tomllib
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -1381,6 +1382,7 @@ _UNITS = (
 )
 
 
+@cache
 def _unit_split(name: str):
     """(stem, unit) when the snake name ends with stem or stem_unit, else None.
 

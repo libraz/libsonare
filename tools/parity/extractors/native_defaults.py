@@ -63,31 +63,33 @@ class NativeDefault:
     unresolved: str = ""  # why no core default could be named
 
 
+_COMMENT_OR_QUOTE = re.compile(r'"|//|/\*')
+
+
 def _strip_comments_keep_lines(text: str) -> str:
-    """Blank out comments and string bodies' comment lookalikes, preserving line numbers."""
+    """Blank out comments while preserving offsets and leaving string literals alone."""
     out = []
     i, n = 0, len(text)
-    while i < n:
-        c = text[i]
-        if c == '"':
+    while marker := _COMMENT_OR_QUOTE.search(text, i):
+        out.append(text[i : marker.start()])
+        i = marker.start()
+        if marker[0] == '"':
             j = i + 1
             while j < n and text[j] != '"':
                 j += 2 if text[j] == "\\" else 1
             out.append(text[i : j + 1])
             i = j + 1
-        elif text.startswith("//", i):
+        elif marker[0] == "//":
             j = text.find("\n", i)
             j = n if j < 0 else j
             out.append(" " * (j - i))
             i = j
-        elif text.startswith("/*", i):
+        else:
             j = text.find("*/", i + 2)
             j = n if j < 0 else j + 2
             out.append(re.sub(r"[^\n]", " ", text[i:j]))
             i = j
-        else:
-            out.append(c)
-            i += 1
+    out.append(text[i:])
     return "".join(out)
 
 
@@ -368,8 +370,11 @@ class Resolver:
             return anchor, None, "the C ABI hop limit was reached"
         hits = set()
         switched = False
+        param = re.compile(rf"\b{struct}\s*(?:const\s*)?[&*]\s*(\w+)")
         for head, body in self.c_defs.values():
-            pm = re.search(rf"\b{struct}\s*(?:const\s*)?[&*]\s*(\w+)", head)
+            if struct not in head:
+                continue
+            pm = param.search(head)
             if not pm:
                 continue
             switched = switched or bool(
