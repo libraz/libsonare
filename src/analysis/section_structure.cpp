@@ -683,12 +683,23 @@ Repetition resolve_repetition(std::vector<Span> spans, const std::vector<float>&
   return out;
 }
 
+namespace {
+
+using BoundaryComparison = bool (*)(const Boundary&, const Boundary&);
+
+[[gnu::noinline]] void sort_boundaries(std::vector<Boundary>& boundaries,
+                                       BoundaryComparison before) {
+  std::sort(boundaries.begin(), boundaries.end(), before);
+}
+
+}  // namespace
+
 std::vector<Boundary> merge_short_sections(const std::vector<Boundary>& boundaries,
                                            float duration_sec, float min_section_sec,
                                            float column_sec) {
   std::vector<Boundary> sorted = boundaries;
-  std::sort(sorted.begin(), sorted.end(),
-            [](const Boundary& a, const Boundary& b) { return a.time < b.time; });
+  const auto by_time = [](const Boundary& a, const Boundary& b) { return a.time < b.time; };
+  sort_boundaries(sorted, by_time);
   const float minimum = std::max(0.0f, min_section_sec);
   if (minimum <= 0.0f || sorted.empty()) return sorted;
   const float reach = minimum - 0.5f * std::max(0.0f, column_sec);
@@ -701,7 +712,7 @@ std::vector<Boundary> merge_short_sections(const std::vector<Boundary>& boundari
       candidates.push_back(boundary);
     }
   }
-  std::sort(candidates.begin(), candidates.end(), [](const Boundary& a, const Boundary& b) {
+  sort_boundaries(candidates, [](const Boundary& a, const Boundary& b) {
     return a.strength != b.strength ? a.strength > b.strength : a.time < b.time;
   });
 
@@ -715,8 +726,7 @@ std::vector<Boundary> merge_short_sections(const std::vector<Boundary>& boundari
     });
     if (separated) kept.push_back(candidate);
   }
-  std::sort(kept.begin(), kept.end(),
-            [](const Boundary& a, const Boundary& b) { return a.time < b.time; });
+  sort_boundaries(kept, by_time);
   return kept;
 }
 
@@ -736,8 +746,7 @@ std::vector<Boundary> snap_to_downbeats(const std::vector<Boundary>& boundaries,
       }
     }
   }
-  std::sort(moved.begin(), moved.end(),
-            [](const Boundary& a, const Boundary& b) { return a.frame < b.frame; });
+  sort_boundaries(moved, [](const Boundary& a, const Boundary& b) { return a.frame < b.frame; });
   std::vector<Boundary> out;
   for (const Boundary& b : moved) {
     if (!out.empty() && out.back().frame == b.frame) {
