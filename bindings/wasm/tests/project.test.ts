@@ -48,6 +48,7 @@ import {
   synthGsDrumKitName,
   synthGsVariationIsVoicedApart,
 } from '../dist/index.js';
+import { refusalOf } from '../src/internal/entry.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/project_types';
 import { expectArgumentRefusal, expectRefusalOf, unknownKeyText } from './_helpers';
 
@@ -2053,8 +2054,71 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('throws cleanly on malformed fromJson input', () => {
-    expect(() => Project.fromJson('{ not valid project json')).toThrow();
+  it.each(['fromJson', 'fromJsonWithDiagnostics'] as const)(
+    '%s keeps all document diagnostics and the literal refusal path',
+    (entry) => {
+      const document = JSON.parse(danglingSourceJson());
+      document.scene = {
+        version: 2,
+        strips: [{ id: 'lead', faderDB: -3 }],
+        buses: [{ id: 'master', role: 'master' }],
+      };
+      let caught: unknown;
+      try {
+        const loaded = Project[entry](JSON.stringify(document));
+        ('project' in loaded ? loaded.project : loaded).destroy();
+      } catch (error) {
+        caught = error;
+      }
+      const diagnostic = `clip ${document.clips[0].id} references missing source 99`;
+      const subject = 'scene.strips[0].faderDB';
+      const refusal = unknownKeyText(`unknown key ${subject}`);
+      expect(isSonareError(caught)).toBe(true);
+      expect(caught).toMatchObject({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringMatching(
+          new RegExp(`^Project\\.${entry}: ${diagnostic}\n${refusal.source}$`),
+        ),
+      });
+      expect(refusalOf(caught)).toMatchObject({
+        cEntry: 'project_deserialize',
+        code: ErrorCode.InvalidFormat,
+        form: 'unknownKey',
+        subjects: [subject],
+        text: expect.stringMatching(new RegExp(`^${diagnostic}\n${refusal.source}$`)),
+      });
+    },
+  );
+
+  it('carries the native reason on a malformed project document', () => {
+    expect(() => Project.fromJson('{ not valid project json')).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidFormat, reason: 'malformedJson' }),
+    );
+  });
+
+  it('keeps a tempo field refusal as an InvalidFormat document error', () => {
+    const saved = new Project();
+    const document = JSON.parse(saved.toJson());
+    saved.destroy();
+    document.tempoSegments = [{ startPpq: 0, bpm: 1e-8 }];
+    let caught: unknown;
+    try {
+      Project.fromJson(JSON.stringify(document)).destroy();
+    } catch (error) {
+      caught = error;
+    }
+    const subject = 'tempoSegments[0].bpm';
+    expect(isSonareError(caught)).toBe(true);
+    expect(caught).toMatchObject({
+      code: ErrorCode.InvalidFormat,
+      message: `Project.fromJson: ${subject} must be finite and in [1e-6, 100000]`,
+    });
+    expect(refusalOf(caught)).toMatchObject({
+      cEntry: 'project_deserialize',
+      code: ErrorCode.InvalidFormat,
+      form: 'predicate',
+      subjects: [subject],
+    });
   });
 
   it('refuses a fractional project rate with the C code, on load and on set', () => {

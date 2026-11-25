@@ -249,13 +249,15 @@ class CEntryRefusal : public sonare::SonareParameterRefusal {
   CEntryRefusal(const sonare::SonareParameterRefusal& refusal, std::string c_entry,
                 std::optional<std::string> reason_override,
                 std::optional<sonare::SonareParameterRefusal> raw_refusal = std::nullopt,
-                bool from_c = false, std::string flattened = {})
+                bool from_c = false, std::string flattened = {},
+                std::optional<std::string> native_message = std::nullopt)
       : sonare::SonareParameterRefusal(refusal),
         c_entry_(std::move(c_entry)),
         reason_override_(std::move(reason_override)),
         raw_refusal_(std::move(raw_refusal)),
         from_c_(from_c),
-        flattened_(std::move(flattened)) {}
+        flattened_(std::move(flattened)),
+        native_message_(std::move(native_message)) {}
   const std::string& c_entry() const noexcept { return c_entry_; }
   const std::optional<std::string>& reason_override() const noexcept { return reason_override_; }
   const std::optional<sonare::SonareParameterRefusal>& raw_refusal() const noexcept {
@@ -263,6 +265,7 @@ class CEntryRefusal : public sonare::SonareParameterRefusal {
   }
   bool from_c() const noexcept { return from_c_; }
   const std::string& flattened() const noexcept { return flattened_; }
+  const std::optional<std::string>& native_message() const noexcept { return native_message_; }
 
  private:
   std::string c_entry_;
@@ -270,10 +273,13 @@ class CEntryRefusal : public sonare::SonareParameterRefusal {
   std::optional<sonare::SonareParameterRefusal> raw_refusal_;
   bool from_c_ = false;
   std::string flattened_;
+  std::optional<std::string> native_message_;
 };
 
 /// @brief Whether a failing C call may contribute its current reason token.
 enum class CErrorReasonMode { kNone, kCurrentEntry };
+
+enum class CErrorSubjectMode { kSurface, kDocument };
 
 /// @brief A coded C-ABI failure with an explicit reason override.
 class WasmCodedError final : public sonare::SonareException {
@@ -291,7 +297,8 @@ class WasmCodedError final : public sonare::SonareException {
 /// @brief Throws @p shown as the refusal the last C-ABI call recorded.
 [[noreturn]] inline void throwCEntryRefusal(
     const sonare::SonareParameterRefusal& shown,
-    std::optional<std::string> reason_override = std::nullopt, const char* root = "") {
+    std::optional<std::string> reason_override = std::nullopt, const char* root = "",
+    std::optional<std::string> native_message = std::nullopt) {
   const char* entry = sonare_last_refusal_entry();
   std::optional<sonare::SonareParameterRefusal> raw_refusal;
   if (captureRefusalMetadataEnabled()) {
@@ -299,7 +306,8 @@ class WasmCodedError final : public sonare::SonareException {
   }
   std::string flattened = raw_refusal ? root : "";
   throw CEntryRefusal(shown, entry != nullptr ? entry : "", std::move(reason_override),
-                      std::move(raw_refusal), entry != nullptr, std::move(flattened));
+                      std::move(raw_refusal), entry != nullptr, std::move(flattened),
+                      std::move(native_message));
 }
 
 /// @brief Rethrows the parameter refusal the last C-ABI call recorded, spelled under the refused
@@ -311,17 +319,26 @@ inline void rethrowLastCRefusal(std::optional<std::string> reason_override = std
   }
 }
 
-/// @brief Throws the returned @p err as its recorded refusal, else as its SonareException with
-///        cErrorMessage(@p err).
-[[noreturn]] inline void throwCodedCError(SonareError err,
-                                          CErrorReasonMode reason_mode = CErrorReasonMode::kNone) {
+/// @brief Throws the returned @p err with its recorded refusal and, for a document, its
+///        literal paths and complete diagnostic text.
+[[noreturn]] inline void throwCodedCError(
+    SonareError err, CErrorReasonMode reason_mode = CErrorReasonMode::kNone,
+    CErrorSubjectMode subjects = CErrorSubjectMode::kSurface) {
   std::optional<std::string> reason_override;
   if (reason_mode == CErrorReasonMode::kCurrentEntry) {
     if (const char* reason = sonare_last_error_reason()) reason_override = reason;
   }
-  rethrowLastCRefusal(reason_override);
-  throw WasmCodedError(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err),
-                       std::move(reason_override));
+  const auto code = sonare_c_detail::error_code_from_c_error(err);
+  if (subjects == CErrorSubjectMode::kDocument) {
+    if (const auto* refusal = sonare_c_detail::last_parameter_refusal()) {
+      const auto shown = refusal->respelled(
+          code, [](const std::string& subject) { return subject; }, true);
+      throwCEntryRefusal(shown, std::move(reason_override), "", cErrorMessage(err));
+    }
+  } else {
+    rethrowLastCRefusal(reason_override);
+  }
+  throw WasmCodedError(code, cErrorMessage(err), std::move(reason_override));
 }
 
 /// @brief throwCodedCError for a call whose struct's refusal subjects carry a "<c_root>." prefix
@@ -347,8 +364,6 @@ inline std::vector<std::string> lastDiagnosticMessages() {
   }
   return messages;
 }
-
-enum class CErrorSubjectMode { kSurface, kDocument };
 
 /// @brief Throws the failure recorded by a C-ABI call that returned NULL
 ///        (a handle, or a descriptor / JSON string): the thread-local code with

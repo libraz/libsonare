@@ -48,7 +48,8 @@ std::string LastRefusalEntry();
 ///        C-ABI entry that refused (`cEntry`, null when empty: a direct core call refused).
 void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown,
                    const std::string& c_entry, const sonare::SonareParameterRefusal* raw = nullptr,
-                   bool from_c = false, const char* flattened = nullptr);
+                   bool from_c = false, const char* flattened = nullptr,
+                   const std::string* text = nullptr);
 
 /// @brief `renderRefusal(refusal, subjects, scales)`: the attached refusal with its subjects
 ///        replaced and its domain divided by `scales[0]`, as `{ message, refusal }`.
@@ -91,8 +92,10 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix 
                       bool typed_document = false);
 
 /// @brief Translate a document refusal without changing its literal key spelling.
+/// @param preserve_diagnostics Use the complete C diagnostic text for the error message.
 void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err,
-                                       const std::string& prefix = "");
+                                       const std::string& prefix = "",
+                                       bool preserve_diagnostics = false);
 
 /// @brief ThrowSonareError for an entry whose JS object flattens the C struct parameter @p c_root,
 ///        a root other than the `options` / `config` every refusal already drops: a refused

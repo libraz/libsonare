@@ -33,6 +33,7 @@ import {
   perNoteControllerName,
   projectAbiVersion,
 } from '../src/index.js';
+import { refusalOf } from '../src/internal/entry.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
 import { expectRefusal, unknownKeyError, unknownKeyText } from './_helpers.js';
 
@@ -1470,6 +1471,42 @@ describe('Project native binding', () => {
 
     project.destroy();
   });
+
+  it.each(['fromJson', 'fromJsonWithDiagnostics'] as const)(
+    '%s keeps all document diagnostics and the literal refusal path',
+    (entry) => {
+      const document = JSON.parse(danglingSourceJson());
+      document.scene = {
+        version: 2,
+        strips: [{ id: 'lead', faderDB: -3 }],
+        buses: [{ id: 'master', role: 'master' }],
+      };
+      let caught: unknown;
+      try {
+        const loaded = Project[entry](JSON.stringify(document));
+        ('project' in loaded ? loaded.project : loaded).destroy();
+      } catch (error) {
+        caught = error;
+      }
+      const diagnostic = `clip ${document.clips[0].id} references missing source 99`;
+      const subject = 'scene.strips[0].faderDB';
+      const refusal = unknownKeyText(`unknown key ${subject}`);
+      expect(isSonareError(caught)).toBe(true);
+      expect(caught).toMatchObject({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringMatching(
+          new RegExp(`^Project\\.${entry}: ${diagnostic}\n${refusal.source}$`),
+        ),
+      });
+      expect(refusalOf(caught)).toMatchObject({
+        cEntry: 'project_deserialize',
+        code: ErrorCode.InvalidFormat,
+        form: 'unknownKey',
+        subjects: [subject],
+        text: expect.stringMatching(new RegExp(`^${diagnostic}\n${refusal.source}$`)),
+      });
+    },
+  );
 
   it('throws cleanly on malformed fromJson input', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();

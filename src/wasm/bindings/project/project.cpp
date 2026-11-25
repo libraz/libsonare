@@ -44,13 +44,10 @@ val ProjectWasm::fromJson(const std::string& json, const val& with_diagnostics_v
   sonare_free_string(diag);
   if (err != SONARE_OK || handle == nullptr) {
     sonare_project_destroy(handle);
-    // The last error carries the diagnostics without their codes; the codes stay in diagnostics.
-    const char* last = err != SONARE_OK ? sonare_last_error_message() : nullptr;
-    const std::string message =
-        last != nullptr && *last != '\0' ? std::string(last) : std::string("invalid project JSON");
-    // The C return code, as on every other surface.
-    if (err != SONARE_OK) throwCErrorMessage(err, message);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
+    if (err != SONARE_OK) {
+      throwCodedCError(err, CErrorReasonMode::kCurrentEntry, CErrorSubjectMode::kDocument);
+    }
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid project JSON");
   }
   if (!with_diagnostics) return val(ProjectWasm(handle));
   val out = val::object();

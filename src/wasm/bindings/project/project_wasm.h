@@ -77,16 +77,6 @@ inline val projectCompileResultToVal(const SonareProjectCompileResult& result) {
   return out;
 }
 
-inline sonare::ErrorCode codeFromCError(SonareError err) {
-  return sonare_c_detail::error_code_from_c_error(err);
-}
-
-/// Throws the C code as its SonareException; sonareExceptionInfo surfaces INVALID_PARAMETER as a
-/// RangeError.
-[[noreturn]] inline void throwCErrorMessage(SonareError err, const std::string& message) {
-  throw sonare::SonareException(codeFromCError(err), message);
-}
-
 /// Throws via throwCodedCError unless @p err is SONARE_OK.
 inline void checkCodedCError(SonareError err) {
   if (err != SONARE_OK) throwCodedCError(err);

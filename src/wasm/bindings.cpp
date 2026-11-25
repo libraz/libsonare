@@ -373,9 +373,13 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
     // A core refusal not yet in the caller's spelling is rendered in request-object keys.
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(base)) {
       const sonare::SonareParameterRefusal shown = sonare::util::check::camel_spelled(*refusal);
-      message = refusal_text(shown);
-      val record = refusal_object(shown);
       const auto* from_c = dynamic_cast<const CEntryRefusal*>(refusal);
+      message = from_c != nullptr && from_c->native_message() ? *from_c->native_message()
+                                                             : refusal_text(shown);
+      val record = refusal_object(shown);
+      if (from_c != nullptr && from_c->native_message()) {
+        record.set("text", message.substr(sonare_c_entries::CEntryPrefixLength(message)));
+      }
       record.set("cEntry", from_c != nullptr && !from_c->c_entry().empty() ? val(from_c->c_entry())
                                                                            : val::null());
       const sonare::SonareParameterRefusal* raw = refusal;

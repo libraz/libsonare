@@ -580,7 +580,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   if (err != SONARE_OK || handle == nullptr) {
     sonare_project_destroy(handle);
     // The last error carries the diagnostics without their codes; the codes stay in diagnostics.
-    sonare_node::ThrowSonareErrorPreservingRefusal(env, err);
+    sonare_node::ThrowSonareErrorPreservingRefusal(env, err, "", /*preserve_diagnostics=*/true);
     return env.Undefined();
   }
   if (!with_diagnostics) return ProjectWrap::Wrap(info, handle);

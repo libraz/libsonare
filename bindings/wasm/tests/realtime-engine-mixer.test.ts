@@ -6,6 +6,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
 import { sidechainCheckFromCode } from '../src/codes';
+import { refusalOf } from '../src/internal/entry.js';
 import { expectRefusalOf } from './_helpers';
 
 describe('Sonare WASM Module', () => {
@@ -442,6 +443,34 @@ describe('Sonare WASM Module', () => {
             new RangeError(`${entry}: band.frequencyHz must be finite and in (0, 24000)`),
           );
           expect(() => setBand(bandAt(23999))).not.toThrow();
+        }
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('names the offending band when applying whole-strip EQ settings', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+      try {
+        engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+        engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+
+        const eqAt = (frequencyHz: number) => ({
+          bands: [{ type: 'peak' as const, frequencyHz, gainDb: 3, q: 1, enabled: true }],
+        });
+        const routes: Array<[string, (frequencyHz: number) => void]> = [
+          ['setStrip', (hz) => engine.setStrip(10, { id: 'track-10', eq: eqAt(hz) })],
+          ['setStrip', (hz) => engine.setStrip('master', { id: 'master', eq: eqAt(hz) })],
+          ['setBusStrip', (hz) => engine.setBusStrip(1, { id: '1', eq: eqAt(hz) })],
+        ];
+        for (const [entry, setEq] of routes) {
+          const subject = 'settings.eq.bands[0].frequencyHz';
+          expect(() => setEq(1000)).not.toThrow();
+          const error = expectRefusalOf(() => setEq(30000));
+          expect(error.message).toBe(
+            `RealtimeEngine.${entry}: ${subject} must be finite and in (0, 24000)`,
+          );
+          expect(refusalOf(error)?.subjects).toEqual([subject]);
         }
       } finally {
         engine.destroy();

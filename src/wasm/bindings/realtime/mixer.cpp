@@ -430,7 +430,7 @@ void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::strin
       sonare::mixing::api::bus_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_bus_strip_json", [&] {
     if (!engine_.set_bus_strip(bus_id, settings)) {
-      sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts);
+      sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts, &settings.eq);
     }
   });
 #else
@@ -452,7 +452,7 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val,
       sonare::mixing::api::strip_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_track_strip_json", [&] {
     if (!engine_.set_track_strip(track_id, settings)) {
-      sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts);
+      sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts, &settings.eq);
     }
   });
 #else
@@ -543,7 +543,8 @@ void RealtimeEngineWasm::setMasterStripJson(const std::string& settings_json) {
       sonare::mixing::api::strip_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_master_strip_json", [&] {
     if (!engine_.set_master_strip(settings)) {
-      sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts);
+      sonare_c_detail::throw_strip_edit_refusal(engine_, settings.inserts, &settings.eq,
+                                               /*prepare_inserts=*/true);
     }
   });
 #else

@@ -33,16 +33,20 @@ std::string RefusalText(const sonare::SonareParameterRefusal& refusal) {
   return refusal.text(sonare::PresenceSpelling::kJs);
 }
 
-std::string ErrorMessageForCode(SonareError err) {
-  // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
-  if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
-    return RefusalText(*shown);
-  }
+static std::string ErrorDetailForCode(SonareError err) {
   const char* detail = sonare_last_error_message();
   if (detail != nullptr && detail[0] != '\0') {
     return detail + sonare_c_entries::CEntryPrefixLength(detail);
   }
   return sonare_error_message(err);
+}
+
+std::string ErrorMessageForCode(SonareError err) {
+  // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
+  if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
+    return RefusalText(*shown);
+  }
+  return ErrorDetailForCode(err);
 }
 
 std::string ExceptionMessage(const std::exception& e) {
@@ -167,8 +171,9 @@ bool RefusalFromObject(Napi::Env env, const Napi::Object& object,
 
 void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown,
                    const std::string& c_entry, const sonare::SonareParameterRefusal* raw,
-                   bool from_c, const char* flattened) {
+                   bool from_c, const char* flattened, const std::string* text) {
   Napi::Object record = RefusalObject(env, shown, raw, from_c, flattened);
+  if (text != nullptr) record.Set("text", *text);
   record.Set("cEntry", c_entry.empty() ? env.Null() : Napi::String::New(env, c_entry));
   error.DefineProperty(Napi::PropertyDescriptor::Value(Napi::Symbol::For(env, "libsonare.refusal"),
                                                        record, napi_configurable));
@@ -337,7 +342,8 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix,
   ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason, typed_document);
 }
 
-void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err, const std::string& prefix) {
+void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err, const std::string& prefix,
+                                       bool preserve_diagnostics) {
   if (env.IsExceptionPending()) return;
   if (err == SONARE_OK) {
     err = sonare_last_error_code();
@@ -349,12 +355,14 @@ void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err, const std
     ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason);
     return;
   }
-  const sonare::SonareParameterRefusal shown = refusal->as_caller_spelled();
-  // The code stays the C call's: a document refusal is InvalidFormat, not an argument error.
-  Napi::Error error =
-      MakeSonareError(env, err, prefix + RefusalText(shown), shown.shape_error(), reason);
+  const auto shown = refusal->respelled(
+      preserve_diagnostics ? CodeFromCError(err) : refusal->code(),
+      [](const std::string& subject) { return subject; }, true);
+  const std::string text = preserve_diagnostics ? ErrorDetailForCode(err) : RefusalText(shown);
+  Napi::Error error = MakeSonareError(env, err, prefix + text, shown.shape_error(), reason);
   const Napi::Object value = error.Value().As<Napi::Object>();
-  AttachRefusal(env, value, shown, LastRefusalEntry(), refusal, true);
+  AttachRefusal(env, value, shown, LastRefusalEntry(), refusal, true, nullptr,
+                preserve_diagnostics ? &text : nullptr);
   error.ThrowAsJavaScriptException();
 }
 
