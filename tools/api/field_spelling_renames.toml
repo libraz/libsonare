@@ -6,6 +6,8 @@
 # gen_field_spelling.py fails on a row that binds nowhere, which is how a row retires
 # once the C name or the facade name moves to meet the other.
 [node]
+settings_json = "settings"
+band_json = "band"
 reference_sample_rate = "sampleRate"
 frame_offset = "startSample"
 bytes = "data"
@@ -41,6 +43,8 @@ source_kind = "source.kind"
 offset_samples = "recordOffsetSamples"
 
 [wasm]
+settings_json = "settings"
+band_json = "band"
 reference_sample_rate = "sampleRate"
 frame_offset = "startSample"
 bytes = "data"
@@ -78,6 +82,9 @@ source_kind = "source.kind"
 offset_samples = "recordOffsetSamples"
 
 [python]
+settings_json = "settings"
+band_json = "band"
+track_id = "ref"
 amplitude_envelope = "edit.amplitude_envelope"
 source_id = "source.id"
 source_track_id = "source.id"

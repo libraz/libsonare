@@ -85,6 +85,17 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
       );
     });
   });
+
+  it('uses ref for the folded strip target in C and transport refusals', () => {
+    withEngine((engine) => {
+      expect(() => engine.setStripPan(99, 0)).toThrow(
+        new RangeError('RealtimeEngine.setStripPan: ref must be the id of a track in this engine'),
+      );
+      expect(() => engine.setStripPan(-1, 0)).toThrow(
+        new RangeError('RealtimeEngine.setStripPan: ref must be an integer in [0, 4294967295]'),
+      );
+    });
+  });
 });
 
 describe('RealtimeEngine state refusals stay coded SonareError', () => {

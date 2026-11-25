@@ -58,6 +58,43 @@ beforeAll(async () => {
 });
 
 describe('RealtimeEngine value refusals are RangeErrors', () => {
+  it('names the ref of a missing track strip', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(10, { id: 'track-10' });
+      engine.setStripPan(10, 0);
+      const error = thrown(() => engine.setStripPan(99, 0));
+      expect(error).toBeInstanceOf(RangeError);
+      expect((error as Error).message).toBe(
+        'RealtimeEngine.setStripPan: ref must be the id of a track in this engine',
+      );
+    });
+  });
+
+  it('preserves the value refusal when a nonzero ref is also missing', () => {
+    withEngine((engine) => {
+      for (const [call, text] of [
+        [() => engine.setStripPan(99, 2), 'setStripPan: pan must be finite and in [-1, 1]'],
+        [
+          () => engine.setStripDualPan(99, 2, 0),
+          'setStripDualPan: leftPan must be finite and in [-1, 1]',
+        ],
+        [
+          () => engine.setStripChannelDelaySamples(99, -1),
+          'setStripChannelDelaySamples: delaySamples must be an integer in [0, 192000]',
+        ],
+        [
+          () => engine.setStripInsertParam(99, 0, { name: '', value: 0 }),
+          'setStripInsertParam: param.name must not be empty',
+        ],
+      ] as const) {
+        const error = thrown(call);
+        expect(error).toBeInstanceOf(RangeError);
+        expect((error as Error).message).toBe(`RealtimeEngine.${text}`);
+      }
+    });
+  });
+
   it('refuses unknown mixer, clip and marker ids', () => {
     withEngine((engine) => {
       engine.setTrackLanes([{ trackId: 10 }]);

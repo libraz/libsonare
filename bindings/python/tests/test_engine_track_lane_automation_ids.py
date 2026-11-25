@@ -23,6 +23,24 @@ def _settled(engine: RealtimeEngine, blocks: int = 30) -> float:
     return out[0][-1]
 
 
+@pytest.mark.parametrize(
+    ("method", "args"),
+    [
+        ("resolve_strip_automation_id", ("faderDb",)),
+        ("resolve_strip_insert_automation_id", (0, "levelDb")),
+        ("set_strip_pan", (0.0,)),
+    ],
+)
+def test_missing_strip_names_the_callers_ref(method: str, args: tuple) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
+        engine.set_track_lanes([{"track_id": 10}])
+        with pytest.raises(SonareValueError) as refused:
+            getattr(engine, method)(99, *args)
+        assert str(refused.value) == (
+            f"RealtimeEngine.{method}: ref must be the id of a track in this engine"
+        )
+
+
 def test_fader_id_keeps_its_track_across_a_reorder_and_retires_with_it() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         # Only track 20 sounds, so the output reads track 20's fader alone.

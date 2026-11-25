@@ -47,7 +47,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   std::string settings_json;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredStringValue(env, info[1], "settingsJson", &settings_json)) {
     return env.Undefined();
   }
@@ -63,7 +63,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripEqBandJson(const Napi::CallbackInfo
   uint32_t track_id = 0;
   int band_index = -1;
   std::string band_json;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredIntArg(env, info, 1, "bandIndex", &band_index) ||
       !RequiredStringValue(env, info[2], "bandJson", &band_json)) {
     return env.Undefined();
@@ -82,7 +82,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertBypassed(const Napi::Callback
   uint32_t insert_index = 0;
   bool bypassed = false;
   bool reset_on_bypass = false;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
       !RequiredBoolArg(env, info, 2, "bypassed", &bypassed) ||
       !OptionalBoolArg(env, info, 3, "resetOnBypass", false, &reset_on_bypass)) {
@@ -148,7 +148,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertParamByName(const Napi::Callb
   uint32_t insert_index = 0;
   std::string param_name;
   float value = 0.0f;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
       !RequiredStringValue(env, info[2], "paramName", &param_name) ||
       !RequiredFloatArg(env, info, 3, "value", &value)) {
@@ -207,7 +207,7 @@ Napi::Value RealtimeEngineWrap::ApplyTrackStripInsertParamByNameNow(
   uint32_t insert_index = 0;
   std::string param_name;
   float value = 0.0f;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
       !RequiredStringValue(env, info[2], "paramName", &param_name) ||
       !RequiredFloatArg(env, info, 3, "value", &value)) {
@@ -229,7 +229,7 @@ Napi::Value RealtimeEngineWrap::RestoreTrackStripInsertParamByName(const Napi::C
   uint32_t insert_index = 0;
   std::string param_name;
   float value = 0.0f;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
       !RequiredStringValue(env, info[2], "paramName", &param_name) ||
       !RequiredFloatArg(env, info, 3, "value", &value)) {
@@ -328,7 +328,7 @@ Napi::Value RealtimeEngineWrap::ClearTrackInsertParameterBases(const Napi::Callb
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id)) {
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_clear_track_insert_parameter_bases(engine_, track_id));
@@ -515,7 +515,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPan(const Napi::CallbackInfo& info)
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   float pan = 0.0f;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredFloatArg(env, info, 1, "pan", &pan)) {
     return env.Undefined();
   }
@@ -530,7 +530,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPanLaw(const Napi::CallbackInfo& in
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int pan_law = 0;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredIntArg(env, info, 1, "panLaw", &pan_law)) {
     return env.Undefined();
   }
@@ -545,7 +545,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPanMode(const Napi::CallbackInfo& i
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int pan_mode = 0;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredIntArg(env, info, 1, "panMode", &pan_mode)) {
     return env.Undefined();
   }
@@ -561,7 +561,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripDualPan(const Napi::CallbackInfo& i
   uint32_t track_id = 0;
   float left_pan = 0.0f;
   float right_pan = 0.0f;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredFloatArg(env, info, 1, "leftPan", &left_pan) ||
       !RequiredFloatArg(env, info, 2, "rightPan", &right_pan)) {
     return env.Undefined();
@@ -576,7 +576,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInf
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id)) {
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id)) {
     return env.Undefined();
   }
   if (!info[1].IsObject()) {
@@ -663,7 +663,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripChannelDelaySamples(const Napi::Cal
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int delay_samples = 0;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredIntArg(env, info, 1, "delaySamples", &delay_samples)) {
     return env.Undefined();
   }

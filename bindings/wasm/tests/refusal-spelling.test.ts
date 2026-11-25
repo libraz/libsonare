@@ -364,8 +364,16 @@ const DRIVERS: Record<string, Driver> = {
     withEngine((engine) => engine.setStripChannelDelaySamples(value as never, 0)),
   engine_set_track_strip_dual_pan: (_spelling, value) =>
     withEngine((engine) => engine.setStripDualPan(value as never, 0, 0)),
-  engine_set_track_strip_eq_band_json: (_spelling, value) =>
-    withEngine((engine) => engine.setStripEqBand(value as never, 0, {} as never)),
+  engine_set_bus_strip_eq_band_json: (_spelling, value) =>
+    withEngine((engine) => engine.setBusEqBand(1, 0, value as never)),
+  engine_set_master_strip_eq_band_json: (_spelling, value) =>
+    withEngine((engine) => engine.setStripEqBand('master', 0, value as never)),
+  engine_set_track_strip_eq_band_json: (spelling, value) =>
+    withEngine((engine) =>
+      spelling === 'ref'
+        ? engine.setStripEqBand(value as never, 0, {})
+        : engine.setStripEqBand(1, 0, value as never),
+    ),
   engine_set_track_strip_insert_bypassed: (_spelling, value) =>
     withEngine((engine) => engine.setStripInsertBypassed(value as never, 0, { bypassed: true })),
   engine_set_track_strip_insert_param_by_name: (spelling, value) =>
@@ -392,6 +400,7 @@ const DRIVERS: Record<string, Driver> = {
     withEngine((engine) => engine.setStripPanMode(value as never, 'balance' as never)),
   engine_set_track_strip_surround_pan: (_spelling, value) =>
     withEngine((engine) => engine.setStripSurroundPan(value as never, {})),
+  eq_set_band: (_spelling, value) => withEqualizer((eq) => eq.setBand(0, value as never)),
   eq_magnitude_response: (_spelling, value) =>
     withEqualizer((eq) => eq.magnitudeResponse(value as Float32Array)),
   eq_match: (spelling, value) =>

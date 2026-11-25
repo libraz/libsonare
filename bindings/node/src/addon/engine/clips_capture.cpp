@@ -420,7 +420,7 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "trackId must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "ref must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
@@ -432,7 +432,7 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_lane_sidechain(
-                        engine_, sonare_node::node_narrow_uint32(env, info[0], "trackId"),
+                        engine_, sonare_node::node_narrow_uint32(env, info[0], "ref"),
                         sonare_node::node_narrow_uint32(env, info[1], "insertIndex"),
                         sonare_node::node_narrow_uint32(env, info[2], "sourceTrackId")));
   return env.Undefined();
@@ -567,7 +567,7 @@ Napi::Value RealtimeEngineWrap::CanSetLaneSidechain(const Napi::CallbackInfo& in
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   uint32_t source_track_id = 0;
-  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+  if (!RequiredUint32Arg(env, info, 0, "ref", &track_id) ||
       !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
       !RequiredUint32Arg(env, info, 2, "sourceTrackId", &source_track_id)) {
     return env.Undefined();

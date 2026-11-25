@@ -120,7 +120,12 @@ def _insert_param(method: str, ref: Any) -> Callable[[], tuple[Callable[..., Any
 
     def make() -> tuple[Callable[..., Any], dict[str, Any]]:
         target = {"bus_id": ref} if "bus" in method else {"ref": ref}
-        return getattr(_engine(), method), {**target, "insert_index": 0, "value": 0.0}
+        return getattr(_engine(), method), {
+            **target,
+            "insert_index": 0,
+            "name": "levelDb",
+            "value": 0.0,
+        }
 
     return make
 
@@ -151,6 +156,58 @@ def _mixer_stereo() -> tuple[Callable[..., Any], dict[str, Any]]:
 
 # A C entry a handle method reaches: the bound method and a valid value for each argument.
 _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
+    "engine_clear_track_insert_parameter_bases": lambda: (
+        _engine().clear_strip_insert_parameter_bases,
+        {},
+    ),
+    "engine_resolve_track_insert_automation_id": lambda: (
+        _engine().resolve_strip_insert_automation_id,
+        {"insert_index": 0, "param_name": "levelDb"},
+    ),
+    "engine_set_bus_strip_eq_band_json": lambda: (
+        _engine().set_bus_eq_band,
+        {"bus_id": 1, "band_index": 0},
+    ),
+    "engine_set_master_strip_eq_band_json": lambda: (
+        _engine().set_strip_eq_band,
+        {"ref": "master", "band_index": 0},
+    ),
+    "engine_set_track_strip_eq_band_json": lambda: (
+        _engine().set_strip_eq_band,
+        {"ref": 1, "band_index": 0, "band": {}},
+    ),
+    "engine_set_bus_strip_json": lambda: (_engine().set_bus_strip, {"bus_id": 1}),
+    "engine_set_master_strip_json": lambda: (_engine().set_strip, {"ref": "master"}),
+    "engine_set_track_strip_json": lambda: (
+        _engine().set_strip,
+        {"ref": 1, "settings": {"id": "a"}},
+    ),
+    "engine_set_track_strip_channel_delay_samples": lambda: (
+        _engine().set_strip_channel_delay_samples,
+        {"delay_samples": 0},
+    ),
+    "engine_set_track_strip_dual_pan": lambda: (
+        _engine().set_strip_dual_pan,
+        {"left_pan": 0.0, "right_pan": 0.0},
+    ),
+    "engine_set_track_strip_insert_bypassed": lambda: (
+        _engine().set_strip_insert_bypassed,
+        {"insert_index": 0, "bypassed": True},
+    ),
+    "engine_set_track_strip_pan": lambda: (_engine().set_strip_pan, {"pan": 0.0}),
+    "engine_set_track_strip_pan_law": lambda: (
+        _engine().set_strip_pan_law,
+        {"pan_law": "const3Db"},
+    ),
+    "engine_set_track_strip_pan_mode": lambda: (
+        _engine().set_strip_pan_mode,
+        {"pan_mode": "balance"},
+    ),
+    "engine_set_track_strip_surround_pan": lambda: (_engine().set_strip_surround_pan, {}),
+    "eq_set_band": lambda: (
+        libsonare.StreamingEqualizer(sample_rate=48000).set_band,
+        {"index": 0},
+    ),
     "engine_apply_bus_strip_insert_param_by_name_now": _insert_param(
         "apply_bus_insert_param_now", 1
     ),
@@ -170,7 +227,7 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     ),
     "engine_resolve_track_lane_automation_id": lambda: (
         _engine().resolve_strip_automation_id,
-        {"ref": 1},
+        {"ref": 1, "kind": "pan"},
     ),
     "engine_restore_bus_strip_insert_param_by_name": _insert_param("restore_bus_insert_param", 1),
     "engine_restore_master_strip_insert_param_by_name": _insert_param(

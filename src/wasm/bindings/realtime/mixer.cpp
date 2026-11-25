@@ -37,6 +37,15 @@ bool trackHasLane(sonare::engine::RealtimeEngine& engine, uint32_t track_id) {
   return engine.track_mixer().track_lane_position(track_id, &position);
 }
 
+void requireTrackMixingTarget(sonare::engine::RealtimeEngine& engine, uint32_t track_id,
+                              bool accepted, const char* entry, const char* message) {
+  if (accepted) return;
+  if (!trackHasLane(engine, track_id)) {
+    withCEntryRefusal(entry, [] { sonare_c_detail::refuse_unknown_mixer_track(); });
+  }
+  throw WasmRangeError(message);
+}
+
 /// Refuses an EQ band index outside the engine's band table.
 void checkEqBandIndex(int band_index) {
   sonare::util::check::integer_within(band_index, sonare_c_detail::kEngineBandIndexDomain,
@@ -234,7 +243,7 @@ val RealtimeEngineWasm::inputTrack() const {
 /// alignment past the delay ceiling. Matches sonare_engine_set_lane_sidechain.
 void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& insert_index_val,
                                           const val& source_track_id_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "sourceTrackId");
 #if defined(SONARE_WITH_MIXING)
@@ -263,7 +272,7 @@ void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& in
 /// sonare_engine_can_set_lane_sidechain; a build without mixing throws, as the setter does.
 int RealtimeEngineWasm::canSetLaneSidechain(const val& track_id_val, const val& insert_index_val,
                                             const val& source_track_id_val) const {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "sourceTrackId");
 #if defined(SONARE_WITH_MIXING)
@@ -437,7 +446,7 @@ void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::strin
 
 void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val,
                                            const std::string& settings_json) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
 #if defined(SONARE_WITH_MIXING)
   withCEntryRefusal("engine_set_track_strip_json", [&] {
     if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
@@ -459,7 +468,7 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val,
 
 void RealtimeEngineWasm::setTrackStripEqBandJson(const val& track_id_val, const val& band_index_val,
                                                  const std::string& band_json) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
   withCEntryRefusal("engine_set_track_strip_eq_band_json", [&] {
@@ -509,12 +518,13 @@ void RealtimeEngineWasm::setBusStripEqBandJson(const val& bus_id_val, const val&
 void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
                                                      const val& insert_index_val, bool bypassed,
                                                      bool reset_on_bypass) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(
+  requireTrackMixingTarget(
+      engine_, track_id,
       engine_.set_track_insert_bypassed(track_id, insert_index, bypassed, reset_on_bypass),
-      "invalid track strip insert bypass target");
+      "engine_set_track_strip_insert_bypassed", "invalid track strip insert bypass target");
 #else
   (void)track_id;
   (void)insert_index;
@@ -600,13 +610,18 @@ void RealtimeEngineWasm::setTrackStripInsertParamByName(const val& track_id_val,
                                                         const val& insert_index_val,
                                                         const std::string& param_name,
                                                         const val& value_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
   const auto result =
       engine_.set_track_insert_param_detailed(track_id, insert_index, param_name, value);
   if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
+    withCEntryRefusal("engine_set_track_strip_insert_param_by_name", [&] {
+      if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
+      sonare::util::check::non_empty(param_name, "param_name");
+      if (!trackHasLane(engine_, track_id)) sonare_c_detail::refuse_unknown_mixer_track();
+    });
     throw WasmRangeError("invalid track strip insert parameter target");
   }
   if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
@@ -627,7 +642,7 @@ bool RealtimeEngineWasm::applyTrackStripInsertParamByNameNow(const val& track_id
                                                              const val& insert_index_val,
                                                              const std::string& param_name,
                                                              const val& value_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
@@ -643,10 +658,11 @@ bool RealtimeEngineWasm::applyTrackStripInsertParamByNameNow(const val& track_id
 }
 
 void RealtimeEngineWasm::clearTrackStripInsertParameterBases(const val& track_id_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(engine_.clear_track_insert_parameter_bases(track_id),
-                      "invalid track strip insert base target");
+  requireTrackMixingTarget(engine_, track_id, engine_.clear_track_insert_parameter_bases(track_id),
+                           "engine_clear_track_insert_parameter_bases",
+                           "invalid track strip insert base target");
 #else
   (void)track_id;
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
@@ -658,13 +674,19 @@ void RealtimeEngineWasm::restoreTrackStripInsertParamByName(const val& track_id_
                                                             const val& insert_index_val,
                                                             const std::string& param_name,
                                                             const val& value_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(
-      engine_.restore_track_insert_param_by_name(track_id, insert_index, param_name, value),
-      "invalid track strip insert parameter target");
+  withCEntryRefusal("engine_restore_track_strip_insert_param_by_name", [&] {
+    if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
+    sonare::util::check::non_empty(param_name, "param_name");
+    if (engine_.restore_track_insert_param_by_name(track_id, insert_index, param_name, value)) {
+      return;
+    }
+    if (!trackHasLane(engine_, track_id)) sonare_c_detail::refuse_unknown_mixer_track();
+    throw WasmRangeError("invalid track strip insert parameter target");
+  });
 #else
   (void)track_id;
   (void)insert_index;
@@ -936,10 +958,16 @@ double RealtimeEngineWasm::resolveBusInsertAutomationId(const val& bus_id_val,
 }
 
 void RealtimeEngineWasm::setTrackStripPan(const val& track_id_val, const val& pan_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const float pan = checkedFloatFromVal(pan_val, "pan");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(engine_.set_track_pan(track_id, pan), "invalid track strip pan target");
+  withCEntryRefusal("engine_set_track_strip_pan", [&] {
+    if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
+    sonare::util::check::in_range(pan, sonare::mixing::kPanMin, sonare::mixing::kPanMax, "pan");
+    if (!engine_.set_track_pan(track_id, pan)) {
+      sonare_c_detail::throw_track_without_strip(engine_, track_id);
+    }
+  });
 #else
   (void)track_id;
   (void)pan;
@@ -949,15 +977,16 @@ void RealtimeEngineWasm::setTrackStripPan(const val& track_id_val, const val& pa
 }
 
 void RealtimeEngineWasm::setTrackStripPanLaw(const val& track_id_val, const val& pan_law_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const int pan_law = checkedIntFromVal(pan_law_val, "panLaw");
 #if defined(SONARE_WITH_MIXING)
   if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
     throw WasmRangeError("unknown mixing pan law");
   }
-  requireMixingTarget(
+  requireTrackMixingTarget(
+      engine_, track_id,
       engine_.set_track_pan_law(track_id, static_cast<sonare::mixing::PanLaw>(pan_law)),
-      "invalid track strip pan-law target");
+      "engine_set_track_strip_pan_law", "invalid track strip pan-law target");
 #else
   (void)track_id;
   (void)pan_law;
@@ -967,15 +996,16 @@ void RealtimeEngineWasm::setTrackStripPanLaw(const val& track_id_val, const val&
 }
 
 void RealtimeEngineWasm::setTrackStripPanMode(const val& track_id_val, const val& pan_mode_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
 #if defined(SONARE_WITH_MIXING)
   if (pan_mode < 0 || pan_mode >= sonare::mixing::kPanModeCount) {
     throw WasmRangeError("unknown mixing pan mode");
   }
-  requireMixingTarget(
+  requireTrackMixingTarget(
+      engine_, track_id,
       engine_.set_track_pan_mode(track_id, static_cast<sonare::mixing::PanMode>(pan_mode)),
-      "invalid track strip pan-mode target");
+      "engine_set_track_strip_pan_mode", "invalid track strip pan-mode target");
 #else
   (void)track_id;
   (void)pan_mode;
@@ -986,12 +1016,20 @@ void RealtimeEngineWasm::setTrackStripPanMode(const val& track_id_val, const val
 
 void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val& left_pan_val,
                                               const val& right_pan_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
   const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(engine_.set_track_dual_pan(track_id, left_pan, right_pan),
-                      "invalid track strip dual-pan target");
+  withCEntryRefusal("engine_set_track_strip_dual_pan", [&] {
+    if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
+    sonare::util::check::in_range(left_pan, sonare::mixing::kPanMin, sonare::mixing::kPanMax,
+                                  "left_pan");
+    sonare::util::check::in_range(right_pan, sonare::mixing::kPanMin, sonare::mixing::kPanMax,
+                                  "right_pan");
+    if (!engine_.set_track_dual_pan(track_id, left_pan, right_pan)) {
+      sonare_c_detail::throw_track_without_strip(engine_, track_id);
+    }
+  });
 #else
   (void)track_id;
   (void)left_pan;
@@ -1005,7 +1043,7 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
 // point-source defaults, a present non-number is refused by name, and an out-of-range or non-finite
 // field is refused.
 void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const val& pan_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   if (pan_val.isNull() || pan_val.typeOf().as<std::string>() != "object") {
     throw WasmTypeError("pan must be an object");
   }
@@ -1023,8 +1061,9 @@ void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const
     throw WasmRangeError(
         "surround pan: azimuth must be in [-180, 180]; divergence and lfe in [0, 1]");
   }
-  requireMixingTarget(engine_.set_track_surround_pan(track_id, params),
-                      "invalid track strip surround-pan target");
+  requireTrackMixingTarget(engine_, track_id, engine_.set_track_surround_pan(track_id, params),
+                           "engine_set_track_strip_surround_pan",
+                           "invalid track strip surround-pan target");
 #else
   (void)track_id;
   (void)field;
@@ -1100,11 +1139,17 @@ void RealtimeEngineWasm::setBusStripDualPan(const val& bus_id_val, const val& le
 
 void RealtimeEngineWasm::setTrackStripChannelDelaySamples(const val& track_id_val,
                                                           const val& delay_samples_val) {
-  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "ref");
   const int delay_samples = checkedIntFromVal(delay_samples_val, "delaySamples");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(engine_.set_track_channel_delay_samples(track_id, delay_samples),
-                      "invalid track strip channel-delay target");
+  withCEntryRefusal("engine_set_track_strip_channel_delay_samples", [&] {
+    if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
+    sonare::util::check::integer_within(delay_samples, sonare_c_detail::kEngineAlignmentDelayDomain,
+                                        "delay_samples");
+    if (!engine_.set_track_channel_delay_samples(track_id, delay_samples)) {
+      sonare_c_detail::throw_track_without_strip(engine_, track_id);
+    }
+  });
 #else
   (void)track_id;
   (void)delay_samples;
