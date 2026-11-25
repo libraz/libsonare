@@ -72,8 +72,6 @@ from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._mixing import StripRef
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
-    _C_INT_MAX,
-    _C_INT_MIN,
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
     _UINT8_MAX,
@@ -930,15 +928,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                         group_name,
                         f"must be an integer in [0, {_UINT8_MAX}]",
                     ) from exc
-                # Same tolerance the C bridge documents: a word_count outside
-                # [1, 4] means "infer the word form", so this narrows integrality
-                # only -- a range refusal would reject what the bridge defines.
-                # int() truncated 2.5 onto a word form the caller never asked for.
+                # The C entry owns the [0, 4] domain: zero infers the word form,
+                # and other out-of-domain counts are refused there. Narrow only to
+                # uint8_t's representation so ctypes cannot wrap a caller value.
                 word_count = _narrow_int(
                     event.word_count,
                     f"clips[{index}].events[{event_index}].word_count",
-                    _C_INT_MIN,
-                    _C_INT_MAX,
+                    0,
+                    _UINT8_MAX,
                 )
                 # The remaining fields go in unconverted so the struct's own
                 # narrowing sees each caller value.
@@ -948,7 +945,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     event.word1,
                     event.word2,
                     event.word3,
-                    word_count if 1 <= word_count <= 4 else 0,
+                    word_count,
                     group,
                     0,
                     event.sysex_handle,

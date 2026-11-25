@@ -437,6 +437,10 @@ class _EngineIoMixin:
         resampling); the result's ``sample_rate`` is the rate of the output.
         An explicit 0 is refused for either.
 
+        If the bounce raises after pre-roll or rendering begins, the engine retains
+        changes already made to its processor and transport state. The failed call
+        returns no bounce result.
+
         Render longer material in chunks through
         ``render_offline(..., finalize=False)``.
         """
@@ -676,9 +680,11 @@ class _EngineIoMixin:
     def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
         """Enable scope telemetry publishing and return the applied band count.
 
-        ``interval_frames`` is the minimum render-frame spacing between snapshots;
-        ``band_count`` is the requested number of spectrum bands (clamped by the
-        engine). Returns the band count the engine actually applied.
+        ``interval_frames`` must be in [0, 2147483647], with 0 disabling snapshots;
+        ``band_count`` must be in [1, 64]. The engine refuses values outside either
+        domain before changing the active tap. If allocating memory during tap
+        preparation fails, the new interval and band count are already stored and
+        the tap may be partially prepared. Returns the band count the engine applied.
         """
         lib = _get_lib()
         applied = ctypes.c_size_t()

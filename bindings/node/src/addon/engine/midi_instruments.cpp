@@ -20,6 +20,7 @@
 #include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
+#include "util/numeric_validation.h"
 
 using namespace sonare_node::engine;
 
@@ -41,7 +42,8 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   return !env.IsExceptionPending();
 }
 
-std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Value value) {
+std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Value value,
+                                                        const std::string& clip_path) {
   if (!value.IsArray()) {
     Napi::TypeError::New(env, "MIDI clip events must be an array").ThrowAsJavaScriptException();
     return {};
@@ -49,29 +51,71 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
   Napi::Array input = value.As<Napi::Array>();
   const uint32_t input_count = sonare_node::node_list_length(input, "MIDI clip events");
   std::vector<SonareEngineMidiEvent> events(input_count);
+  const std::string events_path = clip_path + ".events";
   for (uint32_t i = 0; i < input_count; ++i) {
-    Napi::Value item = input.Get(i);
-    if (!item.IsObject()) {
-      Napi::TypeError::New(env, "MIDI clip events must be objects").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    std::string event_path;
+    if (!sonare_node::RequiredElementObject(env, input, i, events_path.c_str(), &obj,
+                                            &event_path)) {
       return {};
     }
-    Napi::Object obj = item.As<Napi::Object>();
+    const auto read = [&](const char* field) {
+      const Napi::Value value = obj.Get(field);
+      if (!value.IsUndefined() && !value.IsNull() && !value.IsNumber()) {
+        throw Napi::TypeError::New(env, event_path + "." + field + " must be an integer");
+      }
+      return value;
+    };
+    const Napi::Value render_frame = read("renderFrame");
+    const Napi::Value word0 = read("word0");
+    const Napi::Value word1 = read("word1");
+    const Napi::Value word2 = read("word2");
+    const Napi::Value word3 = read("word3");
+    const Napi::Value word_count = read("wordCount");
+    const Napi::Value group = read("group");
+    const Napi::Value sysex_handle = read("sysexHandle");
+
     SonareEngineMidiEvent event{};
-    event.render_frame = Int64Property(obj, "renderFrame", event.render_frame);
-    event.word0 = WordProperty(obj, "word0", event.word0);
-    event.word1 = WordProperty(obj, "word1", event.word1);
-    event.word2 = WordProperty(obj, "word2", event.word2);
-    event.word3 = WordProperty(obj, "word3", event.word3);
-    // wordCount is documented as tolerant: anything outside [1,4] lets the C
-    // bridge infer the word form. Narrow out of range rather than through the
-    // uint8_t cast, which would land 257 on a spurious 1 instead of inferring.
-    const uint32_t word_count = Uint32Property(obj, "wordCount", kZeroIsSentinel);
-    event.word_count = word_count >= 1 && word_count <= 4 ? static_cast<uint8_t>(word_count) : 0;
-    event.group = MidiByteProperty(env, obj, "group", event.group);
-    event.sysex_handle = Uint32Property(obj, "sysexHandle", event.sysex_handle);
-    // Bail on the first wrong-typed field so the next iteration's explicit
-    // TypeError is never raised on top of an already-pending exception.
-    if (env.IsExceptionPending()) return {};
+    const auto field_subject = [&](const char* field) { return event_path + "." + field; };
+    if (render_frame.IsNumber()) {
+      event.render_frame =
+          node_narrow_int64(env, render_frame, field_subject("renderFrame").c_str());
+    }
+    if (word0.IsNumber())
+      event.word0 = node_narrow_word(env, word0, field_subject("word0").c_str());
+    if (word1.IsNumber())
+      event.word1 = node_narrow_word(env, word1, field_subject("word1").c_str());
+    if (word2.IsNumber())
+      event.word2 = node_narrow_word(env, word2, field_subject("word2").c_str());
+    if (word3.IsNumber())
+      event.word3 = node_narrow_word(env, word3, field_subject("word3").c_str());
+    // Zero and absence ask the C reader to infer the word form.
+    if (word_count.IsNumber() &&
+        !sonare::numeric::checked_integral_cast(word_count.As<Napi::Number>().DoubleValue(),
+                                                &event.word_count)) {
+      const std::string subject = event_path + ".wordCount";
+      if (!RequiredDomainValue(env, word_count, subject.c_str(),
+                               sonare_c_detail::kEngineUmpWordCountDomain, &event.word_count)) {
+        return {};
+      }
+    }
+    if (group.IsNumber() && !sonare::numeric::checked_integral_cast(
+                                group.As<Napi::Number>().DoubleValue(), &event.group)) {
+      if (word_count.IsNumber() &&
+          !RequiredDomainValue(env, word_count, field_subject("wordCount").c_str(),
+                               sonare_c_detail::kEngineUmpWordCountDomain, &event.word_count)) {
+        return {};
+      }
+      const std::string subject = field_subject("group");
+      if (!RequiredDomainValue(env, group, subject.c_str(), sonare_c_detail::kEngineUmpGroupDomain,
+                               &event.group)) {
+        return {};
+      }
+    }
+    if (sysex_handle.IsNumber()) {
+      event.sysex_handle =
+          node_narrow_uint32(env, sysex_handle, field_subject("sysexHandle").c_str());
+    }
     events[i] = event;
   }
   return events;
@@ -96,7 +140,7 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     std::string at;
     if (!RequiredElementObject(env, input, i, "clips", &obj, &at)) return env.Undefined();
     event_storage[i] =
-        ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null());
+        ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null(), at);
     if (env.IsExceptionPending()) return env.Undefined();
     SonareEngineMidiClipSchedule clip{};
     sonare_engine_midi_clip_schedule_init(&clip);

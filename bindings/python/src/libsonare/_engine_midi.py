@@ -899,7 +899,11 @@ class _EngineMidiMixin:
 
     @_entry("RealtimeEngine.clear_midi_cc_bindings")
     def clear_midi_cc_bindings(self) -> None:
-        """Clear all live MIDI CC to parameter bindings."""
+        """Clear all live MIDI CC to parameter bindings.
+
+        Raises SonareError with the OutOfMemory code if allocation fails.
+        The previous bindings remain active.
+        """
         lib = _get_lib()
         _check(lib.sonare_engine_clear_midi_cc_bindings(self._require_handle()))
 

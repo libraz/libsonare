@@ -59,6 +59,126 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('refuses an oversized scheduled wordCount and keeps the installed schedule', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      engine.setMidiDestinationExternal(5, true);
+      const clip = (note: number, wordCount: number) => [
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 128,
+          events: [{ renderFrame: 0, word0: midi1Word(0x9, 0, note, 100), wordCount }],
+        },
+      ];
+      engine.setMidiClips(clip(60, 0));
+      expect(() => engine.setMidiClips(clip(62, 5))).toThrow(
+        new RangeError(
+          'RealtimeEngine.setMidiClips: clips[0].events[0].wordCount must be an integer in [0, 4]',
+        ),
+      );
+
+      expect(() =>
+        engine.setMidiClips([
+          {
+            id: 2,
+            trackId: 6,
+            destinationId: 6,
+            lengthSamples: 128,
+            events: [
+              {
+                renderFrame: 0,
+                word0: midi1Word(0x9, 0, 62, 100),
+                wordCount: 5,
+                group: 'bad' as unknown as number,
+              },
+            ],
+          },
+        ]),
+      ).toThrow(
+        new TypeError('RealtimeEngine.setMidiClips: clips[0].events[0].group must be an integer'),
+      );
+      engine.play();
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+      expect(engine.drainExternalMidi().map((event) => event.bytes[1])).toEqual([60]);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('names each narrowed scheduled-event field by its clip path', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    const fields: Array<[string, number]> = [
+      ['renderFrame', 1.5],
+      ['word0', 4294967296],
+      ['word1', 4294967296],
+      ['word2', 4294967296],
+      ['word3', 4294967296],
+      ['wordCount', 5],
+      ['group', 256],
+      ['sysexHandle', 4294967296],
+    ];
+    try {
+      for (const [field, value] of fields) {
+        const event = {
+          renderFrame: 0,
+          word0: midi1Word(0x9, 0, 60, 100),
+          wordCount: 1,
+          [field]: value,
+        } as never;
+        let caught: unknown;
+        try {
+          engine.setMidiClips([{ id: 1, trackId: 5, events: [event] }]);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toBeInstanceOf(RangeError);
+        expect((caught as Error).message).toContain(`clips[0].events[0].${field}`);
+      }
+
+      let groupError: unknown;
+      try {
+        engine.setMidiClips([
+          {
+            id: 2,
+            trackId: 5,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1, group: 16 },
+            ],
+          },
+        ]);
+      } catch (error) {
+        groupError = error;
+      }
+      expect(groupError).toBeInstanceOf(RangeError);
+      expect((groupError as Error).message).toContain(
+        'clips[0].events[0].group must be an integer in [0, 15]',
+      );
+
+      const malformedEvent = () =>
+        engine.setMidiClips([{ id: 3, trackId: 5, events: [null as never] }]);
+      expect(malformedEvent).toThrow(TypeError);
+      expect(malformedEvent).toThrow(/clips\[0\]\.events\[0\] must be an object/);
+
+      const invalidCountAndGroup = () =>
+        engine.setMidiClips([
+          {
+            id: 4,
+            trackId: 5,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 5, group: -1 },
+            ],
+          },
+        ]);
+      expect(invalidCountAndGroup).toThrow(
+        /clips\[0\]\.events\[0\]\.wordCount must be an integer in \[0, 4\]/,
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('rejects MIDI byte arguments that would wrap through the uint8 cast', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setMidiInputSource(0);

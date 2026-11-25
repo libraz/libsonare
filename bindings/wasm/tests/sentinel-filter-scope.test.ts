@@ -35,6 +35,7 @@ import {
   sentinelSources,
   subjectsOf,
 } from './_sentinel_filter_sources';
+import { wasmBindingSources } from './_wasm_binding_sources';
 
 /**
  * EVERY field this defect has been removed from, each with what its zero selects
@@ -393,6 +394,16 @@ const UNANSWERED: SentinelSource[] = [
     text: 'void f(const Options& o) { int n = o.n_fft > 0 ? o.n_fft : 2048; }\n',
   },
 ];
+
+it('reads keyFifths without substituting a literal zero for an omitted argument', () => {
+  const sources = wasmBindingSources();
+  expect(sources.some(({ file }) => file === 'realtime/transport.cpp')).toBe(true);
+  const zeroFallback = /\bintProperty\s*\(\s*[^,]+,\s*"keyFifths"\s*,\s*0[uUlL]*\s*\)/;
+  const fallbackFiles = sources
+    .filter(({ text }) => zeroFallback.test(text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')))
+    .map(({ file }) => file);
+  expect(fallbackFiles).toEqual([]);
+});
 
 describe('a `> 0` sentinel filter is removed or answered', () => {
   it('reports nothing about the scanned trees as they stand', () => {

@@ -82,6 +82,22 @@ def test_metronome_default_click_length_is_absent() -> None:
     assert EngineMetronomeConfig(enabled=True).click_samples is None
 
 
+@pytest.mark.parametrize("render_frame", [-2, -1])
+def test_scheduled_render_frame_keeps_absence_and_refuses_below_sentinel(
+    render_frame: int,
+) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        with pytest.raises(SonareValueError) as refused:
+            engine.play(render_frame=render_frame)
+        assert refused.value.code == ErrorCode.INVALID_PARAMETER
+        assert str(refused.value) == (
+            "RealtimeEngine.play: render_frame must be an integer in [0, 9223372036854775807]"
+        )
+
+        engine.play()  # Omission is the Python spelling for the C sentinel.
+        engine.play(render_frame=0)
+
+
 def test_engine_transport_state_and_live_parameters() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_tempo(90.0)

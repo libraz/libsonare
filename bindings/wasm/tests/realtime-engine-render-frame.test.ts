@@ -14,6 +14,14 @@ interface NativeTransport {
   stop: (renderFrame?: number) => void;
   seekSample: (timelineSample: number, renderFrame?: number) => void;
   pushMidiPanic: (renderFrame?: number) => void;
+  pushMidiNoteOn: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame?: number,
+  ) => void;
   getTransportState: () => { playing: boolean; samplePosition: number };
 }
 
@@ -69,6 +77,21 @@ describe('RealtimeEngine native render-frame default', () => {
       expect(() => nativeOf(engine).seekSample(0, -1)).toThrow(/renderFrame/);
       engine.process([new Float32Array(256)]);
       expect(nativeOf(engine).getTransportState().playing).toBe(false);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('keeps omission distinct from zero and refuses a negative MIDI frame', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      expect(() => engine.pushMidiNoteOn(0, 0, 0, 60, 100)).not.toThrow();
+      expect(() => engine.pushMidiNoteOn(0, 0, 0, 60, 100, 0)).not.toThrow();
+      expect(() => engine.pushMidiNoteOn(0, 0, 0, 60, 100, -2)).toThrow(
+        new RangeError(
+          'RealtimeEngine.pushMidiNoteOn: renderFrame must be finite and at least 0; omit it to apply immediately',
+        ),
+      );
     } finally {
       engine.destroy();
     }

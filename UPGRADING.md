@@ -3575,7 +3575,10 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineMidiEvent.word_count` | Only 0 (infer) and explicit counts 1 through 4 are accepted; an explicit integer above 4 now raises SonareValueError instead of asking the engine to infer the count. |
 | `PlaybackLoudnessMeter.constructor(sample_rate)` | sample_rate must be an integer in [8000, 384000] Hz. The constructor raises SonareValueError naming sample_rate outside that domain; 1.x refused only a non-positive rate. |
+| `RealtimeEngine.configure_scope_telemetry(band_count)` | A band count of zero or a representable count above 64 raises SonareValueError instead of being clamped. |
+| `RealtimeEngine.configure_scope_telemetry(interval_frames)` | Negative intervals now raise SonareValueError instead of being clamped to 0; pass 0 to disable scope capture. |
 | `RealtimeEngine.set_tempo` | BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.set_tempo, RealtimeEngine.set_tempo_segments and Project.set_tempo_segments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.from_json and Project.from_json_with_diagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempo_bpm to detect. |
 
 #### String values are lowerCamelCase tokens
@@ -3726,6 +3729,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.scene_warnings` | unread insert parameters are refused at load time and no longer appear as warnings |
 | `Mixer.strip_by_id` | an unknown id raises SonareValueError instead of KeyError |
 | `Mixer` | a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError. The constructor takes keywords: Mixer(sample_rate=..., scene=<MixSceneDocument mapping>) builds from a scene, an omitted scene builds an empty mixer, a non-mapping scene raises TypeError (parse JSON text with json.loads or use Mixer.from_json); the handle form is gone |
+| `RealtimeEngine.clear_midi_cc_bindings` | Allocation failure raises SonareError with the OutOfMemory code and leaves the previous bindings active. The prior clear returned success on allocation failure. |
 | `RealtimeEngine.push_midi_sysex` | pass bytes, bytearray or memoryview as data; a list or integer raises TypeError naming data (1.x coerced them to bytes) |
 | `RealtimeEngine.set_midi_fx` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.set_part_rig` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)'), as is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') |
@@ -7270,6 +7274,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `PlaybackRenderer.processPlanar` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
 | `PlaybackRenderer.renderOffline` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
+| `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -7522,6 +7527,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ClipPageRequest` | `ClipPageSampleRequest` |
+| `EngineMidiEvent.wordCount` | an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring |
+| `RealtimeEngine.configureScopeTelemetry` | intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged. |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
 | `SampleDesc.rootKey` | an integer in [1, 127]; 128..255, previously accepted as a byte, is refused |
 | `SampleZoneDesc.keyHi` | an integer in [1, 127]; an out-of-domain bound is refused before the zone is added |
@@ -12385,6 +12392,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
+| `EngineMarker.keyFifths` | RealtimeEngine.setMarkers requires an integer in [-7, 7]; 1.x accepted values such as -8 and 8 and stored them as signed bytes |
 | `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
 | `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted |
 | `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
@@ -12639,6 +12647,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTimeSignatureSegment.denominator` | an absent denominator is refused with TypeError naming segments[i].denominator (1.x read it as 0 and refused it with RangeError) |
 | `EngineTimeSignatureSegment.numerator` | an absent numerator is refused with TypeError naming segments[i].numerator (1.x read it as 0 and refused it with RangeError) |
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
+| `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
 | `SonareEngineSyncErrorMessage.failure` (`./worklet`) | `EngineSyncErrorMessage.failure`: typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload |
 | `SonareRealtimeEngineNode.onSyncError` (`./worklet`) | the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload, and its text names the public entry whose call posted the sync (SonareEngine.setTempo: ...), not the audio thread's inner RealtimeEngine name |
 
@@ -13157,11 +13166,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `CaptureOptions.bufferFrames` (`./worklet`) | `CaptureOptions.capacityFrames` |
 | `ClipPageRequest` | `ClipPageSampleRequest` |
+| `EngineMidiEvent.wordCount` | only 0..4 is accepted; 0 and omission infer the word count from the last non-zero word, while an explicit integer above 4 is refused as a RangeError naming clips[i].events[j].wordCount (1.x inferred the word count for it) |
 | `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number \| undefined: a value not measured (the correlation of silence) is undefined, not NaN |
 | `PlaybackRenderer.processPlanar` | Invalid input channel counts are RangeError rather than coded SonareError. Non-finite samples in an otherwise valid block are still replaced and counted. |
 | `PlaybackRenderer.renderOffline` | Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError. |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.clipPageRequestScratchSample` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
+| `RealtimeEngine.configureScopeTelemetry` | intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged. |
 | `RealtimeEngine.consumeExternalMidiScratch` | removed: use drainExternalMidi(maxRecords), which returns ExternalMidiEvent[] |
 | `RealtimeEngine.externalMidiScratchByteCount` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
 | `RealtimeEngine.externalMidiScratchByteWord` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |

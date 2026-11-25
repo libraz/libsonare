@@ -12,6 +12,7 @@ import {
   RealtimeEngine,
   renderPercussiveEvents,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
   await init();
@@ -82,6 +83,33 @@ describe('an unset value reads back as an absent key and the record is passable 
       expect(stored[0]).not.toHaveProperty('name');
       engine.setMarkers(stored);
       expect(engine.markers()).toEqual(stored);
+    });
+  });
+
+  it('reads back omitted, zero and negative engine marker key fifths', () => {
+    withEngine((engine) => {
+      engine.setMarkers([
+        { ppq: 0, kind: 'keySignature' },
+        { ppq: 1, kind: 'keySignature', keyFifths: 0 },
+        { ppq: 2, kind: 'keySignature', keyFifths: -3 },
+      ]);
+      expect(engine.markers().map((marker) => marker.keyFifths)).toEqual([0, 0, -3]);
+    });
+  });
+
+  it('refuses engine marker key fifths outside the key signature domain', () => {
+    withEngine((engine) => {
+      engine.setMarkers([{ ppq: 0, kind: 'keySignature', keyFifths: -3 }]);
+      const stored = engine.markers();
+      for (const keyFifths of [-8, 8]) {
+        const error = expectRefusalOf(() =>
+          engine.setMarkers([{ ppq: 1, kind: 'keySignature', keyFifths }]),
+        );
+        expect(error.message).toBe(
+          'RealtimeEngine.setMarkers: markers[0].keyFifths must be an integer in [-7, 7]',
+        );
+        expect(engine.markers()).toEqual(stored);
+      }
     });
   });
 

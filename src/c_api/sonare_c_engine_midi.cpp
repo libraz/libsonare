@@ -13,6 +13,7 @@
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/midi_cc_binding_check.h"
+#include "c_api/midi_instrument_bind_error.h"
 #include "c_api/sonare_c_engine_internal.h"
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
@@ -50,33 +51,6 @@ static_assert(sonare::midi::kArticulationModeCount == SONARE_ARTICULATION_COUNT,
 
 namespace {
 
-// An instrument that cannot prepare for the engine is an invalid parameter.
-// A full rack or incompatible pending SysEx is invalid state.
-SonareError midi_instrument_bind_error(const sonare::engine::RealtimeEngine& engine) noexcept {
-  switch (engine.last_midi_instrument_bind_status()) {
-    case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
-      return run_validation([&] {
-        util::check::refuse("instrument", "must not already be bound to another destination");
-      });
-    case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
-      return run_validation([&] {
-        util::check::refuse("instrument",
-                            "must be preparable at the engine's sample rate and block size");
-      });
-    case sonare::engine::MidiInstrumentBindStatus::kRackFull:
-      set_last_error_static(SONARE_ERROR_INVALID_STATE, "the instrument rack is full");
-      return SONARE_ERROR_INVALID_STATE;
-    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
-      set_last_error_static(SONARE_ERROR_INVALID_STATE,
-                            "the instrument could not prepare scheduled or queued SysEx");
-      return SONARE_ERROR_INVALID_STATE;
-    default:
-      set_last_error_static(SONARE_ERROR_OUT_OF_MEMORY,
-                            "out of memory while binding the instrument");
-      return SONARE_ERROR_OUT_OF_MEMORY;
-  }
-}
-
 // Maps a refused bind_midi_cc() whose arguments were already validated. A rebind
 // of a bound (cc, channel) fits a full table, so a refusal there is the table
 // earlier bindings filled; otherwise the snapshot failed to allocate.
@@ -98,7 +72,7 @@ SonareError bind_engine_instrument(SonareEngine* engine, uint32_t destination_id
     if (entry.first == destination_id) {
       sonare::midi::MidiInstrument* raw = instrument.get();
       if (!engine->engine.set_midi_instrument(destination_id, raw)) {
-        return midi_instrument_bind_error(engine->engine);
+        return sonare_c_detail::record_midi_instrument_bind_failure(engine->engine);
       }
       entry.second = std::move(instrument);
       return SONARE_OK;
@@ -108,7 +82,7 @@ SonareError bind_engine_instrument(SonareEngine* engine, uint32_t destination_id
   sonare::midi::MidiInstrument* raw = engine->builtin_instruments.back().second.get();
   if (!engine->engine.set_midi_instrument(destination_id, raw)) {
     engine->builtin_instruments.pop_back();
-    return midi_instrument_bind_error(engine->engine);
+    return sonare_c_detail::record_midi_instrument_bind_failure(engine->engine);
   }
   return SONARE_OK;
 }
@@ -491,7 +465,7 @@ SonareError sonare_engine_clear_midi_instrument(SonareEngine* engine, uint32_t d
   SONARE_C_TRY
   engine->engine.require_quiescent();
   if (!engine->engine.set_midi_instrument(destination_id, nullptr)) {
-    return midi_instrument_bind_error(engine->engine);
+    return sonare_c_detail::record_midi_instrument_bind_failure(engine->engine);
   }
   engine->builtin_instruments.erase(
       std::remove_if(engine->builtin_instruments.begin(), engine->builtin_instruments.end(),

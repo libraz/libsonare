@@ -14133,6 +14133,38 @@ rule = "error-class-by-cause"
 test = "bindings/python/tests/test_core_validation_refusals.py::test_part_rig_inserts_refused_as_an_argument"
 
 [[entry]]
+kind = "option"
+old = "RealtimeEngine.configure_scope_telemetry(interval_frames)"
+changed = "Negative intervals now raise SonareValueError instead of being clamped to 0; pass 0 to disable scope capture."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_engine_telemetry.py::test_scope_telemetry_refuses_invalid_domain_values"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.configure_scope_telemetry(band_count)"
+changed = "A band count of zero or a representable count above 64 raises SonareValueError instead of being clamped."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_engine_telemetry.py::test_scope_telemetry_refuses_invalid_domain_values"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiEvent.word_count"
+changed = "Only 0 (infer) and explicit counts 1 through 4 are accepted; an explicit integer above 4 now raises SonareValueError instead of asking the engine to infer the count."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_engine_midi.py::test_engine_midi_clip_word_count_only_zero_infers"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clear_midi_cc_bindings"
+changed = "Allocation failure raises SonareError with the OutOfMemory code and leaves the previous bindings active. The prior clear returned success on allocation failure."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_engine_midi.py::test_engine_midi_cc_clear_out_of_memory_preserves_bindings"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.set_midi_fx"
 changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0')"

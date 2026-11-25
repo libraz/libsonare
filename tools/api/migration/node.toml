@@ -8108,6 +8108,30 @@ rule = "finite-or-refused"
 test = "bindings/node/tests/runtime-refusal-parity.test.ts::refuses a fractional UMP word"
 
 [[entry]]
+kind = "field"
+old = "EngineMidiEvent.wordCount"
+changed = "an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/engine-midi.test.ts::refuses an oversized scheduled wordCount and keeps the installed schedule"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.configureScopeTelemetry"
+changed = "intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged."
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/engine.test.ts::configures and drains scope telemetry"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearMidiCcBindings"
+changed = "Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/surface/engine.test.ts::reports OutOfMemory when clearing bindings fails and retains the current snapshot"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiClips"
 changed = "a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core"

@@ -4,6 +4,9 @@
 #include <cmath>
 #include <cstddef>
 #include <memory>
+#if defined(SONARE_TEST_CC_CLEAR_OOM)
+#include <memory_resource>
+#endif
 #include <new>
 #include <unordered_map>
 #include <unordered_set>
@@ -48,7 +51,14 @@ bool RealtimeEngine::bind_midi_cc(const midi::CcBinding& binding) noexcept {
 }
 
 void RealtimeEngine::clear_midi_cc_bindings() {
+#if defined(SONARE_TEST_CC_CLEAR_OOM)
+  auto next = midi_cc_binding_count() != 0
+                  ? std::allocate_shared<midi::CcMap>(std::pmr::polymorphic_allocator<midi::CcMap>{
+                        std::pmr::null_memory_resource()})
+                  : std::make_shared<midi::CcMap>();
+#else
   auto next = std::make_shared<midi::CcMap>();
+#endif
   midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
 }
 

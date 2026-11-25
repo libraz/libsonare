@@ -40,6 +40,7 @@
 #include "analysis/timbre_analyzer.h"
 #include "automation/parameter.h"
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_internal.h"
 #include "c_api/sonare_c_last_refusal.h"
 #include "core/audio.h"
 #include "core/convert.h"
@@ -352,8 +353,10 @@ enum class CErrorSubjectMode { kSurface, kDocument };
 
 /// @brief Throws NotSupported for an arrangement/MIDI entry point in a build without the engine.
 [[noreturn]] inline void throwMidiEngineUnavailable() {
-  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
-                                "arrangement/MIDI engine is not available in this build");
+  throw sonare::SonareException(
+      sonare::ErrorCode::NotSupported,
+      sonare_c_detail::not_compiled_in_message(sonare_c_detail::Feature::kArrangement),
+      sonare::ErrorReason::NotCompiledIn);
 }
 
 /// Element budget for a plain JS array, whose elements are converted one at a
@@ -440,6 +443,10 @@ std::size_t wasmIndexArg(double value, const char* subject);
 /// (an object with a `length`, a string, a DataView) as "<subject> must be an array".
 /// @p length_key names the count property ("length", or "byteLength" for a Uint8Array blob).
 std::size_t wasmArrayLength(const val& arr, const char* subject, const char* length_key = "length");
+inline std::size_t wasmArrayLength(const val& arr, const std::string& path) {
+  const char* subject = path.data();
+  return wasmArrayLength(arr, subject);
+}
 /// Reads the count of a list of audio planes, refusing a non-array as
 /// "<subject> must be an array of Float32Array"; each plane is read with
 /// wasmFloat32ArrayLength under "<subject>[i]".
@@ -523,8 +530,11 @@ inline std::string elementField(const std::string& at, const char* key) {
 ///        @ref elementAt.
 /// @throws WasmTypeError naming the element.
 val requiredElementObject(const val& list, std::size_t index, const char* list_name);
+inline val requiredElementObject(const val& list, std::size_t index, const std::string& list_name) {
+  return requiredElementObject(list, index, list_name.data());
+}
 /// @brief The name a list element is refused by: "<list_name>[<index>]".
-inline std::string elementAt(const char* list_name, std::size_t index) {
+inline std::string elementAt(std::string_view list_name, std::size_t index) {
   return std::string(list_name) + "[" + std::to_string(index) + "]";
 }
 /// @brief A required number field of an object, checked for type only so the owning check
@@ -643,6 +653,9 @@ int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int 
 ///          on the first real id or the first enum member instead.
 /// @throws WasmArgumentError naming @p key.
 uint32_t checkedUintFromVal(const val& value, const char* key);
+inline uint32_t checkedUintFromVal(const val& value, const std::string& path) {
+  return checkedUintFromVal(value, path.data());
+}
 uint32_t uintProperty(val object, const char* key, uint32_t default_value);
 /// @brief Reads a size_t count or position.
 /// @throws WasmTypeError unless a number; WasmRangeError unless a finite non-negative integer
@@ -658,6 +671,9 @@ std::size_t sizeTFromNumber(double value, const char* key);
 ///          [-2^31, 2^32) or a fractional one is a caller error.
 /// @throws WasmArgumentError naming @p key.
 uint32_t checkedWordFromVal(const val& value, const char* key);
+inline uint32_t checkedWordFromVal(const val& value, const std::string& path) {
+  return checkedWordFromVal(value, path.data());
+}
 uint32_t wordProperty(val object, const char* key, uint32_t default_value);
 /// @brief MIDI-byte sibling of @ref checkedIntFromVal, narrowing only: the
 ///        member's own domain stays with whoever owns it.
@@ -678,6 +694,9 @@ uint16_t checkedUint16FromVal(const val& value, const char* key);
 ///          any downstream non-negative check can tell from a real request.
 /// @throws WasmArgumentError naming @p key.
 int64_t checkedInt64FromVal(const val& value, const char* key);
+inline int64_t checkedInt64FromVal(const val& value, const std::string& path) {
+  return checkedInt64FromVal(value, path.data());
+}
 int64_t int64Property(val object, const char* key, int64_t default_value);
 /// @brief Reads a 64-bit unsigned value carried as a canonical-length decimal
 ///        string, the only spelling a JS number cannot corrupt above 2^53.
@@ -786,6 +805,11 @@ T domainNumberFromVal(const val& value, const char* key,
                       const sonare::util::check::NumericDomain& domain) {
   return static_cast<T>(domainCheckedNumber(value, key, domain, std::is_same_v<T, float>));
 }
+template <typename T>
+T domainNumberFromVal(const val& value, const std::string& path,
+                      const sonare::util::check::NumericDomain& domain) {
+  return domainNumberFromVal<T>(value, path.data(), domain);
+}
 /// @brief Optional sibling of domainNumberFromVal: omitted, `undefined` or `null` is
 ///        std::nullopt.
 template <typename T>
@@ -793,6 +817,11 @@ std::optional<T> optionalDomainValue(const val& v, const char* key,
                                      const sonare::util::check::NumericDomain& domain) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
   return domainNumberFromVal<T>(v, key, domain);
+}
+template <typename T>
+std::optional<T> optionalDomainValue(const val& value, const std::string& path,
+                                     const sonare::util::check::NumericDomain& domain) {
+  return optionalDomainValue<T>(value, path.data(), domain);
 }
 /// @brief Boolean sibling of optionalNumber.
 /// @throws WasmArgumentError naming @p key when @p v is present

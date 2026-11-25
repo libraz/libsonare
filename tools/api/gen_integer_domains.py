@@ -54,7 +54,12 @@ def overrides() -> dict[tuple[str, str], str]:
 # Resolvers that map an omitted keyword onto the C ABI's "not given" value and refuse it
 # when typed. Such a keyword keeps its row only where the row declares that sentinel.
 _SENTINEL_RESOLVERS = frozenset(
-    {"_resolve_zero_default", "_resolve_absent_positive", "_optional_nonzero"}
+    {
+        "_resolve_zero_default",
+        "_resolve_absent_positive",
+        "_optional_nonzero",
+        "_resolve_render_frame",
+    }
 )
 
 

@@ -15092,6 +15092,14 @@ test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a mar
 
 [[entry]]
 kind = "field"
+old = "EngineMarker.keyFifths"
+changed = "RealtimeEngine.setMarkers requires an integer in [-7, 7]; 1.x accepted values such as -8 and 8 and stored them as signed bytes"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/absence-contract.test.ts::refuses engine marker key fifths outside the key signature domain"
+
+[[entry]]
+kind = "field"
 old = "EngineAutomationPoint.curveToNext"
 changed = "AutomationCurve string only; a number is a TypeError"
 domain = "engine"
@@ -36331,6 +36339,30 @@ changed = "an absent targetParamId is a TypeError 'targetParamId must be an inte
 domain = "project"
 rule = "error-class-by-cause"
 test = "bindings/wasm/tests/list-element-readers.test.ts::an absent target"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiEvent.wordCount"
+changed = "only 0..4 is accepted; 0 and omission infer the word count from the last non-zero word, while an explicit integer above 4 is refused as a RangeError naming clips[i].events[j].wordCount (1.x inferred the word count for it)"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/midi-clip-destination.test.ts::refuses an out-of-domain wordCount without replacing the existing schedule"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.configureScopeTelemetry"
+changed = "intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged."
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/scope-telemetry.test.ts::refuses out-of-domain configuration without changing the active tap"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearMidiCcBindings"
+changed = "Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/engine.test.ts::reports OutOfMemory when clearing bindings fails and retains the current snapshot"
 
 [[entry]]
 kind = "method"

@@ -437,15 +437,21 @@ Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "intervalFrames must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "intervalFrames must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "bandCount must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "bandCount must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const int interval_frames = sonare_node::node_narrow_int(env, info[0], "intervalFrames");
-  const unsigned int band_count = sonare_node::node_narrow_uint32(env, info[1], "bandCount");
+  int interval_frames = 0;
+  size_t band_count = 0;
+  if (!RequiredDomainValue(env, info[0], "intervalFrames",
+                           sonare_c_detail::kEngineScopeIntervalDomain, &interval_frames) ||
+      !RequiredDomainValue(env, info[1], "bandCount", sonare_c_detail::kEngineScopeBandCountDomain,
+                           &band_count)) {
+    return env.Undefined();
+  }
   size_t applied = 0;
   ThrowIfError(
       env, sonare_engine_configure_scope_telemetry(engine_, interval_frames, band_count, &applied));

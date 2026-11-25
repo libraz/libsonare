@@ -14,6 +14,7 @@
 #include "c_api/checked_insert.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/midi_fx_json.h"
+#include "c_api/midi_instrument_bind_error.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_fx.h"
@@ -135,21 +136,46 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       }
     }
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
-    val events_val = clip_val["events"];
-    const uint32_t event_count = static_cast<uint32_t>(wasmArrayLength(events_val, "events"));
+    const val events_val = clip_val["events"];
+    const auto subject = elementField(path, "events");
+    const uint32_t event_count = static_cast<uint32_t>(wasmArrayLength(events_val, subject));
     clip.events.reserve(event_count);
     for (uint32_t j = 0; j < event_count; ++j) {
-      val event_val = events_val[j];
+      const val event_val = requiredElementObject(events_val, j, subject);
+      const std::string event_path = elementAt(subject, j);
+      const auto read = [&](const char* field) {
+        const val value = objectProperty(event_val, field);
+        if (!value.isUndefined() && value.typeOf().as<std::string>() != "number") {
+          throw WasmTypeError(elementField(event_path, field) + " must be an integer");
+        }
+        return value;
+      };
+      const auto field_subject = [&](const char* field) { return elementField(event_path, field); };
+      const val render_frame = read("renderFrame");
+      const val word0 = read("word0");
+      const val word1 = read("word1");
+      const val word2 = read("word2");
+      const val word3 = read("word3");
+      const val word_count_value = read("wordCount");
+      const val group_value = read("group");
+      const val sysex_handle = read("sysexHandle");
+
       sonare::midi::MidiEvent event;
-      event.render_frame = int64Property(event_val, "renderFrame", event.render_frame);
+      if (!render_frame.isUndefined()) {
+        event.render_frame = checkedInt64FromVal(render_frame, field_subject("renderFrame"));
+      }
       sonare::midi::Ump ump;
-      ump.words[0] = wordProperty(event_val, "word0", ump.words[0]);
-      ump.words[1] = wordProperty(event_val, "word1", ump.words[1]);
-      ump.words[2] = wordProperty(event_val, "word2", ump.words[2]);
-      ump.words[3] = wordProperty(event_val, "word3", ump.words[3]);
-      const uint32_t word_count = uintProperty(event_val, "wordCount", 0);
-      if (word_count >= 1 && word_count <= 4) {
-        ump.word_count = static_cast<uint8_t>(word_count);
+      if (!word0.isUndefined()) ump.words[0] = checkedWordFromVal(word0, field_subject("word0"));
+      if (!word1.isUndefined()) ump.words[1] = checkedWordFromVal(word1, field_subject("word1"));
+      if (!word2.isUndefined()) ump.words[2] = checkedWordFromVal(word2, field_subject("word2"));
+      if (!word3.isUndefined()) ump.words[3] = checkedWordFromVal(word3, field_subject("word3"));
+      const uint8_t word_count =
+          word_count_value.isUndefined()
+              ? 0
+              : domainNumberFromVal<uint8_t>(word_count_value, field_subject("wordCount"),
+                                             sonare_c_detail::kEngineUmpWordCountDomain);
+      if (word_count != 0) {
+        ump.word_count = word_count;
       } else if (ump.words[3] != 0) {
         ump.word_count = 4;
       } else if (ump.words[2] != 0) {
@@ -172,12 +198,14 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       // conversion yields a self-consistent Ump on its own terms, not because
       // anything downstream depends on it. Anyone changing the sequencer's
       // derivation must not read this line as coverage.
-      const uint32_t group = uintProperty(event_val, "group", ump.group);
-      if (group > 15) {
-        throw WasmRangeError("event group must be in [0,15]");
+      if (!group_value.isUndefined()) {
+        (void)domainNumberFromVal<uint32_t>(group_value, field_subject("group"),
+                                            sonare_c_detail::kEngineUmpGroupDomain);
       }
       ump.group = sonare::midi::ump_group_from_word0(ump.words[0]);
-      ump.sysex_handle = uintProperty(event_val, "sysexHandle", ump.sysex_handle);
+      if (!sysex_handle.isUndefined()) {
+        ump.sysex_handle = checkedUintFromVal(sysex_handle, field_subject("sysexHandle"));
+      }
       event.ump = ump;
       clip.events.push_back(event);
     }
@@ -323,21 +351,11 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
-// Mirrors the C ABI's bind mapping: a refused instrument is a RangeError; a full
-// rack, or a scheduled or queued SysEx the new instrument refuses, is
-// InvalidState; a failed allocation is OutOfMemory.
-[[noreturn]] void throwMidiInstrumentBindFailure(const sonare::engine::RealtimeEngine& engine,
-                                                 const char* message) {
-  switch (engine.last_midi_instrument_bind_status()) {
-    case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
-    case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
-      throw WasmRangeError(message);
-    case sonare::engine::MidiInstrumentBindStatus::kRackFull:
-    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState, message);
-    default:
-      throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
-  }
+// Mirrors the C ABI: an instrument prepare refusal is InvalidParameter; a rack
+// full or an incompatible pending SysEx is InvalidState; allocation failure is
+// OutOfMemory.
+[[noreturn]] void throwMidiInstrumentBindFailure(const sonare::engine::RealtimeEngine& engine) {
+  throwLastCError(sonare_c_detail::record_midi_instrument_bind_failure(engine));
 }
 
 }  // namespace
@@ -351,7 +369,7 @@ void RealtimeEngineWasm::bindInstrument(uint32_t destination_id,
     if (entry.first == destination_id) {
       sonare::midi::MidiInstrument* raw = instrument.get();
       if (!engine_.set_midi_instrument(destination_id, raw)) {
-        throwMidiInstrumentBindFailure(engine_, "failed to bind MIDI instrument");
+        throwMidiInstrumentBindFailure(engine_);
       }
       entry.second = std::move(instrument);
       return;
@@ -361,7 +379,7 @@ void RealtimeEngineWasm::bindInstrument(uint32_t destination_id,
   sonare::midi::MidiInstrument* raw = builtin_instruments_.back().second.get();
   if (!engine_.set_midi_instrument(destination_id, raw)) {
     builtin_instruments_.pop_back();
-    throwMidiInstrumentBindFailure(engine_, "failed to bind MIDI instrument");
+    throwMidiInstrumentBindFailure(engine_);
   }
 }
 #endif
@@ -371,7 +389,7 @@ void RealtimeEngineWasm::clearMidiInstrument(const val& destination_id_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   // A failed clear leaves the instrument bound, so its owner must stay alive.
   if (!engine_.set_midi_instrument(destination_id, nullptr)) {
-    throwMidiInstrumentBindFailure(engine_, "failed to clear MIDI instrument");
+    throwMidiInstrumentBindFailure(engine_);
   }
   builtin_instruments_.erase(
       std::remove_if(builtin_instruments_.begin(), builtin_instruments_.end(),

@@ -156,6 +156,8 @@ void RealtimeEngineWasm::bindMidiCc(val object) {
 void RealtimeEngineWasm::clearMidiCcBindings() {
 #if defined(SONARE_WITH_ARRANGEMENT)
   engine_.clear_midi_cc_bindings();
+#else
+  throwMidiEngineUnavailable();
 #endif
 }
 

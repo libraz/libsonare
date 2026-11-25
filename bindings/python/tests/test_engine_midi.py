@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 from typing import Any
 
 import numpy as np
@@ -129,6 +130,20 @@ def test_engine_midi_cc_bindings() -> None:
         assert sorted(engine.midi_cc_bindings(), key=lambda binding: binding.cc_number) == bindings
         bindings.clear()
         assert len(engine.midi_cc_bindings()) == 2
+
+
+@pytest.mark.skipif(
+    os.environ.get("SONARE_TEST_CC_CLEAR_OOM") != "1",
+    reason="requires the explicit CC-map allocation-failure injection",
+)
+def test_engine_midi_cc_clear_out_of_memory_preserves_bindings() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        engine.bind_midi_cc(MidiCcBinding(cc_number=7, channel=0, param_id=42))
+        before = engine.midi_cc_bindings()
+        assert len(before) == 1
+        with raises_coded(ErrorCode.OUT_OF_MEMORY):
+            engine.clear_midi_cc_bindings()
+        assert engine.midi_cc_bindings() == before
 
 
 class _FakeMidiCcBindingLibrary:
@@ -543,6 +558,49 @@ def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
             engine.load_sound_font(b"not sf2")
         assert bad_soundfont_error.value.code == 2
         engine.set_midi_clips([])
+
+
+@pytest.mark.parametrize("word_count", [-1, 5, 256])
+def test_engine_midi_clip_word_count_only_zero_infers(word_count: int) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        engine.set_midi_destination_external(5, True)
+        note_on = _midi1_word(0x9, 0, 60, 100)
+        valid = EngineMidiClipSchedule(
+            id=8,
+            track_id=5,
+            destination_id=5,
+            length_samples=256,
+            events=[EngineMidiEvent(0, word0=note_on, word_count=0)],
+        )
+        engine.set_midi_clips([valid])
+
+        invalid = EngineMidiClipSchedule(
+            id=9,
+            track_id=5,
+            destination_id=5,
+            length_samples=256,
+            events=[
+                EngineMidiEvent(
+                    0,
+                    word0=_midi1_word(0x9, 0, 61, 100),
+                    word_count=word_count,
+                )
+            ],
+        )
+        with pytest.raises(SonareValueError) as refused:
+            engine.set_midi_clips([invalid])
+        assert refused.value.code == ErrorCode.INVALID_PARAMETER
+        assert str(refused.value) == (
+            "RealtimeEngine.set_midi_clips: clips[0].events[0].word_count "
+            "must be an integer in [0, 4]"
+        )
+
+        # A rejected replacement leaves the previously published, inferred event in force.
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+        drained = engine.drain_external_midi()
+        assert len(drained) == 1
+        assert drained[0].bytes[1] == 60
 
 
 def test_engine_drains_external_midi_routing_to_host() -> None:

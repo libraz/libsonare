@@ -521,6 +521,9 @@ class EngineMidiEvent:
     have no group field -- those bits are Reserved and ``form``/``status``
     respectively -- so they always read as group 0 and packing a group into
     them has no effect.
+
+    ``word_count=0`` asks the engine to infer the UMP word form; explicit counts
+    are 1 through 4. Other values are refused.
     """
 
     render_frame: int
@@ -534,7 +537,7 @@ class EngineMidiEvent:
     word3: int = 0
     """Fourth UMP word."""
     word_count: int = 0
-    """Number of valid UMP words."""
+    """Number of UMP words: 0 infers the form; explicit counts are 1..4."""
     group: int = 0
     """UMP group, 0..15; the group in :attr:`word0` takes precedence."""
     sysex_handle: int = 0

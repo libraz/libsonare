@@ -23,6 +23,7 @@ from libsonare import (
     EngineMarker,
     EngineMetronomeConfig,
     EngineTelemetryError,
+    ErrorCode,
     ParameterInfo,
     RealtimeEngine,
     ScopeTelemetryRecord,
@@ -452,6 +453,34 @@ def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
         ]
         assert oversized
         assert oversized[-1].value == 3
+
+
+@pytest.mark.parametrize(
+    ("interval_frames", "band_count", "expected"),
+    [
+        (-1, 1, "interval_frames must be an integer in [0, 2147483647]"),
+        (0, 0, "band_count must be an integer in [1, 64]"),
+        (0, 65, "band_count must be an integer in [1, 64]"),
+        (1 << 100, 1, "interval_frames must be an integer in [0, 2147483647]"),
+        (0, 1 << 100, "band_count must be an integer in [1, 64]"),
+    ],
+)
+def test_scope_telemetry_refuses_invalid_domain_values(
+    interval_frames: int, band_count: int, expected: str
+) -> None:
+    with (
+        RealtimeEngine(sample_rate=48000, max_block_size=128) as engine,
+        pytest.raises(SonareValueError) as refused,
+    ):
+        engine.configure_scope_telemetry(interval_frames, band_count)
+    assert refused.value.code == ErrorCode.INVALID_PARAMETER
+    assert str(refused.value) == f"RealtimeEngine.configure_scope_telemetry: {expected}"
+
+
+def test_scope_telemetry_accepts_domain_endpoints() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        assert engine.configure_scope_telemetry(0, 1) == 1
+        assert engine.configure_scope_telemetry(2147483647, 64) == 64
 
 
 def test_realtime_engine_scope_telemetry() -> None:

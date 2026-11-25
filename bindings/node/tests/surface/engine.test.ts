@@ -1179,6 +1179,26 @@ describe('RealtimeEngine instruments and MIDI', () => {
     });
   });
 
+  it('reports OutOfMemory when clearing bindings fails and retains the current snapshot', (context) => {
+    if (process.env.SONARE_TEST_CC_CLEAR_OOM !== '1') {
+      context.skip();
+    }
+    withEngine((engine) => {
+      engine.addParameter({ id: 42, name: 'cutoff' });
+      engine.bindMidiCc({ ccNumber: 7, paramId: 42 });
+      const before = engine.midiCcBindings();
+      expect(before).toHaveLength(1);
+      let caught: unknown;
+      try {
+        engine.clearMidiCcBindings();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: ErrorCode.OutOfMemory });
+      expect(engine.midiCcBindings()).toEqual(before);
+    });
+  });
+
   it('pushes a program change with an optional bank object', () => {
     withEngine((engine) => {
       engine.setSf2Instrument(3, {});

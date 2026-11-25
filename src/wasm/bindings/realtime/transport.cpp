@@ -215,13 +215,13 @@ void RealtimeEngineWasm::setMarkers(val markers) {
     const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
     sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
                                   ("markers[" + std::to_string(i) + "].ppq").c_str());
-    const uint8_t kind = byteProperty(marker, "kind", 0, "marker");
-    const int key_fifths_value = intProperty(marker, "keyFifths", 0);
-    if (key_fifths_value < std::numeric_limits<int8_t>::min() ||
-        key_fifths_value > std::numeric_limits<int8_t>::max()) {
-      throw WasmRangeError("keyFifths must be an integer in [-128, 127]");
-    }
-    const int8_t key_fifths = static_cast<int8_t>(key_fifths_value);
+    const uint8_t kind = byteProperty(marker, "kind", sonare::transport::Marker{}.kind, "marker");
+    const auto key_fifths_path = elementField(elementAt("markers", i), "keyFifths");
+    const auto key_fifths_value = optionalDomainValue<int8_t>(
+        objectProperty(marker, "keyFifths"), key_fifths_path,
+        sonare::util::check::integer_domain(std::numeric_limits<int8_t>::min(),
+                                            std::numeric_limits<int8_t>::max()));
+    const int8_t key_fifths = key_fifths_value.value_or(sonare::transport::Marker{}.key_fifths);
     const uint8_t key_minor =
         boolProperty(marker, "keyMinor", sonare::transport::Marker{}.key_minor) ? 1 : 0;
     const std::string prefix = "markers[" + std::to_string(i) + "].";

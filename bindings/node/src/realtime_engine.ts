@@ -1733,6 +1733,8 @@ export class RealtimeEngine {
    * Renders `options.totalFrames` frames offline from the current transport position and returns the
    * interleaved result split into channels, with the measured integrated loudness.
    * A span over the memory budget is a `RangeError`; see {@link EngineBounceOptions.totalFrames}.
+   * If the bounce throws after pre-roll or rendering begins, the engine retains changes already
+   * made to its processor and transport state. The failed call returns no bounce result.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     const { interleaved, numChannels, sampleRate, integratedLufs, quantizeClippedSamples } =
@@ -1806,9 +1808,14 @@ export class RealtimeEngine {
   /**
    * Enable or configure per-target spectrum + vectorscope telemetry.
    *
+   * If allocating memory during tap preparation fails, the new interval and band count
+   * are already stored and the tap may be partially prepared.
+   *
    * @param intervalFrames - Minimum render-frame gap between published snapshots; `0` disables capture
    * @param bandCount - Requested FFT band resolution (1..64); changing it re-prepares the tap
    * @returns The band count actually applied
+   * @throws RangeError when intervalFrames is negative or bandCount is outside [1, 64].
+   *   A range refusal leaves the active tap unchanged.
    */
   configureScopeTelemetry(intervalFrames: number, bandCount: number): number {
     return this.native.configureScopeTelemetry(intervalFrames, bandCount);
@@ -1929,7 +1936,8 @@ export class RealtimeEngine {
   /**
    * Replace the realtime MIDI clip snapshot. Events are absolute render-frame
    * UMP events compiled for the engine timeline. A looping clip needs a positive
-   * `loopLengthSamples`; omit that field for a one-shot clip.
+   * `loopLengthSamples`; omit that field for a one-shot clip. A refused
+   * schedule leaves the installed schedule unchanged.
    */
   setMidiClips(clips: ReadonlyArray<EngineMidiClipSchedule>): void {
     if (Array.isArray(clips)) {
@@ -2030,7 +2038,10 @@ export class RealtimeEngine {
     return this.native.midiCcBindings();
   }
 
-  /** Removes every live MIDI CC / RPN / NRPN binding. */
+  /**
+   * Removes every live MIDI CC / RPN / NRPN binding.
+   * @throws SonareError with OutOfMemory if allocation fails. The existing bindings remain active.
+   */
   clearMidiCcBindings(): void {
     this.native.clearMidiCcBindings();
   }

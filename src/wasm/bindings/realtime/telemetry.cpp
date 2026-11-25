@@ -5,6 +5,7 @@
 
 #include <sonare/sonare_c_engine.h>
 
+#include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 
 val RealtimeEngineWasm::drainTelemetry(const val& max_records_val) {
@@ -213,14 +214,26 @@ val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
 
 unsigned int RealtimeEngineWasm::configureScopeTelemetry(const val& interval_frames_val,
                                                          const val& band_count_val) {
-  const int interval_frames = checkedIntFromVal(interval_frames_val, "intervalFrames");
-  const uint32_t band_count = checkedUintFromVal(band_count_val, "bandCount");
 #if defined(SONARE_WITH_MIXING)
+  if (interval_frames_val.typeOf().as<std::string>() != "number") {
+    throw WasmTypeError("intervalFrames must be an integer");
+  }
+  if (band_count_val.typeOf().as<std::string>() != "number") {
+    throw WasmTypeError("bandCount must be an integer");
+  }
+  const int interval_frames = domainNumberFromVal<int>(interval_frames_val, "intervalFrames",
+                                                       sonare_c_detail::kEngineScopeIntervalDomain);
+  const uint32_t band_count = domainNumberFromVal<uint32_t>(
+      band_count_val, "bandCount", sonare_c_detail::kEngineScopeBandCountDomain);
+  engine_.require_quiescent();
   return engine_.configure_scope_telemetry(interval_frames, band_count);
 #else
-  (void)interval_frames;
-  (void)band_count;
-  return 0;
+  (void)interval_frames_val;
+  (void)band_count_val;
+  throw sonare::SonareException(
+      sonare::ErrorCode::NotSupported,
+      sonare_c_detail::not_compiled_in_message(sonare_c_detail::Feature::kMixing),
+      sonare::ErrorReason::NotCompiledIn);
 #endif
 }
 

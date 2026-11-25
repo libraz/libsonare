@@ -661,7 +661,7 @@ export interface EngineMidiEvent {
   word2?: number;
   /** Fourth UMP word. */
   word3?: number;
-  /** Number of UMP words in use (1..4). Omitted: inferred as one word when only `word0` is set. */
+  /** Number of UMP words in use (0..4). Omitted or 0: inferred from the last non-zero word. */
   wordCount?: number;
   /**
    * Redundant with `word0`, which already carries the UMP group in bits 24..27.

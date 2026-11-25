@@ -835,7 +835,10 @@ export class RealtimeEngine {
     this.native.bindMidiCc(binding);
   }
 
-  /** Removes every live MIDI CC / RPN / NRPN binding. */
+  /**
+   * Removes every live MIDI CC / RPN / NRPN binding.
+   * @throws SonareError with OutOfMemory if allocation fails. The existing bindings remain active.
+   */
   clearMidiCcBindings(): void {
     this.native.clearMidiCcBindings();
   }
@@ -2880,6 +2883,8 @@ export class RealtimeEngine {
    * and `sourceSampleRate` are omitted for their defaults (the engine block, the
    * source rate, the engine rate); an explicit `0` is a `RangeError`. An omitted
    * `targetLufs` is -14 LUFS and any finite value is literal.
+   * If the bounce throws after pre-roll or rendering begins, the engine retains changes already
+   * made to its processor and transport state. The failed call returns no bounce result.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requestObject('bounceOffline', options, 'options', true);
@@ -2994,9 +2999,11 @@ export class RealtimeEngine {
 
   /**
    * Enables per-target spectrum + vectorscope capture. @param intervalFrames is
-   * the minimum render-frame gap between snapshots (0 disables). @param bandCount
-   * is the FFT band resolution (1..64); changing it re-prepares the tap. Returns
-   * the band count actually applied.
+   * the minimum render-frame gap between snapshots, in [0, 2147483647] (0 disables).
+   * @param bandCount is the FFT band resolution (1..64); changing it re-prepares
+   * the tap. Returns the band count actually applied. A range refusal leaves the active tap
+   * unchanged. If allocating memory during tap preparation fails, the new interval and band count
+   * are already stored and the tap may be partially prepared.
    */
   configureScopeTelemetry(intervalFrames: number, bandCount: number): number {
     return this.native.configureScopeTelemetry(intervalFrames, bandCount);

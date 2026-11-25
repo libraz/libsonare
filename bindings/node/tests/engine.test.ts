@@ -480,6 +480,23 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('keeps omitted render frames immediate and refuses explicit negative frames', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      const refusal = new RangeError(
+        'RealtimeEngine.play: renderFrame must be finite and at least 0; omit it to apply immediately',
+      );
+      expect(() => engine.play(-2)).toThrow(refusal);
+      expect(() => engine.play(-1)).toThrow(refusal);
+      expect(() => engine.play()).not.toThrow();
+      expect(() => engine.stop()).not.toThrow();
+      expect(() => engine.play(0)).not.toThrow();
+      expect(() => engine.stop(0)).not.toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('configures and drains scope telemetry', () => {
     const sampleRate = 48000;
     const blockSize = 256;
@@ -506,7 +523,25 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setTrackLanes([{ trackId: 10 }]);
     engine.play();
+    expect(() => engine.configureScopeTelemetry(-1, 32)).toThrow(
+      new RangeError(
+        'RealtimeEngine.configureScopeTelemetry: intervalFrames must be an integer in [0, 2147483647]',
+      ),
+    );
+    expect(() => engine.configureScopeTelemetry(256, 65)).toThrow(
+      new RangeError(
+        'RealtimeEngine.configureScopeTelemetry: bandCount must be an integer in [1, 64]',
+      ),
+    );
 
+    expect(() => engine.configureScopeTelemetry(0, -1)).toThrow(
+      new RangeError(
+        'RealtimeEngine.configureScopeTelemetry: bandCount must be an integer in [1, 64]',
+      ),
+    );
+    expect(() => engine.configureScopeTelemetry(-1, 'bad' as unknown as number)).toThrow(
+      new TypeError('RealtimeEngine.configureScopeTelemetry: bandCount must be an integer'),
+    );
     let records: ReturnType<typeof engine.drainScopeTelemetry> = [];
     for (let block = 0; block < 12; block++) {
       engine.process([new Float32Array(blockSize), new Float32Array(blockSize)]);

@@ -433,8 +433,12 @@ class RealtimeEngine:
         after ``render_offline(..., finalize=False)``."""
         ...
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
-        """Render the whole span in one call and return the interleaved mix; a span over the 1 GiB
-        memory budget raises SonareValueError."""
+        """Render the whole span in one call and return the interleaved mix.
+
+        A span over the 1 GiB memory budget raises SonareValueError. If the bounce raises after
+        pre-roll or rendering begins, the engine retains changes already made to its processor
+        and transport state.
+        """
         ...
     def freeze_offline(self, options: EngineFreezeOptions) -> EngineFreezeResult:
         """Render the source layer over the span and install it as the only clip."""
@@ -465,8 +469,13 @@ class RealtimeEngine:
         """
         ...
     def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
-        """Enable scope telemetry every ``interval_frames`` render frames with ``band_count``
-        spectrum bands; returns the band count the engine applied."""
+        """Enable scope telemetry and return the applied band count.
+
+        ``interval_frames`` must be in [0, 2147483647] and ``band_count`` in [1, 64].
+        Out-of-domain values leave the tap unchanged. If allocating memory during tap
+        preparation fails, the new interval and band count are already stored and the tap
+        may be partially prepared.
+        """
         ...
     def drain_scope_telemetry(self, max_records: int = 1024) -> list[ScopeTelemetryRecord]:
         """Drain up to ``max_records`` scope telemetry records."""
@@ -652,7 +661,11 @@ class RealtimeEngine:
         """Bind a 7/14-bit CC, RPN or NRPN descriptor to a live engine parameter."""
         ...
     def clear_midi_cc_bindings(self) -> None:
-        """Clear all live MIDI CC to parameter bindings."""
+        """Clear all live MIDI CC to parameter bindings.
+
+        Raises SonareError with the OutOfMemory code if allocation fails.
+        The previous bindings remain active.
+        """
         ...
     def midi_cc_bindings(self) -> list[MidiCcBinding]:
         """Return a copied snapshot of the live MIDI CC to parameter bindings."""
