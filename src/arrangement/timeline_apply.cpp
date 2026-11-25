@@ -149,6 +149,30 @@ const mixing::api::Strip* find_scene_strip(const MixerRequest& mixer,
   return nullptr;
 }
 
+// A failed build can carry the factory's domain refusal under the scene entry's index.
+void rethrow_timeline_insert_refusal(const MixerRequest& mixer, const mixing::api::Strip& strip,
+                                     double sample_rate) {
+  if (!engine::strip_eq_acceptable(strip.eq, sample_rate)) return;
+  const auto strip_index = static_cast<size_t>(&strip - mixer.scene.strips.data());
+  const std::string inserts =
+      "timeline.mixer.scene.strips[" + std::to_string(strip_index) + "].inserts";
+  for (size_t i = 0; i < strip.inserts.size(); ++i) {
+    const std::string path = inserts + "[" + std::to_string(i) + "].params";
+    try {
+      bool stereo_pair_only = false;
+      if (!engine::make_insert_processor(strip.inserts[i], sample_rate, &stereo_pair_only,
+                                         path.c_str())) {
+        return;
+      }
+    } catch (const SonareParameterRefusal& refusal) {
+      if (refusal.code() == ErrorCode::InvalidParameter && !refusal.shape_error()) throw;
+      return;
+    } catch (const SonareException&) {
+      return;
+    }
+  }
+}
+
 bool has_strip_binding(const CompiledTimeline& timeline, TrackId track_id) noexcept {
   for (const MixerStripBinding& binding : timeline.mixer.bindings) {
     if (binding.track_id == track_id) return true;
@@ -311,6 +335,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
           }
         }
         if (!engine.validate_track_strip(*strip)) {
+          rethrow_timeline_insert_refusal(timeline.mixer, *strip, engine.sample_rate());
           return apply_refused(ErrorCode::InvalidParameter,
                                "scene strip \"" + bindings[i].strip_id + "\" cannot be built");
         }

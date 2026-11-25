@@ -6,18 +6,24 @@
 // remain in project_serializer_internal.h with their existing ABI.
 
 #include <cstddef>
+#include <optional>
 #include <string>
 
 #include "arrangement/edit_model.h"
+#include "serialize/project_serializer.h"
+#include "util/exception.h"
 #include "util/json.h"
-
-namespace sonare::serialize::detail {
 
 #if defined(__GNUC__) || defined(__clang__)
 #define SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN __attribute__((visibility("hidden")))
 #else
 #define SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN
 #endif
+
+namespace sonare::serialize::detail {
+
+SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN DeserializeResult project_from_json_with_refusal(
+    const std::string& json_text, std::optional<sonare::SonareParameterRefusal>* refusal_out);
 
 SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN const std::string* strict_string_field(
     const sonare::util::json::Value& value, const std::string& path, const char* key);

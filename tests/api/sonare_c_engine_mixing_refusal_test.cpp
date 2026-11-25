@@ -751,18 +751,22 @@ TEST_CASE("strip settings name the EQ, insert and bus-image cause the mixer refu
                               {2, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
 
-  constexpr const char* kEqText =
-      "settings must describe a strip EQ whose bands are valid at the engine's sample rate";
+  const auto check_eq_frequency_refusal = [] {
+    CHECK(sonare_last_refusal_subject_count() == 1);
+    const char* subject = sonare_last_refusal_subject(0);
+    CHECK((subject != nullptr && std::string(subject) == "settings.eq.bands[0].frequencyHz"));
+    CHECK_FALSE(sonare_last_refusal_is_shape());
+  };
   const std::string nyquist_strip = strip_scene("s", kPastNyquistEq);
   CHECK(sonare_engine_set_track_strip_json(engine, 10, nyquist_strip.c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == kEqText);
+  check_eq_frequency_refusal();
   CHECK(sonare_engine_set_master_strip_json(engine, nyquist_strip.c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == kEqText);
+  check_eq_frequency_refusal();
   CHECK(sonare_engine_set_bus_strip_json(engine, 1, bus_scene("1", kPastNyquistEq).c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == kEqText);
+  check_eq_frequency_refusal();
 
   constexpr const char* kUnknownInsert =
       R"({"slot":"pre","processor":"missing.processor","params":{}})";

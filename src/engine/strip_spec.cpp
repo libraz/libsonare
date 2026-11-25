@@ -35,10 +35,11 @@ void apply_shared_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::
 
 std::unique_ptr<rt::ProcessorBase> make_insert_processor(const mixing::api::Insert& insert,
                                                          double build_sample_rate,
-                                                         bool* stereo_pair_only) {
-  auto processor = mastering::api::make_checked_insert(
-      insert.processor_name, insert.params_json, "settings.inserts[].params",
-      ErrorCode::InvalidParameter, build_sample_rate);
+                                                         bool* stereo_pair_only,
+                                                         const char* params_path) {
+  auto processor =
+      mastering::api::make_checked_insert(insert.processor_name, insert.params_json, params_path,
+                                          ErrorCode::InvalidParameter, build_sample_rate);
   if (!processor) return nullptr;
   *stereo_pair_only = mastering::api::channel_policy(insert.processor_name) ==
                       mastering::api::ChannelPolicy::StereoPairOnly;

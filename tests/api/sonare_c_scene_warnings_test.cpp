@@ -75,6 +75,11 @@ TEST_CASE("sonare_project_deserialize refuses unknown scene keys", "[c_api][proj
   CHECK(report.find("invalid_format: unknown key scene.strips[0].faderDB") != std::string::npos);
   // The error text carries the message alone; the diagnostics keep the code.
   CHECK(last_error().rfind("unknown key scene.strips[0].faderDB (expected ", 0) == 0);
+  REQUIRE(sonare_last_refusal_entry() != nullptr);
+  CHECK(std::string(sonare_last_refusal_entry()) == "project_deserialize");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "scene.strips[0].faderDB");
+  CHECK(sonare_last_refusal_is_shape() == 1);
   CHECK(report.find("unknown_scene_key") == std::string::npos);
   CHECK(report.find("x-note") == std::string::npos);
 
@@ -92,6 +97,25 @@ TEST_CASE("sonare_project_deserialize refuses unknown scene keys", "[c_api][proj
           SONARE_OK);
   CHECK(take_diagnostics(diagnostics).find("unknown key") == std::string::npos);
   sonare_project_destroy(loaded);
+}
+
+TEST_CASE("sonare_project_deserialize records an out-of-domain tempo field", "[c_api][project]") {
+  const std::string typo = R"({"version":7,"tempoSegments":[{"startPpq":0,"bpm":1e-8}]})";
+  SonareProject* loaded = nullptr;
+  char* diagnostics = nullptr;
+  REQUIRE(sonare_project_deserialize(typo.data(), typo.size(), &loaded, &diagnostics) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  const std::string report = take_diagnostics(diagnostics);
+  CHECK(loaded == nullptr);
+  CHECK(
+      report.find("invalid_tempo_bpm: tempoSegments[0].bpm must be finite and in [1e-6, 100000]") !=
+      std::string::npos);
+  CHECK(last_error() == "tempoSegments[0].bpm must be finite and in [1e-6, 100000]");
+  REQUIRE(sonare_last_refusal_entry() != nullptr);
+  CHECK(std::string(sonare_last_refusal_entry()) == "project_deserialize");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "tempoSegments[0].bpm");
+  CHECK(sonare_last_refusal_is_shape() == 0);
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

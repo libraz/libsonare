@@ -7,12 +7,15 @@
 #include <array>
 #include <cmath>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/internal_processor_runner.h"
+#include "mastering/api/param_field_tables.h"
+#include "mastering/api/param_map.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
@@ -47,14 +50,43 @@ bool valid_true_peak_oversample(int factor) noexcept {
   return rt::is_supported_polyphase_oversample_factor(factor);
 }
 
-// Runs @p validate and rethrows its message behind the stage name, so a chain
-// rejection names the stage to fix rather than only the offending field.
+// The chain's flat keys spell array positions as dot-separated components.
+std::string stage_member_key(std::string_view stage, const std::string& member) {
+  detail::ParamMap keys;
+  if (stage == "dynamics.deesser") {
+#define X(key, field, meta) keys.note_member(#field, key);
+    SONARE_FIELDS_DEESSER(X)
+#undef X
+  }
+  if (stage == "dynamics.multibandComp") {
+    if (member.compare(0, 6, "bands[") == 0) {
+      const size_t end = member.find("].", 6);
+      if (end != std::string::npos) {
+        return "bands." + member.substr(6, end - 6) + "." + keys.caller_key(member.substr(end + 2));
+      }
+    }
+    if (member.compare(0, 6, "cutoff") == 0 && member.size() > 9 &&
+        member.compare(member.size() - 3, 3, "_hz") == 0) {
+      return "crossover.cutoffsHz." + member.substr(6, member.size() - 9);
+    }
+    if (member == "fir_kernel_size") return "crossover.firKernelSize";
+  }
+  return keys.caller_key(member);
+}
+
 template <typename ValidateFn>
 void check_stage(const char* stage, ValidateFn&& validate) {
   try {
     validate();
+  } catch (const SonareParameterRefusal& error) {
+    throw error.respelled(
+        error.code(),
+        [stage](const std::string& member) {
+          return std::string(stage) + "." + stage_member_key(stage, member);
+        },
+        false);
   } catch (const SonareException& error) {
-    throw SonareException(error.code(), std::string(stage) + ": " + error.what());
+    throw SonareException(error.code(), std::string(stage) + ": " + error.what(), error.reason());
   }
 }
 

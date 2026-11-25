@@ -742,6 +742,11 @@ mixing::api::Scene scene_from_value(const Value& v) {
     // Walk the already-parsed sub-tree. Dumping it back to text and re-parsing it
     // would cost a second full parse under a different (unlimited) resource regime.
     return mixing::api::scene_from_value(v, "scene");
+  } catch (const SonareParameterRefusal& error) {
+    // A scene nested in a project is malformed persisted input, while the
+    // standalone control-thread API reports InvalidParameter.
+    throw error.respelled(
+        ErrorCode::InvalidFormat, [](const std::string& subject) { return subject; }, true);
   } catch (const SonareException& error) {
     // A scene nested in a project is malformed persisted input, while the
     // standalone control-thread API reports InvalidParameter.

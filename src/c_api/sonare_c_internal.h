@@ -101,6 +101,10 @@ const char* last_error_reason() noexcept;
 ///          returned had it not reported failure through a NULL handle. @p reason is optional.
 void set_last_error(SonareError code, const char* msg,
                     std::optional<sonare::ErrorReason> reason = std::nullopt) noexcept;
+/// @brief Records an existing structured refusal while retaining a caller-composed message.
+void set_last_error_with_refusal(SonareError code, const char* msg,
+                                 const sonare::SonareParameterRefusal& refusal,
+                                 std::optional<sonare::ErrorReason> reason = std::nullopt) noexcept;
 /// @brief Refuses a @c struct_size below the struct this library was built with,
 ///        naming the struct in the recorded message.
 inline bool struct_size_accepted(uint32_t struct_size, size_t expected, const char* name) {

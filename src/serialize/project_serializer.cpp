@@ -534,7 +534,9 @@ std::string project_to_json(const arrangement::Project& project,
 // Public: deserialize
 // ===========================================================================
 
-DeserializeResult project_from_json(const std::string& json_text) {
+DeserializeResult detail::project_from_json_with_refusal(
+    const std::string& json_text, std::optional<SonareParameterRefusal>* refusal_out) {
+  if (refusal_out != nullptr) refusal_out->reset();
   DeserializeResult result;
 
   const auto& import_limits = resource::kDefaultProjectImportResourceLimits;
@@ -648,6 +650,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         try {
           transport::check_public_tempo_segment(s, index, "tempoSegments", "endBpm");
         } catch (const SonareParameterRefusal& e) {
+          if (refusal_out != nullptr) *refusal_out = e;
           const bool is_start = e.subject() == schema::child_path(at, "bpm");
           const double bpm = is_start ? s.bpm : s.end_bpm;
           const char* diagnostic = std::isfinite(bpm) && bpm > transport::kMaxPublicTempoBpm
@@ -1108,6 +1111,14 @@ DeserializeResult project_from_json(const std::string& json_text) {
     decode_diagnostics.finalize();
     result.project = std::move(project);
     return result;
+  } catch (const SonareParameterRefusal& e) {
+    if (refusal_out != nullptr) *refusal_out = e;
+    result.project.reset();
+    result.reason = e.reason();
+    result.diagnostics.push_back(
+        {DiagnosticSeverity::kError,
+         e.code() == ErrorCode::InvalidFormat ? "invalid_format" : "deserialize_failed", e.what()});
+    return result;
   } catch (const SonareException& e) {
     result.project.reset();
     result.reason = e.reason();
@@ -1129,6 +1140,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
         {DiagnosticSeverity::kError, "deserialize_failed", "unknown deserialize failure"});
     return result;
   }
+}
+
+DeserializeResult project_from_json(const std::string& json_text) {
+  return detail::project_from_json_with_refusal(json_text, nullptr);
 }
 
 }  // namespace sonare::serialize

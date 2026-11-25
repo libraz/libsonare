@@ -10,17 +10,17 @@ namespace sonare::c_api {
 
 /// Validate one engine strip EQ band for its sample rate and keep DSP refusals
 /// in the field paths of the band JSON argument.
-inline void validate_engine_eq_band_argument(const mastering::eq::EqBand& band,
-                                             double sample_rate) {
+inline void validate_engine_eq_band_argument(const mastering::eq::EqBand& band, double sample_rate,
+                                             const std::string& path = "band") {
   try {
     mixing::validate_eq(mixing::api::StripEq{true, {band}});
     (void)mastering::eq::design_eq_biquad(band, sample_rate);
   } catch (const SonareParameterRefusal& refusal) {
     throw refusal.respelled(
         refusal.code(),
-        [](const std::string& subject) {
-          if (subject == "frequency_hz") return std::string("band.frequencyHz");
-          if (subject == "q") return std::string("band.q");
+        [&](const std::string& subject) {
+          if (subject == "frequency_hz") return path + ".frequencyHz";
+          if (subject == "q") return path + ".q";
           return subject;
         },
         true);

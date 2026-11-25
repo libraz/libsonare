@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
 namespace {
 
@@ -85,3 +86,34 @@ TEST_CASE("sonare_streaming_retune_create returns its error and leaves out NULL 
   CHECK(retune != nullptr);
   sonare_streaming_retune_destroy(retune);
 }
+
+#if defined(SONARE_WITH_MASTERING)
+TEST_CASE("chain configuration retains the structured name of a refused stage field",
+          "[c_api][c_create][mastering]") {
+  struct Row {
+    const char* params;
+    const char* field;
+  };
+  const Row rows[] = {
+      {R"({"dynamics.compressor.ratio":0.5})", "dynamics.compressor.ratio"},
+      {R"({"dynamics.deesser.bandPassQ":0})", "dynamics.deesser.bandPassQ"},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.field);
+    SonareStreamingMasteringChain* chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(row.params, nullptr, &chain) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(chain == nullptr);
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == std::string("config.") + row.field);
+
+    const std::string doc = std::string(R"({"version":2,"params":)") + row.params + "}";
+    char* output = nullptr;
+    REQUIRE(sonare_mastering_chain_config_from_json(doc.c_str(), &output) ==
+            SONARE_ERROR_INVALID_FORMAT);
+    CHECK(output == nullptr);
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == std::string("params.") + row.field);
+  }
+}
+#endif

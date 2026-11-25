@@ -405,6 +405,39 @@ TEST_CASE("C API names the timeline tempo segments when capture refuses an appli
 }
 
 #if defined(SONARE_WITH_MIXING)
+#ifdef SONARE_WITH_MASTERING
+TEST_CASE("applying a timeline names an insert parameter refused at the engine rate",
+          "[timeline-apply][c_api]") {
+  const std::vector<float> tone = stereo_tone(kSampleRate);
+  TestProject built = build_project(tone);
+  const std::unique_ptr<SonareProject, decltype(&sonare_project_destroy)> project(
+      built.project, sonare_project_destroy);
+  const char* scene =
+      R"({"version":2,"strips":[{"id":"lead","inserts":[{"slot":"pre","processor":"eq.parametric",)"
+      R"("params":{"band0.type":1,"band0.frequencyHz":12000,"band0.enabled":1}}]}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.get(), scene) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project.get(), built.midi_track, "lead", nullptr) ==
+          SONARE_OK);
+  constexpr int kLowerSampleRate = 16000;
+  REQUIRE(sonare_project_set_sample_rate(project.get(), kLowerSampleRate) == SONARE_OK);
+  const std::unique_ptr<SonareProjectTimeline, decltype(&sonare_project_timeline_destroy)> timeline(
+      compile_timeline(project.get()), sonare_project_timeline_destroy);
+
+  SonareEngine* raw_engine = nullptr;
+  REQUIRE(sonare_engine_create(&raw_engine) == SONARE_OK);
+  const std::unique_ptr<SonareEngine, decltype(&sonare_engine_destroy)> engine(
+      raw_engine, sonare_engine_destroy);
+  REQUIRE(sonare_engine_prepare(engine.get(), kLowerSampleRate, kBlockSize, 64, 16, 0) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_apply_project_timeline(engine.get(), timeline.get()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK_FALSE(sonare_last_refusal_is_shape());
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) ==
+        "timeline.mixer.scene.strips[0].inserts[0].params.band0.frequencyHz");
+}
+#endif
+
 TEST_CASE("applied timeline binds a 1:1 scene strip like the project bounce mixes it",
           "[timeline-apply][c_api]") {
   // Same agreement bound as tests/engine/bus_strip_agreement_test.cpp:

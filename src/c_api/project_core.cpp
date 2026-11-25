@@ -1,6 +1,7 @@
 #include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
 #include "c_api/project_timeline_internal.h"
+#include "serialize/project_serializer_private.h"
 #if defined(SONARE_WITH_MASTERING) && defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/checked_insert.h"
 #endif
@@ -147,15 +148,22 @@ SonareError sonare_project_deserialize(const char* document, size_t len, SonareP
     return SONARE_ERROR_INVALID_FORMAT;
   }
   SONARE_C_TRY
+  std::optional<sonare::SonareParameterRefusal> refusal;
   sonare::serialize::DeserializeResult result =
-      sonare::serialize::project_from_json(std::string(document, len));
+      sonare::serialize::detail::project_from_json_with_refusal(std::string(document, len),
+                                                                &refusal);
   if (!result.ok()) {
     std::unique_ptr<char[]> diagnostics;
     if (out_diag) {
       diagnostics.reset(copy_string(serialize_deserialize_diagnostics(result.diagnostics)));
     }
     const std::string message = serialize_deserialize_diagnostics(result.diagnostics, false);
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str(), result.reason);
+    if (refusal) {
+      sonare_c_detail::set_last_error_with_refusal(SONARE_ERROR_INVALID_FORMAT, message.c_str(),
+                                                   *refusal, result.reason);
+    } else {
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str(), result.reason);
+    }
     if (out_diag) *out_diag = diagnostics.release();
     return SONARE_ERROR_INVALID_FORMAT;
   }

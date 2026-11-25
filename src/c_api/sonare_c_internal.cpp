@@ -110,6 +110,18 @@ void set_last_error(SonareError code, const char* msg,
   }
 }
 
+void set_last_error_with_refusal(SonareError code, const char* msg,
+                                 const sonare::SonareParameterRefusal& refusal,
+                                 std::optional<sonare::ErrorReason> reason) noexcept {
+  set_last_error(code, msg, reason);
+  try {
+    last_refusal_entry_storage() = c_entry_key(current_entry_storage());
+    last_refusal_storage() = refusal;
+  } catch (...) {
+    last_refusal_storage().reset();
+  }
+}
+
 void set_last_error_static(SonareError code, const char* msg,
                            std::optional<sonare::ErrorReason> reason) noexcept {
   last_error_code_storage() = code;

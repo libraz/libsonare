@@ -16,6 +16,7 @@
 
 #include "c_api/checked_insert.h"
 #include "c_api/engine_config_domains.h"
+#include "c_api/engine_eq_band_argument.h"
 #include "engine/insert_automation_targets.h"
 #include "engine/realtime_engine.h"
 #include "mastering/eq/parametric.h"
@@ -265,10 +266,23 @@ inline void check_mixer_surround_pan(double azimuth, double divergence, double l
 ///        throw_mixer_edit_refusal raises it for MixerEditScope::kStrip.
 [[noreturn]] inline void throw_strip_edit_refusal(
     sonare::engine::RealtimeEngine& realtime,
-    const std::vector<sonare::mixing::api::Insert>& inserts) {
-  if (realtime.last_mixer_edit_fault().cause ==
-      sonare::engine::MixerEditCause::kStripInsertsRefused) {
-    namespace schema = sonare::util::json::schema;
+    const std::vector<sonare::mixing::api::Insert>& inserts,
+    const sonare::mixing::api::StripEq* eq = nullptr) {
+  using sonare::engine::MixerEditCause;
+  namespace schema = sonare::util::json::schema;
+  if (eq != nullptr && realtime.last_mixer_edit_fault().cause == MixerEditCause::kStripEqInvalid) {
+    for (size_t i = 0; i < eq->bands.size(); ++i) {
+      try {
+        sonare::c_api::validate_engine_eq_band_argument(eq->bands[i], realtime.sample_rate(),
+                                                        schema::index_path("settings.eq.bands", i));
+      } catch (const sonare::SonareParameterRefusal&) {
+        throw;
+      } catch (const sonare::SonareException&) {
+        break;
+      }
+    }
+  }
+  if (realtime.last_mixer_edit_fault().cause == MixerEditCause::kStripInsertsRefused) {
     for (size_t i = 0; i < inserts.size(); ++i) {
       const sonare::mixing::api::Insert& insert = inserts[i];
       const std::string path =
