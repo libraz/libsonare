@@ -179,6 +179,20 @@ describe('runtime refusal parity (WASM)', () => {
           'StreamingMasteringChain.processStereo: right contains a non-finite sample at index 5',
         ),
       );
+      expectRefusal(
+        () => mono.processStereo(nonFinite, new Float32Array(64)),
+        RangeError,
+        exactly(
+          'StreamingMasteringChain.processStereo: left and right must match the prepared channel count',
+        ),
+      );
+      expectRefusal(
+        () => stereo.processMono(nonFinite),
+        RangeError,
+        exactly(
+          'StreamingMasteringChain.processMono: samples must match the prepared channel count',
+        ),
+      );
       retune.prepare(48000, 128);
       expectRefusal(
         () => retune.processMono(tooLong),
