@@ -124,7 +124,6 @@ TEST_CASE("declaring a wider width on a prepared strip prepares it again",
 
 TEST_CASE("a strip declared stereo holds less than an undeclared one by its planes",
           "[mixing][prepared_width]") {
-  if (!sonare::test::kLiveBytesMeasured) SKIP("live bytes are not measured on this platform");
   strip_held_bytes(2);
   const long long stereo = strip_held_bytes(2);
   const long long undeclared = strip_held_bytes(0);

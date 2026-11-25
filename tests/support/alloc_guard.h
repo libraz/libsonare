@@ -121,14 +121,8 @@ class LiveBlockGuard {
   LiveBlockGuard& operator=(const LiveBlockGuard&) = delete;
 };
 
-// Live-byte peak for memory-bound checks: each operator new block's usable size is added on
-// allocation and subtracted on release while armed, keeping the high-water mark. Windows has no
-// usable-size query for an aligned block of unknown alignment, so it is not measured there.
-#if defined(_WIN32)
-inline constexpr bool kLiveBytesMeasured = false;
-#else
-inline constexpr bool kLiveBytesMeasured = true;
-#endif
+// Live-byte peak for memory-bound checks: each operator new block's requested size is added on
+// allocation and subtracted on release while armed, keeping the high-water mark.
 inline std::atomic<bool> g_track_live_bytes{false};
 inline std::atomic<long long> g_live_bytes{0};
 inline std::atomic<long long> g_peak_live_bytes{0};

@@ -26,7 +26,6 @@
 namespace {
 
 using sonare::Audio;
-using sonare::test::kLiveBytesMeasured;
 using sonare::test::PeakLiveBytesGuard;
 
 constexpr int kSampleRate = 44100;
@@ -159,7 +158,6 @@ PeakLine mono_preset_line(sonare::mastering::api::Preset preset, const float (&l
 
 TEST_CASE("an exciter preset and a repair preset hold a bounded heap per input byte",
           "[mastering][memory]") {
-  if (!kLiveBytesMeasured) SKIP("live heap bytes are not measured on this platform");
   for (const char* name : {"pop", "fieldRecording"}) {
     CAPTURE(name);
     const PeakLine line =
@@ -171,7 +169,6 @@ TEST_CASE("an exciter preset and a repair preset hold a bounded heap per input b
 }
 
 TEST_CASE("mastering presets hold a bounded heap per input byte", "[mastering][memory][.][slow]") {
-  if (!kLiveBytesMeasured) SKIP("live heap bytes are not measured on this platform");
   using namespace sonare::mastering::api;
   PeakLine pop_stereo{};
   std::vector<std::string> lined;
@@ -210,7 +207,6 @@ TEST_CASE("mastering presets hold a bounded heap per input byte", "[mastering][m
 }
 
 TEST_CASE("repair one-shots hold a bounded heap per input byte", "[mastering][repair][memory]") {
-  if (!kLiveBytesMeasured) SKIP("live heap bytes are not measured on this platform");
   namespace repair = sonare::mastering::repair;
   struct Case {
     const char* name;

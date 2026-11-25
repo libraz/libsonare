@@ -3,20 +3,20 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <new>
 #include <string>
 #include <vector>
 #if defined(_WIN32)
-#include <malloc.h>
-#elif defined(__APPLE__)
-#include <malloc/malloc.h>
-#else
 #include <malloc.h>
 #endif
 
@@ -67,73 +67,71 @@ using sonare::test::note_live_allocation;
 using sonare::test::note_live_bytes;
 using sonare::test::note_live_release;
 
-// Bytes the allocator holds for @p ptr; 0 where it cannot say (see kLiveBytesMeasured).
-[[maybe_unused]] long long block_bytes(void* ptr) noexcept {
-#if defined(_WIN32)
-  (void)ptr;
-  return 0;
-#elif defined(__APPLE__)
-  return static_cast<long long>(malloc_size(ptr));
-#else
-  return static_cast<long long>(malloc_usable_size(ptr));
-#endif
+// Every block carries its requested size just in front of it, so a release subtracts what was
+// requested; the allocator's own block can be larger (macOS reuses a cached larger large region).
+inline constexpr std::size_t kSizeHeader = alignof(std::max_align_t);
+
+[[maybe_unused]] std::size_t header_bytes(std::size_t alignment) noexcept {
+  return std::max(alignment, kSizeHeader);
+}
+
+[[maybe_unused]] void* stamp_size(void* base, std::size_t header, std::size_t size) noexcept {
+  auto* user = static_cast<unsigned char*>(base) + header;
+  std::memcpy(user - sizeof(size), &size, sizeof(size));
+  note_live_allocation();
+  note_live_bytes(static_cast<long long>(size));
+  return user;
+}
+
+// Notes the release of @p ptr and returns the block the allocator handed out.
+[[maybe_unused]] void* unstamp_size(void* ptr, std::size_t header) noexcept {
+  note_live_release(ptr);
+  auto* user = static_cast<unsigned char*>(ptr);
+  std::size_t size = 0;
+  std::memcpy(&size, user - sizeof(size), sizeof(size));
+  note_live_bytes(-static_cast<long long>(size));
+  return user - header;
 }
 
 [[maybe_unused]] void* allocate_bytes(std::size_t size) {
   note_allocation();
-  if (allocation_should_fail(size)) {
+  if (allocation_should_fail(size) || size > SIZE_MAX - kSizeHeader) {
     throw std::bad_alloc();
   }
-  if (void* ptr = std::malloc(size == 0 ? 1 : size)) {
-    note_live_allocation();
-    note_live_bytes(block_bytes(ptr));
-    return ptr;
-  }
+  if (void* base = std::malloc(kSizeHeader + size)) return stamp_size(base, kSizeHeader, size);
   throw std::bad_alloc();
 }
 
 [[maybe_unused]] void* allocate_aligned_bytes(std::size_t size, std::size_t alignment) {
   note_allocation();
-  if (allocation_should_fail(size)) {
+  const std::size_t header = header_bytes(alignment);
+  if (allocation_should_fail(size) || size > SIZE_MAX - header) {
     throw std::bad_alloc();
   }
-  void* ptr = nullptr;
-  const std::size_t actual_size = size == 0 ? 1 : size;
+  void* base = nullptr;
 #if defined(_WIN32)
-  ptr = _aligned_malloc(actual_size, alignment);
-  if (ptr != nullptr) {
-    note_live_allocation();
-    return ptr;
-  }
+  base = _aligned_malloc(header + size, alignment);
 #else
-  if (posix_memalign(&ptr, alignment, actual_size) != 0) {
-    ptr = nullptr;
-  }
-  if (ptr != nullptr) {
-    note_live_allocation();
-    note_live_bytes(block_bytes(ptr));
-    return ptr;
-  }
+  if (posix_memalign(&base, alignment, header + size) != 0) base = nullptr;
 #endif
+  if (base != nullptr) return stamp_size(base, header, size);
   throw std::bad_alloc();
 }
 
 [[maybe_unused]] void release_bytes(void* ptr) noexcept {
-  note_live_release(ptr);
-  if (ptr != nullptr) note_live_bytes(-block_bytes(ptr));
-  std::free(ptr);
+  if (ptr != nullptr) std::free(unstamp_size(ptr, kSizeHeader));
 }
 
 // Aligned allocations must be released with the matching deallocator: on Windows
 // _aligned_malloc memory requires _aligned_free, whereas posix_memalign memory is
 // freed with std::free.
-[[maybe_unused]] void aligned_free(void* ptr) noexcept {
-  note_live_release(ptr);
-  if (ptr != nullptr) note_live_bytes(-block_bytes(ptr));
+[[maybe_unused]] void aligned_free(void* ptr, std::size_t alignment) noexcept {
+  if (ptr == nullptr) return;
+  void* base = unstamp_size(ptr, header_bytes(alignment));
 #if defined(_WIN32)
-  _aligned_free(ptr);
+  _aligned_free(base);
 #else
-  std::free(ptr);
+  std::free(base);
 #endif
 }
 
