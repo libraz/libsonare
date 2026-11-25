@@ -491,25 +491,26 @@ Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
   const uint32_t input_count = sonare_node::node_list_length(input, "keys");
   keys.reserve(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
-    Napi::Value entry = input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "key segment must be an object").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    std::string at;
+    if (!sonare_node::RequiredElementObject(env, input, i, "keys", &obj, &at)) {
       return env.Undefined();
     }
-    Napi::Object obj = entry.As<Napi::Object>();
     static constexpr std::array<const char*, 4> kAllowed = {"endPpq", "mode", "startPpq",
                                                             "tonicPc"};
     if (!RefuseUnknownAnnotationKeys(env, obj, "keys", i, kAllowed)) {
       return env.Undefined();
     }
     SonareProjectKeySegment seg{};
-    if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq) ||
-        !RequiredDoubleProperty(env, obj, "endPpq", &seg.end_ppq)) {
+    if (!RequiredDoubleValue(env, obj.Get("startPpq"),
+                             sonare_node::node_element_field(at, "startPpq"), &seg.start_ppq) ||
+        !RequiredDoubleValue(env, obj.Get("endPpq"), sonare_node::node_element_field(at, "endPpq"),
+                             &seg.end_ppq)) {
       return env.Undefined();
     }
-    seg.tonic_pc =
-        static_cast<uint32_t>(sonare_node::IntInRangeOrAbsentProperty(obj, "tonicPc", 0, 11, 255));
-    seg.mode = Uint32Property(obj, "mode", seg.mode);
+    seg.tonic_pc = static_cast<uint32_t>(
+        sonare_node::IntInRangeOrAbsentProperty(obj, "tonicPc", 0, 11, 255, at));
+    seg.mode = Uint32Property(obj, "mode", seg.mode, at);
     keys.push_back(seg);
   }
   ThrowIfError(env, sonare_project_annotate_keys(project_, keys.empty() ? nullptr : keys.data(),
@@ -536,7 +537,8 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     Napi::Object obj;
-    if (!RequiredObjectValue(env, entry, "chords[" + std::to_string(i) + "]", &obj)) {
+    const std::string at = "chords[" + std::to_string(i) + "]";
+    if (!RequiredObjectValue(env, entry, at, &obj)) {
       return env.Undefined();
     }
     static constexpr std::array<const char*, 8> kAllowed = {
@@ -546,17 +548,19 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     SonareProjectChordSymbol chord{};
-    if (!RequiredDoubleProperty(env, obj, "startPpq", &chord.start_ppq) ||
-        !RequiredDoubleProperty(env, obj, "endPpq", &chord.end_ppq)) {
+    if (!RequiredDoubleValue(env, obj.Get("startPpq"),
+                             sonare_node::node_element_field(at, "startPpq"), &chord.start_ppq) ||
+        !RequiredDoubleValue(env, obj.Get("endPpq"), sonare_node::node_element_field(at, "endPpq"),
+                             &chord.end_ppq)) {
       return env.Undefined();
     }
-    chord.root_pc =
-        static_cast<uint32_t>(sonare_node::IntInRangeOrAbsentProperty(obj, "rootPc", 0, 11, 255));
-    chord.quality = Uint32Property(obj, "quality", chord.quality);
+    chord.root_pc = static_cast<uint32_t>(
+        sonare_node::IntInRangeOrAbsentProperty(obj, "rootPc", 0, 11, 255, at));
+    chord.quality = Uint32Property(obj, "quality", chord.quality, at);
     Napi::Value ext = obj.Get("extensions");
     if (!ext.IsUndefined() && !ext.IsNull()) {
       Napi::Array arr;
-      const std::string subject = "chords[" + std::to_string(i) + "].extensions";
+      const std::string subject = at + ".extensions";
       if (!RequiredArrayValue(env, ext, subject, &arr)) return env.Undefined();
       const uint32_t arr_count = sonare_node::node_list_length(arr, subject);
       extensions[i].reserve(arr_count);
@@ -572,17 +576,16 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
     chord.extensions = extensions[i].empty() ? nullptr : extensions[i].data();
     chord.extension_count = extensions[i].size();
     chord.slash_bass_pc = static_cast<uint32_t>(
-        sonare_node::IntInRangeOrAbsentProperty(obj, "slashBassPc", 0, 11, 255));
+        sonare_node::IntInRangeOrAbsentProperty(obj, "slashBassPc", 0, 11, 255, at));
     Napi::Value rn = obj.Get("romanNumeral");
     if (!rn.IsUndefined() && !rn.IsNull()) {
-      if (!RequiredStringValue(env, rn, "chords[" + std::to_string(i) + "].romanNumeral",
-                               &roman[i])) {
+      if (!RequiredStringValue(env, rn, at + ".romanNumeral", &roman[i])) {
         return env.Undefined();
       }
       chord.roman_numeral = roman[i].c_str();
     }
     chord.modulation_boundary =
-        BoolProperty(obj, "modulationBoundary", chord.modulation_boundary != 0) ? 1 : 0;
+        BoolProperty(obj, "modulationBoundary", chord.modulation_boundary != 0, at) ? 1 : 0;
     if (env.IsExceptionPending()) return env.Undefined();
     chords.push_back(chord);
   }

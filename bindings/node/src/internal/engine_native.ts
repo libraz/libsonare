@@ -25,7 +25,7 @@ import { refuse, refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
 import { optionalCount, optionalId } from './optional_ints.js';
 import { tokenName, tokenOrdinal } from './project_tokens.js';
-import { isAbsent } from './value_guards.js';
+import { isAbsent, isPlainRecord } from './value_guards.js';
 
 /** What omitting an output bus id does, for its `0` refusal. */
 export const MASTER_MIX_HINT = 'to route to the master mix';
@@ -117,6 +117,9 @@ export function laneToNative(
   index: number,
 ): unknown {
   const label = `lanes[${index}]`;
+  if (!isPlainRecord(lane as unknown)) {
+    throw refuseType(`${label} must be an object`);
+  }
   const record = requestObject(requestName, lane, 'lane', true);
   const native: Record<string, unknown> = { ...record };
   const outputBusId = outputBusField(record.outputBusId, label);
@@ -138,6 +141,9 @@ export function laneToNative(
 
 export function busToNative(requestName: 'setTrackBuses', bus: EngineBus, index: number): unknown {
   const label = `buses[${index}]`;
+  if (!isPlainRecord(bus as unknown)) {
+    throw refuseType(`${label} must be an object`);
+  }
   const record = requestObject(requestName, bus, 'bus', true);
   const native: Record<string, unknown> = { ...record };
   if (outputBusField(record.outputBusId, label) === undefined) {

@@ -500,11 +500,13 @@ inline uint32_t WordProperty(const Napi::Object& obj, const char* key, uint32_t 
 
 /// @brief Read a uint32 property: undefined/null returns the fallback, any other
 ///        non-number is refused by name.
-inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_t fallback) {
+inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_t fallback,
+                               const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "an integer");
-  return node_narrow_uint32(obj.Env(), value, key);
+  const std::string name = node_element_field(at, key);
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "an integer");
+  return node_narrow_uint32(obj.Env(), value, name.c_str());
 }
 
 /// @brief Read a uint32 property whose 0 is the library default

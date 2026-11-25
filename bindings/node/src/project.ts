@@ -2152,10 +2152,18 @@ export class Project {
       requireListBudget(keys, 'keys');
     }
     this.native.annotateKeys(
-      keys.map((key) => ({
-        ...key,
-        ...(key.mode === undefined ? {} : { mode: tokenOrdinal(key.mode, KEY_MODE, 'mode') }),
-      })),
+      keys.map((key: unknown, index) => {
+        if (key === null || (typeof key !== 'object' && typeof key !== 'function')) {
+          throw refuseType(`keys[${index}] must be an object`);
+        }
+        const row = key as Record<string, unknown>;
+        return {
+          ...row,
+          ...(row.mode === undefined
+            ? {}
+            : { mode: tokenOrdinal(row.mode, KEY_MODE, `keys[${index}].mode`) }),
+        };
+      }),
     );
   }
 
@@ -2191,7 +2199,7 @@ export class Project {
           ...chord,
           ...(chord.quality === undefined
             ? {}
-            : { quality: tokenOrdinal(chord.quality, CHORD_QUALITY, 'quality') }),
+            : { quality: tokenOrdinal(chord.quality, CHORD_QUALITY, `chords[${index}].quality`) }),
         };
       }),
     );

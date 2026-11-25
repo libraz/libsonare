@@ -58,14 +58,15 @@ const char* CaptureSourceName(int source) {
 // Reads a JS array of sends into SonareEngineTrackSend, the one shape lanes,
 // buses and the positional per-lane op share. Returns false with a pending JS
 // exception on a malformed entry.
-bool ReadSends(Napi::Env env, const Napi::Array& sends,
+bool ReadSends(Napi::Env env, const Napi::Array& sends, const std::string& subject,
                std::vector<SonareEngineTrackSend>* out_sends) {
-  const uint32_t send_count = sonare_node::node_list_length(sends, "sends");
+  const uint32_t send_count = sonare_node::node_list_length(sends, subject);
   out_sends->reserve(send_count);
   for (uint32_t send_index = 0; send_index < send_count; ++send_index) {
     Napi::Object send_obj;
     std::string at;
-    if (!sonare_node::RequiredElementObject(env, sends, send_index, "sends", &send_obj, &at)) {
+    if (!sonare_node::RequiredElementObject(env, sends, send_index, subject.c_str(), &send_obj,
+                                            &at)) {
       return false;
     }
     SonareEngineTrackSend send{};
@@ -73,32 +74,31 @@ bool ReadSends(Napi::Env env, const Napi::Array& sends,
                                           &send.bus_id)) {
       return false;
     }
-    send.level_db = FloatProperty(send_obj, "levelDb", send.level_db);
-    send.enabled = BoolProperty(send_obj, "enabled", true) ? 1 : 0;
+    send.level_db = FloatProperty(send_obj, "levelDb", send.level_db, at);
+    send.enabled = BoolProperty(send_obj, "enabled", true, at) ? 1 : 0;
     // Default to post-fader when sendTiming is absent to preserve the
     // historical behavior before the field existed (post-fader is the zero
     // value of SonareSendTiming).
-    send.send_timing = IntProperty(send_obj, "sendTiming", send.send_timing);
+    send.send_timing = IntProperty(send_obj, "sendTiming", send.send_timing, at);
     if (env.IsExceptionPending()) return false;
     out_sends->push_back(send);
   }
   return true;
 }
 
-// Reads an optional `sends` array off a track lane or bus object. Absent/null
-// `sends` leaves *out_sends empty and returns true. Returns false with a
-// pending JS exception on a malformed entry.
-bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
+// Reads a lane's or bus's optional `sends` value named @p subject. Absent/null
+// leaves *out_sends empty and returns true. Returns false with a pending JS
+// exception on a malformed entry.
+bool ReadOptionalSends(Napi::Env env, const Napi::Value& sends_value, const std::string& subject,
                        std::vector<SonareEngineTrackSend>* out_sends) {
-  const Napi::Value sends_value = obj.Get("sends");
   if (sends_value.IsUndefined() || sends_value.IsNull()) {
     return true;
   }
   if (!sends_value.IsArray()) {
-    Napi::TypeError::New(env, "sends must be an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, subject + " must be an array").ThrowAsJavaScriptException();
     return false;
   }
-  return ReadSends(env, sends_value.As<Napi::Array>(), out_sends);
+  return ReadSends(env, sends_value.As<Napi::Array>(), subject, out_sends);
 }
 
 // Backing storage a SonareEngineClip read from JS points into.
@@ -321,7 +321,10 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
       }
       lane.source_channel_layout = static_cast<uint8_t>(source_channel_layout_raw);
       std::vector<SonareEngineTrackSend> lane_sends;
-      if (!ReadOptionalSends(env, obj, &lane_sends)) return env.Undefined();
+      if (!ReadOptionalSends(env, obj.Get("sends"), "lanes[" + std::to_string(i) + "].sends",
+                             &lane_sends)) {
+        return env.Undefined();
+      }
       if (!lane_sends.empty()) {
         send_storage.push_back(std::move(lane_sends));
         lane.sends = send_storage.back().data();
@@ -351,7 +354,7 @@ Napi::Value RealtimeEngineWrap::SetTrackSends(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::vector<SonareEngineTrackSend> sends;
-  if (!ReadSends(env, info[1].As<Napi::Array>(), &sends)) return env.Undefined();
+  if (!ReadSends(env, info[1].As<Napi::Array>(), "sends", &sends)) return env.Undefined();
   const SonareError err = sonare_engine_set_track_sends(
       engine_, track_id, sonare_node::ElementData(sends), sends.size());
   if (err != SONARE_OK) {
@@ -494,7 +497,8 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     bus.output_bus_id = Uint32Property(obj, "outputBusId", bus.output_bus_id);
     if (env.IsExceptionPending()) return env.Undefined();
     std::vector<SonareEngineTrackSend> bus_sends;
-    if (!ReadOptionalSends(env, obj, &bus_sends)) return env.Undefined();
+    if (!ReadOptionalSends(env, obj.Get("sends"), at + ".sends", &bus_sends))
+      return env.Undefined();
     if (!bus_sends.empty()) {
       send_storage.push_back(std::move(bus_sends));
       bus.sends = send_storage.back().data();

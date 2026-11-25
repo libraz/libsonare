@@ -451,10 +451,10 @@ it('requires chord endpoints and names invalid nested fields', () => {
   const chord = { startPpq: 0, endPpq: 4, extensions: [7] } as const;
   project.annotateChords([chord] as const);
   expect(() => project.annotateChords([{ endPpq: 4 } as never])).toThrow(
-    new TypeError('Project.annotateChords: startPpq must be a number'),
+    new TypeError('Project.annotateChords: chords[0].startPpq must be a number'),
   );
   expect(() => project.annotateChords([{ startPpq: 0 } as never])).toThrow(
-    new TypeError('Project.annotateChords: endPpq must be a number'),
+    new TypeError('Project.annotateChords: chords[0].endPpq must be a number'),
   );
   expect(() => project.annotateChords([chord, { ...chord, extensions: [7, 256] }])).toThrow(
     new RangeError(
@@ -464,6 +464,74 @@ it('requires chord endpoints and names invalid nested fields', () => {
   expect(() => project.annotateChords([chord, { ...chord, romanNumeral: 'I\0V' }])).toThrow(
     new RangeError('Project.annotateChords: chords[1].romanNumeral must not contain NUL'),
   );
+});
+
+it('names key and chord fields by their path from the argument root', () => {
+  using project = new Project();
+  const key = { startPpq: 0, endPpq: 4 };
+  const cases: ReadonlyArray<readonly [() => void, Error]> = [
+    [
+      () => project.annotateKeys([{ endPpq: 4 } as never]),
+      new TypeError('Project.annotateKeys: keys[0].startPpq must be a number'),
+    ],
+    [
+      () => project.annotateKeys([key, { startPpq: 4 } as never]),
+      new TypeError('Project.annotateKeys: keys[1].endPpq must be a number'),
+    ],
+    [
+      () => project.annotateKeys([42 as never]),
+      new TypeError('Project.annotateKeys: keys[0] must be an object'),
+    ],
+    [
+      () => project.annotateKeys([null as never]),
+      new TypeError('Project.annotateKeys: keys[0] must be an object'),
+    ],
+    [
+      () => project.annotateKeys([{ ...key, tonicPc: 12 }]),
+      new RangeError(
+        'Project.annotateKeys: keys[0].tonicPc must be an integer in [0, 11], or omitted',
+      ),
+    ],
+    [
+      () => project.annotateKeys([{ ...key, tonicPc: 'C' as never }]),
+      new TypeError('Project.annotateKeys: keys[0].tonicPc must be an integer'),
+    ],
+    [
+      () => project.annotateKeys([{ ...key, mode: 'bogus' as never }]),
+      new RangeError(
+        'Project.annotateKeys: keys[0].mode must be one of unknown, major, minor, dorian, phrygian, lydian, mixolydian, locrian',
+      ),
+    ],
+    [
+      () => project.annotateKeys([{ ...key, mode: 3 as never }]),
+      new TypeError(
+        'Project.annotateKeys: keys[0].mode must be one of unknown, major, minor, dorian, phrygian, lydian, mixolydian, locrian',
+      ),
+    ],
+    [
+      () => project.annotateChords([{ startPpq: 0, endPpq: 'x' as never }]),
+      new TypeError('Project.annotateChords: chords[0].endPpq must be a number'),
+    ],
+    [
+      () => project.annotateChords([{ startPpq: 0, endPpq: 4, rootPc: 12 }]),
+      new RangeError(
+        'Project.annotateChords: chords[0].rootPc must be an integer in [0, 11], or omitted',
+      ),
+    ],
+    [
+      () => project.annotateChords([{ startPpq: 0, endPpq: 4, slashBassPc: -1 }]),
+      new RangeError(
+        'Project.annotateChords: chords[0].slashBassPc must be an integer in [0, 11], or omitted',
+      ),
+    ],
+    [
+      () => project.annotateChords([{ startPpq: 0, endPpq: 4, modulationBoundary: 1 as never }]),
+      new TypeError('Project.annotateChords: chords[0].modulationBoundary must be a boolean'),
+    ],
+  ];
+  for (const [call, error] of cases) {
+    expect(call).toThrow(error);
+  }
 });
 
 it('writes overlapping section annotations as one undoable edit', () => {
