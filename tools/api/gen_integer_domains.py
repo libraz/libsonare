@@ -433,10 +433,19 @@ def _row(entry: str, keyword: str, values: list[str]) -> str:
     return f"    {key}: (\n{inner}    ),\n"
 
 
+def _literal(value: object) -> str:
+    """A Python literal spelled the way the formatter leaves it: double quotes, no exponent sign."""
+    if isinstance(value, float):
+        return repr(value).replace("e+", "e")
+    if isinstance(value, str) and '"' not in value:
+        return '"' + repr(value)[1:-1].replace("\\'", "'") + '"'
+    return repr(value)
+
+
 def _string_row(entry: str, keyword: str, value: str) -> str:
     """One string-valued mapping line without tuple syntax for a long value."""
     key = f'("{entry}", "{keyword}")'
-    literal = repr(value)
+    literal = _literal(value)
     line = f"    {key}: {literal},\n"
     if len(line) <= 101:
         return line
@@ -456,7 +465,13 @@ def render(
         _row(
             entry,
             keyword,
-            [repr(lo), repr(hi), repr(lo_included), repr(hi_included), repr(sentinel)],
+            [
+                _literal(lo),
+                _literal(hi),
+                _literal(lo_included),
+                _literal(hi_included),
+                _literal(sentinel),
+            ],
         )
         for (entry, keyword), (lo, hi, lo_included, hi_included, sentinel) in real_table.items()
     )
