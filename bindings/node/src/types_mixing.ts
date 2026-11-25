@@ -503,14 +503,14 @@ export interface MixAssistantTrackProfile {
   truePeakDbtp?: number;
   /** Crest factor (peak over RMS) in dB. Absent for silence or a track that could not be measured. */
   crestFactorDb?: number;
-  /** Spectral centroid in Hz. */
-  spectralCentroidHz: number;
-  /** Spectral flatness; near 0 is tonal, near 1 is noise-like. */
-  spectralFlatness: number;
+  /** Spectral centroid in Hz. Absent on silence. */
+  spectralCentroidHz?: number;
+  /** Spectral flatness; near 0 is tonal, near 1 is noise-like. Absent on silence. */
+  spectralFlatness?: number;
   /** Onsets per second. */
   attackPerSecond: number;
-  /** Sustain ratio of the track's envelope. */
-  sustainRatio: number;
+  /** Sustain ratio of the track's envelope. Absent when the track has no level to be relative to. */
+  sustainRatio?: number;
   /** Share of the track's energy in each analysis band. */
   bandOccupancy: MixBandOccupancy;
 }

@@ -6965,10 +6965,10 @@ test = "tests/api/c_header_order_editing_test.cpp::pitch-correction config requi
 [[entry]]
 kind = "type"
 old = "SonareReverbDetection"
-changed = "Appends has_late_predictability. Recompile layout mirrors and read late_predictability only when the flag is set."
+changed = "Appends has_late_predictability and has_late_decay_ratio_db. Recompile layout mirrors and read late_predictability and late_decay_ratio_db only when their flag is set; the decay is unmeasured on silence or an input shorter than the late lag."
 domain = "effects"
 rule = "individual"
-test = "tests/api/sonare_c_mastering_repair_test.cpp::sonare_mastering_repair_dereverb_classical_stereo"
+test = "tests/api/sonare_c_mastering_repair_detect_test.cpp::sonare_mastering_repair_detect_reverb"
 
 [[entry]]
 kind = "type"

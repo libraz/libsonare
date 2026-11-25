@@ -12,7 +12,9 @@ import type {
   ExtractNotesRequest,
   LufsResult,
   MasteringAssistantProfile,
+  MasteringAudioProfileDynamics,
   MasteringAudioProfileLoudness,
+  MasteringAudioProfileSpectral,
   MasteringInsertParamChoice,
   MasteringInsertParamInfo,
   MasteringInsertParamUnit,
@@ -293,8 +295,38 @@ describe('result records type an unmeasured value as an absent field', () => {
     expectTypeOf<ProjectSource['kind']>().toEqualTypeOf<ProjectSourceKind>();
   });
 
-  it('ReverbDetection migration: the unrun WPE metric can be omitted', () => {
-    expectTypeOf<{}>().toMatchTypeOf<Pick<ReverbDetection, 'latePredictability'>>();
+  it('a spectral shape or level spread an input without energy does not have is absent', () => {
+    expectTypeOf<MasteringAudioProfileSpectral['centroidHz']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileSpectral['flatness']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileSpectral['rolloffHz']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileDynamics['shortTermLufsStd']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAudioProfileDynamics['sustainRatio']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAudioProfileDynamics['attackPerSecond']>().toEqualTypeOf<number>();
+    expectTypeOf<MasteringAssistantProfile['spectralCentroidHz']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAssistantProfile['spectralFlatness']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAssistantProfile['sustainRatio']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixAssistantTrackProfile['spectralCentroidHz']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MixAssistantTrackProfile['spectralFlatness']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MixAssistantTrackProfile['sustainRatio']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('ReverbDetection migration: the unrun WPE metric and an unmeasured decay can be omitted', () => {
+    expectTypeOf<{}>().toMatchTypeOf<
+      Pick<ReverbDetection, 'lateDecayRatioDb' | 'latePredictability'>
+    >();
+    expectTypeOf<ReverbDetection['lateDecayRatioDb']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<ReverbDetection['latePredictability']>().toEqualTypeOf<number | undefined>();
   });
 

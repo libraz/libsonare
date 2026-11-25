@@ -501,7 +501,7 @@ describe('repair detection (WASM)', () => {
       expect(on.latePredictability).toBeGreaterThan(0);
       // The decay statistic is the same measurement either way: WPE's
       // prediction is never subtracted here.
-      expect(on.lateDecayRatioDb).toBeCloseTo(off.lateDecayRatioDb, 5);
+      expect(on.lateDecayRatioDb).toBeCloseTo(present(off.lateDecayRatioDb), 5);
     });
 
     it('rejects a non-power-of-two nFft and a hopLength past nFft by name', () => {

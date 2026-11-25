@@ -468,13 +468,14 @@ class ReverbDetection:
     ``late_decay_ratio_db`` less negative means the material sustains across
     the module's own late lag, which a late tail does and a dry offset does
     not, so a reverberant input reads HIGHER here than the same material
-    dry. ``late_predictability`` is None whenever ``wpe_enabled`` is clear --
+    dry. It is None when nothing was measured: silence, or an input shorter
+    than the late lag. ``late_predictability`` is None whenever ``wpe_enabled`` is clear --
     the default -- because the WPE stage that measures it did not run.
     """
 
-    late_decay_ratio_db: float
+    late_decay_ratio_db: float | None
     """Decay in dB across the module's own late lag; higher (less negative) means more sustained
-    reverberation."""
+    reverberation. None on silence or an input shorter than the late lag."""
     late_predictability: float | None
     """Mean WPE predictor norm before the clamp; None when ``wpe_enabled`` is clear."""
 

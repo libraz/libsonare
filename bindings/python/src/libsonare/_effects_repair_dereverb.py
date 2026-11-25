@@ -105,7 +105,9 @@ def mastering_repair_dereverb_classical(
 
 def _extract_reverb_detection(raw: Any) -> ReverbDetection:
     return ReverbDetection(
-        late_decay_ratio_db=float(raw.late_decay_ratio_db),
+        late_decay_ratio_db=(
+            float(raw.late_decay_ratio_db) if raw.has_late_decay_ratio_db else None
+        ),
         late_predictability=(
             float(raw.late_predictability) if raw.has_late_predictability else None
         ),

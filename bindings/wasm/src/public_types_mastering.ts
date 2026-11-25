@@ -13242,22 +13242,22 @@ export interface MasteringAudioProfileSpectral {
   highRmsDb?: number;
   /** Air band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin (e.g. at a 22.05 kHz sample rate). */
   airRmsDb?: number;
-  /** Spectral centroid in Hz. */
-  centroidHz: number;
-  /** Spectral flatness of the input. */
-  flatness: number;
-  /** Spectral rolloff frequency in Hz. */
-  rolloffHz: number;
+  /** Spectral centroid in Hz. Absent on silence. */
+  centroidHz?: number;
+  /** Spectral flatness of the input. Absent on silence. */
+  flatness?: number;
+  /** Spectral rolloff frequency in Hz. Absent on silence. */
+  rolloffHz?: number;
 }
 
 /** Dynamics group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileDynamics {
-  /** Standard deviation of the short-term loudness, in LU. */
-  shortTermLufsStd: number;
+  /** Standard deviation of the short-term loudness, in LU. Absent with fewer than two finite short-term blocks (silence, or under about 3 s). */
+  shortTermLufsStd?: number;
   /** Onsets per second of the input. */
   attackPerSecond: number;
-  /** Sustain ratio of the input. */
-  sustainRatio: number;
+  /** Sustain ratio of the input. Absent when the signal has no level to be relative to. */
+  sustainRatio?: number;
 }
 
 /** What the repair detectors measured, one record per detector. */
@@ -13319,14 +13319,14 @@ export interface MasteringAssistantProfile {
   truePeakDbtp?: number;
   /** Crest factor (peak over RMS level) in dB. Absent for silence, where no RMS level is measured. */
   crestFactorDb?: number;
-  /** Spectral centroid in Hz. */
-  spectralCentroidHz: number;
-  /** Spectral flatness of the input. */
-  spectralFlatness: number;
+  /** Spectral centroid in Hz. Absent on silence. */
+  spectralCentroidHz?: number;
+  /** Spectral flatness of the input. Absent on silence. */
+  spectralFlatness?: number;
   /** Onsets per second of the input. */
   attackPerSecond: number;
-  /** Sustain ratio of the input. */
-  sustainRatio: number;
+  /** Sustain ratio of the input. Absent when the signal has no level to be relative to. */
+  sustainRatio?: number;
 }
 
 /** What {@link masteringAssistantSuggest} and its stereo form return. */

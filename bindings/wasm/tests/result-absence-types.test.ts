@@ -18,7 +18,9 @@ import type {
   LufsResult,
   MasteringAssistantProfile,
   MasteringAudioProfileDefects,
+  MasteringAudioProfileDynamics,
   MasteringAudioProfileLoudness,
+  MasteringAudioProfileSpectral,
   MasteringInsertParamChoice,
   MasteringInsertParamDependency,
   MasteringInsertParamInfo,
@@ -348,9 +350,37 @@ describe('public result shapes', () => {
     expectTypeOf<NoiseDetection['floorDbfs']>().toEqualTypeOf<number | undefined>();
   });
 
-  it('leaves reverb predictability absent when the predictor does not run', () => {
-    const absent: Pick<ReverbDetection, 'latePredictability'> = {};
+  it('a spectral shape or level spread an input without energy does not have is absent', () => {
+    expectTypeOf<MasteringAudioProfileSpectral['centroidHz']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileSpectral['flatness']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileSpectral['rolloffHz']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileDynamics['shortTermLufsStd']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAudioProfileDynamics['sustainRatio']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAudioProfileDynamics['attackPerSecond']>().toEqualTypeOf<number>();
+    expectTypeOf<MasteringAssistantProfile['spectralCentroidHz']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAssistantProfile['spectralFlatness']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAssistantProfile['sustainRatio']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixAssistantTrackProfile['spectralCentroidHz']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MixAssistantTrackProfile['spectralFlatness']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MixAssistantTrackProfile['sustainRatio']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('leaves reverb predictability and an unmeasured decay absent', () => {
+    const absent: Pick<ReverbDetection, 'lateDecayRatioDb' | 'latePredictability'> = {};
     void absent;
+    expectTypeOf<ReverbDetection['lateDecayRatioDb']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<ReverbDetection['latePredictability']>().toEqualTypeOf<number | undefined>();
   });
 

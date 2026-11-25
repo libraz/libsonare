@@ -552,7 +552,7 @@ export interface WasmDenoiseLinkedResult {
 
 /** What a dereverb analysis found, as `masteringRepairDereverbClassicalStereo` returns it. */
 export interface WasmReverbDetection {
-  lateDecayRatioDb: number;
+  lateDecayRatioDb?: number;
   latePredictability: number;
 }
 

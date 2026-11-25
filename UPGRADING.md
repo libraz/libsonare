@@ -755,7 +755,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareDeclipReport.linked_runs` | 0 unless config.link_channels is set on a multichannel entry point |
 | `SonareNoteEdit.envelope_count` | `SonareNoteEdit.amplitude_envelope_count` |
 | `SonareNoteEdit.envelope_offset` | `SonareNoteEdit.amplitude_envelope_offset` |
-| `SonareReverbDetection` | Appends has_late_predictability. Recompile layout mirrors and read late_predictability only when the flag is set. |
+| `SonareReverbDetection` | Appends has_late_predictability and has_late_decay_ratio_db. Recompile layout mirrors and read late_predictability and late_decay_ratio_db only when their flag is set; the decay is unmeasured on silence or an input shorter than the late lag. |
 | `SonareRirSynthConfig.absorption_band_count` | `SonareRirSynthConfig.band_absorption_count` |
 | `SonareRirSynthConfig.absorption_bands` | `SonareRirSynthConfig.band_absorption` |
 | `SonareRirSynthConfig.late_model` | `SonareRirSynthConfig.prefer_eyring` |
@@ -2761,6 +2761,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `NoiseDetection.band_floor_dbfs` | holds only the bands an analysis bin lands in, so it can be shorter than 32; the new band_floor_band names each entry's band, and an empty band is no longer a sentinel entry |
 | `NoiseDetection.floor_dbfs` | float -> float \| None: -inf for digital silence, None when there is nothing to measure from |
 | `PercussiveEvent.percussive_ratio` | float \| None: None for an event over a silent span, instead of 0; such an event is kept only when min_percussive_ratio is not given |
+| `ReverbDetection.late_decay_ratio_db` | The value is float \| None: None on silence or an input shorter than the late lag instead of 0 dB. Check for None before using it in arithmetic. |
 | `normalize_stereo` | a silent pair is refused with SonareValueError ('has no measurable level') instead of coming back untouched |
 
 #### Every call scans its input for non-finite values
@@ -3261,7 +3262,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringAssistantProfile.spectralCentroidHz` | `MasteringAssistantProfile.spectral_centroid_hz` |
 | `MasteringAssistantProfile.spectralFlatness` | `MasteringAssistantProfile.spectral_flatness` |
 | `MasteringAssistantProfile.sustainRatio` | `MasteringAssistantProfile.sustain_ratio` |
-| `MasteringAssistantProfile` | a frozen dataclass with snake_case attributes instead of a TypedDict |
+| `MasteringAssistantProfile` | a frozen dataclass with snake_case attributes instead of a TypedDict; spectral_centroid_hz, spectral_flatness and sustain_ratio are float \| None, None on silence |
 | `MasteringAssistantResult.chainConfig` | `MasteringAssistantResult.chain_config`: the version 2 document's params (a MasteringChainConfig) instead of the version/params document |
 | `MasteringAssistantResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; chain_config is the MasteringChainConfig mastering_assistant_suggest_chain returns |
 | `MasteringAudioProfile.bpmConfidence` | `MasteringAudioProfile.bpm_confidence` |
@@ -3269,7 +3270,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringAudioProfileDefects` | removed: read MasteringAudioProfile.defects, an AudioDefects with one record per detector (click, clip, crackle, noise, hum, reverb), or None when the detectors did not run; the flat clip*/hum*/noise* fields and the measured flag go |
 | `MasteringAudioProfileDynamics.shortTermLufsStd` | `MasteringAudioProfileDynamics.short_term_lufs_std` |
 | `MasteringAudioProfileDynamics.sustainRatio` | `MasteringAudioProfileDynamics.sustain_ratio` |
-| `MasteringAudioProfileDynamics` | a frozen dataclass with snake_case attributes instead of a TypedDict |
+| `MasteringAudioProfileDynamics` | a frozen dataclass with snake_case attributes instead of a TypedDict; short_term_lufs_std is float \| None, None with fewer than two finite short-term blocks, and sustain_ratio is None on silence |
 | `MasteringAudioProfileLoudness` | a frozen dataclass with snake_case attributes instead of a TypedDict |
 | `MasteringAudioProfileSpectral.airRmsDb` | `MasteringAudioProfileSpectral.air_rms_db` |
 | `MasteringAudioProfileSpectral.centroidHz` | `MasteringAudioProfileSpectral.centroid_hz` |
@@ -3280,7 +3281,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringAudioProfileSpectral.midRmsDb` | `MasteringAudioProfileSpectral.mid_rms_db` |
 | `MasteringAudioProfileSpectral.rolloffHz` | `MasteringAudioProfileSpectral.rolloff_hz` |
 | `MasteringAudioProfileSpectral.subRmsDb` | `MasteringAudioProfileSpectral.sub_rms_db` |
-| `MasteringAudioProfileSpectral` | a frozen dataclass with snake_case attributes instead of a TypedDict |
+| `MasteringAudioProfileSpectral` | a frozen dataclass with snake_case attributes instead of a TypedDict; centroid_hz, flatness and rolloff_hz are float \| None, None on silence |
 | `MasteringAudioProfile` | a frozen dataclass with snake_case attributes instead of a TypedDict; loudness, spectral and dynamics are records, defects is an AudioDefects or None, and an integrated loudness that was not measured is None |
 | `MasteringChainConfigDocument` | removed: MasteringAssistantResult.chain_config is the document's params as a MasteringChainConfig |
 | `MasteringStreamingPreviewPlatform.ceilingRisk` | `MasteringStreamingPreviewPlatform.ceiling_risk` |
@@ -6053,7 +6054,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
 | `MasteringRepairAnalysis` | Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records. |
 | `NoiseDetection` | Handle undefined in floorDbfs. |
-| `ReverbDetection` | Handle undefined in latePredictability. |
+| `ReverbDetection` | Handle undefined in latePredictability, and in lateDecayRatioDb, which is absent on silence or an input shorter than the late lag instead of reading 0 dB. |
 | `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent together with rt60Bands only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when the absorption solve fails |
 | `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
@@ -6559,6 +6560,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DynamicRangeReport.lowPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
 | `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringAssistantProfile.spectralCentroidHz` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MasteringAssistantProfile.spectralFlatness` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MasteringAssistantProfile.sustainRatio` | number -> number \| undefined: absent on silence instead of a value read from no energy |
 | `MasteringLoudnessSummary` | Handle undefined in maxMomentaryLufs, maxShortTermLufs. |
 | `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
 | `MasteringStreamingPreviewPlatform` | Handle undefined in normalizationGainDb. |
@@ -6569,6 +6573,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MatchTonalBalanceBand.sourceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
 | `MixAssistantTrackProfile.crestFactorDb` | optional: absent for silence or a track that could not be measured |
 | `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
+| `MixAssistantTrackProfile.spectralCentroidHz` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MixAssistantTrackProfile.spectralFlatness` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MixAssistantTrackProfile.sustainRatio` | number -> number \| undefined: absent on silence instead of a value read from no energy |
 | `MixMeterSnapshot` | Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs. |
 | `MixMonoRisk.correlation` | optional: absent when either channel is silent |
 | `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
@@ -10812,7 +10819,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipDetection.flatLevel` | Absent when no flat-top run was measured. v1.10.0 returned 0. Check for absence before reading the level. |
 | `MasteringRepairAnalysis` | Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records. |
 | `NoiseDetection` | Handle undefined in floorDbfs. |
-| `ReverbDetection` | Handle undefined in latePredictability. |
+| `ReverbDetection` | Handle undefined in latePredictability, and in lateDecayRatioDb, which is absent on silence or an input shorter than the late lag instead of reading 0 dB. |
 | `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent together with rt60Bands only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when the absorption solve fails |
 | `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
@@ -11570,6 +11577,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DynamicRangeReport.lowPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
 | `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringAssistantProfile.spectralCentroidHz` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MasteringAssistantProfile.spectralFlatness` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MasteringAssistantProfile.sustainRatio` | number -> number \| undefined: absent on silence instead of a value read from no energy |
 | `MasteringLoudnessSummary` | Handle undefined in maxMomentaryLufs, maxShortTermLufs. |
 | `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
 | `MasteringStreamingPreviewPlatform` | Handle undefined in normalizationGainDb. |
@@ -11580,6 +11590,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MatchTonalBalanceBand.sourceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
 | `MixAssistantTrackProfile.crestFactorDb` | optional: absent for silence or a track that could not be measured |
 | `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
+| `MixAssistantTrackProfile.spectralCentroidHz` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MixAssistantTrackProfile.spectralFlatness` | number -> number \| undefined: absent on silence instead of a value read from no energy |
+| `MixAssistantTrackProfile.sustainRatio` | number -> number \| undefined: absent on silence instead of a value read from no energy |
 | `MixMeterSnapshot` | Handle undefined in correlation, integratedLufs, momentaryLufs, monoCompatWidth, shortTermLufs. |
 | `MixMonoRisk.correlation` | optional: absent when either channel is silent |
 | `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |

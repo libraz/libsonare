@@ -10239,10 +10239,10 @@ test = "bindings/node/tests/result-absence-types.test.ts::NoiseDetection migrati
 [[entry]]
 kind = "type"
 old = "ReverbDetection"
-changed = "Handle undefined in latePredictability."
+changed = "Handle undefined in latePredictability, and in lateDecayRatioDb, which is absent on silence or an input shorter than the late lag instead of reading 0 dB."
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/node/tests/result-absence-types.test.ts::ReverbDetection migration: the unrun WPE metric can be omitted"
+test = "bindings/node/tests/result-absence-types.test.ts::ReverbDetection migration: the unrun WPE metric and an unmeasured decay can be omitted"
 
 [[entry]]
 kind = "field"
@@ -20567,3 +20567,51 @@ changed = "when requested, the decoded local tempo is bounded to 60–200 BPM in
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.spectralCentroidHz"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.spectralFlatness"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.sustainRatio"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.spectralCentroidHz"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.spectralFlatness"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.sustainRatio"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"

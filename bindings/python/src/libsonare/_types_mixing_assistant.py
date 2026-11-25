@@ -64,14 +64,14 @@ class MixAssistantTrackProfile:
     """True peak in dBTP; ``-inf`` for silence, None for an excluded track."""
     crest_factor_db: float | None
     """Crest factor (peak over RMS) in dB; None for a silent or excluded track."""
-    spectral_centroid_hz: float
-    """Spectral centroid in Hz."""
-    spectral_flatness: float
-    """Near 0 is tonal, near 1 is noise-like."""
+    spectral_centroid_hz: float | None
+    """Spectral centroid in Hz; None on silence."""
+    spectral_flatness: float | None
+    """Near 0 is tonal, near 1 is noise-like; None on silence."""
     attack_per_second: float
     """Onsets per second."""
-    sustain_ratio: float
-    """Sustain ratio of the track's envelope."""
+    sustain_ratio: float | None
+    """Sustain ratio of the track's envelope; None when the track has no level to be relative to."""
     band_occupancy: dict[MixAnalysisBand, float]
     """Share of the track's energy in each analysis band."""
 

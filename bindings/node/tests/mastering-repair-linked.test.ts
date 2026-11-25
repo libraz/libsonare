@@ -264,7 +264,7 @@ describe('masteringRepairDereverbClassicalLinked', () => {
     // can land a ULP off on material where the accumulation order matters. Five
     // decimal places is six orders below the 4.77 dB a count-following quantity
     // moves by, so this still fails anything that actually tracks the set size.
-    expect(three.detected.lateDecayRatioDb).toBeCloseTo(one.detected.lateDecayRatioDb, 5);
+    expect(three.detected.lateDecayRatioDb).toBeCloseTo(present(one.detected.lateDecayRatioDb), 5);
   });
 
   it('keeps the WPE stage set-wide, within what accumulating over three channels costs', () => {

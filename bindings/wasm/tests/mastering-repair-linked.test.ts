@@ -303,7 +303,7 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
     // Every field is a ratio or a fraction, so unlike the denoise floor nothing
     // here shifts with the channel count.
     expect(three.reports[0].detected.lateDecayRatioDb).toBeCloseTo(
-      one.reports[0].detected.lateDecayRatioDb,
+      present(one.reports[0].detected.lateDecayRatioDb),
       6,
     );
     expect(three.reports[0].detected.latePredictability).toBeCloseTo(

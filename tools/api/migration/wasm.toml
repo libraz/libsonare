@@ -37353,10 +37353,10 @@ test = "bindings/wasm/tests/result-absence-types.test.ts::keeps optional source 
 [[entry]]
 kind = "type"
 old = "ReverbDetection"
-changed = "Handle undefined in latePredictability."
+changed = "Handle undefined in latePredictability, and in lateDecayRatioDb, which is absent on silence or an input shorter than the late lag instead of reading 0 dB."
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/result-absence-types.test.ts::leaves reverb predictability absent when the predictor does not run"
+test = "bindings/wasm/tests/result-absence-types.test.ts::leaves reverb predictability and an unmeasured decay absent"
 
 [[entry]]
 kind = "type"
@@ -38265,3 +38265,51 @@ changed = "an unknown group id is refused with RangeError naming id instead of I
 domain = "engine"
 rule = "error-class-by-cause"
 test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves argument refusals for VCA group changes"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.spectralCentroidHz"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.spectralFlatness"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.sustainRatio"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.spectralCentroidHz"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.spectralFlatness"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.sustainRatio"
+changed = "number -> number | undefined: absent on silence instead of a value read from no energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/result-absence-types.test.ts::a spectral shape or level spread an input without energy does not have is absent"

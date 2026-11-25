@@ -85,7 +85,9 @@ def _detection(detection_type: type, values: Mapping[str, Any]) -> Any:
         detected["band_floor_dbfs"] = np.asarray(detected["band_floor_dbfs"], dtype=np.float32)
         detected["band_floor_band"] = np.asarray(detected["band_floor_band"], dtype=np.int32)
     if detection_type is ReverbDetection:
-        # The document omits the key when the WPE stage did not run.
+        # The document omits the decay when nothing was measured, and the predictability when
+        # the WPE stage did not run.
+        detected.setdefault("late_decay_ratio_db", None)
         detected.setdefault("late_predictability", None)
     return detection_type(**detected)
 

@@ -260,10 +260,13 @@ def _print_repair_detection_report(report: dict[str, dict[str, object]] | None) 
         )
     else:
         print("    Hum:          search found no candidate peak (could not decide)")
-    print(
-        f"    Late decay:   {cast('float', reverb['late_decay_ratio_db']):.1f} dB "
-        "(not RT60; less negative means more reverberant)"
-    )
+    if "late_decay_ratio_db" in reverb:
+        print(
+            f"    Late decay:   {cast('float', reverb['late_decay_ratio_db']):.1f} dB "
+            "(not RT60; less negative means more reverberant)"
+        )
+    else:
+        print("    Late decay:   not measured (silence, or input shorter than the late lag)")
 
 
 def cmd_repair(args: argparse.Namespace) -> int:

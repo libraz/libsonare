@@ -11,6 +11,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, masteringRepairDereverbClassicalStereo } from '../src/index';
+import { present } from './_helpers';
 
 const SR = 22050;
 // Half a second: 43 hops at the default 256-sample hop, comfortably more than
@@ -135,7 +136,7 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     // nothing. The margin is what makes this an observation of the property
     // rather than of a rounding direction. Measured -3.99 against -22.91.
     expect(wetResult.reports[0].detected.lateDecayRatioDb).toBeGreaterThan(
-      dryResult.reports[0].detected.lateDecayRatioDb + 5,
+      present(dryResult.reports[0].detected.lateDecayRatioDb) + 5,
     );
   });
 

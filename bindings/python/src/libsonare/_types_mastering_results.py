@@ -56,24 +56,25 @@ class MasteringAudioProfileSpectral:
     """High band level in dBFS."""
     air_rms_db: float | None
     """Air band level in dBFS."""
-    centroid_hz: float
-    """Spectral centroid in Hz."""
-    flatness: float
-    """Spectral flatness of the input."""
-    rolloff_hz: float
-    """Spectral rolloff frequency in Hz."""
+    centroid_hz: float | None
+    """Spectral centroid in Hz; None on silence."""
+    flatness: float | None
+    """Spectral flatness of the input; None on silence."""
+    rolloff_hz: float | None
+    """Spectral rolloff frequency in Hz; None on silence."""
 
 
 @dataclass(frozen=True, slots=True)
 class MasteringAudioProfileDynamics:
     """Dynamics group of :class:`MasteringAudioProfile`."""
 
-    short_term_lufs_std: float
-    """Standard deviation of the short-term loudness, in LU."""
+    short_term_lufs_std: float | None
+    """Standard deviation of the short-term loudness, in LU; None with fewer than two finite
+    short-term blocks (silence, or under about 3 s)."""
     attack_per_second: float
     """Onsets per second of the input."""
-    sustain_ratio: float
-    """Sustain ratio of the input."""
+    sustain_ratio: float | None
+    """Sustain ratio of the input; None when the signal has no level to be relative to."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,14 +148,14 @@ class MasteringAssistantProfile:
     """True peak, in dBTP; -inf for digital silence."""
     crest_factor_db: float | None
     """Crest factor (peak over RMS level) in dB; None for a silent take."""
-    spectral_centroid_hz: float
-    """Spectral centroid in Hz."""
-    spectral_flatness: float
-    """Spectral flatness of the input."""
+    spectral_centroid_hz: float | None
+    """Spectral centroid in Hz; None on silence."""
+    spectral_flatness: float | None
+    """Spectral flatness of the input; None on silence."""
     attack_per_second: float
     """Onsets per second of the input."""
-    sustain_ratio: float
-    """Sustain ratio of the input."""
+    sustain_ratio: float | None
+    """Sustain ratio of the input; None when the signal has no level to be relative to."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -1822,9 +1822,9 @@
 . MasteringAssistantProfile.durationSec property required : number
 . MasteringAssistantProfile.integratedLufs property required : number
 . MasteringAssistantProfile.loudnessRangeLu property optional : number | undefined
-. MasteringAssistantProfile.spectralCentroidHz property required : number
-. MasteringAssistantProfile.spectralFlatness property required : number
-. MasteringAssistantProfile.sustainRatio property required : number
+. MasteringAssistantProfile.spectralCentroidHz property optional : number | undefined
+. MasteringAssistantProfile.spectralFlatness property optional : number | undefined
+. MasteringAssistantProfile.sustainRatio property optional : number | undefined
 . MasteringAssistantProfile.truePeakDbtp property optional : number | undefined
 . MasteringAssistantResult interface
 . MasteringAssistantResult.chainConfig property required : MasteringChainConfig
@@ -1876,8 +1876,8 @@
 . MasteringAudioProfileDefects.reverb property required : ReverbDetection
 . MasteringAudioProfileDynamics interface
 . MasteringAudioProfileDynamics.attackPerSecond property required : number
-. MasteringAudioProfileDynamics.shortTermLufsStd property required : number
-. MasteringAudioProfileDynamics.sustainRatio property required : number
+. MasteringAudioProfileDynamics.shortTermLufsStd property optional : number | undefined
+. MasteringAudioProfileDynamics.sustainRatio property optional : number | undefined
 . MasteringAudioProfileLoudness interface
 . MasteringAudioProfileLoudness.crestFactorDb property optional : number | undefined
 . MasteringAudioProfileLoudness.integratedLufs property required : number
@@ -1892,14 +1892,14 @@
 . MasteringAudioProfileRequest.truePeakOversample property optional : number | undefined
 . MasteringAudioProfileSpectral interface
 . MasteringAudioProfileSpectral.airRmsDb property optional : number | undefined
-. MasteringAudioProfileSpectral.centroidHz property required : number
-. MasteringAudioProfileSpectral.flatness property required : number
+. MasteringAudioProfileSpectral.centroidHz property optional : number | undefined
+. MasteringAudioProfileSpectral.flatness property optional : number | undefined
 . MasteringAudioProfileSpectral.highMidRmsDb property optional : number | undefined
 . MasteringAudioProfileSpectral.highRmsDb property optional : number | undefined
 . MasteringAudioProfileSpectral.lowMidRmsDb property optional : number | undefined
 . MasteringAudioProfileSpectral.lowRmsDb property optional : number | undefined
 . MasteringAudioProfileSpectral.midRmsDb property optional : number | undefined
-. MasteringAudioProfileSpectral.rolloffHz property required : number
+. MasteringAudioProfileSpectral.rolloffHz property optional : number | undefined
 . MasteringAudioProfileSpectral.subRmsDb property optional : number | undefined
 . MasteringAudioProfileStereoRequest interface
 . MasteringAudioProfileStereoRequest.detectDefects property optional : boolean | undefined
@@ -8744,10 +8744,10 @@
 . MixAssistantTrackProfile.numChannels property required : number
 . MixAssistantTrackProfile.source property required : MixSourceClass
 . MixAssistantTrackProfile.sourceConfidence property required : number
-. MixAssistantTrackProfile.spectralCentroidHz property required : number
-. MixAssistantTrackProfile.spectralFlatness property required : number
+. MixAssistantTrackProfile.spectralCentroidHz property optional : number | undefined
+. MixAssistantTrackProfile.spectralFlatness property optional : number | undefined
 . MixAssistantTrackProfile.stripId property required : string
-. MixAssistantTrackProfile.sustainRatio property required : number
+. MixAssistantTrackProfile.sustainRatio property optional : number | undefined
 . MixAssistantTrackProfile.truePeakDbtp property optional : number | undefined
 . MixAssistantTrackProfile.usable property required : boolean
 . MixBandDominance interface
@@ -14222,7 +14222,7 @@
 . ResampleRequest.samples property required : Float32Array<ArrayBufferLike>
 . ResampleRequest.targetSampleRate property required : number
 . ReverbDetection interface
-. ReverbDetection.lateDecayRatioDb property required : number
+. ReverbDetection.lateDecayRatioDb property optional : number | undefined
 . ReverbDetection.latePredictability property optional : number | undefined
 . ReverbVariation type : export type ReverbVariation = 'reverb' | 'echo' | 'tempoDelay' | 'dubEcho';
 . RhythmResult interface
@@ -17650,9 +17650,9 @@
 ./analysis MasteringAssistantProfile.durationSec property required : number
 ./analysis MasteringAssistantProfile.integratedLufs property required : number
 ./analysis MasteringAssistantProfile.loudnessRangeLu property optional : number | undefined
-./analysis MasteringAssistantProfile.spectralCentroidHz property required : number
-./analysis MasteringAssistantProfile.spectralFlatness property required : number
-./analysis MasteringAssistantProfile.sustainRatio property required : number
+./analysis MasteringAssistantProfile.spectralCentroidHz property optional : number | undefined
+./analysis MasteringAssistantProfile.spectralFlatness property optional : number | undefined
+./analysis MasteringAssistantProfile.sustainRatio property optional : number | undefined
 ./analysis MasteringAssistantProfile.truePeakDbtp property optional : number | undefined
 ./analysis MasteringAssistantResult interface
 ./analysis MasteringAssistantResult.chainConfig property required : MasteringChainConfig
@@ -17675,8 +17675,8 @@
 ./analysis MasteringAudioProfileDefects.reverb property required : ReverbDetection
 ./analysis MasteringAudioProfileDynamics interface
 ./analysis MasteringAudioProfileDynamics.attackPerSecond property required : number
-./analysis MasteringAudioProfileDynamics.shortTermLufsStd property required : number
-./analysis MasteringAudioProfileDynamics.sustainRatio property required : number
+./analysis MasteringAudioProfileDynamics.shortTermLufsStd property optional : number | undefined
+./analysis MasteringAudioProfileDynamics.sustainRatio property optional : number | undefined
 ./analysis MasteringAudioProfileLoudness interface
 ./analysis MasteringAudioProfileLoudness.crestFactorDb property optional : number | undefined
 ./analysis MasteringAudioProfileLoudness.integratedLufs property required : number
@@ -17684,14 +17684,14 @@
 ./analysis MasteringAudioProfileLoudness.truePeakDbtp property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral interface
 ./analysis MasteringAudioProfileSpectral.airRmsDb property optional : number | undefined
-./analysis MasteringAudioProfileSpectral.centroidHz property required : number
-./analysis MasteringAudioProfileSpectral.flatness property required : number
+./analysis MasteringAudioProfileSpectral.centroidHz property optional : number | undefined
+./analysis MasteringAudioProfileSpectral.flatness property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral.highMidRmsDb property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral.highRmsDb property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral.lowMidRmsDb property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral.lowRmsDb property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral.midRmsDb property optional : number | undefined
-./analysis MasteringAudioProfileSpectral.rolloffHz property required : number
+./analysis MasteringAudioProfileSpectral.rolloffHz property optional : number | undefined
 ./analysis MasteringAudioProfileSpectral.subRmsDb property optional : number | undefined
 ./analysis MasteringChainConfig interface
 ./analysis MasteringChainConfig.dynamics property optional : { compressor?: { enabled?: boolean | undefined; thresholdDb?: number | undefined; ratio?: number | undefined; attackMs?: number | undefined; releaseMs?: number | undefined; kneeDb?: number | undefined; makeupGainDb?: number | undefined; autoMakeup?: boolean | undefined; detector?: CompressorDetector | undefined; sidechainHighPassHz?: number | undefined; pdrTimeMs?: number | undefined; pdrReleaseScale?: number | undefined; } | undefined; deesser?: { enabled?: boolean | undefined; frequencyHz?: number | undefined; thresholdDb?: number | undefined; ratio?: number | undefined; attackMs?: number | undefined; releaseMs?: number | undefined; rangeDb?: number | undefined; bandPassQ?: number | undefined; } | undefined; transientShaper?: { enabled?: boolean | undefined; attackGainDb?: number | undefined; sustainGainDb?: number | undefined; fastAttackMs?: number | undefined; fastReleaseMs?: number | undefined; slowAttackMs?: number | undefined; slowReleaseMs?: number | undefined; sensitivity?: number | undefined; maxGainDb?: number | undefined; gainSmoothingMs?: number | undefined; lookaheadMs?: number | undefined; } | undefined; multibandComp?: { enabled?: boolean | undefined; crossover?: { cutoffsHz?: number[] | undefined; slope?: "lr2" | "lr4" | "lr8" | undefined; mode?: "linkwitzRiley" | "butterworth" | "bessel" | "firLinearPhase" | undefined; firKernelSize?: number | undefined; } | undefined; bands?: MultibandCompressorBand[] | undefined; } | undefined; } | undefined
@@ -23929,10 +23929,10 @@
 ./analysis MixAssistantTrackProfile.numChannels property required : number
 ./analysis MixAssistantTrackProfile.source property required : MixSourceClass
 ./analysis MixAssistantTrackProfile.sourceConfidence property required : number
-./analysis MixAssistantTrackProfile.spectralCentroidHz property required : number
-./analysis MixAssistantTrackProfile.spectralFlatness property required : number
+./analysis MixAssistantTrackProfile.spectralCentroidHz property optional : number | undefined
+./analysis MixAssistantTrackProfile.spectralFlatness property optional : number | undefined
 ./analysis MixAssistantTrackProfile.stripId property required : string
-./analysis MixAssistantTrackProfile.sustainRatio property required : number
+./analysis MixAssistantTrackProfile.sustainRatio property optional : number | undefined
 ./analysis MixAssistantTrackProfile.truePeakDbtp property optional : number | undefined
 ./analysis MixAssistantTrackProfile.usable property required : boolean
 ./analysis MixBandDominance interface
@@ -27899,7 +27899,7 @@
 ./analysis ResampleRequest.samples property required : Float32Array<ArrayBufferLike>
 ./analysis ResampleRequest.targetSampleRate property required : number
 ./analysis ReverbDetection interface
-./analysis ReverbDetection.lateDecayRatioDb property required : number
+./analysis ReverbDetection.lateDecayRatioDb property optional : number | undefined
 ./analysis ReverbDetection.latePredictability property optional : number | undefined
 ./analysis ReverbVariation type : export type ReverbVariation = 'reverb' | 'echo' | 'tempoDelay' | 'dubEcho';
 ./analysis RhythmResult interface

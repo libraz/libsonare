@@ -253,3 +253,16 @@ def test_an_out_of_phase_pair_is_infinitely_wide() -> None:
     assert isinstance(result, libsonare.StereoMonoCompatCheckResult)
     assert result.width == math.inf
     assert result.correlation == pytest.approx(-1.0, abs=1e-3)
+
+
+def test_silence_leaves_the_energy_relative_profile_fields_none() -> None:
+    silence = np.zeros(SR, dtype=np.float32)
+    profile = libsonare.mastering_audio_profile(silence, SR)
+    spectral, dynamics = profile.spectral, profile.dynamics
+    assert (spectral.centroid_hz, spectral.flatness, spectral.rolloff_hz) == (None, None, None)
+    assert (dynamics.short_term_lufs_std, dynamics.sustain_ratio) == (None, None)
+    assistant = libsonare.mastering_assistant_suggest(silence, SR).profile
+    assert (assistant.spectral_centroid_hz, assistant.spectral_flatness) == (None, None)
+    assert assistant.sustain_ratio is None
+    reverb = libsonare.mastering_repair_detect_reverb(silence, SR)
+    assert reverb.late_decay_ratio_db is None

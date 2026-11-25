@@ -145,7 +145,7 @@ describe('masteringRepairDetectNoiseFloor', () => {
     expect(present(loud.floorDbfs) - present(quiet.floorDbfs)).toBeCloseTo(20, 0);
   });
 
-  it('pads a buffer shorter than nFft, as detectReverb pads the same one', () => {
+  it('pads a buffer shorter than nFft, which detectReverb accepts without a decay', () => {
     const short = tone(512, 440);
     const padded = new Float32Array(1024);
     padded.set(short);
@@ -155,8 +155,9 @@ describe('masteringRepairDetectNoiseFloor', () => {
     ).toBe(
       masteringRepairDetectNoiseFloor({ samples: padded, sampleRate: SR, nFft: 1024 }).floorDbfs,
     );
+    // 512 samples are shorter than the late lag, so the decay is not measured.
     const reverb = masteringRepairDetectReverb({ samples: short, sampleRate: SR, nFft: 1024 });
-    expect(Number.isFinite(reverb.lateDecayRatioDb)).toBe(true);
+    expect(reverb).not.toHaveProperty('lateDecayRatioDb');
   });
 });
 
@@ -301,7 +302,7 @@ describe('masteringRepairDetectReverb', () => {
     expect(
       masteringRepairDetectReverb({ samples: wet, sampleRate: SR }).lateDecayRatioDb,
     ).toBeGreaterThan(
-      masteringRepairDetectReverb({ samples: dry, sampleRate: SR }).lateDecayRatioDb,
+      present(masteringRepairDetectReverb({ samples: dry, sampleRate: SR }).lateDecayRatioDb),
     );
   });
 

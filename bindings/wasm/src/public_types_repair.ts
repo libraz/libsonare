@@ -376,8 +376,9 @@ export interface MasteringRepairDenoiseClassicalResult {
 export interface ReverbDetection {
   /** Decay across the module's own late lag, in dB. Less negative means the material sustains
    * across that lag, which a late tail does and a dry offset does not -- so a reverberant
-   * input reads HIGHER here than the same material dry. */
-  lateDecayRatioDb: number;
+   * input reads HIGHER here than the same material dry. Absent when nothing was measured:
+   * silence, or an input shorter than the late lag. */
+  lateDecayRatioDb?: number;
   /** Mean WPE predictor norm, before the clamp. Absent whenever the WPE stage did not run,
    * which is the case unless `wpeEnabled` is set -- and it is clear by default, so a
    * default-config pass omits it. */

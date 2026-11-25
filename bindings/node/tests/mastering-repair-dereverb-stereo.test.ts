@@ -4,6 +4,7 @@ import {
   masteringRepairDenoiseClassicalStereo,
   masteringRepairDereverbClassicalStereo,
 } from '../src/index.js';
+import { present } from './_helpers.js';
 
 const SR = 22050;
 const SECONDS = 0.5;
@@ -155,8 +156,8 @@ describe('masteringRepairDereverbClassicalStereo', () => {
       expect(value).toBeGreaterThan(-200);
       expect(value).toBeLessThan(60);
     }
-    expect(wet.reports[0].detected.lateDecayRatioDb).toBeGreaterThan(
-      dry.reports[0].detected.lateDecayRatioDb + 1,
+    expect(present(wet.reports[0].detected.lateDecayRatioDb)).toBeGreaterThan(
+      present(dry.reports[0].detected.lateDecayRatioDb) + 1,
     );
   });
 

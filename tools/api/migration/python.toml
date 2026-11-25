@@ -8672,7 +8672,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileSpectral"
-changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; centroid_hz, flatness and rolloff_hz are float | None, None on silence"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
@@ -8680,7 +8680,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileDynamics"
-changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; short_term_lufs_std is float | None, None with fewer than two finite short-term blocks, and sustain_ratio is None on silence"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
@@ -8696,7 +8696,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_res
 [[entry]]
 kind = "type"
 old = "MasteringAssistantProfile"
-changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; spectral_centroid_hz, spectral_flatness and sustain_ratio are float | None, None on silence"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -15651,3 +15651,11 @@ changed = "None fits the spacing to the room, up to 0.5 m (1.x used a fixed 0.5 
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_acoustic.py::test_room_morph_stereo_fits_an_omitted_spacing_beside_a_wall"
+
+[[entry]]
+kind = "field"
+old = "ReverbDetection.late_decay_ratio_db"
+changed = "The value is float | None: None on silence or an input shorter than the late lag instead of 0 dB. Check for None before using it in arithmetic."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_mastering_result_types.py::test_silence_leaves_the_energy_relative_profile_fields_none"

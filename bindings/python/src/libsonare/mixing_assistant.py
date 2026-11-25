@@ -336,14 +336,18 @@ def _track_profile_from_wire(wire: dict[str, Any]) -> MixAssistantTrackProfile:
     for key in (
         "source_confidence",
         "duration_sec",
-        "spectral_centroid_hz",
-        "spectral_flatness",
         "attack_per_second",
-        "sustain_ratio",
     ):
         fields[key] = float(fields[key])
-    # Absent for an excluded track (and the crest factor for a silent one): not measured.
-    for key in ("integrated_lufs", "true_peak_dbtp", "crest_factor_db"):
+    # Absent when not measured: an excluded track, or a shape a silent track does not have.
+    for key in (
+        "integrated_lufs",
+        "true_peak_dbtp",
+        "crest_factor_db",
+        "spectral_centroid_hz",
+        "spectral_flatness",
+        "sustain_ratio",
+    ):
         fields[key] = None if fields.get(key) is None else float(fields[key])
     fields["band_occupancy"] = {band: float(share) for band, share in wire["bandOccupancy"].items()}
     return MixAssistantTrackProfile(**fields)
