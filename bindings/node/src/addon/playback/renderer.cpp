@@ -261,8 +261,12 @@ Napi::Value PlaybackRendererWrap::SetConfig(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   const std::string config_json = sonare_node::node_narrow_string(env, info[0], "configJson");
-  sonare_node::ThrowIfError(
-      env, sonare_playback_renderer_set_config_json(renderer_, config_json.c_str()));
+  bool typed_document = false;
+  if (!sonare_node::OptionalBoolArg(env, info, 1, "typedDocument", false, &typed_document)) {
+    return env.Undefined();
+  }
+  const SonareError err = sonare_playback_renderer_set_config_json(renderer_, config_json.c_str());
+  if (err != SONARE_OK) sonare_node::ThrowSonareError(env, err, "", typed_document);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

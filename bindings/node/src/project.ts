@@ -965,6 +965,25 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
   return { ...desc, audio: data, audioChannels: numChannels };
 }
 
+function respellSourceAudioRefusal(error: unknown, numChannels: number): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined || refusal.cEntry !== 'project_set_source_audio' || numChannels === 0) {
+    return error;
+  }
+  const respelled: Record<string, Respelling> = {};
+  for (const subject of refusal.subjects) {
+    const match = /^channels\[(\d+)\]$/.exec(subject);
+    if (match !== null) {
+      const index = Number(match[1]);
+      respelled[subject] = {
+        name: `channels[${index % numChannels}][${Math.floor(index / numChannels)}]`,
+        scale: 1,
+      };
+    }
+  }
+  return Object.keys(respelled).length === 0 ? error : respellRefusal(error, respelled);
+}
+
 let createTimeline: (native: InstanceType<typeof addon.ProjectTimeline>) => ProjectTimeline;
 
 /**
@@ -1348,12 +1367,16 @@ export class Project {
     const record = requestObject(fnName, request, 'request', true);
     assertSampleRate(record.sampleRate);
     const { data, numChannels } = interleavePlanar(record.channels);
-    this.native.setSourceAudio(
-      requireInteger(record.sourceId, 'sourceId'),
-      data,
-      numChannels,
-      record.sampleRate,
-    );
+    try {
+      this.native.setSourceAudio(
+        requireInteger(record.sourceId, 'sourceId'),
+        data,
+        numChannels,
+        record.sampleRate,
+      );
+    } catch (error) {
+      throw respellSourceAudioRefusal(error, numChannels);
+    }
   }
 
   /** Replace an audio source's metadata strings as one undoable edit. */

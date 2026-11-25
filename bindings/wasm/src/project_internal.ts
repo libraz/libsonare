@@ -986,8 +986,9 @@ export function projectCompileResultFromNative(
 export function interleaveChannels(
   channels: unknown,
   sampleRate: unknown,
+  options: object = {},
 ): { audio: Float32Array; numChannels: number } {
-  assertAudioChannels(channels, sampleRate);
+  assertAudioChannels(channels, sampleRate, options);
   const planes = channels as Float32Array[];
   const frames = planes[0].length;
   if (planes.some((plane) => plane.length !== frames)) {

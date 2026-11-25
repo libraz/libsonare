@@ -156,6 +156,18 @@ describe('RealtimeEngine native binding', () => {
       expect(() => new ClipPageProvider({ ...dims, notAField: 1 } as never)).toThrow(/notAField/);
     });
 
+    it('names a final-page frame-count refusal after the first channel length', () => {
+      const provider = new ClipPageProvider({ numChannels: 1, numSamples: 6, pageFrames: 4 });
+      try {
+        provider.supply(1, [new Float32Array(2)]);
+        const supply = () => provider.supply(1, [new Float32Array(1)]);
+        expect(supply).toThrow(RangeError);
+        expect(supply).toThrow('ClipPageProvider.supply: channels[0].length must be one of 2');
+      } finally {
+        provider.destroy();
+      }
+    });
+
     it('refuses a positional call', () => {
       expect(
         () => new (ClipPageProvider as unknown as new (...args: number[]) => unknown)(2, 1000, 256),

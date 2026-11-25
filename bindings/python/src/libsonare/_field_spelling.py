@@ -13,6 +13,7 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("clicks", "click_duration_sec"): "click_duration",
     ("clicks", "frequency_hz"): "click_freq",
     ("clicks", "sample_rate"): "sr",
+    ("clip_page_provider_supply", "frames"): "channels[0] length",
     ("cqt", "fmin_hz"): "fmin",
     ("cqt", "sample_rate"): "sr",
     ("encode_audio", "num_channels"): "channels",
@@ -122,6 +123,7 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("project_set_marker", "id"): "marker_id",
     ("project_set_overlap_policy", "overlap_policy"): "policy",
     ("project_set_part_rig", "inserts_json"): "inserts",
+    ("project_set_source_audio", "interleaved"): "channels",
     ("project_set_warp_map", "id"): "warp_ref_id",
     ("pseudo_cqt", "fmin_hz"): "fmin",
     ("pseudo_cqt", "sample_rate"): "sr",
@@ -226,6 +228,7 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("project_annotate_keys", "count"): "keys",
     ("project_annotate_sections", "count"): "sections",
     ("project_apply_vocal_edit", "rendered_sample_count"): "rendered_mono",
+    ("project_apply_vocal_edit", "sve1_size"): "sve1",
     ("project_bounce", "articulation_count"): "articulations",
     ("project_bounce", "builtin_instrument_count"): "builtin_instruments",
     ("project_bounce", "controller_profile_count"): "controller_profiles",
@@ -266,13 +269,21 @@ QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {
 
 # (C entry key, document prefix, caller root): the facade puts the caller's mapping in the
 # document slot the prefix names, so a path under it is the caller's path under the root.
-DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = (("encode_audio", "options.tags.", "tags."),)
+DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = (
+    ("encode_audio", "options.tags.", "tags."),
+    ("playback_render_interleaved", "", "config."),
+    ("playback_renderer_set_config_json", "", "config."),
+)
 
 
-def document_rooted(entry: str, subject: str) -> str | None:
+def document_rooted(entry: str, subject: str, *, typed_document: bool = False) -> str | None:
     """``subject`` under the caller's root when it lies in entry ``entry``'s document slot."""
     for root_entry, prefix, root in DOCUMENT_ROOTS:
         if root_entry != entry:
+            continue
+        if not prefix:
+            if typed_document:
+                return root + subject if subject else root[:-1]
             continue
         if subject.startswith(prefix):
             return root + subject[len(prefix) :]

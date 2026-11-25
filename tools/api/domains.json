@@ -835,6 +835,7 @@
 "last_error_code": {"domain": "core", "surfaces": ["c"]},
 "last_error_message": {"domain": "core", "surfaces": ["c"]},
 "last_refusal_entry": {"domain": "core", "surfaces": ["c"]},
+"last_refusal_is_shape": {"domain": "core", "surfaces": ["c"]},
 "last_refusal_render": {"domain": "core", "surfaces": ["c"]},
 "last_refusal_subject": {"domain": "core", "surfaces": ["c"]},
 "last_refusal_subject_count": {"domain": "core", "surfaces": ["c"]},

@@ -13,7 +13,17 @@ import math
 import operator
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from typing import Any, SupportsIndex, TypeAlias, TypeGuard, TypeVar, cast, get_args
+from typing import (
+    Any,
+    Literal,
+    SupportsIndex,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    cast,
+    get_args,
+    overload,
+)
 
 import numpy as np
 
@@ -134,24 +144,50 @@ def _strip_c_entry(message: str) -> str:
     return message[match.end() :]
 
 
+@overload
 def _coded_error(
     code: int,
     message: str,
     *,
     argument: bool = False,
     native_reason: bool = False,
-) -> SonareError:
+    shape: Literal[False] = False,
+) -> SonareError: ...
+
+
+@overload
+def _coded_error(
+    code: int,
+    message: str,
+    *,
+    argument: bool = False,
+    native_reason: bool = False,
+    shape: bool,
+) -> SonareError | TypeError: ...
+
+
+def _coded_error(
+    code: int,
+    message: str,
+    *,
+    argument: bool = False,
+    native_reason: bool = False,
+    shape: bool = False,
+) -> SonareError | TypeError:
     """Build the exception for a C-ABI failure, split by cause.
 
     InvalidParameter is always a refused caller argument, so it is a
     :class:`SonareValueError` with the plain message, and so is a refusal ``argument``
     marks: a document path inside the mapping the entry wrapped into the document it
-    handed the C ABI. Every other code is a coded :class:`SonareError`. Either way the
+    handed the C ABI. A rebased refusal marked as a shape error raises TypeError.
+    Every other code is a coded :class:`SonareError`. Either way the
     calling entry prefixes its name on the way out, in place of a C entry name the text
     opened with. Read the thread-local reason only when the caller identifies the error
     as coming from the native call that just failed.
     """
     message = _strip_c_entry(message)
+    if shape:
+        return _refuse_type(message)
     exc = (
         SonareValueError(message)
         if argument or code == int(ErrorCode.INVALID_PARAMETER)
@@ -173,13 +209,16 @@ def _coded_error(
 
 # SONARE_PRESENCE_SPELLING_PYTHON (sonare_c_types_enums.h): a value left out reads as None.
 _PRESENCE_SPELLING_PYTHON = 1
+_RefusalSpellings: TypeAlias = Mapping[str, _Respelling] | Callable[[str], _Respelling | None]
 
 
 def _render_as_given(
     lib: Any,
     root: str | None,
-    respelled: Mapping[str, _Respelling] | None,
+    respelled: _RefusalSpellings | None,
     document_root: str | None = None,
+    *,
+    typed_document: bool = False,
 ) -> tuple[str, bool, bool] | None:
     """Render the last parameter refusal under the names, units and None the caller wrote.
 
@@ -214,7 +253,10 @@ def _render_as_given(
             cli_subject = cli_subjects(recorded) or cli_subjects(subject)
         else:
             cli_subject = None
-        given = respelled.get(subject) if respelled else None
+        if callable(respelled):
+            given = respelled(subject)
+        else:
+            given = respelled.get(subject) if respelled else None
         scale = 1.0
         if cli_subject is not None:
             subject = cli_subject
@@ -228,7 +270,8 @@ def _render_as_given(
             subject = f"{document_root}.{subject}" if subject else document_root
             in_argument = True
         elif (
-            rooted := document_rooted(entry, recorded) or document_rooted(entry, subject)
+            rooted := document_rooted(entry, recorded, typed_document=typed_document)
+            or document_rooted(entry, subject, typed_document=typed_document)
         ) is not None:
             subject = rooted
             in_argument = True
@@ -259,9 +302,10 @@ def _check(
     rc: int,
     *,
     flattened: str | None = None,
-    respelled: Mapping[str, _Respelling] | None = None,
+    respelled: _RefusalSpellings | None = None,
     document_root: str | None = None,
     literal_document: bool = False,
+    typed_document: bool = False,
 ) -> None:
     """Check a SonareError return code and raise on failure.
 
@@ -278,6 +322,8 @@ def _check(
     (``start_sec``). Both together make the refusal name the argument the caller wrote.
     ``document_root`` names the argument when this call serialized a typed mapping.
     ``literal_document`` keeps the C text for a directly supplied document.
+    ``typed_document`` activates the generated whole-document spelling for a mapping
+    this call serialized.
     """
     if rc != SONARE_OK:
         lib = _get_lib()
@@ -288,12 +334,19 @@ def _check(
         rendered = (
             None
             if literal_document and is_format
-            else _render_as_given(lib, flattened, respelled, root)
+            else _render_as_given(
+                lib, flattened, respelled, root, typed_document=typed_document and is_format
+            )
         )
         argument = rendered is not None and rendered[1]
         detail_str = (rendered[0] if rendered is not None else "") or detail_str
         if detail_str:
-            error = _coded_error(rc, detail_str, argument=argument, native_reason=True)
+            shape = bool(
+                typed_document and is_format and argument and lib.sonare_last_refusal_is_shape()
+            )
+            error = _coded_error(
+                rc, detail_str, argument=argument, native_reason=True, shape=shape
+            )
             if rendered is not None and rendered[2]:
                 vars(error)["_cli_error_message"] = detail_str
             raise error

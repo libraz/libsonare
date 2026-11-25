@@ -27,7 +27,11 @@ function configJsonText(config: PlaybackRendererConfig): string {
   if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a configuration object`);
   }
-  return stringifyWithinBudget(config, 'config');
+  const document = stringifyWithinBudget(config, 'config');
+  if (typeof document !== 'string' || !document.startsWith('{')) {
+    throw refuseType('config must serialize as an object');
+  }
+  return document;
 }
 
 /**
@@ -165,9 +169,12 @@ export class PlaybackRenderer {
     return this.native.renderOffline(samples, inChannels);
   }
 
-  /** Applies a complete configuration document; a changed prepare key throws. */
+  /**
+   * Applies a configuration. Wrong field types and unknown keys raise TypeError.
+   * Out-of-domain values or changes to prepare keys raise RangeError.
+   */
   setConfig(config: PlaybackRendererConfig): void {
-    this.native.setConfig(configJsonText(config));
+    this.native.setConfig(configJsonText(config), true);
   }
 
   /** The current complete configuration document. */
@@ -323,6 +330,7 @@ export function renderPlayback(...args: unknown[]): RenderPlaybackResult {
       request.sampleRate,
       configJsonText(request.config),
       nativeHrtf(request.hrtf),
+      true,
     ) as { samples: Float32Array; channels: number };
     return { samples, numChannels: channels };
   });

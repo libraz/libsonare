@@ -3922,7 +3922,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `PlaybackRenderer.constructor(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
-| `PlaybackRenderer.set_config(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
+| `PlaybackRenderer.set_config(config)` | config takes a PlaybackRendererConfig mapping. Parse JSON text with json.loads first. Refusals name config and the supplied key path. Unknown keys, wrong types and required fields that are absent raise TypeError. Values outside the field's domain raise SonareValueError. Leave an unmeasured input.channelMap, speaker distanceM or loudness.programLufs key out. |
 | `RealtimeEngine.bind_midi_cc(channel)` | removed: pass a MidiCcBinding record and set its channel field |
 | `RealtimeEngine.bind_midi_cc(controller)` | removed: pass a MidiCcBinding record and set its cc_number field |
 | `RealtimeEngine.bind_midi_cc(max_value)` | removed: pass a MidiCcBinding record and set its max_value field |
@@ -3951,7 +3951,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_track_strip_json(scene_json)` | removed: set_strip(ref, settings) takes one MixSceneStripInput mapping as settings |
 | `RealtimeEngine.set_track_strip_json(track_id)` | removed: set_strip(ref, settings) names the strip by ref, a track id or 'master' |
 | `RealtimeEngine.set_track_strip_json` | `RealtimeEngine.set_strip`: set_strip(ref, settings) with ref a track id takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]); a key or value refused inside settings is SonareValueError naming settings.<path>, where 1.x raised SonareError [2] naming strips[0].<path> |
-| `render_playback(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
+| `render_playback(config)` | config takes a PlaybackRendererConfig mapping. Parse JSON text with json.loads first. Refusals name config and the supplied key path. Unknown keys, wrong types and required fields that are absent raise TypeError. Values outside the field's domain raise SonareValueError. Leave an unmeasured input.channelMap, speaker distanceM or loudness.programLufs key out. |
 
 #### A JSON argument is named and refused by what it is
 
@@ -7504,9 +7504,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `PartRigInsert.params` | an object only; a JSON string is a TypeError |
-| `PlaybackRenderer.setConfig` | config is a PlaybackRendererConfig object only; a JSON string is a TypeError |
+| `PlaybackRenderer.setConfig` | config takes a PlaybackRendererConfig object; JSON text is a TypeError. Refusals name config and the supplied key path. Unknown keys and wrong shapes raise TypeError, and out-of-domain values raise RangeError. |
 | `PlaybackRendererOptions.config` | PlaybackRendererConfig object only; a JSON string is a TypeError, and the core refuses an unknown key, a 1.x snake_case key or role token at any depth as SonareError InvalidFormat |
-| `RenderPlaybackRequest.config` | PlaybackRendererConfig object only; a JSON string is a TypeError |
+| `RenderPlaybackRequest.config` | config takes a PlaybackRendererConfig object; JSON text is a TypeError. Refusals name config and the supplied key path. Unknown keys and wrong shapes raise TypeError, and out-of-domain values raise RangeError. |
 
 #### Historical aliases are removed
 
@@ -13029,10 +13029,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `PartRigInsert.params` | an object only; a JSON string is a TypeError |
-| `PlaybackRenderer.setConfig` | config is a PlaybackRendererConfig object only; a JSON string is a TypeError |
+| `PlaybackRenderer.setConfig` | config takes a PlaybackRendererConfig object; JSON text is a TypeError. Refusals name config and the supplied key path. Unknown keys and wrong shapes raise TypeError, and out-of-domain values raise RangeError. |
 | `PlaybackRendererOptions.config` | PlaybackRendererConfig object only; a JSON string is a TypeError, and the core refuses an unknown key, a 1.x snake_case key or role token at any depth as SonareError InvalidFormat |
 | `RealtimeEngine.pushMidiUmp` | words is a Uint32Array or number array; a bare number is a TypeError |
-| `RenderPlaybackRequest.config` | PlaybackRendererConfig object only; a JSON string is a TypeError |
+| `RenderPlaybackRequest.config` | config takes a PlaybackRendererConfig object; JSON text is a TypeError. Refusals name config and the supplied key path. Unknown keys and wrong shapes raise TypeError, and out-of-domain values raise RangeError. |
 
 #### Historical aliases are removed
 

@@ -20,10 +20,11 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 105> kOverrides = {{
+inline constexpr std::array<Override, 107> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"chord_functions", "key_root", "key.root"},
+    {"clip_page_provider_supply", "frames", "channels[0].length"},
     {"encode_audio", "num_channels", "channels"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "param_name", "param.name"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "value", "param.value"},
@@ -119,6 +120,7 @@ inline constexpr std::array<Override, 105> kOverrides = {{
     {"project_move_clip", "new_track_id", "trackId"},
     {"project_set_overlap_policy", "overlap_policy", "policy"},
     {"project_set_part_rig", "inserts_json", "inserts"},
+    {"project_set_source_audio", "interleaved", "channels"},
     {"realtime_voice_changer_process_mono", "input", "samples"},
     {"stream_analyzer_process", "sample_offset", "startSample"},
     {"stream_analyzer_reset", "base_sample_offset", "startSample"},
@@ -129,7 +131,7 @@ inline constexpr std::array<Override, 105> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 66> kLengths = {{
+inline constexpr std::array<Override, 67> kLengths = {{
     {"align_take_to_reference", "reference_len", "reference"},
     {"align_take_to_reference", "take_len", "take"},
     {"chord_functions", "count", "chords"},
@@ -171,6 +173,7 @@ inline constexpr std::array<Override, 66> kLengths = {{
     {"project_annotate_keys", "count", "keys"},
     {"project_annotate_sections", "count", "sections"},
     {"project_apply_vocal_edit", "rendered_sample_count", "renderedMono"},
+    {"project_apply_vocal_edit", "sve1_size", "vocalState"},
     {"project_bounce", "builtin_instrument_count", "builtinInstruments"},
     {"project_bounce", "instrument_count", "instruments"},
     {"project_bounce", "synth_instrument_count", "synthInstruments"},
@@ -257,14 +260,16 @@ struct DocumentRoot {
 
 // (C entry key, document prefix, caller root): the facade puts the caller's object in the
 // document slot the prefix names, so a path under it is the caller's path under the root.
-inline constexpr std::array<DocumentRoot, 1> kDocumentRoots = {{
+inline constexpr std::array<DocumentRoot, 3> kDocumentRoots = {{
     {"encode_audio", "options.tags.", "tags."},
+    {"playback_render_interleaved", "", "config."},
+    {"playback_renderer_set_config_json", "", "config."},
 }};
 
 // @p subject re-rooted under the caller's root when it lies in entry @p entry's document slot.
 inline std::optional<std::string> DocumentRooted(std::string_view entry, std::string_view subject) {
   for (const DocumentRoot& row : kDocumentRoots) {
-    if (row.entry != entry) continue;
+    if (row.entry != entry || row.prefix.empty()) continue;
     if (subject.substr(0, row.prefix.size()) == row.prefix) {
       return std::string(row.root) + std::string(subject.substr(row.prefix.size()));
     }
@@ -297,7 +302,20 @@ inline std::string_view Unrooted(std::string_view subject, std::string_view c_ro
 // object-argument roots.
 inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefusal& refusal,
                                               std::string_view entry,
-                                              std::string_view c_root = {}) {
+                                              std::string_view c_root = {},
+                                              bool typed_document = false) {
+  if (typed_document && refusal.code() == sonare::ErrorCode::InvalidFormat) {
+    for (const DocumentRoot& row : kDocumentRoots) {
+      if (row.entry != entry || !row.prefix.empty()) continue;
+      return refusal.respelled(
+          sonare::ErrorCode::InvalidParameter,
+          [root = row.root](const std::string& subject) {
+            return subject.empty() ? std::string(root.substr(0, root.size() - 1))
+                                   : std::string(root) + subject;
+          },
+          true);
+    }
+  }
   // A caller-spelled path keeps its spelling; only its slot prefix and "<c_root>." are re-rooted.
   if (refusal.caller_spelled()) {
     return refusal.respelled(
@@ -319,11 +337,11 @@ inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefus
 
 // The last C refusal, spelled as Spelled() spells it under the entry that recorded it.
 inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
-    std::string_view c_root = {}) {
+    std::string_view c_root = {}, bool typed_document = false) {
   const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
   if (refusal == nullptr) return std::nullopt;
   const char* entry = sonare_c_detail::last_refusal_entry();
-  return Spelled(*refusal, entry != nullptr ? entry : "", c_root);
+  return Spelled(*refusal, entry != nullptr ? entry : "", c_root, typed_document);
 }
 
 }  // namespace sonare_field_spelling::wasm

@@ -1463,6 +1463,20 @@ def test_replacing_source_audio_carries_its_shape_and_undo_restores_it() -> None
         project.close()
 
 
+def test_source_audio_non_finite_sample_names_planar_channel_coordinate() -> None:
+    project = Project()
+    try:
+        source_id = project.add_audio_source("asset://source.wav")
+        audio = np.array([[0.25, 0.5], [0.75, np.nan]], dtype=np.float32)
+        with raises_coded(
+            int(ErrorCode.INVALID_PARAMETER),
+            match=r"Project\.set_source_audio: channels\[1\]\[1\] must be finite",
+        ):
+            project.set_source_audio(source_id, audio, 48000)
+    finally:
+        project.close()
+
+
 def _library_tokens(name_fn: Any) -> list[str]:
     tokens: list[str] = []
     while (token := name_fn(len(tokens))) is not None:

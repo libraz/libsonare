@@ -12,6 +12,7 @@ import {
   Audio,
   alignTakeToReference,
   analyzePolyphonic,
+  ClipPageProvider,
   chordFunctions,
   createVocalEditSession,
   decomposeNotePitch,
@@ -211,6 +212,7 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
     { data: MEL.data, rows: 3 },
   ],
   note_targets_from_smf: [new Uint8Array(0), new Uint8Array([1, 2, 3])],
+  clip_page_provider_supply: [3],
   playback_loudness_meter_push_interleaved: [new Float32Array(0), NON_FINITE],
   playback_renderer_process_interleaved: [new Float32Array(0), NON_FINITE],
   playback_renderer_process_planar: [
@@ -600,6 +602,17 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   mixing_scene_preset_json: (_s, v) => mixingScenePreset(v as never),
   note_targets_from_smf: (s, v) => noteTargetsFromSmf(given({ data: SMF }, s, v) as never),
+  clip_page_provider_supply: (_spelling, value) =>
+    withHandle(new ClipPageProvider({ numChannels: 1, numSamples: 10, pageFrames: 4 }), (pages) => {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 4) {
+        return;
+      }
+      pages.supply(2, [new Float32Array(value)]);
+    }),
+  project_set_source_audio: (_spelling, value) =>
+    withHandle(new Project(), (project) =>
+      project.setSourceAudio({ sourceId: 1, channels: value, sampleRate: 48000 } as never),
+    ),
   playback_loudness_meter_create: (s, v) =>
     withHandle(
       new PlaybackLoudnessMeter({ [s]: v, sampleRate: 48000 } as never),

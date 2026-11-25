@@ -367,7 +367,7 @@ def test_render_playback_names_the_output_channel_count_via_shape() -> None:
 
 
 def test_render_playback_rejects_an_unknown_key() -> None:
-    with pytest.raises(SonareError):
+    with pytest.raises(TypeError, match=r"^render_playback: unknown key config\.bad_key"):
         render_playback([0.0] * 4, num_channels=2, sample_rate=SR, config={"bad_key": 1})
 
 
@@ -544,3 +544,56 @@ def test_render_offline_rejects_bad_input() -> None:
             r.render_offline(np.array([0.0, float("nan")], dtype=np.float32), 2)
         with pytest.raises(SonareValueError):
             r.render_offline(np.empty(0, dtype=np.float32), 2)
+
+
+@pytest.mark.parametrize(
+    ("config", "error", "cause"),
+    [
+        (
+            {"target": {"kind": "speakers", "layout": 9}},
+            TypeError,
+            "config.target.layout must be a string",
+        ),
+        (
+            {"target": {"kind": "speakers", "layout": "9.9"}},
+            SonareValueError,
+            "config.target.layout must be one of stereo, 5.1, 7.1",
+        ),
+        (
+            {"target": {"bad_key": 1}},
+            TypeError,
+            "unknown key config.target.bad_key",
+        ),
+    ],
+)
+@pytest.mark.parametrize("entry", ["PlaybackRenderer.set_config", "render_playback"])
+def test_playback_configuration_refusal_uses_the_argument_path(config, error, cause, entry) -> None:
+    with pytest.raises(error) as refused:
+        if entry == "PlaybackRenderer.set_config":
+            with PlaybackRenderer({}, sample_rate=SR, max_block_size=BLOCK) as renderer:
+                renderer.set_config(config)
+        else:
+            render_playback(
+                np.zeros(BLOCK * 2, np.float32), num_channels=2, sample_rate=SR, config=config
+            )
+    assert str(refused.value).startswith(f"{entry}: {cause}")
+
+
+def test_playback_native_json_keeps_document_code_and_literal_path() -> None:
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    with PlaybackRenderer({}, sample_rate=SR, max_block_size=BLOCK) as renderer:
+        code = lib.sonare_playback_renderer_set_config_json(
+            renderer._require_handle(), b'{"target":{"kind":"speakers","layout":9}}'
+        )
+        assert code == int(ErrorCode.INVALID_FORMAT)
+        assert lib.sonare_last_refusal_subject(0) == b"target.layout"
+        assert lib.sonare_last_refusal_is_shape() == 1
+
+        code = lib.sonare_playback_renderer_set_config_json(
+            renderer._require_handle(), b'{"target":{"kind":"speakers","layout":"9.9"}}'
+        )
+        assert code == int(ErrorCode.INVALID_FORMAT)
+        assert lib.sonare_last_refusal_subject(0) == b"target.layout"
+        assert lib.sonare_last_refusal_is_shape() == 0

@@ -288,7 +288,6 @@ def _apply_project_vocal_edit(
     sve1_bytes = _byte_buffer(sve1, "sve1")
     if not sve1_bytes:
         raise _refuse("sve1 must not be empty")
-    _narrow_int(len(sve1_bytes), "sve1_size", 1, _UINT64_MAX)
     token = _token_to_c(render_token)
     if token.draft_id != 0 or token.generation != 0:
         raise _refuse("render_token must be a committed session token")

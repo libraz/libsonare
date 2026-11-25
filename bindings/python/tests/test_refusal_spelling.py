@@ -317,9 +317,13 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "project_import_smf": lambda: (libsonare.Project().import_smf, {}),
     "project_set_marker": lambda: (libsonare.Project().set_marker, {"ppq": 0.0}),
     "project_set_overlap_policy": lambda: (libsonare.Project().set_overlap_policy, {}),
+    "clip_page_provider_supply": lambda: (
+        libsonare.ClipPageProvider(num_channels=1, num_samples=10, page_frames=4).supply,
+        {"page_index": 2, "channels": [np.zeros(2, dtype=np.float32)]},
+    ),
     "project_set_source_audio": lambda: (
         libsonare.Project().set_source_audio,
-        {"source_id": 1, "audio": _TONE, "sample_rate": 48000},
+        {"source_id": 1, "channels": [_TONE], "sample_rate": 48000},
     ),
     "project_set_warp_map": lambda: (
         libsonare.Project().set_warp_map,
@@ -365,6 +369,13 @@ def _call(entry: str, spelling: str) -> tuple[Callable[..., Any], dict[str, Any]
 
 def _refusals(entry: str, spelling: str) -> list[str]:
     texts = []
+    if entry == "clip_page_provider_supply":
+        fn, given = _call(entry, spelling)
+        try:
+            fn(**{**given, "channels": [np.zeros(3, dtype=np.float32)]})
+        except SonareValueError as exc:
+            texts.append(str(exc))
+        return texts
     root, _, field = spelling.partition(".")
     for value in (*_OUTSIDE, *((_MALFORMED,) if spelling in _BUFFERS else ())):
         fn, given = _call(entry, spelling)
@@ -395,7 +406,8 @@ _ROWS = [(*k, v) for k, v in OVERRIDES.items()]
 def test_a_table_row_is_refused_under_the_callers_spelling(
     entry: str, subject: str, spelling: str
 ) -> None:
-    assert spelling.partition(".")[0] in inspect.signature(_call(entry, spelling)[0]).parameters
+    root = re.split(r"[.\[]", spelling, maxsplit=1)[0]
+    assert root in inspect.signature(_call(entry, spelling)[0]).parameters
     texts = _refusals(entry, spelling)
     assert [t for t in texts if _names(t, subject)] == []
     assert any(_names(t, spelling) for t in texts), texts
@@ -430,14 +442,40 @@ def test_indexed_polyphonic_edit_refusal_keeps_the_caller_root() -> None:
         assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
 
-def _document_call(entry: str) -> tuple[Callable[[dict[str, Any]], None], list[tuple[Any, str]]]:
+def _document_call(
+    entry: str,
+) -> tuple[Callable[[dict[str, Any]], None], list[tuple[Any, str, type[Exception]]]]:
     """The call that puts a caller mapping in ``entry``'s document slot, and refusals under it."""
     if entry == "encode_audio":
         planes = np.zeros((1, 100), np.float32)
         return (
             lambda tags: libsonare.encode_audio(planes, 48000, format="wav", tags=tags),
-            [({"a=b": "c"}, "a=b is not writable as WAV INFO")],
+            [({"a=b": "c"}, "a=b is not writable as WAV INFO", SonareValueError)],
         )
+    if entry in {"playback_render_interleaved", "playback_renderer_set_config_json"}:
+
+        def configure(config: dict[str, Any]) -> None:
+            with libsonare.PlaybackRenderer({}, sample_rate=48000) as renderer:
+                renderer.set_config(config)
+
+        def render(config: dict[str, Any]) -> None:
+            libsonare.render_playback(
+                np.zeros(256, np.float32), num_channels=2, sample_rate=48000, config=config
+            )
+
+        call = render if entry == "playback_render_interleaved" else configure
+        return call, [
+            (
+                {"target": {"kind": "speakers", "layout": 9}},
+                "{root}target.layout must be a string",
+                TypeError,
+            ),
+            (
+                {"target": {"kind": "speakers", "layout": "9.9"}},
+                "{root}target.layout must be one of stereo, 5.1, 7.1",
+                SonareValueError,
+            ),
+        ]
     engine = _engine()
     engine.set_track_lanes([{"track_id": 1, "source_channel_layout": "stereo"}])
     engine.set_track_buses([{"bus_id": 1}])
@@ -447,9 +485,9 @@ def _document_call(entry: str) -> tuple[Callable[[dict[str, Any]], None], list[t
         "engine_set_bus_strip_json": lambda settings: engine.set_bus_strip(1, settings),
     }
     return strips[entry], [
-        ({"id": "1", "faderDB": 0}, "unknown key {root}faderDB"),
-        ({"id": "1", "pan": "left"}, "{root}pan must be a number"),
-        ({"id": "1", "pan": 2.0}, "{root}pan must be finite and in [-1, 1]"),
+        ({"id": "1", "faderDB": 0}, "unknown key {root}faderDB", SonareValueError),
+        ({"id": "1", "pan": "left"}, "{root}pan must be a number", SonareValueError),
+        ({"id": "1", "pan": 2.0}, "{root}pan must be finite and in [-1, 1]", SonareValueError),
     ]
 
 
@@ -458,12 +496,13 @@ def test_a_document_refusal_is_a_refused_argument_under_the_callers_root(
     entry: str, prefix: str, root: str
 ) -> None:
     call, cases = _document_call(entry)
-    for value, cause in cases:
+    for value, cause, error in cases:
         expected = cause.format(root=root) if "{root}" in cause else root + cause
-        with pytest.raises(SonareValueError) as refused:
+        with pytest.raises(error) as refused:
             call(value)
         assert str(refused.value).endswith(f": {expected}"), str(refused.value)
-        assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+        if isinstance(refused.value, SonareValueError):
+            assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
 
 def test_an_empty_interleaved_render_names_the_array_over_its_channel_count() -> None:

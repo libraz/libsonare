@@ -9,8 +9,6 @@
 # until that lands it sits under [pending] with the change that retires it, and the
 # run fails once it binds.
 [pending]
-"playback_render_interleaved.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"
-"playback_renderer_set_config_json.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"
 
 [unclassified]
 node = 0
@@ -116,7 +114,6 @@ python = 0
 "auto_tune.target_midi" = "C-only plumbing: the facade passes the config default; auto_tune always corrects to the scale"
 "auto_tune.target_mode" = "C-only plumbing: the facade passes the config default; auto_tune always corrects to the scale"
 "chord_functional_analysis.tuning_auto" = "folded into tuningCents: 'auto'; python: tuning_cents: 'auto'"
-"clip_page_provider_supply.frames" = "derived length: channels[].length"
 "detect_chords.tuning_auto" = "folded into tuningCents: 'auto'; python: tuning_cents: 'auto'"
 "detect_key.profile_type" = "folded into profile"
 "detect_key.tuning_auto" = "folded into tuningCents: 'auto'; python: tuning_cents: 'auto'"
@@ -181,7 +178,6 @@ python = 0
 "polyphonic_notes.capacity" = "C-only plumbing: output buffer capacity"
 "polyphonic_polyphony.capacity" = "C-only plumbing: output buffer capacity"
 "project_analyze_tempo.capacity" = "C-only plumbing: output buffer capacity"
-"project_apply_vocal_edit.sve1_size" = "derived length: sve1.length"
 "project_bake_midi_fx.config_json" = "folded into config"
 "project_bounce.sf2_instrument_count" = "derived length: sf2_instruments.length"
 "project_set_program.bank" = "folded into bank_msb and bank_lsb"
@@ -193,7 +189,6 @@ python = 0
 "project_preview_midi_fx_count.config_json" = "folded into config"
 "project_set_clip_fade.curve" = "folded into fadeInCurve / fadeOutCurve; python: fade_in_curve / fade_out_curve"
 "project_set_clip_fade.length_ppq" = "folded into fadeInPpq / fadeOutPpq; python: fade_in_length_ppq / fade_out_length_ppq"
-"project_set_source_audio.interleaved" = "folded into channels"
 "project_sound_font_manifest.max_entries" = "C-only plumbing: output buffer capacity"
 "project_source_name_or_uri_by_index.index" = "C-only plumbing: the facade lists every entry, the caller never states an index"
 "project_track_name_by_index.index" = "C-only plumbing: the facade lists every entry, the caller never states an index"

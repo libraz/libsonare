@@ -15,6 +15,7 @@ from libsonare import (
     FileClipPageProvider,
     RealtimeEngine,
     SonareError,
+    SonareValueError,
 )
 
 
@@ -106,6 +107,16 @@ def test_set_clips_accepts_planar_channels_as_a_2d_ndarray() -> None:
 
     assert np.array_equal(rendered(np.array(nested, dtype=np.float32)), rendered(nested))
     assert rendered(nested)[0] == pytest.approx(nested[0])
+
+
+def test_clip_page_provider_refusal_names_the_final_page_frame_length() -> None:
+    with ClipPageProvider(num_channels=1, num_samples=6, page_frames=4) as provider:
+        provider.supply(1, [[0.0, 1.0]])
+        with pytest.raises(
+            SonareValueError,
+            match=r"ClipPageProvider.supply: channels\[0\] length must be one of 2",
+        ):
+            provider.supply(1, [[1.0]])
 
 
 def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:

@@ -41,16 +41,13 @@ from ._runtime import (
 )
 
 PlaybackRendererConfig = dict[str, Any]
-"""A nested playback renderer config document with camelCase keys.
+"""A nested playback renderer configuration with camelCase keys.
 
 Keys such as ``target``, ``room``, ``loudness`` and ``outputLimiter``; speaker roles
-are spelled out (``left``, ``center``, ``leftSurround``, ...). Complete or partial; an
-omitted key takes the schema default, and an earlier snake_case key or short role
-token raises ``SonareError`` (InvalidFormat) naming the spelling to write. An unset
-optional value (``input.channelMap``, a speaker's ``distanceM``,
-``loudness.programLufs``) is an omitted key: ``None`` is refused as InvalidFormat
-naming the path, and :meth:`PlaybackRenderer.config` leaves the key out. JSON text
-is parsed by the caller (``json.loads``) before it is passed.
+are spelled out (``left``, ``center``, ``leftSurround``, ...). Omitted keys take
+the schema defaults. Leave an unset ``input.channelMap``, speaker ``distanceM``
+or ``loudness.programLufs`` key out. Parse JSON text with ``json.loads`` before
+passing it as a configuration.
 """
 
 
@@ -215,7 +212,11 @@ class PlaybackRenderer:
 
     @_entry("PlaybackRenderer.set_config")
     def set_config(self, config: PlaybackRendererConfig) -> None:
-        """Apply a complete configuration document.
+        """Apply a complete configuration.
+
+        Unknown keys and wrong field types raise :class:`TypeError`. Out-of-domain
+        values raise :class:`SonareValueError`. Refusals name the supplied path
+        under ``config``.
 
         A prepare key (``target.kind``, ``target.layout``, ``input.layout``, ...)
         that differs from the current value raises :class:`SonareError`; realtime
@@ -225,7 +226,8 @@ class PlaybackRenderer:
         _check(
             self._lib.sonare_playback_renderer_set_config_json(
                 handle, _playback_config_to_json(config)
-            )
+            ),
+            typed_document=True,
         )
 
     @_entry("PlaybackRenderer.config")
@@ -492,7 +494,8 @@ def render_playback(
             ctypes.byref(out_ptr),
             ctypes.byref(out_frames),
             ctypes.byref(out_channels),
-        )
+        ),
+        typed_document=True,
     )
     try:
         flat = _from_c_float_array(out_ptr, int(out_frames.value) * int(out_channels.value))

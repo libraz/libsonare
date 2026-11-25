@@ -287,21 +287,26 @@ namespace {
 
 /// Throws a failed C-ABI call with the refusal, entry and reason captured by its caller.
 void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& message,
-                          const char* reason) {
-  Napi::Error error = MakeSonareError(env, err, message, LastRefusalIsShape(), reason);
-  const Napi::Object value = error.Value().As<Napi::Object>();
-  if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
-    if (IsKnownErrorReason(reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
+                          const char* reason, bool typed_document = false) {
+  const auto shown = sonare_field_spelling::node::SpelledLastRefusal({}, typed_document);
+  const bool reclassified = typed_document && err == SONARE_ERROR_INVALID_FORMAT && shown &&
+                            shown->code() == sonare::ErrorCode::InvalidParameter;
+  Napi::Error error = MakeSonareError(env, reclassified ? SONARE_ERROR_INVALID_PARAMETER : err,
+                                      reclassified ? RefusalText(*shown) : message,
+                                      shown && shown->shape_error(), reason);
+  if (shown && IsKnownErrorReason(reason)) {
+    AttachRefusal(env, error.Value().As<Napi::Object>(), *shown, LastRefusalEntry());
   }
   error.ThrowAsJavaScriptException();
 }
 
 }  // namespace
 
-void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix) {
+void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix,
+                      bool typed_document) {
   if (env.IsExceptionPending()) return;
   const char* reason = sonare_last_error_reason();
-  ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason);
+  ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason, typed_document);
 }
 
 void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err, const std::string& prefix) {

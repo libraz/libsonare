@@ -100,6 +100,28 @@ def test_empty_project_dependencies_and_rehydrate_are_owned_results() -> None:
         assert project.rehydrate_vocal_edits(()) == ()
 
 
+def test_oversized_vocal_state_names_its_derived_length() -> None:
+    oversized = bytes(32 * 1024 * 1024 + 1)
+    with Project.create() as project, pytest.raises(SonareValueError) as raised:
+        project.apply_vocal_edit(
+            clip_id=1,
+            expected_source_id=1,
+            expected_source_sample_rate=16_000,
+            expected_source_sample_count=1,
+            expected_source_sha256="00" * 32,
+            expected_clip_length_ppq=1.0,
+            expected_source_offset_ppq=0.0,
+            rendered_mono=[0.0],
+            rendered_sample_rate=16_000,
+            render_token=VocalStateToken(0, 0, 0, 0),
+            sve1=oversized,
+        )
+    assert raised.value.code == ErrorCode.INVALID_PARAMETER
+    assert str(raised.value) == (
+        "Project.apply_vocal_edit: sve1 length must be an integer in [1, 33554432]"
+    )
+
+
 def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
     source, sample_rate, source_sha256, rendered, state_and_token = _source_and_render()
     state, token = state_and_token

@@ -489,6 +489,18 @@ describe('Node Project vocal edit helpers', () => {
         renderToken: session.token,
         vocalState: session.exportState(),
       };
+      const oversizedVocalState = new Uint8Array(32 * 1024 * 1024 + 1);
+      let oversizedError: unknown;
+      try {
+        project.applyVocalEdit({ ...applyRequest, vocalState: oversizedVocalState });
+      } catch (error) {
+        oversizedError = error;
+      }
+      expect(oversizedError).toBeInstanceOf(RangeError);
+      expect(oversizedError).toMatchObject({
+        message: 'Project.applyVocalEdit: vocalState.length must be an integer in [1, 33554432]',
+      });
+
       const malformed = applyRequest.vocalState.slice();
       malformed[0] = 0x58;
       expect(() => project?.applyVocalEdit({ ...applyRequest, vocalState: malformed })).toThrow(

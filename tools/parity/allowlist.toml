@@ -133,6 +133,7 @@ node = [
   "last_refusal_subject",
   "last_refusal_render",
   "last_refusal_entry",
+  "last_refusal_is_shape",
   "mixer_strip_at",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
   # result IS what analyze() returns, serialized via sonare_analyze_json) and
@@ -214,6 +215,7 @@ wasm = [
   "last_refusal_subject",
   "last_refusal_render",
   "last_refusal_entry",
+  "last_refusal_is_shape",
   "mixer_strip_at",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "synth_enum_names",

@@ -1201,6 +1201,19 @@ describe('ClipPageProvider', () => {
     ).toThrow(/bogus/);
   });
 
+  it('names a final-page frame-count refusal after the first channel length', () => {
+    const partial = new ClipPageProvider({ numChannels: 1, numSamples: 6, pageFrames: 4 });
+    try {
+      partial.supply(1, [new Float32Array(2)]);
+      expect(() => partial.supply(1, [new Float32Array(1)])).toThrow(RangeError);
+      expect(() => partial.supply(1, [new Float32Array(1)])).toThrow(
+        'ClipPageProvider.supply: channels[0].length must be one of 2',
+      );
+    } finally {
+      partial.destroy();
+    }
+  });
+
   it('refuses positional arguments', () => {
     expect(
       () => new (ClipPageProvider as unknown as new (...args: number[]) => unknown)(2, 1000, 256),

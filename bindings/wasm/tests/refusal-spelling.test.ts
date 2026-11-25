@@ -14,6 +14,7 @@ import {
   Audio,
   alignTakeToReference,
   analyzePolyphonic,
+  ClipPageProvider,
   chordFunctions,
   createVocalEditSession,
   decomposeNotePitch,
@@ -86,7 +87,7 @@ function parseRows(table: 'kOverrides' | 'kLengths' | 'kQuotients'): Row[] {
   }
   const rows: Row[] = [];
   const row =
-    /\{"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)"(?:,\s*"([A-Za-z0-9_.]+)")?\}/g;
+    /\{"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)",\s*"([^"]+)"(?:,\s*"([A-Za-z0-9_.]+)")?\}/g;
   for (const m of text.slice(start, end).matchAll(row)) {
     const spelling = m[4] === undefined ? m[3] : `${m[3]}.length / ${m[4]}`;
     rows.push({ entry: m[1], subject: m[2], spelling });
@@ -259,6 +260,17 @@ const DRIVERS: Record<string, Driver> = {
     ),
   mixing_scene_preset_json: (_spelling, value) => mixingScenePreset(value as never),
   note_targets_from_smf: (spelling, value) => noteTargetsFromSmf({ [spelling]: value } as never),
+  clip_page_provider_supply: (_spelling, value) =>
+    using(new ClipPageProvider({ numChannels: 1, numSamples: 10, pageFrames: 4 }), (pages) => {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 4) {
+        return;
+      }
+      pages.supply(2, [new Float32Array(value)]);
+    }),
+  project_set_source_audio: (_spelling, value) =>
+    using(new Project(), (project) =>
+      project.setSourceAudio({ sourceId: 1, channels: value, sampleRate: 48000 } as never),
+    ),
   playback_loudness_meter_create: (_spelling, value) =>
     using(new PlaybackLoudnessMeter({ numChannels: value as number, sampleRate: 48000 }), (meter) =>
       meter.pushInterleaved(new Float32Array([0, 0])),
@@ -633,6 +645,7 @@ const OUTSIDE: unknown[] = [
 
 /** Extra values for an entry whose count is refused only by a list longer than the budget. */
 const EXTRA_OUTSIDE: Record<string, unknown[]> = {
+  clip_page_provider_supply: [3],
   chord_functions: [new Array(64 * 1024 * 1024 + 1)],
   encode_audio: [Array.from({ length: 9 }, () => TONE)],
   mastering_analyze_pair_stereo: [new Float32Array(1 << 20)],

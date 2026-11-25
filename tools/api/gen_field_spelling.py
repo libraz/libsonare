@@ -23,6 +23,8 @@ facade wraps the caller's object into a fixed slot of the document it hands the 
 ("strips[0]." under "settings."): the prefix is matched exactly, the rest of the path is
 kept as the caller wrote it, and the row binds only where the entry takes the root keyword.
 A top-level ``[document_roots]`` row supplies the same mapping to every surface.
+An empty prefix names the whole document and requires the caller to opt in when
+handing over a typed argument. It only applies to an InvalidFormat refusal.
 A ``[<surface>.members_of]`` row maps an entry's C subject to a member path of a
 record the caller passes, including dimensions derived from a caller matrix.
 A name another C subject already pairs with counts: a second form folded
@@ -259,7 +261,9 @@ def derive(
         by_canonical = {camel_to_snake(f): f for f in known}
         # A dotted spelling names a member of an object the facade takes, so it binds on the root.
         renamed = [
-            r for r in spellings(b.surface, subject_key) if r in known or r.split(".")[0] in known
+            r
+            for r in spellings(b.surface, subject_key)
+            if r in known or r.split(".")[0].split("[")[0] in known
         ]
         member = members[b.surface].get(f"{b.c_key}.{b.c_subject}")
         if member is not None and member.partition(".")[0] in known:
@@ -342,11 +346,18 @@ def derive(
             ):
                 bind(surface, key, subject, spelling)
                 used.add((surface, f"constructor_renames.{name}", spelling))
+    bound_documents: set[tuple[str, str]] = set()
     for surface, table in document_roots.items():
         for key, (prefix, root) in table.items():
             if root.endswith(".") and root[:-1] in names[(surface, key)]:
                 rows[surface].add(Row(key, prefix, root, document=True))
                 used.add((surface, f"document_roots.{key}", f"{prefix} -> {root}"))
+                if not prefix:
+                    bound_documents.add((surface, key))
+    unbound = [
+        u for u in unbound
+        if u.c_subject != "document" or (u.surface, u.c_key) not in bound_documents
+    ]
     unbound.sort(key=lambda u: (u.surface, u.c_key, u.c_subject))
     idle = (
         sorted(
@@ -588,7 +599,7 @@ inline constexpr std::array<DocumentRoot, {len(documents)}> kDocumentRoots = {{{
 // @p subject re-rooted under the caller's root when it lies in entry @p entry's document slot.
 inline std::optional<std::string> DocumentRooted(std::string_view entry, std::string_view subject) {{
   for (const DocumentRoot& row : kDocumentRoots) {{
-    if (row.entry != entry) continue;
+    if (row.entry != entry || row.prefix.empty()) continue;
     if (subject.substr(0, row.prefix.size()) == row.prefix) {{
       return std::string(row.root) + std::string(subject.substr(row.prefix.size()));
     }}
@@ -621,7 +632,20 @@ inline std::string_view Unrooted(std::string_view subject, std::string_view c_ro
 // object-argument roots.
 inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefusal& refusal,
                                               std::string_view entry,
-                                              std::string_view c_root = {{}}) {{
+                                              std::string_view c_root = {{}},
+                                              bool typed_document = false) {{
+  if (typed_document && refusal.code() == sonare::ErrorCode::InvalidFormat) {{
+    for (const DocumentRoot& row : kDocumentRoots) {{
+      if (row.entry != entry || !row.prefix.empty()) continue;
+      return refusal.respelled(
+          sonare::ErrorCode::InvalidParameter,
+          [root = row.root](const std::string& subject) {{
+            return subject.empty() ? std::string(root.substr(0, root.size() - 1))
+                                   : std::string(root) + subject;
+          }},
+          true);
+    }}
+  }}
   // A caller-spelled path keeps its spelling; only its slot prefix and "<c_root>." are re-rooted.
   if (refusal.caller_spelled()) {{
     return refusal.respelled(
@@ -643,11 +667,11 @@ inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefus
 
 // The last C refusal, spelled as Spelled() spells it under the entry that recorded it.
 inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
-    std::string_view c_root = {{}}) {{
+    std::string_view c_root = {{}}, bool typed_document = false) {{
   const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
   if (refusal == nullptr) return std::nullopt;
   const char* entry = sonare_c_detail::last_refusal_entry();
-  return Spelled(*refusal, entry != nullptr ? entry : "", c_root);
+  return Spelled(*refusal, entry != nullptr ? entry : "", c_root, typed_document);
 }}
 
 }}  // namespace sonare_field_spelling::{surface}
@@ -719,10 +743,14 @@ QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {{{quotients}}}
 DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = ({documents})
 
 
-def document_rooted(entry: str, subject: str) -> str | None:
+def document_rooted(entry: str, subject: str, *, typed_document: bool = False) -> str | None:
     """``subject`` under the caller's root when it lies in entry ``entry``'s document slot."""
     for root_entry, prefix, root in DOCUMENT_ROOTS:
         if root_entry != entry:
+            continue
+        if not prefix:
+            if typed_document:
+                return root + subject if subject else root[:-1]
             continue
         if subject.startswith(prefix):
             return root + subject[len(prefix) :]

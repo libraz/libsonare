@@ -3749,6 +3749,7 @@ export interface SonareModule {
     sampleRate: number,
     configJson: string,
     hrtf: WasmHrtfSet | null,
+    typedDocument?: boolean,
   ) => { samples: Float32Array; channels: number };
   /** Output channel count a renderer built from `configJson` would have, without building one. */
   playbackConfigOutputChannels: (configJson: string) => number;
@@ -3940,7 +3941,7 @@ export interface WasmPlaybackRenderer {
   processInterleaved: (samples: Float32Array, inChannels: number) => Float32Array;
   processSilence: (frames: number) => Float32Array[];
   renderOffline: (samples: Float32Array, inChannels: number) => Float32Array;
-  setConfig: (configJson: string) => void;
+  setConfig: (configJson: string, typedDocument?: boolean) => void;
   configJson: () => string;
   setHeadOrientation: (yawDeg: number, pitchDeg: number, rollDeg: number) => void;
   reset: () => void;

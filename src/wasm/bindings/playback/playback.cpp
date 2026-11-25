@@ -31,16 +31,18 @@ namespace {
 /// Largest input channel count any layout accepts (7.1).
 constexpr int kMaxInputChannels = 8;
 
-[[noreturn]] void throwPlaybackError(SonareError err) {
-  rethrowLastCRefusal();
+[[noreturn]] void throwPlaybackError(SonareError err, bool typed_document = false) {
+  if (const auto shown = sonare_field_spelling::wasm::SpelledLastRefusal({}, typed_document)) {
+    throwCEntryRefusal(*shown);
+  }
   const char* detail = sonare_last_error_message();
   std::string message;
   message += detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(err);
   throw SonareException(sonare_c_detail::error_code_from_c_error(err), message);
 }
 
-void checkPlayback(SonareError err) {
-  if (err != SONARE_OK) throwPlaybackError(err);
+void checkPlayback(SonareError err, bool typed_document = false) {
+  if (err != SONARE_OK) throwPlaybackError(err, typed_document);
 }
 
 // The realtime entry points leave the thread-local message alone, so a rejected
@@ -199,10 +201,13 @@ class PlaybackRendererWasm {
     return vectorToFloat32Array(owned.get(), out_frames * static_cast<std::size_t>(out_channels));
   }
 
-  void setConfig(const std::string& config_json) {
+  void setConfig(const std::string& config_json, bool typed_document) {
     checkPlayback(sonare_playback_renderer_set_config_json(renderer_.get(),
-                                                           wasmCString(config_json, "configJson")));
+                                                           wasmCString(config_json, "configJson")),
+                  typed_document);
   }
+
+  void setConfigDocument(const std::string& config_json) { setConfig(config_json, false); }
 
   std::string configJson() const {
     char* text = nullptr;
@@ -369,7 +374,7 @@ PlaybackLoudnessMeterWasm* createPlaybackLoudnessMeter(val channels, val sample_
 }
 
 val renderPlayback(val samples, val channels_val, val sample_rate_val,
-                   const std::string& config_json, val hrtf) {
+                   const std::string& config_json, val hrtf, bool typed_document) {
   const int channels = checkedIntFromVal(channels_val, "numChannels");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   size_t frames = 0;
@@ -378,15 +383,22 @@ val renderPlayback(val samples, val channels_val, val sample_rate_val,
   float* rendered = nullptr;
   size_t out_frames = 0;
   int out_channels = 0;
-  checkPlayback(sonare_playback_render_interleaved(
-      elementData(input), frames, channels, sample_rate, wasmCString(config_json, "configJson"),
-      hrtfHandleFromVal(hrtf), &rendered, &out_frames, &out_channels));
+  checkPlayback(
+      sonare_playback_render_interleaved(
+          elementData(input), frames, channels, sample_rate, wasmCString(config_json, "configJson"),
+          hrtfHandleFromVal(hrtf), &rendered, &out_frames, &out_channels),
+      typed_document);
   std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
   val out = val::object();
   out.set("samples",
           vectorToFloat32Array(owned.get(), out_frames * static_cast<size_t>(out_channels)));
   out.set("channels", out_channels);
   return out;
+}
+
+val renderPlaybackDocument(val samples, val channels, val sample_rate,
+                           const std::string& config_json, val hrtf) {
+  return renderPlayback(samples, channels, sample_rate, config_json, hrtf, false);
 }
 
 int playbackConfigOutputChannels(const std::string& config_json) {
@@ -405,6 +417,7 @@ void registerPlaybackBindings() {
       .function("processInterleaved", &PlaybackRendererWasm::processInterleaved)
       .function("processSilence", &PlaybackRendererWasm::processSilence)
       .function("renderOffline", &PlaybackRendererWasm::renderOffline)
+      .function("setConfig", &PlaybackRendererWasm::setConfigDocument)
       .function("setConfig", &PlaybackRendererWasm::setConfig)
       .function("configJson", &PlaybackRendererWasm::configJson)
       .function("setHeadOrientation", &PlaybackRendererWasm::setHeadOrientation)
@@ -426,6 +439,7 @@ void registerPlaybackBindings() {
   function("createHrtfSet", &createHrtfSet, allow_raw_pointers());
   function("createPlaybackRenderer", &createPlaybackRenderer, allow_raw_pointers());
   function("createPlaybackLoudnessMeter", &createPlaybackLoudnessMeter, allow_raw_pointers());
+  function("renderPlayback", &renderPlaybackDocument, allow_raw_pointers());
   function("renderPlayback", &renderPlayback, allow_raw_pointers());
   function("playbackConfigOutputChannels", &playbackConfigOutputChannels);
 }

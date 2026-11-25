@@ -306,6 +306,25 @@ it('adds and relinks an audio source without changing its id and restores it on 
   }
 });
 
+it('names a non-finite source sample by its planar channel coordinate', () => {
+  const project = new Project();
+  try {
+    const sourceId = project.addAudioSource('asset://source.wav');
+    expectRefusal(
+      () =>
+        project.setSourceAudio({
+          sourceId,
+          channels: [new Float32Array([0.25, 0.5]), new Float32Array([0.75, Number.NaN])],
+          sampleRate: 48000,
+        }),
+      RangeError,
+      /^Project\.setSourceAudio: channels\[1\]\[1\] must be finite$/,
+    );
+  } finally {
+    project.destroy();
+  }
+});
+
 it('reads key annotations in stored order and restores them with redo', () => {
   const project = new Project();
   try {

@@ -801,6 +801,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_last_refusal_subject.argtypes = [ctypes.c_size_t]
     lib.sonare_last_refusal_entry.restype = ctypes.c_char_p
     lib.sonare_last_refusal_entry.argtypes = []
+    lib.sonare_last_refusal_is_shape.restype = ctypes.c_int
+    lib.sonare_last_refusal_is_shape.argtypes = []
     lib.sonare_last_refusal_render.restype = ctypes.c_int32
     lib.sonare_last_refusal_render.argtypes = [
         ctypes.POINTER(ctypes.c_char_p),

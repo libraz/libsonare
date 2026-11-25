@@ -27,6 +27,10 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "configJson must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  bool typed_document = false;
+  if (!OptionalBoolArg(env, info, 5, "typedDocument", false, &typed_document)) {
+    return env.Undefined();
+  }
   const SonareHrtfSet* hrtf = nullptr;
   if (!HrtfSetWrap::ReadHandle(env, info[4], &hrtf)) return env.Undefined();
 
@@ -41,9 +45,10 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t out_frames = 0;
   int out_channels = 0;
-  ThrowIfError(env, sonare_playback_render_interleaved(
-                        sonare_node::ElementData(input), frames, in_channels, sample_rate,
-                        config_json.c_str(), hrtf, &out, &out_frames, &out_channels));
+  const SonareError err = sonare_playback_render_interleaved(
+      sonare_node::ElementData(input), frames, in_channels, sample_rate, config_json.c_str(), hrtf,
+      &out, &out_frames, &out_channels);
+  if (err != SONARE_OK) ThrowSonareError(env, err, "", typed_document);
   if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Float32Array samples =

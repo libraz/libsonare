@@ -55,35 +55,35 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
   }
 
   void supply(int64_t page_index, val channels_val) {
-    if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
-      throw WasmRangeError("invalid page index");
-    }
-    const std::size_t channel_count = wasmPlaneListLength(channels_val, "channels");
-    if (channel_count != static_cast<std::size_t>(channels_)) {
-      throw WasmRangeError("clip page channel count mismatch");
-    }
-    auto page = std::make_unique<Page>();
-    page->channels.reserve(static_cast<size_t>(channels_));
-    for (int ch = 0; ch < channels_; ++ch) {
-      const std::string channel_name = "channels[" + std::to_string(ch) + "]";
-      std::vector<float> channel = float32ArrayToVector(channels_val[ch], channel_name.c_str());
-      if (ch == 0) {
-        page->frames = static_cast<int64_t>(channel.size());
-        const int64_t page_start = page_index * page_frames_;
-        const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
-        if (page->frames != max_frames) {
-          throw WasmRangeError("invalid clip page frame count");
-        }
-      } else if (static_cast<int64_t>(channel.size()) != page->frames) {
-        throw WasmRangeError("all clip page channels must have the same length");
+    withCEntryRefusal("clip_page_provider_supply", [&] {
+      if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
+        throw WasmRangeError("invalid page index");
       }
-      page->channels.push_back(std::move(channel));
-    }
-    const size_t index = static_cast<size_t>(page_index);
-    std::unique_ptr<Page> retired = std::move(pages_[index]);
-    pages_[index] = std::move(page);
-    page_ptrs_[index].store(pages_[index].get(), std::memory_order_release);
-    reclaimAfterEpoch(std::move(retired));
+      const std::size_t channel_count = wasmPlaneListLength(channels_val, "channels");
+      if (channel_count != static_cast<std::size_t>(channels_)) {
+        throw WasmRangeError("clip page channel count mismatch");
+      }
+      auto page = std::make_unique<Page>();
+      page->channels.reserve(static_cast<size_t>(channels_));
+      for (int ch = 0; ch < channels_; ++ch) {
+        const std::string channel_name = "channels[" + std::to_string(ch) + "]";
+        std::vector<float> channel = float32ArrayToVector(channels_val[ch], channel_name.c_str());
+        if (ch == 0) {
+          page->frames = static_cast<int64_t>(channel.size());
+        } else if (static_cast<int64_t>(channel.size()) != page->frames) {
+          throw WasmRangeError("all clip page channels must have the same length");
+        }
+        page->channels.push_back(std::move(channel));
+      }
+      sonare::engine::admit_clip_page_frame_count(page_index, samples_, page_frames_, page->frames,
+                                                  "frames");
+
+      const size_t index = static_cast<size_t>(page_index);
+      std::unique_ptr<Page> retired = std::move(pages_[index]);
+      pages_[index] = std::move(page);
+      page_ptrs_[index].store(pages_[index].get(), std::memory_order_release);
+      reclaimAfterEpoch(std::move(retired));
+    });
   }
 
   void clear(int64_t page_index) {

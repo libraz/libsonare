@@ -7,6 +7,7 @@ import {
   PlaybackRenderer,
   renderPlayback,
 } from '../src/index.js';
+import { addon } from '../src/native.js';
 import type { PlaybackRendererConfig } from '../src/types_playback.js';
 import { expectRefusal, present, sine, unknownKeyError } from './_helpers.js';
 
@@ -675,4 +676,65 @@ describe('playback constructors take one options object', () => {
     ) => PlaybackLoudnessMeter;
     expect(() => new positional(2, 48000)).toThrow(TypeError);
   });
+});
+
+describe.each(['PlaybackRenderer.setConfig', 'renderPlayback'] as const)(
+  '%s config arguments',
+  (entry) => {
+    it.each([
+      [
+        { target: { kind: 'speakers', layout: 9 } },
+        TypeError,
+        'config.target.layout must be a string',
+      ],
+      [
+        { target: { kind: 'speakers', layout: '9.9' } },
+        RangeError,
+        'config.target.layout must be one of stereo, 5.1, 7.1',
+      ],
+      [{ target: { bad_key: 1 } }, TypeError, 'unknown key config.target.bad_key'],
+    ])('names the supplied config path and preserves the refusal kind', (config, error, cause) => {
+      const sampleRate = 48000;
+      if (entry === 'PlaybackRenderer.setConfig') {
+        const renderer = new PlaybackRenderer({
+          sampleRate,
+          config: { target: { kind: 'speakers', layout: 'stereo' } },
+        });
+        try {
+          const call = () => renderer.setConfig(config as never);
+          expect(call).toThrow(error);
+          expect(call).toThrow(`${entry}: ${cause}`);
+        } finally {
+          renderer.destroy();
+        }
+        return;
+      }
+      const call = () =>
+        renderPlayback({
+          samples: new Float32Array(256),
+          numChannels: 2,
+          sampleRate,
+          config: config as never,
+        });
+      expect(call).toThrow(error);
+      expect(call).toThrow(`${entry}: ${cause}`);
+    });
+  },
+);
+
+it('keeps caller-supplied playback JSON strings documents at the native entries', () => {
+  const document = '{"target":{"kind":"speakers","layout":9}}';
+  const config = '{"target":{"kind":"speakers","layout":"stereo"}}';
+  const renderer = new addon.PlaybackRenderer(config, undefined, 48000, 128);
+  try {
+    for (const call of [
+      () => addon.renderPlayback(new Float32Array(256), 2, 48000, document),
+      () => renderer.setConfig(document),
+    ]) {
+      expect(call).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+      expect(call).toThrow(/: target\.layout must be a string$/);
+    }
+  } finally {
+    renderer.destroy();
+  }
 });

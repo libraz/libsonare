@@ -188,6 +188,10 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
     'Instance method on StreamingEqualizer, which needs an initialized equalizer; its band-index rejection is driven by basic_streaming_metering.test.ts.',
   ],
   [
+    'setConfig',
+    'Instance method on PlaybackRenderer, which needs a configured renderer; the direct addon test below pins a wrong-typed typedDocument and unchanged config.',
+  ],
+  [
     'setHeadOrientation',
     'Instance method on PlaybackRenderer, which needs a configured renderer; its pitchDeg/rollDeg rejection is driven by playback.test.ts.',
   ],
@@ -736,6 +740,24 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     const live = new Set(positionalArgEntryPoints());
     expect([...UNCOVERED_POSITIONAL_GUARDS.keys()].filter((name) => !live.has(name))).toEqual([]);
   });
+});
+
+it('PlaybackRenderer.setConfig refuses a wrong-typed mode without changing its config', () => {
+  const renderer = new addon.PlaybackRenderer(
+    '{"target":{"kind":"speakers","layout":"stereo"}}',
+    null,
+    48000,
+    128,
+  );
+  try {
+    const before = renderer.config();
+    expect(() =>
+      renderer.setConfig('{"target":{"kind":"speakers","layout":"5.1"}}', 1 as never),
+    ).toThrow(new TypeError('PlaybackRenderer.setConfig: typedDocument must be a boolean'));
+    expect(renderer.config()).toEqual(before);
+  } finally {
+    renderer.destroy();
+  }
 });
 
 const DRAINS = ['drainTelemetry', 'drainMeterTelemetry', 'drainScopeTelemetry'] as const;

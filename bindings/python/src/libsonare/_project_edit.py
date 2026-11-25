@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
@@ -12,7 +13,7 @@ import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import SONARE_AUTOMATION_TARGET_UNCHANGED
-from ._narrowing import _MAX_PUBLIC_PPQ
+from ._narrowing import _MAX_PUBLIC_PPQ, _Respelling
 from ._project_mir import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_mir import TakeAlignment as TakeAlignment
 from ._project_mir import align_take_to_reference as align_take_to_reference
@@ -257,6 +258,14 @@ class _ProjectEditMixin:
         interleaved = np.stack([np.ctypeslib.as_array(plane) for plane in planes], axis=1)
         backing, _ = _to_c_float_array(interleaved.reshape(-1), arg_name="channels")
         channels_c = _to_c_int(channel_count, "channels")
+
+        def respell_source_audio_subject(subject: str) -> _Respelling | None:
+            match = re.fullmatch(r"interleaved\[(\d+)\]", subject)
+            if match is None:
+                return None
+            index = int(match.group(1))
+            return _Respelling(f"channels[{index % channel_count}][{index // channel_count}]")
+
         _check(
             _get_lib().sonare_project_set_source_audio(
                 self._require_handle(),
@@ -265,7 +274,8 @@ class _ProjectEditMixin:
                 _to_c_int64(frames, "frames"),
                 channels_c,
                 _to_c_int(sample_rate, "sample_rate"),
-            )
+            ),
+            respelled=respell_source_audio_subject,
         )
 
     @_entry("Project.add_audio_source")

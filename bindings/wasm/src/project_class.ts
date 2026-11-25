@@ -424,6 +424,25 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
   return { ...desc, audio: interleaved, audioChannels: channels };
 }
 
+function respellSourceAudioRefusal(error: unknown, numChannels: number): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined || refusal.cEntry !== 'project_set_source_audio' || numChannels === 0) {
+    return error;
+  }
+  const respelled: Record<string, { name: string; scale: number }> = {};
+  for (const subject of refusal.subjects) {
+    const match = /^channels\[(\d+)\]$/.exec(subject);
+    if (match !== null) {
+      const index = Number(match[1]);
+      respelled[subject] = {
+        name: `channels[${index % numChannels}][${Math.floor(index / numChannels)}]`,
+        scale: 1,
+      };
+    }
+  }
+  return Object.keys(respelled).length === 0 ? error : respellRefusal(error, respelled);
+}
+
 /** Marks a {@link ProjectTimeline} construction as coming from this module. */
 const timelineToken = Symbol('ProjectTimeline');
 
@@ -1507,8 +1526,12 @@ export class Project {
     if (typeof sourceId !== 'number') {
       throw refuseType('sourceId must be an integer');
     }
-    const planar = interleaveChannels(channels, sampleRate);
-    this.native.setSourceAudio(sourceId, planar.audio, planar.numChannels, sampleRate);
+    const planar = interleaveChannels(channels, sampleRate, { scanFinite: false });
+    try {
+      this.native.setSourceAudio(sourceId, planar.audio, planar.numChannels, sampleRate);
+    } catch (error) {
+      throw respellSourceAudioRefusal(error, planar.numChannels);
+    }
   }
 
   /** Replace an audio source's metadata strings as one undoable edit; an omitted string is cleared. */

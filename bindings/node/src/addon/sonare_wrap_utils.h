@@ -86,7 +86,8 @@ Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& m
 /// @brief Translate the just-failed C-ABI call through MakeSonareError.
 ///        The detail and reason are read from that call's last-error record. Binding guards use
 ///        ThrowSonareErrorMessage instead, so they never read or inherit thread-local reasons.
-void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
+void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "",
+                      bool typed_document = false);
 
 /// @brief Translate a document refusal without changing its literal key spelling.
 void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err,

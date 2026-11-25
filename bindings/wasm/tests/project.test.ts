@@ -483,6 +483,25 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('names a non-finite source sample by its planar channel coordinate', () => {
+    const project = new Project();
+    try {
+      const sourceId = project.addAudioSource('asset://source.wav');
+      const error = expectRefusalOf(
+        () =>
+          project.setSourceAudio({
+            sourceId,
+            channels: [new Float32Array([0.25, 0.5]), new Float32Array([0.75, Number.NaN])],
+            sampleRate: 48000,
+          }),
+        RangeError,
+      );
+      expect(error.message).toBe('Project.setSourceAudio: channels[1][1] must be finite');
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('reads, edits, clears, undoes, redoes, and serializes audio source metadata', () => {
     const project = new Project();
     try {

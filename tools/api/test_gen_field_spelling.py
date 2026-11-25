@@ -433,6 +433,39 @@ class RenderTest(unittest.TestCase):
         self.assertIn('kDocumentRoots = {{\n    {"set_strip", "strips[0].", "settings."},', text)
         self.assertIn("std::array<Override, 0> kOverrides", text)
 
+    def test_a_whole_document_root_binds_the_document_and_requires_opt_in(self) -> None:
+        facts = [
+            Fact("render", "document", "param", "python", None),
+            Fact("render", None, "param", "python", "config"),
+            Fact("render", "frames", "param", "python", None),
+        ]
+        rule = {"python": {"document_roots": {"render": ["", "config."]}}}
+        rows, unbound, _ = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["python"], [gen.Row("render", "", "config.", document=True)])
+        self.assertEqual([u.c_subject for u in unbound], ["frames"])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "_field_spelling.py"
+            path.write_text(gen.render_py(rows["python"]))
+            spec = importlib.util.spec_from_file_location("_field_spelling", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        self.assertIsNone(module.document_rooted("render", "target.bad_key"))
+        self.assertEqual(
+            module.document_rooted("render", "target.bad_key", typed_document=True),
+            "config.target.bad_key",
+        )
+        self.assertEqual(module.document_rooted("render", "", typed_document=True), "config")
+
+    def test_a_count_can_name_the_first_plane_when_the_entry_takes_the_list(self) -> None:
+        facts = [
+            Fact("supply", "frames", "param", "node", None),
+            Fact("supply", "channels", "param", "node", "channels"),
+        ]
+        rule = {"node": {"supply.frames": "channels[0].length"}}
+        rows, unbound, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["node"], [gen.Row("supply", "frames", "channels[0].length")])
+        self.assertEqual((unbound, idle), ([], []))
+
     def test_a_document_root_whose_caller_keyword_the_entry_lacks_binds_nothing(self) -> None:
         facts = [Fact("set_strip", None, "param", "node", "options")]
         rule = {"node": {"document_roots": {"set_strip": ["strips[0].", "settings."]}}}

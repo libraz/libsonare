@@ -6,6 +6,8 @@
 # gen_field_spelling.py fails on a row that binds nowhere, which is how a row retires
 # once the C name or the facade name moves to meet the other.
 [node]
+"clip_page_provider_supply.frames" = "channels[0].length"
+"project_set_source_audio.interleaved" = "channels"
 settings_json = "settings"
 band_json = "band"
 reference_sample_rate = "sampleRate"
@@ -50,6 +52,8 @@ offset_samples = "recordOffsetSamples"
 "mel_to_stft.n_frames" = "power.cols"
 
 [wasm]
+"clip_page_provider_supply.frames" = "channels[0].length"
+"project_set_source_audio.interleaved" = "channels"
 settings_json = "settings"
 band_json = "band"
 reference_sample_rate = "sampleRate"
@@ -96,6 +100,8 @@ offset_samples = "recordOffsetSamples"
 "mel_to_stft.n_frames" = "power.cols"
 
 [python]
+"clip_page_provider_supply.frames" = "channels[0] length"
+"project_set_source_audio.interleaved" = "channels"
 key_root = "key.root"
 "project_add_loop_recording_takes.flags" = "partial_tail"
 inserts_json = "inserts"
@@ -154,6 +160,7 @@ offset_samples = "record_offset_samples"
 "pcen.n_frames" = "values.cols"
 
 [python.length_of]
+"project_apply_vocal_edit.sve1_size" = "sve1"
 "cqt_to_audio.n_frames" = "magnitude"
 "mastering_analyze_pair_stereo.reference_length" = "reference"
 "mastering_analyze_pair_stereo.source_length" = "source"
@@ -230,6 +237,7 @@ offset_samples = "record_offset_samples"
 "playback_loudness_meter_create.channels" = "numChannels"
 
 [node.length_of]
+"project_apply_vocal_edit.sve1_size" = "vocalState"
 "align_take_to_reference.reference_len" = "reference"
 "align_take_to_reference.take_len" = "take"
 "chord_functions.count" = "chords"
@@ -298,6 +306,7 @@ offset_samples = "record_offset_samples"
 "vocal_draft_apply.count" = "operations"
 
 [wasm.length_of]
+"project_apply_vocal_edit.sve1_size" = "vocalState"
 "align_take_to_reference.reference_len" = "reference"
 "align_take_to_reference.take_len" = "take"
 "chord_functions.count" = "chords"
@@ -390,6 +399,8 @@ offset_samples = "record_offset_samples"
 # Caller-defined tag keys keep their spelling on every facade.
 [document_roots]
 encode_audio = ["options.tags.", "tags."]
+playback_render_interleaved = ["", "config."]
+playback_renderer_set_config_json = ["", "config."]
 
 # Core parameter-bag subject -> caller key. These spellings apply only to the named entry.
 [parameter_bag_keys.mixing_assistant_suggest]

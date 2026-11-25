@@ -28332,7 +28332,7 @@ test = "bindings/wasm/tests/project.test.ts::takes the CC binding kind as a toke
 [[entry]]
 kind = "method"
 old = "PlaybackRenderer.setConfig"
-changed = "config is a PlaybackRendererConfig object only; a JSON string is a TypeError"
+changed = "config takes a PlaybackRendererConfig object; JSON text is a TypeError. Refusals name config and the supplied key path. Unknown keys and wrong shapes raise TypeError, and out-of-domain values raise RangeError."
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/wasm/tests/playback.test.ts::and a JSON string config"
@@ -28348,7 +28348,7 @@ test = "bindings/wasm/tests/playback.test.ts::and a JSON string config"
 [[entry]]
 kind = "field"
 old = "RenderPlaybackRequest.config"
-changed = "PlaybackRendererConfig object only; a JSON string is a TypeError"
+changed = "config takes a PlaybackRendererConfig object; JSON text is a TypeError. Refusals name config and the supplied key path. Unknown keys and wrong shapes raise TypeError, and out-of-domain values raise RangeError."
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/wasm/tests/playback.test.ts::refuses a serialized JSON string as the configuration"

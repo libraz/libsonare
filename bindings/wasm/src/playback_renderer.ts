@@ -25,7 +25,11 @@ function configJsonText(config: PlaybackRendererConfig): string {
   if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a configuration object`);
   }
-  return stringifyWithinBudget(config, 'config');
+  const document = stringifyWithinBudget(config, 'config');
+  if (typeof document !== 'string' || !document.startsWith('{')) {
+    throw refuseType('config must serialize as an object');
+  }
+  return document;
 }
 
 function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
@@ -182,9 +186,12 @@ export class PlaybackRenderer {
     );
   }
 
-  /** Applies a complete configuration document; a changed prepare key throws. */
+  /**
+   * Applies a configuration. Wrong field types and unknown keys raise TypeError.
+   * Out-of-domain values or changes to prepare keys raise RangeError.
+   */
   setConfig(config: PlaybackRendererConfig): void {
-    this.native.setConfig(configJsonText(config));
+    this.native.setConfig(configJsonText(config), true);
   }
 
   /** The current complete configuration document. */
@@ -340,6 +347,7 @@ export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackRe
         request.sampleRate,
         config,
         hrtf,
+        true,
       );
     // The output has the input's frame count in at least one channel; the native reader
     // refuses a channel count that is not a positive integer, so only a valid one is sized.

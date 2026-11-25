@@ -12,6 +12,7 @@ import {
   renderPlayback,
   SonareError,
 } from '../dist/index.js';
+import { nativeExceptionPtr } from '../src/module_state.js';
 import { expectRefusalOf, unknownKeyError } from './_helpers';
 
 const SR = 48000;
@@ -766,4 +767,87 @@ describe('playback constructors take one options object', () => {
     ) => PlaybackLoudnessMeter;
     expect(() => new positional(2, 48000)).toThrow(TypeError);
   });
+});
+
+describe.each(['PlaybackRenderer.setConfig', 'renderPlayback'] as const)(
+  '%s config arguments',
+  (entry) => {
+    beforeAll(async () => {
+      await init();
+    });
+
+    it.each([
+      [
+        { target: { kind: 'speakers', layout: 9 } },
+        TypeError,
+        'config.target.layout must be a string',
+      ],
+      [
+        { target: { kind: 'speakers', layout: '9.9' } },
+        RangeError,
+        'config.target.layout must be one of stereo, 5.1, 7.1',
+      ],
+      [{ target: { bad_key: 1 } }, TypeError, 'unknown key config.target.bad_key'],
+    ])('names the supplied config path and preserves the refusal kind', (config, error, cause) => {
+      const sampleRate = 48000;
+      if (entry === 'PlaybackRenderer.setConfig') {
+        const renderer = new PlaybackRenderer({
+          sampleRate,
+          config: { target: { kind: 'speakers', layout: 'stereo' } },
+        });
+        try {
+          const call = () => renderer.setConfig(config as never);
+          expect(call).toThrow(error);
+          expect(call).toThrow(`${entry}: ${cause}`);
+        } finally {
+          renderer.destroy();
+        }
+        return;
+      }
+      const call = () =>
+        renderPlayback({
+          samples: new Float32Array(256),
+          numChannels: 2,
+          sampleRate,
+          config: config as never,
+        });
+      expect(call).toThrow(error);
+      expect(call).toThrow(`${entry}: ${cause}`);
+    });
+  },
+);
+
+it('keeps caller-supplied playback JSON strings documents at the native entries', async () => {
+  const module = await (await import('../dist/sonare.js')).default();
+  const document = '{"target":{"kind":"speakers","layout":9}}';
+  const config = '{"target":{"kind":"speakers","layout":"stereo"}}';
+  const renderer = module.createPlaybackRenderer(config, null, 48000, 128);
+  try {
+    for (const call of [
+      () => module.renderPlayback(new Float32Array(256), 2, 48000, document, null),
+      () => renderer.setConfig(document),
+    ]) {
+      let caught: unknown;
+      try {
+        call();
+      } catch (error) {
+        caught = error;
+      }
+      const ptr = nativeExceptionPtr(module, caught);
+      expect(ptr).not.toBeNull();
+      if (ptr === null) {
+        throw caught;
+      }
+      try {
+        expect(module.sonareExceptionInfo(ptr)).toMatchObject({
+          code: ErrorCode.InvalidFormat,
+          message: 'target.layout must be a string',
+        });
+      } finally {
+        module.sonareReleaseException(ptr);
+      }
+    }
+  } finally {
+    renderer.delete();
+  }
 });
