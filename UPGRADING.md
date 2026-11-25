@@ -8848,6 +8848,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MelodyResult.pitchRangeOctaves` | optional; absent when no frame is voiced (was a required number) |
 | `MelodyResult.pitchStability` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
 | `MelodyResult.pitchStability` | optional; absent when no frame is voiced (was a required number) |
+| `NoteEditInput.amplitudeEnvelope` | amplitudeEnvelope is typed Float32Array \| readonly number[], not null; a null at runtime reads as an omitted envelope, as on Node (1.x refused it with TypeError) |
 | `PitchResult.meanF0` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
 | `PitchResult.meanF0` | optional; absent when no frame is voiced (was a required number) |
 | `PitchResult.medianF0` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |

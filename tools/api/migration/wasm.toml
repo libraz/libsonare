@@ -9691,6 +9691,14 @@ rule = "individual"
 test = "bindings/wasm/tests/polyphonic-editing.test.ts::refuses an unusable envelope point by index before replacing the edit"
 
 [[entry]]
+kind = "field"
+old = "NoteEditInput.amplitudeEnvelope"
+changed = "amplitudeEnvelope is typed Float32Array | readonly number[], not null; a null at runtime reads as an omitted envelope, as on Node (1.x refused it with TypeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/polyphonic-editing.test.ts::reads a null amplitude envelope as absent"
+
+[[entry]]
 kind = "option"
 old = "analyze(sampleRate)"
 changed = "required second argument (was optional / later position)"
