@@ -207,6 +207,13 @@ class SonareParameterRefusal : public SonareException {
     std::vector<std::string> subjects;
     subjects.reserve(subjects_.size());
     for (const std::string& subject : subjects_) subjects.push_back(spell(subject));
+    return with_subjects(code, std::move(subjects), caller_spelled);
+  }
+
+ private:
+  [[gnu::noinline]] SonareParameterRefusal with_subjects(ErrorCode code,
+                                                         std::vector<std::string>&& subjects,
+                                                         bool caller_spelled) const {
     SonareParameterRefusal refusal(code, form_, std::move(subjects), predicate_, expected_,
                                    caller_spelled_ || caller_spelled,
                                    code == this->code() ? reason() : std::nullopt);
@@ -214,7 +221,6 @@ class SonareParameterRefusal : public SonareException {
     return refusal;
   }
 
- private:
   SonareParameterRefusal(ErrorCode code, Form form, std::vector<std::string> subjects,
                          std::string predicate, std::string expected, bool caller_spelled,
                          std::optional<ErrorReason> reason = std::nullopt)
