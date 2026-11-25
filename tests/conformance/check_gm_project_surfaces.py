@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -49,7 +50,21 @@ class HarnessFailure(RuntimeError):
     """A deterministic acceptance failure with an actionable message."""
 
 
-def _load_binding_types() -> tuple[object, ...]:
+class BindingTypes(NamedTuple):
+    """The facade classes and ctypes helpers the renderers use, read by name."""
+
+    project: Any
+    synth_patch: Any
+    bounce_options: Any
+    synth_instrument_binding: Any
+    check: Any
+    from_c_float_array: Any
+    get_lib: Any
+    out_float_array: Any
+    project_instrument_binding: Any
+
+
+def _load_binding_types() -> BindingTypes:
     """Import the public Python facade and its existing ctypes declarations."""
     if str(PYTHON_SRC) not in sys.path:
         sys.path.insert(0, str(PYTHON_SRC))
@@ -68,16 +83,16 @@ def _load_binding_types() -> tuple[object, ...]:
             "Python binding unavailable; install the bindings/python environment and "
             f"build the shared library (reason: {exc})"
         ) from exc
-    return (
-        Project,
-        SynthPatch,
-        SonareProjectBounceOptions,
-        SonareSynthInstrumentBinding,
-        _check,
-        _from_c_float_array,
-        _get_lib,
-        _out_float_array,
-        ProjectInstrumentBinding,
+    return BindingTypes(
+        project=Project,
+        synth_patch=SynthPatch,
+        bounce_options=SonareProjectBounceOptions,
+        synth_instrument_binding=SonareSynthInstrumentBinding,
+        check=_check,
+        from_c_float_array=_from_c_float_array,
+        get_lib=_get_lib,
+        out_float_array=_out_float_array,
+        project_instrument_binding=ProjectInstrumentBinding,
     )
 
 
@@ -122,19 +137,15 @@ def _read_fixture() -> tuple[str, bytes]:
 def _render_c(
     serialized: bytes,
     use_gm_programs: bool,
-    types: tuple[object, ...],
+    types: BindingTypes,
 ) -> np.ndarray:
-    (
-        _project,
-        SynthPatch,
-        SonareProjectBounceOptions,
-        SonareSynthInstrumentBinding,
-        check,
-        from_c_float_array,
-        get_lib,
-        out_float_array,
-    ) = types
-    del _project
+    SynthPatch = types.synth_patch
+    SonareProjectBounceOptions = types.bounce_options
+    SonareSynthInstrumentBinding = types.synth_instrument_binding
+    check = types.check
+    from_c_float_array = types.from_c_float_array
+    get_lib = types.get_lib
+    out_float_array = types.out_float_array
     lib = get_lib()
     handle = ctypes.c_void_p()
     diagnostics = ctypes.c_char_p()
@@ -183,8 +194,12 @@ def _render_c(
     return np.asarray(samples, dtype=np.float32)
 
 
-def _render_python(serialized: str, use_gm_programs: bool, types: tuple[object, ...]) -> np.ndarray:
-    Project, SynthPatch, Binding = types[0], types[1], types[8]
+def _render_python(serialized: str, use_gm_programs: bool, types: BindingTypes) -> np.ndarray:
+    Project, SynthPatch, Binding = (
+        types.project,
+        types.synth_patch,
+        types.project_instrument_binding,
+    )
     project = Project.from_json(serialized)
     try:
         samples = project.bounce(
