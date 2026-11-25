@@ -16185,6 +16185,24 @@ entry = "./worklet"
 test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
 
 [[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.sendCommand"
+changed = "Supply targetId and argFloat for parameter writes, argInt for sample seek, argFloat for PPQ seek, targetId and both float operands for loops, argInt and argFloat for punch, targetId for marker seek, and targetId and argInt for solo/mute. Missing operands raise named TypeErrors. 1.x accepted omissions such as argInt on a sample seek and supplied zero on the transport."
+domain = "engine"
+rule = "absent-not-sentinel"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::creates a SAB-backed AudioWorkletNode facade and queues transport commands"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.canSendCommand"
+changed = "Returns false when the opcode needs a missing operand. 1.x considered a sample seek without argInt queueable."
+domain = "engine"
+rule = "absent-not-sentinel"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::creates a SAB-backed AudioWorkletNode facade and queues transport commands"
+
+[[entry]]
 kind = "option"
 old = "SonareRealtimeEngineNode.play(sampleTime)"
 new = "SonareRealtimeEngineNode.play(renderFrame)"
@@ -16312,8 +16330,17 @@ entry = "./worklet"
 
 [[entry]]
 kind = "method"
+old = "SonareEngine.addMarker"
+changed = "Omit name to create an unnamed marker, whose record omits the name field; 1.x returned an empty string. An explicit empty name is refused."
+domain = "engine"
+rule = "absent-not-sentinel"
+entry = "./worklet"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::syncs time signatures and requests transport state over the worklet port"
+
+[[entry]]
+kind = "method"
 old = "SonareEngine.setMarkers"
-changed = "entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]. Nonzero keyFifths and true keyMinor are refused on markers of other kinds."
+changed = "entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]; an unnamed marker omits name, which 1.x returned as an empty string. Nonzero keyFifths and true keyMinor are refused on markers of other kinds."
 domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
@@ -21471,6 +21498,22 @@ changed = "now a readonly getter, read it without parentheses"
 domain = "project"
 rule = "getters"
 test = "bindings/wasm/tests/vocal_edit.test.ts::reads the session and draft token and revision as getters"
+
+[[entry]]
+kind = "field"
+old = "VocalTransition.curve"
+changed = "A missing or non-string curve raises TypeError; a string other than smoothstep raises RangeError. 1.x reported RangeError for an omitted curve."
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/vocal_edit.test.ts::requires every transition field and a smoothstep curve"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.apply"
+changed = "An operation without kind raises TypeError naming operation.kind; 1.x refused the resulting empty token with RangeError."
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/vocal_edit.test.ts::requires every transition field and a smoothstep curve"
 
 [[entry]]
 kind = "method"

@@ -11854,6 +11854,14 @@ domain = "project"
 rule = "getters"
 
 [[entry]]
+kind = "field"
+old = "VocalTransition.curve"
+changed = "A missing or non-string curve raises TypeError; a string other than smoothstep raises RangeError. 1.x reported RangeError for an omitted curve."
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/vocal_edit.test.ts::applies an adjacent-note transition through the tagged operation parser"
+
+[[entry]]
 kind = "method"
 old = "VocalEditDraft.token"
 changed = "read the token as a property: draft.token"

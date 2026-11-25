@@ -1,5 +1,6 @@
 import type { EngineClip, SynthPatch } from '../index.js';
 import { ClipPageProvider, RealtimeEngine } from '../index.js';
+import { requireCommandOperand } from '../internal/engine_command_ring.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { refuse, refuseType } from '../internal/entry.js';
 import { errorText, failurePayload } from '../internal/failure_payload.js';
@@ -1335,7 +1336,10 @@ export class SonareRealtimeEngineWorkletProcessor {
         return;
       }
       // Serial-number order, so the comparison survives the uint32 sequence wrapping.
-      if ((((command.syncSequence ?? 0) - this.syncSequence) | 0) > 0) {
+      if (
+        command.syncSequence !== undefined &&
+        ((command.syncSequence - this.syncSequence) | 0) > 0
+      ) {
         this.heldCommand = command;
         return;
       }
@@ -1369,15 +1373,15 @@ export class SonareRealtimeEngineWorkletProcessor {
         // paramId is carried in targetId, the new value in argFloat (matches the
         // SonareEngine.setParam producer). renderFrame is the render frame.
         this.engine.setParameter(
-          Math.trunc(Number(command.targetId ?? 0)),
-          Number(command.argFloat ?? 0),
+          Math.trunc(Number(requireCommandOperand(command, 'targetId'))),
+          Number(requireCommandOperand(command, 'argFloat')),
           renderFrame,
         );
         break;
       case SonareEngineCommandType.SetParamSmoothed:
         this.engine.setParameter(
-          Math.trunc(Number(command.targetId ?? 0)),
-          Number(command.argFloat ?? 0),
+          Math.trunc(Number(requireCommandOperand(command, 'targetId'))),
+          Number(requireCommandOperand(command, 'argFloat')),
           renderFrame,
           { smoothed: true },
         );
@@ -1389,16 +1393,16 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.stop(renderFrame);
         break;
       case SonareEngineCommandType.TransportSeekSample:
-        this.engine.seekSample(Number(command.argInt ?? 0), renderFrame);
+        this.engine.seekSample(Number(requireCommandOperand(command, 'argInt')), renderFrame);
         break;
       case SonareEngineCommandType.TransportSeekPpq:
-        this.engine.seekPpq(Number(command.argFloat ?? 0), renderFrame);
+        this.engine.seekPpq(Number(requireCommandOperand(command, 'argFloat')), renderFrame);
         break;
       case SonareEngineCommandType.SetLoop:
         this.engine.setLoop({
-          startPpq: Number(command.argFloat ?? 0),
-          endPpq: Number(command.argFloat2 ?? 0),
-          enabled: command.targetId !== 0,
+          startPpq: Number(requireCommandOperand(command, 'argFloat')),
+          endPpq: Number(requireCommandOperand(command, 'argFloat2')),
+          enabled: requireCommandOperand(command, 'targetId') !== 0,
         });
         break;
       case SonareEngineCommandType.ArmRecord:
@@ -1408,11 +1412,15 @@ export class SonareRealtimeEngineWorkletProcessor {
         // Both endpoints already arrive as samples (see SonareEngine.punch);
         // do NOT re-scale by sampleRate. A fractional out point is refused
         // (reported as InvalidCommand telemetry), never rounded.
-        const outSample = Number(command.argFloat ?? 0);
+        const outSample = Number(requireCommandOperand(command, 'argFloat'));
         if (!Number.isSafeInteger(outSample)) {
           throw refuse('Punch out sample must be a safe integer');
         }
-        this.native.setCapturePunch(Number(command.argInt ?? 0), outSample, true);
+        this.native.setCapturePunch(
+          Number(requireCommandOperand(command, 'argInt')),
+          outSample,
+          true,
+        );
         break;
       }
       case SonareEngineCommandType.SetMetronome:
@@ -1436,13 +1444,16 @@ export class SonareRealtimeEngineWorkletProcessor {
       case SonareEngineCommandType.SeekMarker:
         // The realtime engine's markers are kept in sync via 'syncMarkers'
         // (RtPublisher-style swap), so a queued kSeekMarker resolves correctly.
-        this.engine.seekMarker(Math.trunc(Number(command.targetId ?? 0)), renderFrame);
+        this.engine.seekMarker(
+          Math.trunc(Number(requireCommandOperand(command, 'targetId'))),
+          renderFrame,
+        );
         break;
       case SonareEngineCommandType.SetSoloMute:
         this.native.setSoloMute(
-          Math.trunc(Number(command.targetId ?? 0)),
-          (Number(command.argInt ?? 0) & 0x2) !== 0,
-          (Number(command.argInt ?? 0) & 0x1) !== 0,
+          Math.trunc(Number(requireCommandOperand(command, 'targetId'))),
+          (Number(requireCommandOperand(command, 'argInt')) & 0x2) !== 0,
+          (Number(requireCommandOperand(command, 'argInt')) & 0x1) !== 0,
           renderFrame,
         );
         break;

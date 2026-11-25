@@ -868,10 +868,36 @@ describe('Sonare worklet ring buffers', () => {
       expect(popSonareEngineCommandRingBuffer(ring)).toBeNull();
     });
 
+    it('requires opcode operands and round-trips an explicit zero', () => {
+      const ring = createSonareEngineCommandRingBuffer({ capacity: 2 });
+      const commands = [
+        [SonareEngineCommandType.SetParam, { targetId: 0, argFloat: 0 }],
+        [SonareEngineCommandType.SetParamSmoothed, { targetId: 0, argFloat: 0 }],
+        [SonareEngineCommandType.TransportSeekSample, { argInt: 0 }],
+        [SonareEngineCommandType.TransportSeekPpq, { argFloat: 0 }],
+        [SonareEngineCommandType.SetLoop, { targetId: 0, argFloat: 0, argFloat2: 0 }],
+        [SonareEngineCommandType.Punch, { argInt: 0, argFloat: 0 }],
+        [SonareEngineCommandType.SeekMarker, { targetId: 0 }],
+        [SonareEngineCommandType.SetSoloMute, { targetId: 0, argInt: 0 }],
+      ] as const;
+      for (const [type, payload] of commands) {
+        for (const field of Object.keys(payload)) {
+          const partial: Record<string, unknown> = { type, ...payload };
+          delete partial[field];
+          const write = () => pushSonareEngineCommandRingBuffer(ring, partial as never);
+          expect(write).toThrow(TypeError);
+          expect(write).toThrow(`${field} must be a number`);
+          expect(popSonareEngineCommandRingBuffer(ring)).toBeNull();
+        }
+        expect(pushSonareEngineCommandRingBuffer(ring, { type, ...payload })).toBe(true);
+        expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({ type, ...payload });
+      }
+    });
+
     it('holds type and targetId to the uint32 slot the readers are unsigned on', () => {
       const ring = createSonareEngineCommandRingBuffer({ capacity: 8 });
       const push = (command: { type: number; targetId?: number }): boolean =>
-        pushSonareEngineCommandRingBuffer(ring, command);
+        pushSonareEngineCommandRingBuffer(ring, { ...command, argInt: 0 });
 
       // The slot is load-bearing: two ids round-trip as two distinct records,
       // and the top of the domain survives rather than folding to 0.

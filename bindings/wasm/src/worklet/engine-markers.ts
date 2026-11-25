@@ -18,10 +18,10 @@ export interface EngineMarkerContext extends EngineCommitContext {
   setLoop(startPpq: number, endPpq: number, enabled: boolean): void;
 }
 
-export function addMarker(ctx: EngineMarkerContext, ppq: number, name = ''): number {
+export function addMarker(ctx: EngineMarkerContext, ppq: number, name?: string): number {
   const id = ctx.getNextMarkerId();
   const staged = new Map(ctx.markers);
-  staged.set(id, { id, ppq, name });
+  staged.set(id, name === undefined ? { id, ppq } : { id, ppq, name });
   commitMarkers(ctx, staged);
   ctx.setNextMarkerId(id + 1);
   return id;

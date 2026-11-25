@@ -14,6 +14,7 @@ import {
   toUint32Slot,
   writeInt64Words,
 } from '../worklet/ring-core.js';
+import { refuseType } from './entry.js';
 
 export const SONARE_ENGINE_COMMAND_RECORD_BYTES = 40;
 
@@ -50,15 +51,18 @@ export enum SonareEngineCommandType {
 
 export interface SonareEngineCommandRecord {
   type: SonareEngineCommandType | number;
+  /** Required for parameter, marker-seek, loop-enable and solo/mute commands. */
   targetId?: number;
   /** Absolute render frame the command applies at; `-1` or absent: the next block head. */
   renderFrame?: number | bigint;
+  /** Required for parameter, PPQ seek, loop and punch commands. */
   argFloat?: number;
+  /** Required for sample seek, punch and solo/mute commands. */
   argInt?: number | bigint;
   /**
    * A second full-precision double, carried in the 8-byte lane `argInt` uses by
    * the command types that need one (`SetLoop`, for its end PPQ); those types
-   * carry no `argInt`.
+   * carry no `argInt`. Required for `SetLoop`.
    */
   argFloat2?: number;
   /**
@@ -66,6 +70,50 @@ export interface SonareEngineCommandRecord {
    * sync posted before this command, which the worklet applies first.
    */
   syncSequence?: number;
+}
+
+type CommandOperand = 'targetId' | 'argFloat' | 'argFloat2' | 'argInt';
+
+const commandOperands: ReadonlyMap<number, readonly CommandOperand[]> = new Map([
+  [SonareEngineCommandType.SetParam, ['targetId', 'argFloat']],
+  [SonareEngineCommandType.SetParamSmoothed, ['targetId', 'argFloat']],
+  [SonareEngineCommandType.TransportSeekSample, ['argInt']],
+  [SonareEngineCommandType.TransportSeekPpq, ['argFloat']],
+  [SonareEngineCommandType.SetLoop, ['targetId', 'argFloat', 'argFloat2']],
+  [SonareEngineCommandType.Punch, ['argInt', 'argFloat']],
+  [SonareEngineCommandType.SeekMarker, ['targetId']],
+  [SonareEngineCommandType.SetSoloMute, ['targetId', 'argInt']],
+]);
+const noOperands: readonly CommandOperand[] = [];
+const EMPTY_OPERAND_SLOT = 0;
+
+export function requiredCommandOperands(type: SonareEngineCommandType): readonly CommandOperand[] {
+  return commandOperands.get(type) ?? noOperands;
+}
+
+export function hasCommandOperand(
+  command: SonareEngineCommandRecord,
+  field: CommandOperand,
+): boolean {
+  const value = command[field];
+  return typeof value === 'number' || (field === 'argInt' && typeof value === 'bigint');
+}
+
+export function requireCommandOperand<K extends CommandOperand>(
+  command: SonareEngineCommandRecord,
+  field: K,
+): NonNullable<SonareEngineCommandRecord[K]> {
+  const value = command[field];
+  if (value == null || !hasCommandOperand(command, field)) {
+    throw refuseType(`${field} must be a number`);
+  }
+  return value;
+}
+
+export function requireCommandOperands(command: SonareEngineCommandRecord): void {
+  for (const field of requiredCommandOperands(command.type)) {
+    requireCommandOperand(command, field);
+  }
 }
 
 export interface SonareEngineCommandRingBuffer {
@@ -104,6 +152,7 @@ export function pushSonareEngineCommandRingBuffer(
   ring: SonareEngineCommandRingBuffer,
   command: SonareEngineCommandRecord,
 ): boolean {
+  requireCommandOperands(command);
   const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
   if (sonareRingCursorDistance(readIndex, writeIndex, ring.capacity) >= ring.capacity) {
@@ -162,12 +211,13 @@ function writeEngineCommandRecord(
   view.setUint32(offset, toUint32Slot(command.type, 0, 'type'), true);
   view.setUint32(offset + 4, toUint32Slot(command.targetId, 0, 'targetId'), true);
   writeInt64Words(view, offset + 8, toSafeInteger(command.renderFrame, -1));
+  // Unused slots stay zero. The required operands were checked before reserving the record.
   // argFloat occupies a full 8-byte Float64 slot (replacing the old Float32 +
   // 4-byte pad) so PPQ scalars carried here keep full double precision over the
   // SAB transport, matching the engine's double-precision seek/loop contract.
-  view.setFloat64(offset + 16, command.argFloat ?? 0, true);
+  view.setFloat64(offset + 16, command.argFloat ?? EMPTY_OPERAND_SLOT, true);
   if (command.type === SonareEngineCommandType.SetLoop) {
-    view.setFloat64(offset + 24, command.argFloat2 ?? 0, true);
+    view.setFloat64(offset + 24, command.argFloat2 ?? EMPTY_OPERAND_SLOT, true);
   } else {
     writeInt64Words(view, offset + 24, toSafeInteger(command.argInt, 0));
   }

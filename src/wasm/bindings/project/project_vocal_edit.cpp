@@ -195,7 +195,8 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
                                     sonare::kAudioSampleRateDomain);
   const val rendered_start = property(request, "renderedStartSample");
   storage->desc.rendered_start_sample =
-      absent(rendered_start) ? 0 : checkedInt64FromVal(rendered_start, "renderedStartSample");
+      absent(rendered_start) ? storage->desc.rendered_start_sample
+                             : checkedInt64FromVal(rendered_start, "renderedStartSample");
   if (storage->desc.rendered_start_sample != 0) {
     invalid("renderedStartSample must be zero for the v1 Project vocal API");
   }

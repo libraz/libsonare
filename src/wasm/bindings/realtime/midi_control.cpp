@@ -233,7 +233,7 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
                                      SONARE_CONTROLLER_AXIS_COUNT, "controller axis");
   entry.input = static_cast<sonare::midi::ControllerInput>(input);
   entry.axis = static_cast<sonare::midi::ControllerAxis>(axis);
-  const int index = intProperty(binding, "index", 0);
+  const int index = intProperty(binding, "index", entry.index);
   requireIntegerInRange(index, 0, 127, "index");
   entry.index = static_cast<uint8_t>(index);
   const float lo = floatProperty(binding, "lo", 0.0f);

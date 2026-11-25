@@ -1766,9 +1766,9 @@ export class Project {
     return this.native.setMarker({
       id: optionalId('id', id) ?? 0,
       ppq,
-      name: name ?? '',
+      ...(isAbsent(name) ? {} : { name }),
       kind: projectMarkerKindValue(kind),
-      keyFifths: keyFifths ?? 0,
+      ...(isAbsent(keyFifths) ? {} : { keyFifths }),
       keyMinor: optionalBoolean(keyMinor, 'keyMinor', false),
     });
   }

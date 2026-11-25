@@ -613,9 +613,9 @@ export interface WasmProject {
   setMarker: (marker: {
     id: number;
     ppq: number;
-    name: string;
+    name?: string;
     kind: number;
-    keyFifths: number;
+    keyFifths?: number;
     keyMinor: boolean;
   }) => number;
   markerByIndex: (index: number) => NativeProjectMarker;

@@ -181,10 +181,9 @@ bool ReadApplyRequest(Napi::Env env, const Napi::Value& value, ApplyStorage* sto
     return false;
   }
   const Napi::Value rendered_start = request.Get("renderedStartSample");
-  if (rendered_start.IsUndefined() || rendered_start.IsNull()) {
-    storage->desc.rendered_start_sample = 0;
-  } else if (!RequiredSafeIntegerValue(env, rendered_start, "renderedStartSample",
-                                       &storage->desc.rendered_start_sample)) {
+  if (!rendered_start.IsUndefined() && !rendered_start.IsNull() &&
+      !RequiredSafeIntegerValue(env, rendered_start, "renderedStartSample",
+                                &storage->desc.rendered_start_sample)) {
     return false;
   }
   if (storage->desc.rendered_start_sample != 0) {

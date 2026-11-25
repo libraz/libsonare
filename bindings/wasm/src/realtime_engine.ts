@@ -280,12 +280,12 @@ function requireObject(argName: string, value: unknown): void {
   }
 }
 
-/** An omitted size is `0`, which the native engine reads as the library default; an omitted `maxBlockSize` or `maxChannels` stays absent. */
+/** The native engine resolves omitted sizes to its defaults. */
 interface ResolvedEngineConfig {
   sampleRate: number;
   maxBlockSize: number | undefined;
-  commandCapacity: number;
-  telemetryCapacity: number;
+  commandCapacity: number | undefined;
+  telemetryCapacity: number | undefined;
   maxChannels: number | undefined;
 }
 
@@ -302,8 +302,8 @@ function normalizeEngineConfig(
   return {
     sampleRate,
     maxBlockSize: request.maxBlockSize,
-    commandCapacity: optionalCount('commandCapacity', request.commandCapacity) ?? 0,
-    telemetryCapacity: optionalCount('telemetryCapacity', request.telemetryCapacity) ?? 0,
+    commandCapacity: optionalCount('commandCapacity', request.commandCapacity),
+    telemetryCapacity: optionalCount('telemetryCapacity', request.telemetryCapacity),
     maxChannels: request.maxChannels,
   };
 }

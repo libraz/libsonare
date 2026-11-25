@@ -58,14 +58,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'The vocal note-edit initializer uses unity gain and no formant shift.',
   ],
   [
-    'editing/vocal_edit.cpp:curve',
-    'Omission becomes an invalid token and is already refused; the desired raw error class needs confirmation.',
-  ],
-  [
-    'editing/vocal_edit.cpp:kind',
-    'Omission becomes an invalid token and is already refused; the desired raw error class needs confirmation.',
-  ],
-  [
     'editing/vocal_edit.cpp:outputLengthSamples',
     'ABI sentinel. C zero selects the source length instead of requesting an empty render.',
   ],
@@ -80,10 +72,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'editing/vocal_edit.cpp:frameLengthSamples',
     'The facade validates supplied analysis grid scalars before copying the analysis to embind; the raw fallback cannot substitute for a facade omission.',
-  ],
-  [
-    'effects/notes.cpp:frameRate',
-    'The operation reads the rate with its supplemental pitch data; a public guarantee for the no-rate case was not verified.',
   ],
   ['effects/notes.cpp:pitchSemitones', 'Zero semitones is no pitch shift.'],
   ['effects/notes.cpp:muted', 'A missing mute means the pitch command leaves the note audible.'],
@@ -122,10 +110,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'project/project_arrange.cpp:loopLengthPpq',
     'The C PPQ-length domain already refuses zero, which cannot become a stored clip length.',
-  ],
-  [
-    'project/project_arrange.cpp:name',
-    "Need a documented default for an unnamed sequence; empty remains subject to the entry's name rules.",
   ],
   ['project/project_arrange.cpp:id', 'ABI sentinel. Zero is the auto-assigned sequence id.'],
   [
@@ -201,10 +185,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     "ABI sentinel. Zero is C's base-clip binding selector.",
   ],
   [
-    'project/project_vocal_edit.cpp:renderedStartSample',
-    "Node uses its own absence branch; whether the rendered range's origin should be documented explicitly is unsettled.",
-  ],
-  [
     'project/project_vocal_edit.cpp:failed',
     'Internal callback outcome flags, rather than public request fields.',
   ],
@@ -236,10 +216,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   ['realtime/midi_control.cpp:minValue', 'The controller mapping default lower end is 0.'],
   ['realtime/midi_control.cpp:consume', 'MIDI CC consumption is opt-in.'],
-  [
-    'realtime/midi_control.cpp:index',
-    'The Node reader also substitutes zero; confirm what omission should mean for mapping kinds that use index zero.',
-  ],
   ['realtime/midi_control.cpp:lo', 'The controller mapping default lower end is 0.'],
   [
     'realtime/midi_io.cpp:bankMsb',

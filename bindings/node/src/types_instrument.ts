@@ -510,7 +510,7 @@ export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
 export interface ControllerBinding {
   /** Gesture the device sends, by name. */
   input: ControllerInput;
-  /** CC number 0..127 for `'controlChange'`; every other input ignores it. */
+  /** CC number 0..127 for `'controlChange'`; every other input ignores it. Default `0`. */
   index?: number;
   /** Expression axis the gesture means, by name. */
   axis: ControllerAxis;

@@ -147,6 +147,8 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       expect(engine.seekMarker(stored[0].id)).toBeUndefined();
       expect(engine.setLoopFromMarkers(stored[1].id, stored[0].id)).toBeUndefined();
       expect(() => engine.seekMarker(9999)).toThrow(RangeError);
+      const [unnamed] = engine.setMarkers([{ ppq: 0 }]);
+      expect(unnamed).not.toHaveProperty('name');
       expect(loose(engine).markerByIndex).toBeUndefined();
     } finally {
       engine.destroy();

@@ -7810,6 +7810,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `VocalError` | removed: Catch SonareError; the vocal reason, field, expected and actual values are on its detail (VocalErrorDetail). |
+| `VocalTransition.curve` | A missing or non-string curve raises TypeError; a string other than smoothstep raises RangeError. 1.x reported RangeError for an omitted curve. |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -12448,7 +12449,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SampleBank.addSample` | Omit rootKey for MIDI 60. A written zero now raises RangeError. |
 | `SampleBank.addZone` | Omit keyHi, velLo and velHi to use the default edge. A written zero on these fields raises RangeError. Zero keyLo is still a valid lower edge. |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
+| `SonareEngine.addMarker` (`./worklet`) | Omit name to create an unnamed marker, whose record omits the name field; 1.x returned an empty string. An explicit empty name is refused. |
 | `SonareEngine.setTrackOutputBus` (`./worklet`) | setTrackOutputBus(target, busId: number \| null): null routes to the master, 0 is a RangeError |
+| `SonareRealtimeEngineNode.canSendCommand` (`./worklet`) | Returns false when the opcode needs a missing operand. 1.x considered a sample seek without argInt queueable. |
+| `SonareRealtimeEngineNode.sendCommand` (`./worklet`) | Supply targetId and argFloat for parameter writes, argInt for sample seek, argFloat for PPQ seek, targetId and both float operands for loops, argInt and argFloat for punch, targetId for marker seek, and targetId and argInt for solo/mute. Missing operands raise named TypeErrors. 1.x accepted omissions such as argInt on a sample seek and supplied zero on the transport. |
 | `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'Expected mod source to be a number or string' (1.x read each as its default) |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
@@ -13149,7 +13153,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngine.seekMarker` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false; an unknown marker id is a RangeError |
 | `SonareEngine.setBuiltinInstrument` (`./worklet`) | setBuiltinInstrument(trackId, config?: Omit<BuiltinSynthConfig, 'destinationId'>) takes no destinationId in the config |
 | `SonareEngine.setLoopFromMarkers` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
-| `SonareEngine.setMarkers` (`./worklet`) | entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]. Nonzero keyFifths and true keyMinor are refused on markers of other kinds. |
+| `SonareEngine.setMarkers` (`./worklet`) | entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]; an unnamed marker omits name, which 1.x returned as an empty string. Nonzero keyFifths and true keyMinor are refused on markers of other kinds. |
 | `SonareEngine.setMetronome` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.setParam` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.setSf2Instrument` (`./worklet`) | setSf2Instrument(trackId, config?: Omit<Sf2InstrumentConfig, 'destinationId'>) takes no destinationId in the config |
@@ -13605,8 +13609,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setTempoSegments` | a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `ProjectAutomationLaneDesc.targetParamId` | an absent targetParamId is a TypeError 'targetParamId must be an integer', as on Node (1.x read it as 0 and refused it with RangeError 'targetParamId must be an integer in [1, 4294967295]') |
 | `ProjectTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
+| `VocalEditDraft.apply` | An operation without kind raises TypeError naming operation.kind; 1.x refused the resulting empty token with RangeError. |
 | `VocalEditWorkerClient` | constructor without a Worker throws SonareError NotSupported instead of Error; a draft or session misuse inside the Worker (no open draft, a second draft, undo/redo/export with a draft open, an unknown or reused session id) rejects with SonareError InvalidState instead of Unknown |
 | `VocalEditWorkerStaleResultError` | removed: Catch a SonareError and test isSonareError(e) && e.code === ErrorCode.StaleResult. |
+| `VocalTransition.curve` | A missing or non-string curve raises TypeError; a string other than smoothstep raises RangeError. 1.x reported RangeError for an omitted curve. |
 
 #### Cheap scalar state reads are getters and properties
 

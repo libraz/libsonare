@@ -84,8 +84,14 @@ void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size_v
   const int max_block_size = optionalDomainValue<int>(max_block_size_val, "maxBlockSize",
                                                       sonare_c_detail::kEngineMaxBlockSizeDomain)
                                  .value_or(RealtimeEngine::kDefaultMaxBlock);
-  const int command_capacity = checkedIntFromVal(command_capacity_val, "commandCapacity");
-  const int telemetry_capacity = checkedIntFromVal(telemetry_capacity_val, "telemetryCapacity");
+  const int command_capacity =
+      command_capacity_val.isUndefined()
+          ? static_cast<int>(RealtimeEngine::kDefaultCommandCapacity)
+          : checkedIntFromVal(command_capacity_val, "commandCapacity");
+  const int telemetry_capacity =
+      telemetry_capacity_val.isUndefined()
+          ? static_cast<int>(RealtimeEngine::kDefaultTelemetryCapacity)
+          : checkedIntFromVal(telemetry_capacity_val, "telemetryCapacity");
   const int max_channels = optionalDomainValue<int>(max_channels_val, "maxChannels",
                                                     sonare_c_detail::kEngineMaxChannelsDomain)
                                .value_or(RealtimeEngine::kDefaultMaxChannels);

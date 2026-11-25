@@ -195,11 +195,14 @@ void ProjectWasm::setWarpMap(val desc) {
                              elementField(at, "sourceSample").c_str());
     anchors.push_back(out);
   }
-  std::string name = stringProperty(desc, "name", "");
   SonareProjectWarpMapDesc cdesc{};
+  std::string name;
+  if (hasProperty(desc, "name")) {
+    name = stringFromVal(desc["name"], "name");
+    if (!name.empty()) cdesc.name = wasmCString(name, "name");
+  }
   cdesc.id = optionalDomainValue<uint32_t>(desc["id"], "id", sonare_c_detail::kWarpMapIdDomain)
                  .value_or(0u);
-  cdesc.name = name.empty() ? nullptr : wasmCString(name, "name");
   cdesc.anchors = anchors.empty() ? nullptr : anchors.data();
   cdesc.anchor_count = anchors.size();
   checkCodedCErrorFlattening(sonare_project_set_warp_map(project_.get(), &cdesc), "desc");

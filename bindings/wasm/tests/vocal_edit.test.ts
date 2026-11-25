@@ -473,8 +473,17 @@ describe('WASM vocal edit facade', () => {
           operations: [{ kind: 'setTransition', transition } as unknown as VocalEditOperation],
         });
       expect(() => apply({ ...base, curve: 'linear' })).toThrow(/curve must be smoothstep/);
-      const { curve: _curve, ...withoutCurve } = base;
-      expect(() => apply(withoutCurve)).toThrow(/curve must be smoothstep/);
+      const { curve: _omittedCurve, ...otherwiseValid } = base;
+      const omittedCurve = () => apply(otherwiseValid);
+      expect(omittedCurve).toThrow(TypeError);
+      expect(omittedCurve).toThrow('transition.curve must be a string');
+      const omittedKind = () =>
+        draft.apply({
+          expectedGeneration: draft.token.generation,
+          operations: [{ transition: base } as unknown as VocalEditOperation],
+        });
+      expect(omittedKind).toThrow(TypeError);
+      expect(omittedKind).toThrow('operation.kind must be a string');
       const { strength: _strength, ...withoutStrength } = base;
       expect(() => apply(withoutStrength)).toThrow(/strength/);
       const { leftWindowSamples: _left, ...withoutWindow } = base;

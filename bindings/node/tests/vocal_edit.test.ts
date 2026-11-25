@@ -375,6 +375,24 @@ describe('Node vocal edit facade', () => {
       const notes = session.notes().notes;
       expect(notes).toHaveLength(2);
       const draft = session.beginEdit();
+      const omittedCurve = () =>
+        draft.apply({
+          expectedGeneration: draft.token.generation,
+          operations: [
+            {
+              kind: 'setTransition',
+              transition: {
+                leftNoteId: notes[0].id,
+                rightNoteId: notes[1].id,
+                leftWindowSamples: 0,
+                rightWindowSamples: 0,
+                strength: 0,
+              },
+            } as never,
+          ],
+        });
+      expect(omittedCurve).toThrow(TypeError);
+      expect(omittedCurve).toThrow('transition.curve must be a string');
       const result = draft.apply({
         expectedGeneration: draft.token.generation,
         operations: [

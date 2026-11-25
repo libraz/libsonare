@@ -317,7 +317,10 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
     sonare::util::check::refuse_relation({"f0Hz", "voiced"},
                                          sonare::util::refusal::kPresentWhenPresentRelation);
   }
-  const float frame_rate = floatProperty(options, "frameRate", 0.0f);
+  const val frame_rate_value = objectProperty(options, "frameRate");
+  const float frame_rate = frame_rate_value.isUndefined()
+                               ? float{}
+                               : checkedFloatFromVal(frame_rate_value, "frameRate");
   std::vector<float> f0;
   if (has_track) {
     if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {

@@ -65,6 +65,21 @@ describe('an unset value reads back as an absent key and the record is passable 
     }
   });
 
+  it('keeps the omitted project key signature and explicit fifths', () => {
+    const project = new Project();
+    try {
+      project.setMarker({ ppq: 0, kind: 'keySignature' });
+      project.setMarker({ ppq: 1, kind: 'keySignature', keyFifths: 0 });
+      project.setMarker({ ppq: 2, kind: 'keySignature', keyFifths: -3 });
+      expect(project.markers().map((marker) => marker.keyFifths)).toEqual([0, 0, -3]);
+      for (const marker of project.markers()) {
+        expect(marker).not.toHaveProperty('name');
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('project source metadata', () => {
     withProject((project) => {
       expect(project.sources()[0]).not.toHaveProperty('contentHash');

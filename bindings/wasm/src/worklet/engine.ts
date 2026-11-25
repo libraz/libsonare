@@ -1818,9 +1818,9 @@ export class SonareEngine {
   /**
    * Adds a marker at `ppq` (quarter notes, in [0, 1e12]) and returns its id.
    *
-   * @param name Marker label (omitted: empty).
+   * @param name Marker label. Omit to leave the marker unnamed.
    */
-  addMarker(ppq: number, name = ''): number {
+  addMarker(ppq: number, name?: string): number {
     return markerOps.addMarker(this.markerContext, ppq, name);
   }
 

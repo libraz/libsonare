@@ -695,16 +695,30 @@ describe('SonareRealtimeEngineNode', () => {
           }),
         ).toBe(false);
       }
+      const incompleteSeek = { type: SonareEngineCommandType.TransportSeekSample };
+      expect(node.canSendCommand(incompleteSeek)).toBe(false);
+      expect(() => node.sendCommand(incompleteSeek)).toThrow(
+        new TypeError('SonareRealtimeEngineNode.sendCommand: argInt must be a number'),
+      );
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toBeNull();
       // Every command carries its targetId through the same uint32 slot, so the
       // domain cannot be a property of the monitor-mode type alone. This path
       // answers false where the record writer throws.
       expect(
-        node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, targetId: 5 }),
+        node.sendCommand({
+          type: SonareEngineCommandType.TransportSeekSample,
+          targetId: 5,
+          argInt: 0,
+        }),
       ).toBe(true);
       expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({ targetId: 5 });
       for (const targetId of [-1, 0x1_0000_0000, 5.5]) {
         expect(
-          node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, targetId }),
+          node.sendCommand({
+            type: SonareEngineCommandType.TransportSeekSample,
+            targetId,
+            argInt: 0,
+          }),
         ).toBe(false);
       }
       expect(popSonareEngineCommandRingBuffer(commandRing)).toBeNull();
@@ -3563,6 +3577,11 @@ describe('SonareRealtimeEngineNode', () => {
           expect.objectContaining({ type: 'transportRequest', op: 'state' }),
         ]),
       );
+      expect(() => engine.addMarker(0, '')).toThrow(RangeError);
+      const unnamed = engine.addMarker(0);
+      expect(engine.marker(unnamed)).not.toHaveProperty('name');
+      const [storedUnnamed] = engine.setMarkers([{ id: unnamed, ppq: 0 }]);
+      expect(storedUnnamed).not.toHaveProperty('name');
       engine.destroy();
     });
 

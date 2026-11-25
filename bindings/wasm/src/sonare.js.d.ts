@@ -1419,8 +1419,8 @@ export interface WasmRealtimeEngine {
   prepare: (
     sampleRate: number,
     maxBlockSize: number | undefined,
-    commandCapacity: number,
-    telemetryCapacity: number,
+    commandCapacity: number | undefined,
+    telemetryCapacity: number | undefined,
     maxChannels: number | undefined,
   ) => void;
   /** `smoothed` true queues a ramp; undefined queues a step. */
@@ -3707,8 +3707,8 @@ export interface SonareModule {
   RealtimeEngine: new (
     sampleRate: number,
     maxBlockSize: number | undefined,
-    commandCapacity: number,
-    telemetryCapacity: number,
+    commandCapacity: number | undefined,
+    telemetryCapacity: number | undefined,
     maxChannels?: number,
   ) => WasmRealtimeEngine;
 

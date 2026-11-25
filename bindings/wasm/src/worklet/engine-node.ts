@@ -1,6 +1,11 @@
 import { ErrorCode } from '../errors.js';
 import type { Articulation, EngineCaptureStatus, EngineTransportState } from '../index.js';
 import {
+  hasCommandOperand,
+  requireCommandOperands,
+  requiredCommandOperands,
+} from '../internal/engine_command_ring.js';
+import {
   activeEntry,
   codedError,
   entryClass,
@@ -117,6 +122,7 @@ export function isValidCommandRecord(command: SonareEngineCommandRecord): boolea
     return false;
   }
   return (
+    requiredCommandOperands(type).every((field) => hasCommandOperand(command, field)) &&
     // The record writer refuses a targetId outside the slot by throwing, and
     // this path answers false instead, so it must reject the same domain here.
     (command.targetId === undefined || isUint32Slot(command.targetId)) &&
@@ -128,13 +134,13 @@ export function isValidCommandRecord(command: SonareEngineCommandRecord): boolea
     (type !== SonareEngineCommandType.SetTrackMonitorMode ||
       (isUint32Slot(command.targetId) && isTrackMonitorMode(command.argInt))) &&
     // The live engine refuses a negative position and a PPQ outside the public range.
-    (type !== SonareEngineCommandType.TransportSeekSample || Number(command.argInt ?? 0) >= 0) &&
+    (type !== SonareEngineCommandType.TransportSeekSample || Number(command.argInt) >= 0) &&
     (type !== SonareEngineCommandType.TransportSeekPpq || isPublicPpq(command.argFloat)) &&
     // A punch window carries whole samples: in in argInt, out in argFloat, 0 <= in <= out.
     (type !== SonareEngineCommandType.Punch ||
-      (Number(command.argInt ?? 0) >= 0 &&
-        Number.isSafeInteger(command.argFloat ?? 0) &&
-        (command.argFloat ?? 0) >= Number(command.argInt ?? 0))) &&
+      (Number(command.argInt) >= 0 &&
+        Number.isSafeInteger(command.argFloat) &&
+        Number(command.argFloat) >= Number(command.argInt))) &&
     (type !== SonareEngineCommandType.SetLoop ||
       (command.argInt === undefined &&
         isPublicPpq(command.argFloat) &&
@@ -727,13 +733,15 @@ export class SonareRealtimeEngineNode {
   }
 
   /**
-   * Queues `command` live; false when the record is malformed or the ring is full.
+   * Queues `command` live. Returns false when a value is out of domain or the ring is full.
+   * @throws TypeError when a required command operand is missing or of the wrong type.
    * @throws SonareError `InvalidState` once the node is destroyed.
    *
    * @internal
    */
   sendCommand(command: SonareEngineCommandRecord): boolean {
     this.assertOpen();
+    requireCommandOperands(command);
     if (!isValidCommandRecord(command)) {
       return false;
     }

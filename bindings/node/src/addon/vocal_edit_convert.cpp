@@ -255,8 +255,11 @@ bool ReadTransition(Napi::Env env, const Napi::Value& value, SonareVocalTransiti
     return false;
   }
   const Napi::Value curve = object.Get("curve");
-  if (curve.IsUndefined() || curve.IsNull() || !curve.IsString() ||
-      node_narrow_string(env, curve, "transition.curve") != "smoothstep") {
+  if (!curve.IsString()) {
+    Napi::TypeError::New(env, "transition.curve must be a string").ThrowAsJavaScriptException();
+    return false;
+  }
+  if (node_narrow_string(env, curve, "transition.curve") != "smoothstep") {
     Napi::RangeError::New(env, "transition.curve must be smoothstep").ThrowAsJavaScriptException();
     return false;
   }

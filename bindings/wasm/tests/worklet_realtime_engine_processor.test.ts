@@ -404,6 +404,19 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
       try {
+        // Omitting either operand leaves the punch window unpublished.
+        processor.receiveMessage({
+          type: SonareEngineCommandType.Punch,
+          renderFrame: -1,
+          argFloat: 4,
+        });
+        expect(engine.captureStatus().punchEnabled).toBe(false);
+        processor.receiveMessage({
+          type: SonareEngineCommandType.Punch,
+          renderFrame: -1,
+          argInt: 0,
+        });
+        expect(engine.captureStatus().punchEnabled).toBe(false);
         processor.receiveMessage({
           type: SonareEngineCommandType.Punch,
           renderFrame: -1,
@@ -3521,7 +3534,9 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         });
         registerSonareRealtimeEngineWorkletProcessor();
         const Ctor = registeredCtor;
-        if (!Ctor) throw new Error('processor was not registered');
+        if (!Ctor) {
+          throw new Error('processor was not registered');
+        }
         expect(
           () =>
             new Ctor({

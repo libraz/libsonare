@@ -283,7 +283,7 @@ SonareVocalTransition transitionFromVal(const val& object) {
   if (!(result.strength >= 0.0 && result.strength <= 1.0)) {
     throw WasmRangeError("transition.strength must be a number in [0, 1]");
   }
-  if (stringPropertyStrict(object, "curve", "") != "smoothstep") {
+  if (requiredStringElementProperty(object, "curve", "transition") != "smoothstep") {
     throw WasmRangeError("transition.curve must be smoothstep");
   }
   return result;
@@ -297,7 +297,7 @@ struct OperationStorage {
 SonareVocalOperation operationFromVal(const val& object, OperationStorage* storage) {
   SonareVocalOperation result;
   sonare_vocal_operation_init(&result);
-  const std::string kind = stringPropertyStrict(object, "kind", "");
+  const std::string kind = requiredStringElementProperty(object, "kind", "operation");
   if (kind == "setEdit") {
     result.kind = SONARE_VOCAL_SET_EDIT;
     result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");

@@ -1179,7 +1179,7 @@ export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
     const geometry = withHeapNeed(
       {
         subject: 'estimate.bandAbsorption',
-        size: bandAbsorption === undefined ? 0 : bandAbsorption.length,
+        size: bandAbsorption?.length ?? 0,
         bytes: (n) => 4 * n,
         monotone: true,
       },

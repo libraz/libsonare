@@ -268,7 +268,7 @@ export function resolveMarkerSet(
   }
   const assigned = assignMarkerIds(markers, nextMarkerId);
   return {
-    resolved: assigned.markers.map((marker) => ({ ...marker, name: marker.name ?? '' })),
+    resolved: assigned.markers,
     nextMarkerId: assigned.nextId,
   };
 }
