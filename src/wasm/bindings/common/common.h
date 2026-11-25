@@ -250,14 +250,16 @@ class CEntryRefusal : public sonare::SonareParameterRefusal {
                 std::optional<std::string> reason_override,
                 std::optional<sonare::SonareParameterRefusal> raw_refusal = std::nullopt,
                 bool from_c = false, std::string flattened = {},
-                std::optional<std::string> native_message = std::nullopt)
+                std::optional<std::string> native_message = std::nullopt,
+                bool subjects_converted = false)
       : sonare::SonareParameterRefusal(refusal),
         c_entry_(std::move(c_entry)),
         reason_override_(std::move(reason_override)),
         raw_refusal_(std::move(raw_refusal)),
         from_c_(from_c),
         flattened_(std::move(flattened)),
-        native_message_(std::move(native_message)) {}
+        native_message_(std::move(native_message)),
+        subjects_converted_(subjects_converted) {}
   const std::string& c_entry() const noexcept { return c_entry_; }
   const std::optional<std::string>& reason_override() const noexcept { return reason_override_; }
   const std::optional<sonare::SonareParameterRefusal>& raw_refusal() const noexcept {
@@ -266,6 +268,7 @@ class CEntryRefusal : public sonare::SonareParameterRefusal {
   bool from_c() const noexcept { return from_c_; }
   const std::string& flattened() const noexcept { return flattened_; }
   const std::optional<std::string>& native_message() const noexcept { return native_message_; }
+  bool subjects_converted() const noexcept { return subjects_converted_; }
 
  private:
   std::string c_entry_;
@@ -274,6 +277,7 @@ class CEntryRefusal : public sonare::SonareParameterRefusal {
   bool from_c_ = false;
   std::string flattened_;
   std::optional<std::string> native_message_;
+  bool subjects_converted_ = false;
 };
 
 /// @brief Whether a failing C call may contribute its current reason token.
@@ -298,7 +302,7 @@ class WasmCodedError final : public sonare::SonareException {
 [[noreturn]] inline void throwCEntryRefusal(
     const sonare::SonareParameterRefusal& shown,
     std::optional<std::string> reason_override = std::nullopt, const char* root = "",
-    std::optional<std::string> native_message = std::nullopt) {
+    std::optional<std::string> native_message = std::nullopt, bool subjects_converted = false) {
   const char* entry = sonare_last_refusal_entry();
   std::optional<sonare::SonareParameterRefusal> raw_refusal;
   if (captureRefusalMetadataEnabled()) {
@@ -307,7 +311,7 @@ class WasmCodedError final : public sonare::SonareException {
   std::string flattened = raw_refusal ? root : "";
   throw CEntryRefusal(shown, entry != nullptr ? entry : "", std::move(reason_override),
                       std::move(raw_refusal), entry != nullptr, std::move(flattened),
-                      std::move(native_message));
+                      std::move(native_message), subjects_converted);
 }
 
 /// @brief Rethrows the parameter refusal the last C-ABI call recorded, spelled under the refused

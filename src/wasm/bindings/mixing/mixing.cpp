@@ -300,7 +300,7 @@ void checkOneShotSetter(SonareError err, int index, const char* field) {
         refusal->code(),
         [&](const std::string& subject) { return path + (subject == "db" ? field : subject); },
         true);
-    throwCEntryRefusal(shown);
+    throwCEntryRefusal(shown, std::nullopt, "", std::nullopt, /*subjects_converted=*/true);
   }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err));
 }

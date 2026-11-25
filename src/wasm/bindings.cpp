@@ -395,6 +395,9 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
           raw_record.set("flattened", from_c->flattened());
         }
         record.set("raw", raw_record);
+        if (from_c != nullptr && from_c->subjects_converted()) {
+          record.set("convertedSubjects", record["subjects"]);
+        }
       }
       info.set("refusal", record);
       // An unknown key or a wrong type refuses the request's shape: a TypeError, not a RangeError.
