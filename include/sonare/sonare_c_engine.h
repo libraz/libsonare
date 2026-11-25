@@ -2262,6 +2262,7 @@ void sonare_live_session_config_init(SonareLiveSessionConfig* config);
 /// @details Requires audio input or output. MIDI capture requires audio output.
 ///   Default devices are resolved once. If startup fails after engine preparation,
 ///   the negotiated format and reset transport remain on the engine.
+///   If the engine refuses preparation, the error preserves the engine's cause.
 ///   macOS provides CoreAudio and CoreMIDI. Other platforms report NOT_SUPPORTED.
 ///   Destroy the engine and its session on the control thread, without concurrent calls.
 /// @param out Receives the owned session. Release it with @ref sonare_live_session_destroy.

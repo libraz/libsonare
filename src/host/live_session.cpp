@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <new>
 #include <utility>
@@ -135,6 +136,7 @@ bool LiveSession::midi_input_info(size_t index, LiveDeviceInfo* out) noexcept {
 }
 
 LiveOpenResult LiveSession::open(engine::RealtimeEngine* engine, const Config& config) {
+  prepare_failure_ = nullptr;
   if (engine == nullptr || open_ || !std::isfinite(config.sample_rate) ||
       config.sample_rate <= 0.0 || config.block_size <= 0) {
     return LiveOpenResult::kInvalidArgument;
@@ -172,7 +174,6 @@ LiveOpenResult LiveSession::open(engine::RealtimeEngine* engine, const Config& c
   input_device_open_ = false;
   output_device_open_ = false;
   engine_prepared_ = false;
-  engine_refused_format_ = false;
   device_format_refused_ = false;
   driver_attached_ = false;
   midi_selected_ = config.use_midi_input;
@@ -226,7 +227,7 @@ LiveOpenResult LiveSession::open(engine::RealtimeEngine* engine, const Config& c
       core_audio != nullptr && core_audio->open_device(device_id, stream, &pump_);
   if (!audio_opened) {
     const auto* core = dynamic_cast<const backends::CoreAudioDevice*>(audio_.get());
-    const LiveOpenResult result = engine_refused_format_ ? LiveOpenResult::kEngineRefusedFormat
+    const LiveOpenResult result = prepare_failure_ ? LiveOpenResult::kEngineRefusedFormat
                                   : device_format_refused_ || (core && core->format_refused())
                                       ? LiveOpenResult::kAudioFormatRefused
                                       : LiveOpenResult::kAudioOutputUnavailable;
@@ -261,6 +262,7 @@ LiveOpenResult LiveSession::open(engine::RealtimeEngine* engine, const SelectorC
                                  AudioDeviceOverride input_override,
                                  AudioDeviceOverride output_override,
                                  std::unique_ptr<MidiInputSource> midi_override) {
+  prepare_failure_ = nullptr;
   if (engine == nullptr || open_ || !std::isfinite(config.sample_rate) ||
       config.sample_rate < 0.0 || config.block_size <= 0 ||
       !valid_selector(config.audio_input, false) || !valid_selector(config.audio_output, false) ||
@@ -352,7 +354,6 @@ LiveOpenResult LiveSession::open_devices(engine::RealtimeEngine* engine,
   input_device_open_ = false;
   output_device_open_ = false;
   engine_prepared_ = false;
-  engine_refused_format_ = false;
   device_format_refused_ = false;
   driver_attached_ = false;
   midi_selected_ = false;
@@ -483,7 +484,7 @@ LiveOpenResult LiveSession::open_devices(engine::RealtimeEngine* engine,
       return core != nullptr && core->format_refused();
     };
     const LiveOpenResult failed =
-        engine_refused_format_ ? LiveOpenResult::kEngineRefusedFormat
+        prepare_failure_ ? LiveOpenResult::kEngineRefusedFormat
         : device_format_refused_ || format_refused(audio_.get()) ||
                 format_refused(input_audio_.get()) || format_refused(output_audio_.get())
             ? LiveOpenResult::kAudioFormatRefused
@@ -717,7 +718,7 @@ bool LiveSession::prepare_from_callback(const AudioStreamConfig& config) {
         e.code() != sonare::ErrorCode::InvalidParameter) {
       throw;
     }
-    engine_refused_format_ = true;
+    prepare_failure_ = std::current_exception();
     return false;
   }
   input_scratch_left_.assign(static_cast<size_t>(max_block), 0.0f);

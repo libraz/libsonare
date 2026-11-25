@@ -6,6 +6,7 @@
 #define SONARE_C_LIVE_AVAILABLE
 #include <algorithm>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <string>
 
@@ -95,7 +96,7 @@ host::LiveSession::DeviceSelector selector(SonareLiveDeviceSelect value, const c
   return {value == SONARE_LIVE_DEVICE_DEFAULT ? Selection::kDefault : Selection::kNone, {}};
 }
 
-SonareError open_error(host::LiveOpenResult result) {
+SonareError open_error(host::LiveOpenResult result, const host::LiveSession& session) {
   using Open = host::LiveOpenResult;
   using Code = sonare::ErrorCode;
   using Reason = sonare::ErrorReason;
@@ -116,10 +117,25 @@ SonareError open_error(host::LiveOpenResult result) {
     case Open::kAudioOutputStartFailed:
       return unavailable("config.audio_output");
     case Open::kAudioFormatRefused:
-    case Open::kEngineRefusedFormat:
       throw sonare::SonareParameterRefusal::predicate_with_reason(
           Code::NotSupported, "config.sample_rate", "must be supported by the engine and devices",
           Reason::DeviceFormatRefused);
+    case Open::kEngineRefusedFormat: {
+      const std::exception_ptr failure = session.prepare_failure();
+      if (failure != nullptr) {
+        try {
+          std::rethrow_exception(failure);
+        } catch (const sonare::SonareParameterRefusal& refusal) {
+          throw refusal.respelled(
+              refusal.code(),
+              [](const std::string& subject) {
+                return subject == "sample_rate" ? std::string("config.sample_rate") : subject;
+              },
+              false);
+        }
+      }
+      throw sonare::SonareException(Code::InvalidState, "engine prepare failure was not retained");
+    }
     case Open::kEngineAlreadyDriven:
       throw sonare::SonareParameterRefusal::predicate_with_reason(
           Code::InvalidState, "engine", "is driven by a live device", Reason::EngineDeviceDriven);
@@ -219,7 +235,8 @@ SonareError sonare_live_session_create(SonareEngine* engine, const SonareLiveSes
   settings.destination_id = config->destination_id;
   engine->engine.require_quiescent();
   auto session = std::make_unique<SonareLiveSession>();
-  const SonareError result = open_error(session->host.open(&engine->engine, settings));
+  const SonareError result =
+      open_error(session->host.open(&engine->engine, settings), session->host);
   if (result == SONARE_OK) *out = session.release();
   return result;
   SONARE_C_CATCH

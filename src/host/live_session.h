@@ -22,6 +22,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -190,6 +191,9 @@ class LiveSession final : public engine::LiveDriver {
                       AudioDeviceOverride input_override, AudioDeviceOverride output_override,
                       std::unique_ptr<MidiInputSource> midi_override);
 
+  /// Original engine prepare failure, retained for the C error boundary.
+  std::exception_ptr prepare_failure() const noexcept { return prepare_failure_; }
+
   /// CONTROL thread: stops output before input and closes both devices. Restores
   /// an owned prior MIDI input binding only while this session's source remains
   /// active; an intervening replacement is preserved. Safe before open().
@@ -287,6 +291,7 @@ class LiveSession final : public engine::LiveDriver {
   bool input_requested_ = false;
   bool output_requested_ = false;
   bool engine_prepared_ = false;
+  std::exception_ptr prepare_failure_;
   bool driver_attached_ = false;
   bool midi_selected_ = false;
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -296,8 +301,6 @@ class LiveSession final : public engine::LiveDriver {
   bool input_uses_ring_ = false;
   bool clock_locked_ = false;
   bool open_ = false;
-  /// Set by Pump::open() when the engine, not the device, refused the format.
-  bool engine_refused_format_ = false;
   bool device_format_refused_ = false;
   bool require_exact_rate_ = false;
 };

@@ -12,19 +12,93 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
+#include <exception>
 #include <limits>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "engine/realtime_engine.h"
+#include "host/audio_device.h"
+#include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
 using sonare::engine::RealtimeEngine;
+using sonare::host::AudioDevice;
+using sonare::host::AudioDeviceCallback;
+using sonare::host::AudioStreamConfig;
 using sonare::host::LiveDeviceInfo;
 using sonare::host::LiveOpenResult;
 using sonare::host::LiveSession;
+
+struct FakeOutputState {
+  int opens = 0;
+  int starts = 0;
+  int stops = 0;
+  int closes = 0;
+};
+
+class FakeOutputDevice final : public AudioDevice {
+ public:
+  explicit FakeOutputDevice(FakeOutputState* state) : state_(state) {}
+
+  bool open(const AudioStreamConfig& config, AudioDeviceCallback* callback) override {
+    ++state_->opens;
+    if (callback == nullptr || config.num_input_channels != 0 || config.num_output_channels != 2) {
+      return false;
+    }
+    callback_ = callback;
+    if (!callback_->open(config)) {
+      ++state_->closes;
+      callback_->close();
+      callback_ = nullptr;
+      return false;
+    }
+    return true;
+  }
+
+  bool start() override {
+    ++state_->starts;
+    return true;
+  }
+
+  void stop() noexcept override { ++state_->stops; }
+
+  void close() noexcept override {
+    if (callback_ == nullptr) return;
+    ++state_->closes;
+    callback_->close();
+    callback_ = nullptr;
+  }
+
+  bool is_running() const noexcept override { return false; }
+
+ private:
+  FakeOutputState* state_;
+  AudioDeviceCallback* callback_ = nullptr;
+};
+
+LiveSession::AudioDeviceOverride fake_output(FakeOutputState* state) {
+  LiveSession::AudioDeviceOverride output;
+  output.info.id = 17;
+  output.info.uid = "mock-output";
+  output.info.name = "Mock output";
+  output.info.output_channels = 2;
+  output.info.nominal_sample_rate = 8000.0;
+  output.device = std::make_unique<FakeOutputDevice>(state);
+  return output;
+}
+
+LiveSession::SelectorConfig fake_output_config() {
+  LiveSession::SelectorConfig config;
+  config.audio_output = {LiveSession::DeviceSelection::kByUid, "mock-output"};
+  config.sample_rate = 8000.0;
+  config.block_size = 128;
+  return config;
+}
 
 }  // namespace
 
@@ -290,4 +364,69 @@ TEST_CASE("LiveSession runs a minute of 128-frame blocks without a dropout",
   REQUIRE(static_cast<double>(callbacks) < expected * 1.02);
   REQUIRE(xruns == 0u);
   REQUIRE_FALSE(session.is_running());
+}
+
+TEST_CASE("LiveSession preserves the structured engine prepare refusal",
+          "[host][live][mock_backend]") {
+  RealtimeEngine engine;
+  engine.set_tempo(sonare::constants::kDefaultBpm);
+  engine.set_loop(0.0, 1.0, true);
+  engine.set_capture_timing(5000, 0, 10000, true);
+  engine.set_capture_armed(true);
+
+  FakeOutputState backend;
+  LiveSession session;
+  const auto result = session.open(&engine, fake_output_config(), {}, fake_output(&backend));
+
+  REQUIRE(result == LiveOpenResult::kEngineRefusedFormat);
+  CHECK(backend.opens == 1);
+  CHECK(backend.starts == 0);
+  CHECK(backend.closes == 1);
+  CHECK(engine.live_driver() == nullptr);
+  CHECK_FALSE(session.is_running());
+
+  const auto failure = session.prepare_failure();
+  REQUIRE(failure != nullptr);
+  bool caught = false;
+  try {
+    std::rethrow_exception(failure);
+  } catch (const sonare::SonareParameterRefusal& error) {
+    caught = true;
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(error.subjects().size() == 1);
+    CHECK(error.subjects()[0] == "sample_rate");
+    CHECK(error.what() ==
+          std::string("sample_rate must keep the loop at least 5000 samples long while capture "
+                      "is armed with punch on"));
+    CHECK_FALSE(error.shape_error());
+  }
+  CHECK(caught);
+}
+
+TEST_CASE("LiveSession preserves a plain engine prepare failure", "[host][live][mock_backend]") {
+  RealtimeEngine engine;
+  engine.set_applied_timeline_sample_rate(48000.0);
+
+  FakeOutputState backend;
+  LiveSession session;
+  const auto result = session.open(&engine, fake_output_config(), {}, fake_output(&backend));
+
+  REQUIRE(result == LiveOpenResult::kEngineRefusedFormat);
+  CHECK(backend.opens == 1);
+  CHECK(backend.starts == 0);
+  CHECK(backend.closes == 1);
+  CHECK(engine.live_driver() == nullptr);
+  CHECK_FALSE(session.is_running());
+
+  const auto failure = session.prepare_failure();
+  REQUIRE(failure != nullptr);
+  bool caught = false;
+  try {
+    std::rethrow_exception(failure);
+  } catch (const sonare::SonareException& error) {
+    caught = true;
+    CHECK(error.code() == sonare::ErrorCode::InvalidState);
+    CHECK(error.what() == std::string("sample rate differs from the installed project timeline"));
+  }
+  CHECK(caught);
 }
