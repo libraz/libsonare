@@ -181,6 +181,35 @@ describe('vocal edit Worker client', () => {
     expect(typeof constructors).toBe('function');
   });
 
+  // RED WHEN: a call-options key or value of the wrong shape is dropped and the call runs anyway.
+  it('refuses call options of the wrong shape by name before dispatch', async () => {
+    const worker = new FakeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    const samples = new Float32Array([0]);
+    try {
+      await expect(
+        client.create({ samples, sampleRate: 16000 }, { onProgress: () => {} } as never),
+      ).rejects.toThrow(
+        'VocalEditWorkerClient.create: unknown key options.onProgress (expected copy, signal)',
+      );
+      await expect(
+        client.create({ samples, sampleRate: 16000 }, { signal: {} } as never),
+      ).rejects.toThrow(TypeError);
+      expect(worker.posted).toHaveLength(0);
+      const session = await client.create({ samples, sampleRate: 16000 }, null as never);
+      await expect(
+        session.preview({ startSample: 0, endSample: 1 } as never, { signal: undefined } as never),
+      ).rejects.toThrow(
+        /^VocalEditWorkerSession\.preview: unknown key options\.signal \(expected copy\)$/,
+      );
+      await expect(session.preview({} as never, { copy: 1 } as never)).rejects.toThrow(
+        /^VocalEditWorkerSession\.preview: options\.copy must be a boolean$/,
+      );
+    } finally {
+      client.destroy();
+    }
+  });
+
   it('keeps intent counters increasing across decimal digit boundaries', async () => {
     const worker = new FakeWorker();
     const client = new VocalEditWorkerClient({ worker });

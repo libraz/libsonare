@@ -363,6 +363,44 @@ describe('OfflineWorkerClient', () => {
     await client.destroy();
   });
 
+  // RED WHEN: a call-options key or value of the wrong shape is dropped and the call runs anyway,
+  // as the 1.x `{ onProgress }` options argument did (the work ran and no progress arrived).
+  it.each([
+    [
+      { onProgress: () => {} },
+      'unknown key options.onProgress (expected copy, signal); pass onProgress in the request',
+    ],
+    [{ cancel: true }, 'unknown key options.cancel (expected copy, signal)'],
+    [{ copy: 'yes' }, 'options.copy must be a boolean'],
+    [{ signal: {} }, 'options.signal must be an AbortSignal'],
+    [7, 'options must be an object'],
+  ])('refuses call options %j by name before dispatch', async (options, text) => {
+    const worker = new ThrowingWorker(() => undefined);
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    const call = client.analyze(
+      { samples: new Float32Array([0, 0]), sampleRate: 22050 },
+      options as never,
+    );
+    await expect(call).rejects.toThrow(TypeError);
+    await expect(call).rejects.toThrow(`analyze: ${text}`);
+    expect(worker.calls).toHaveLength(0);
+    await client.destroy();
+  });
+
+  it('takes null call options as absent', async () => {
+    const worker = new ThrowingWorker(() => undefined);
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    const call = client.analyze(
+      { samples: new Float32Array([0, 0]), sampleRate: 22050 },
+      null as never,
+    );
+    expect(worker.calls).toHaveLength(1);
+    await client.destroy();
+    await expect(call).rejects.toSatisfy(
+      (e: unknown) => isSonareError(e) && e.code === ErrorCode.InvalidState,
+    );
+  });
+
   it('refuses a function-valued request field with a TypeError naming it, before dispatch', async () => {
     const worker = new ThrowingWorker(() => undefined);
     const client = clientWith(worker as unknown as LoopbackWorker);

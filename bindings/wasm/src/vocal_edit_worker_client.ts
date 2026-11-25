@@ -17,6 +17,7 @@ import {
 } from './internal/vocal_edit_worker_protocol.js';
 import { attachVocalErrorDetail, isVocalErrorDetail } from './internal/vocal_error_detail.js';
 import { expectedRevisionOption } from './internal/vocal_revision.js';
+import { checkWorkerCallOptions } from './internal/worker_call_options.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -282,6 +283,7 @@ class ClientCore {
     const sessionId = nextSessionId(this.nextSession++);
     let reply: Promise<CallReply<VocalWorkerCreateResult>>;
     try {
+      checkWorkerCallOptions(options, ['copy', 'signal']);
       const message: VocalWorkerCreateMessage = {
         type: 'sonare:vocal-create',
         id: 0,
@@ -420,8 +422,14 @@ class ClientCore {
   mutate<T>(
     session: SessionState,
     mutation: VocalWorkerMutation,
-    options: VocalEditWorkerTransferOptions = {},
+    options: VocalEditWorkerTransferOptions | null = {},
   ): Promise<T> {
+    try {
+      checkWorkerCallOptions(options ?? {}, ['copy']);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    const copy = options?.copy;
     const message: VocalWorkerMutateMessage = {
       type: 'sonare:vocal-mutate',
       id: 0,
@@ -431,14 +439,20 @@ class ClientCore {
       mutation,
     };
     // The reply tokens are adopted in onMessage, before any stale-intent check.
-    return this.call<T>(message, { copy: options.copy }, session).then((reply) => reply.result);
+    return this.call<T>(message, { copy }, session).then((reply) => reply.result);
   }
 
   preview(
     session: SessionState,
     request: VocalRenderAsyncRequest,
-    options: VocalEditWorkerTransferOptions = {},
+    options: VocalEditWorkerTransferOptions | null = {},
   ): Promise<VocalRenderResult> {
+    try {
+      checkWorkerCallOptions(options ?? {}, ['copy']);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    const copy = options?.copy;
     const signal = request.signal;
     const { signal: _ignoredSignal, ...portableRequest } = request;
     const message: VocalWorkerPreviewMessage = {
@@ -452,7 +466,7 @@ class ClientCore {
     // A render result carries requestId/profile metadata in its token. It is
     // a snapshot of the state used for rendering, not a new session token, so
     // it is compared against the session state and never adopted.
-    return this.call<VocalRenderResult>(message, { signal, copy: options.copy }, session).then(
+    return this.call<VocalRenderResult>(message, { signal, copy }, session).then(
       (reply) => reply.result,
     );
   }
@@ -653,17 +667,17 @@ export class VocalEditWorkerClient {
   /** Analyses mono PCM in the Worker and opens an editing session. */
   create(
     request: VocalCreateRequest,
-    options: VocalEditWorkerCallOptions = {},
+    options: VocalEditWorkerCallOptions | null = {},
   ): Promise<VocalEditWorkerSession> {
-    return this.core.open({ kind: 'create', request }, options);
+    return this.core.open({ kind: 'create', request }, options ?? {});
   }
 
   /** Opens a session in the Worker from an exported state blob and the same source PCM. */
   restore(
     request: VocalRestoreRequest,
-    options: VocalEditWorkerCallOptions = {},
+    options: VocalEditWorkerCallOptions | null = {},
   ): Promise<VocalEditWorkerSession> {
-    return this.core.open({ kind: 'restore', request }, options);
+    return this.core.open({ kind: 'restore', request }, options ?? {});
   }
 
   /**

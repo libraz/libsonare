@@ -4,6 +4,7 @@ import './lifetime.js';
 import { codedError, entryClass, refuseType } from './internal/entry.js';
 import { errorText } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { checkWorkerCallOptions } from './internal/worker_call_options.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type { ProgressCallback } from './public_types.js';
 import type {
@@ -278,10 +279,21 @@ export class OfflineWorkerClient {
   private call<T>(
     operation: OfflineWorkerOperation,
     request: WorkerRequest<object>,
-    options: OfflineWorkerCallOptions = {},
+    given: OfflineWorkerCallOptions | null = {},
   ): Promise<T> {
     if (this.closed) {
       return Promise.reject(destroyedError());
+    }
+    const options: OfflineWorkerCallOptions = given ?? {};
+    try {
+      if (typeof options === 'object' && Object.keys(options as object).includes('onProgress')) {
+        throw refuseType(
+          'unknown key options.onProgress (expected copy, signal); pass onProgress in the request',
+        );
+      }
+      checkWorkerCallOptions(options, ['copy', 'signal']);
+    } catch (error) {
+      return Promise.reject(error);
     }
     const signal = options.signal;
     if (signal?.aborted) {
