@@ -4,8 +4,19 @@
  * pan law / meter tap / automation curve, and solo / solo-safe behavior.
  */
 
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, meteringTruePeakDbtp, mixingScenePreset, mixStereo } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  Mixer,
+  meteringTruePeakDbtp,
+  mixingScenePreset,
+  mixStereo,
+  SonareError,
+} from '../dist/index.js';
+import { init as initSource } from '../src/index.js';
+import { getSonareModule } from '../src/module_state.js';
 import { assertStripIndex, expectRefusalOf, present, sine, unknownKeyError } from './_helpers';
 
 const SR = 48000;
@@ -101,6 +112,78 @@ describe('Mixer runtime controls (WASM)', () => {
         Object.getOwnPropertyDescriptor(failure, Symbol.for('libsonare.refusal'))?.value,
       ).toMatchObject({ cEntry, subjects: [subject] });
     }
+  });
+
+  it('preserves argument refusals for VCA group changes', () => {
+    using mixer = new Mixer({ sampleRate: SR, maxBlockSize: BLOCK });
+    mixer.addVcaGroup('existing');
+    expect.soft(() => mixer.addVcaGroup('existing')).toThrow(RangeError);
+    expect
+      .soft(() => mixer.addVcaGroup('existing'))
+      .toThrow(
+        new RangeError(
+          'Mixer.addVcaGroup: id must not be the id of a VCA group already in this mixer',
+        ),
+      );
+    for (const [name, call] of [
+      ['removeVcaGroup', () => mixer.removeVcaGroup('missing')],
+      ['setVcaGroupGainDb', () => mixer.setVcaGroupGainDb('missing', 0)],
+      ['setVcaGroupMembers', () => mixer.setVcaGroupMembers('missing', [])],
+    ] as const) {
+      expect.soft(call).toThrow(RangeError);
+      expect
+        .soft(call)
+        .toThrow(new RangeError(`Mixer.${name}: id must be the id of a VCA group in this mixer`));
+    }
+  });
+
+  it('preserves InvalidFormat on explicit and lazy mixer compilation', () => {
+    using mixer = new Mixer({ sampleRate: SR, maxBlockSize: BLOCK });
+    mixer.addStrip('source');
+    const buffer = mixer.createRealtimeBuffer();
+    mixer.addSend('source', { id: 'send', destinationBusId: '' });
+    const samples = new Float32Array(4);
+    const calls = [
+      ['compile', () => mixer.compile()],
+      ['latencySamples', () => mixer.latencySamples],
+      ['tailSamples', () => mixer.tailSamples],
+      ['drainTailStereo', () => mixer.drainTailStereo(samples.length)],
+      ['processStereo', () => mixer.processStereo([samples], [samples])],
+      ['processStereoInto', () => mixer.processStereoInto([samples], [samples], samples, samples)],
+      ['processPreparedStereo', () => buffer.process(samples.length)],
+    ] as const;
+    for (const [name, call] of calls) {
+      let failure: unknown;
+      try {
+        call();
+      } catch (error) {
+        failure = error;
+      }
+      expect.soft(failure, name).toBeInstanceOf(SonareError);
+      expect.soft(failure, name).toMatchObject({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining('strips[0].sends[0].destinationBusId must not be empty'),
+      });
+    }
+  });
+
+  it('keeps the one-shot mixer process refusal class at the native boundary', async () => {
+    await initSource();
+    const good = new Float32Array([0.25]);
+    const bad = new Float32Array([Number.NaN]);
+    const call = () => getSonareModule().mixStereo([bad], [good], SR, {});
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/leftInputs\[0\]/);
+  });
+
+  it('translates a failed one-shot meter flush with its native code', () => {
+    const bridge = readFileSync(
+      new URL('../../../src/wasm/bindings/mixing/mixing.cpp', import.meta.url),
+      'utf8',
+    );
+    expect(bridge).toMatch(
+      /err = sonare_mixer_flush_meters\(mixer\);\s*if \(err != SONARE_OK\) throwCodedCError\(err, CErrorReasonMode::kCurrentEntry\);/,
+    );
   });
 
   describe('type contracts of readers and setters', () => {

@@ -92,24 +92,18 @@ void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members)
   SonareError err = sonare_mixer_add_vca_group(mixer_, wasmCString(id, "id"), gain_db,
                                                member_ptrs.empty() ? nullptr : member_ptrs.data(),
                                                member_ptrs.size());
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
 }
 
 void MixerWasm::removeVcaGroup(std::string id) {
   SonareError err = sonare_mixer_remove_vca_group(mixer_, wasmCString(id, "id"));
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
 }
 
 void MixerWasm::setVcaGroupGainDb(std::string id, const val& gain_db_val) {
   const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, wasmCString(id, "id"), gain_db);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
 }
 
 void MixerWasm::setVcaGroupMembers(std::string id, val members) {
@@ -123,9 +117,7 @@ void MixerWasm::setVcaGroupMembers(std::string id, val members) {
   const SonareError err = sonare_mixer_set_vca_group_members(
       mixer_, wasmCString(id, "id"), member_ptrs.empty() ? nullptr : member_ptrs.data(),
       member_ptrs.size());
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
 }
 
 size_t MixerWasm::vcaGroupCount() const {

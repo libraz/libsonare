@@ -18,16 +18,6 @@ void requireInputCountWithinStrips(size_t input_count, size_t strip_count) {
   }
 }
 
-// A C INVALID_PARAMETER from the mixer is an argument refusal, not object state.
-[[noreturn]] void throwMixerProcessError(SonareError err) {
-  rethrowLastCRefusal();
-  const std::string message = cErrorMessage(err);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    throw WasmRangeError(message);
-  }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, message);
-}
-
 // A strip plane is a Float32Array, as the input list's own refusal states.
 void requireFloat32Plane(const val& plane, const std::string& subject) {
   if (plane.isNull() || plane.isUndefined() || !plane.instanceof (val::global("Float32Array"))) {
@@ -94,7 +84,7 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     SonareError err = sonare_mixer_process_stereo(
         mixer_, elementData(left_ptrs), elementData(right_ptrs), static_cast<size_t>(count),
         elementData(out_left), elementData(out_right), length);
-    if (err != SONARE_OK) throwMixerProcessError(err);
+    if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   }
 
   val out = val::object();
@@ -148,7 +138,7 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
       mixer_, count > 0 ? elementData(left_ptrs_) : nullptr,
       count > 0 ? elementData(right_ptrs_) : nullptr, static_cast<size_t>(count),
       elementData(out_scratch_left_), elementData(out_scratch_right_), length);
-  if (err != SONARE_OK) throwMixerProcessError(err);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   if (length > 0) {
     // As above, these views borrow scratch memory only for the duration of the
     // bulk copy; no view is retained by the binding after this call returns.
@@ -193,7 +183,7 @@ void MixerWasm::processPreparedStereo(const val& num_samples_val) {
       mixer_, count > 0 ? elementData(left_ptrs_) : nullptr,
       count > 0 ? elementData(right_ptrs_) : nullptr, count, elementData(out_scratch_left_),
       elementData(out_scratch_right_), num_samples);
-  if (err != SONARE_OK) throwMixerProcessError(err);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
 }
 
 void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample,
@@ -255,9 +245,7 @@ float MixerWasm::meterScratchValue(const val& field) const {
 int MixerWasm::tailSamples() {
   int out = 0;
   SonareError err = sonare_mixer_tail_samples(mixer_, &out);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   return out;
 }
 
@@ -266,9 +254,7 @@ int MixerWasm::tailSamples() {
 int MixerWasm::latencySamples() {
   int out = 0;
   SonareError err = sonare_mixer_latency_samples(mixer_, &out);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   return out;
 }
 
@@ -292,9 +278,7 @@ val MixerWasm::drainTailStereo(double num_samples) {
   std::vector<float> out_right(count, 0.0f);
   SonareError err =
       sonare_mixer_drain_tail_stereo(mixer_, elementData(out_left), elementData(out_right), count);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   val out = val::object();
   out.set("left", vectorToFloat32Array(out_left));
   out.set("right", vectorToFloat32Array(out_right));

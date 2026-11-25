@@ -16979,7 +16979,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and
 [[entry]]
 kind = "method"
 old = "Mixer.tailSamples"
-changed = "readonly getter (was a method)"
+changed = "readonly getter (was a method); a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState"
 domain = "engine"
 rule = "getters"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
@@ -16987,7 +16987,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and
 [[entry]]
 kind = "method"
 old = "Mixer.latencySamples"
-changed = "readonly getter (was a method)"
+changed = "readonly getter (was a method); a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState"
 domain = "engine"
 rule = "getters"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
@@ -35741,7 +35741,7 @@ entry = "./worklet"
 [[entry]]
 kind = "method"
 old = "Mixer.processStereo"
-changed = "a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted"
+changed = "a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted; a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of RangeError"
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/runtime-refusal-parity.test.ts::refuses a mixer input plane that is not a Float32Array"
@@ -35749,7 +35749,7 @@ test = "bindings/wasm/tests/runtime-refusal-parity.test.ts::refuses a mixer inpu
 [[entry]]
 kind = "method"
 old = "Mixer.processStereoInto"
-changed = "an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError"
+changed = "an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError; a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of RangeError"
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/caller-length-refusal.test.ts::refuses input lists that are not arrays instead of mixing nothing"
@@ -38177,3 +38177,59 @@ domain = "analysis"
 rule = "library-owned-defaults"
 entry = "./analysis"
 test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
+
+[[entry]]
+kind = "method"
+old = "Mixer.compile"
+changed = "a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves InvalidFormat on explicit and lazy mixer compilation"
+
+[[entry]]
+kind = "method"
+old = "Mixer.drainTailStereo"
+changed = "a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves InvalidFormat on explicit and lazy mixer compilation"
+
+[[entry]]
+kind = "method"
+old = "Mixer.createRealtimeBuffer"
+changed = "process() on the returned buffer refuses an empty stored send destination with InvalidFormat naming the destination path instead of RangeError"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves InvalidFormat on explicit and lazy mixer compilation"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addVcaGroup"
+changed = "a duplicate group id is refused with RangeError naming id instead of InvalidState"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves argument refusals for VCA group changes"
+
+[[entry]]
+kind = "method"
+old = "Mixer.removeVcaGroup"
+changed = "an unknown group id is refused with RangeError naming id instead of InvalidState"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves argument refusals for VCA group changes"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setVcaGroupGainDb"
+changed = "an unknown group id is refused with RangeError naming id instead of InvalidState"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves argument refusals for VCA group changes"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setVcaGroupMembers"
+changed = "an unknown group id is refused with RangeError naming id instead of InvalidState"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mixing-runtime.test.ts::preserves argument refusals for VCA group changes"

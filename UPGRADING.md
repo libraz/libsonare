@@ -12527,8 +12527,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
 | `EngineMarker.keyFifths` | RealtimeEngine.setMarkers requires an integer in [-7, 7]; 1.x accepted values such as -8 and 8 and stored them as signed bytes |
-| `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
-| `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted |
+| `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError; a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of RangeError |
+| `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted; a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of RangeError |
 | `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
 | `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through). BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.setTempo, RealtimeEngine.setTempoSegments, Project.setTempoSegments, SonareEngine.setTempo, SonareEngine.setTempoSegments, SonareEngineTransportFacade.setTempo and SonareEngineTransportFacade.setTempoSegments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.fromJson and Project.fromJsonWithDiagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempoBpm to detect. Refusal occurs before synchronizing the worklet. |
@@ -12782,6 +12782,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTimeSignatureSegment.denominator` | an absent denominator is refused with TypeError naming segments[i].denominator (1.x read it as 0 and refused it with RangeError) |
 | `EngineTimeSignatureSegment.numerator` | an absent numerator is refused with TypeError naming segments[i].numerator (1.x read it as 0 and refused it with RangeError) |
 | `HrtfSet.fromBytes` | Malformed SHRF bytes raise a coded InvalidFormat document error instead of an invalid-argument error. |
+| `Mixer.addVcaGroup` | a duplicate group id is refused with RangeError naming id instead of InvalidState |
+| `Mixer.compile` | a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState |
+| `Mixer.createRealtimeBuffer` | process() on the returned buffer refuses an empty stored send destination with InvalidFormat naming the destination path instead of RangeError |
+| `Mixer.drainTailStereo` | a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState |
+| `Mixer.removeVcaGroup` | an unknown group id is refused with RangeError naming id instead of InvalidState |
+| `Mixer.setVcaGroupGainDb` | an unknown group id is refused with RangeError naming id instead of InvalidState |
+| `Mixer.setVcaGroupMembers` | an unknown group id is refused with RangeError naming id instead of InvalidState |
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
 | `SonareEngineSyncErrorMessage.failure` (`./worklet`) | `EngineSyncErrorMessage.failure`: typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload |
@@ -12792,9 +12799,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Mixer.busCount` | readonly getter (was a method) |
-| `Mixer.latencySamples` | readonly getter (was a method) |
+| `Mixer.latencySamples` | readonly getter (was a method); a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState |
 | `Mixer.stripCount` | readonly getter (was a method) |
-| `Mixer.tailSamples` | readonly getter (was a method) |
+| `Mixer.tailSamples` | readonly getter (was a method); a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of InvalidState |
 | `Mixer.vcaGroupCount` | readonly getter (was a method) |
 | `PlaybackLoudnessMeter.integratedLufs` | readonly getter (was a method); undefined before the first gating block and -Infinity while nothing passes the gate |
 | `PlaybackRenderer.inputChannels` | `PlaybackRenderer.numInputChannels`: renamed to numInputChannels, a readonly getter (was a method) |
