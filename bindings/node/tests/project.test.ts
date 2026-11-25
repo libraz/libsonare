@@ -1959,8 +1959,17 @@ describe('Project value-model accessors', () => {
       expectRefusal(() => project.positionAtPpq(-1), RangeError, /ppq/);
       expectRefusal(() => project.barStartPpq(-1), RangeError, /barIndex/);
       expectRefusal(() => project.midiEvents(0xffffffff), RangeError, /clipId/);
-      expectRefusal(() => project.barStartPpq(1.5), TypeError);
-      expectRefusal(() => project.barStartPpq(Number.MAX_SAFE_INTEGER + 1), RangeError);
+      // The safe-integer domain is spelled as its bounds, as every integer domain is.
+      expectRefusal(
+        () => project.barStartPpq(1.5),
+        TypeError,
+        /^Project\.barStartPpq: barIndex must be an integer$/,
+      );
+      expectRefusal(
+        () => project.barStartPpq(Number.MAX_SAFE_INTEGER + 1),
+        RangeError,
+        /^Project\.barStartPpq: barIndex must be an integer in \[-9007199254740991, 9007199254740991\]$/,
+      );
     } finally {
       project.destroy();
     }

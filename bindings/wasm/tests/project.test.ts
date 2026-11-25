@@ -165,9 +165,15 @@ describe('Sonare WASM Project', () => {
       expect(expectRefusalOf(() => project.barStartPpq(-1), RangeError).message).toContain(
         'barIndex',
       );
+      // The safe-integer domain is spelled as its bounds, as every integer domain is.
+      expect(expectRefusalOf(() => project.barStartPpq(1.5), TypeError).message).toBe(
+        'Project.barStartPpq: barIndex must be an integer',
+      );
       expect(
         expectRefusalOf(() => project.barStartPpq(Number.MAX_SAFE_INTEGER + 1), RangeError).message,
-      ).toContain('barIndex');
+      ).toBe(
+        'Project.barStartPpq: barIndex must be an integer in [-9007199254740991, 9007199254740991]',
+      );
     } finally {
       project.destroy();
     }

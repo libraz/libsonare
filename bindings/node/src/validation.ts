@@ -511,13 +511,15 @@ export function assertNonNegativeSafeInteger(value: number, argName: string): vo
 /** A whole safe JS integer, with fractions refused as an argument shape. */
 export function assertSafeInteger(value: unknown, argName: string): asserts value is number {
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a safe integer`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isFinite(value) || !Number.isSafeInteger(value)) {
     if (Number.isFinite(value) && !Number.isInteger(value)) {
-      throw refuseType(`${argName} must be a safe integer`);
+      throw refuseType(`${argName} must be an integer`);
     }
-    throw refuse(`${argName} must be a safe integer`);
+    throw refuse(
+      `${argName} must be an integer in [${-Number.MAX_SAFE_INTEGER}, ${Number.MAX_SAFE_INTEGER}]`,
+    );
   }
 }
 

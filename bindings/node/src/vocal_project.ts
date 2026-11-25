@@ -70,7 +70,7 @@ function safeInteger(
     value < minimum ||
     value > maximum
   ) {
-    throw refuse(`${field} must be a safe integer in [${minimum}, ${maximum}]`);
+    throw refuse(`${field} must be an integer in [${minimum}, ${maximum}]`);
   }
   return value;
 }

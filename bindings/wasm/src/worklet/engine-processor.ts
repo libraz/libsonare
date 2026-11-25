@@ -1414,7 +1414,9 @@ export class SonareRealtimeEngineWorkletProcessor {
         // (reported as InvalidCommand telemetry), never rounded.
         const outSample = Number(requireCommandOperand(command, 'argFloat'));
         if (!Number.isSafeInteger(outSample)) {
-          throw refuse('Punch out sample must be a safe integer');
+          throw refuse(
+            `punch out sample must be an integer in [${-Number.MAX_SAFE_INTEGER}, ${Number.MAX_SAFE_INTEGER}]`,
+          );
         }
         this.native.setCapturePunch(
           Number(requireCommandOperand(command, 'argInt')),

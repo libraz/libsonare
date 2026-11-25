@@ -356,7 +356,9 @@ export function toSafeInteger(value: number | bigint | undefined, fallback: numb
     return fallback;
   }
   if (!Number.isSafeInteger(resolved)) {
-    throw refuse('64-bit ring values must be safe integers');
+    throw refuse(
+      `a 64-bit ring value must be an integer in [${-Number.MAX_SAFE_INTEGER}, ${Number.MAX_SAFE_INTEGER}]`,
+    );
   }
   return resolved;
 }
