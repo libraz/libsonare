@@ -355,7 +355,8 @@ def derive(
                 if not prefix:
                     bound_documents.add((surface, key))
     unbound = [
-        u for u in unbound
+        u
+        for u in unbound
         if u.c_subject != "document" or (u.surface, u.c_key) not in bound_documents
     ]
     unbound.sort(key=lambda u: (u.surface, u.c_key, u.c_subject))
@@ -631,8 +632,7 @@ inline std::string_view Unrooted(std::string_view subject, std::string_view c_ro
 // C entry name without its "sonare_" prefix); @p c_root strips a "<c_root>." prefix beyond the
 // object-argument roots.
 inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefusal& refusal,
-                                              std::string_view entry,
-                                              std::string_view c_root = {{}},
+                                              std::string_view entry, std::string_view c_root = {{}},
                                               bool typed_document = false) {{
   if (typed_document && refusal.code() == sonare::ErrorCode::InvalidFormat) {{
     for (const DocumentRoot& row : kDocumentRoots) {{
