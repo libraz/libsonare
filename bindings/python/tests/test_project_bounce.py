@@ -887,8 +887,11 @@ def test_bounce_names_a_wrongly_typed_instrument_field_where_the_caller_wrote_it
 
 # RED WHEN: a refusal from the destination patch's own reader drops the instrument.patch path.
 def test_destination_instrument_names_a_patch_field_under_instrument_patch() -> None:
-    with Project() as project, pytest.raises(
-        SonareValueError, match=r"instrument\.patch\.preset must be at most 31 bytes$"
+    with (
+        Project() as project,
+        pytest.raises(
+            SonareValueError, match=r"instrument\.patch\.preset must be at most 31 bytes$"
+        ),
     ):
         project.set_destination_instrument(
             0, ProjectInstrument(kind="synth", patch=SynthPatch(preset="x" * 32))

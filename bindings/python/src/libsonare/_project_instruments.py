@@ -656,7 +656,8 @@ class SynthPatch:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
         if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
             raise _refuse(
-                f"synth patch mod_routings must contain at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} entries"
+                "synth patch mod_routings must contain at most "
+                f"{SONARE_SYNTH_PATCH_MOD_ROUTINGS} entries"
             )
         c.num_mod_routings = len(routings)
         for i, routing in enumerate(routings):
