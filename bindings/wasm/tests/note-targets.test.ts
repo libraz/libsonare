@@ -524,7 +524,10 @@ describe('WASM note targets', () => {
       // An explicit 0 reaches the same track as the default.
       expect(noteTargetsFromSmf({ data: melodySmf(), trackIndex: 0 })).toEqual(targets);
       // A caller counting the file's own tracks would land here and be one off.
-      expectRefusalOf(() => noteTargetsFromSmf({ data: melodySmf(), trackIndex: 1 }));
+      const refusal = expectRefusalOf(() =>
+        noteTargetsFromSmf({ data: melodySmf(), trackIndex: 1 }),
+      );
+      expect(refusal.message).toContain('trackIndex must be an integer in [0, 0]');
     });
 
     it('feeds assignNoteTargets directly', () => {

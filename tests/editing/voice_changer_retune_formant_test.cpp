@@ -101,15 +101,15 @@ TEST_CASE("StreamingRetune derives grain size from sample rate unless configured
   REQUIRE(configured.config().grain_size == 4096);
 }
 
-TEST_CASE("StreamingRetune::prepare rejects a non-finite sample rate", "[voice_changer]") {
+TEST_CASE("StreamingRetune::prepare requires an integer sample-rate domain",
+          "[voice_changer][numeric]") {
   // Driven on the class rather than through the C ABI: the WASM wrapper calls prepare()
   // directly, so the C-ABI guard never runs on that path and would mask this one here.
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double inf = std::numeric_limits<double>::infinity();
 
-  // An infinity is the discriminating value. It passes `sample_rate > 0.0`, so the derived
-  // grain size reaches std::lround(inf * seconds), which is undefined before std::max
-  // narrows it -- a NaN was already refused by that comparison.
+  // The core rejects values the int-based C entry cannot express, including fractions, using
+  // the same named domain text.
   StreamingRetune infinite_rate;
   REQUIRE_THROWS_AS(infinite_rate.prepare(inf, 256), sonare::SonareException);
 
@@ -123,6 +123,12 @@ TEST_CASE("StreamingRetune::prepare rejects a non-finite sample rate", "[voice_c
   // refused too rather than passing because nothing rounds the rate.
   StreamingRetune configured_grain({0.0f, 1.0f, 1024});
   REQUIRE_THROWS_AS(configured_grain.prepare(inf, 256), sonare::SonareException);
+
+  for (const double rate : {7999.0, 48000.5, 1e100, 384001.0}) {
+    StreamingRetune refused;
+    REQUIRE_THROWS_WITH(refused.prepare(rate, 256),
+                        "sample_rate must be an integer in [8000, 384000]");
+  }
 
   StreamingRetune ordinary;
   REQUIRE_NOTHROW(ordinary.prepare(48000.0, 256));

@@ -19,6 +19,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/scale_quantizer.h"
 #include "effects/silence.h"
+#include "streaming/realtime_limits.h"
 #include "transport/tempo_map.h"
 
 namespace sonare_c_detail {
@@ -228,6 +229,8 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"split_silence", "hop_length", sonare::kSilenceHopLengthDomain, nullptr},
     {"split_silence_common", "frame_length", sonare::kSilenceFrameLengthDomain, nullptr},
     {"split_silence_common", "hop_length", sonare::kSilenceHopLengthDomain, nullptr},
+    {"streaming_retune_prepare", "max_block_size", sonare::kRealtimeBlockSizeDomain, nullptr},
+    {"streaming_retune_prepare", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"strip_set_channel_delay_samples", "delay_samples", kEngineAlignmentDelayDomain, nullptr},
     {"strip_set_pan", "pan_mode", kStripPanModeDomain, nullptr},
     {"strip_set_pan_law", "pan_law", kStripPanLawDomain, nullptr},

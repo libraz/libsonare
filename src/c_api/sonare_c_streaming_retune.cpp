@@ -56,7 +56,8 @@ bool config_accepted(const char* fn, const StreamingRetuneConfig& config) {
 // A block longer than the prepared maximum, or one before any prepare().
 SonareError refuse_block_length(size_t num_samples, int max_block_size) {
   if (max_block_size <= 0) {
-    set_last_error(SONARE_ERROR_INVALID_STATE, "the retune stage has not been prepared");
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   sonare::editing::voice_changer::kStreamingRetuneNotPreparedMessage);
     return SONARE_ERROR_INVALID_STATE;
   }
   if (num_samples <= static_cast<size_t>(max_block_size)) return SONARE_OK;

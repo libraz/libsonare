@@ -316,6 +316,22 @@ def test_every_table_row_is_driven_or_undriven_for_a_closed_reason() -> None:
     assert set(_UNDRIVEN.values()) <= _REASONS
 
 
+def test_indexed_polyphonic_edit_refusal_keeps_the_caller_root() -> None:
+    analysis = libsonare.PolyphonicAnalysis.analyze(_TONE, _SR)
+    with analysis:
+        assert analysis.note_count > 0
+        with pytest.raises(SonareValueError) as refused:
+            analysis.set_note_edit(
+                0,
+                libsonare.NoteEditInput(amplitude_envelope=np.asarray([-1], dtype=np.float32)),
+            )
+        assert str(refused.value) == (
+            "PolyphonicAnalysis.set_note_edit: "
+            "edit.amplitude_envelope[0] must be finite and at least 0"
+        )
+        assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+
+
 def _document_call(entry: str) -> tuple[Callable[[dict[str, Any]], None], list[tuple[Any, str]]]:
     """The call that puts a caller mapping in ``entry``'s document slot, and refusals under it."""
     if entry == "encode_audio":

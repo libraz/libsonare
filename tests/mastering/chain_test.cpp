@@ -1808,10 +1808,16 @@ TEST_CASE("StreamingMasteringChain stage_names lists enabled stages",
   REQUIRE(names[1] == "dynamics.compressor");
 }
 
-TEST_CASE("StreamingMasteringChain preserves fractional-rate Nyquist validation",
+TEST_CASE("StreamingMasteringChain requires an integer rate and retains a fractional Nyquist",
           "[mastering][chain][streaming]") {
-  constexpr double kSampleRate = 44100.5;
-  constexpr float kNearNyquist = 22050.1f;
+  constexpr double kSampleRate = 44101.0;
+  constexpr float kNearNyquist = 22050.25f;
+
+  SECTION("fractional sample rate") {
+    StreamingMasteringChain chain(MasteringChainConfig{});
+    REQUIRE_THROWS_WITH(chain.prepare(44100.5, 128, 1),
+                        "sample_rate must be an integer in [8000, 384000]");
+  }
 
   SECTION("tilt pivot") {
     MasteringChainConfig config;
@@ -1820,8 +1826,8 @@ TEST_CASE("StreamingMasteringChain preserves fractional-rate Nyquist validation"
     config.eq.tilt.pivot_hz = kNearNyquist;
     StreamingMasteringChain chain(config);
     REQUIRE_NOTHROW(chain.prepare(kSampleRate, 128, 1));
-    // The pivot is valid below 44100.5 / 2, while truncating the prepared rate
-    // to 44100 would incorrectly reject this unrelated realtime-safe change.
+    // The pivot is below 44101 / 2. Rounding Nyquist down to an integer
+    // would incorrectly refuse this unrelated realtime-safe change.
     REQUIRE_NOTHROW(chain.set_parameter("eq.tilt.tiltDb", 2.0));
     REQUIRE(chain.config().eq.tilt.tilt_db == Catch::Approx(2.0f));
   }

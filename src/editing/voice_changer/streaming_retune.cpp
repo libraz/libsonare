@@ -9,6 +9,7 @@
 #include "streaming/realtime_limits.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 // Argument validation in prepare() throws SonareException; process_block
 // is noexcept by contract and must not throw — see below.
 
@@ -90,18 +91,8 @@ void StreamingRetune::update_ratio() noexcept {
 }
 
 void StreamingRetune::prepare(double sample_rate, int max_block_size) {
-  // Finite and in range: the default grain size rounds sample_rate to an int.
-  if (!is_valid_realtime_sample_rate(sample_rate)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "sample_rate must be finite and within [" +
-                              std::to_string(kMinAudioSampleRate) + ", " +
-                              std::to_string(kMaxAudioSampleRate) + "]");
-  }
-  if (!is_valid_realtime_block_size(max_block_size)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
-  }
+  util::check::within(sample_rate, kAudioSampleRateDomain, "sample_rate");
+  util::check::integer_within(max_block_size, kRealtimeBlockSizeDomain, "max_block_size");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
 

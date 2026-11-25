@@ -24,6 +24,10 @@ constexpr int kRetuneGrainStep = 4;
 /// Largest pitch shift, in semitones either way, a retune accepts.
 constexpr float kMaxRetuneSemitones = 24.0f;
 
+/// Refusal text shared by C and WASM when a nonempty block reaches an unprepared stage.
+inline constexpr char kStreamingRetuneNotPreparedMessage[] =
+    "the retune stage has not been prepared";
+
 struct StreamingRetuneConfig {
   float semitones = 0.0f;  ///< Finite, in [-24, 24].
   float mix = 1.0f;        ///< Finite, in [0, 1].

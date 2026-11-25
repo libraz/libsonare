@@ -685,8 +685,9 @@ function assertRetuneConfig(config: StreamingRetuneConfig): Record<string, unkno
  * always applies its input high-pass (20 Hz at the lowest setting).
  *
  * State is maintained across {@link processMono} calls. Call {@link prepare}
- * before processing, and call {@link destroy} (or use `try/finally`) to release
- * the underlying WASM object.
+ * before a non-empty block; an empty block is a no-op even before preparation.
+ * A refused re-prepare leaves the previous stage usable. Call {@link destroy}
+ * (or use try/finally) to release the underlying WASM object.
  */
 @entryClass('StreamingRetune', ['processMono', 'retune'])
 export class StreamingRetune {
@@ -704,8 +705,9 @@ export class StreamingRetune {
   }
 
   /**
-   * Allocate and initialize native state for the given sample rate and maximum
-   * process block size.
+   * Allocate and initialize native state for an integer sample rate in
+   * [8000, 384000] and maximum process block size in [1, 1048576]. A refused
+   * re-prepare leaves the previous stage usable.
    */
   prepare(sampleRate: number, maxBlockSize: number): void {
     this.retune.prepare(sampleRate, maxBlockSize);
@@ -752,7 +754,10 @@ export class StreamingRetune {
     return this.retune.latencySamples();
   }
 
-  /** Process one mono block, returning the shifted samples (same length). */
+  /**
+   * Process one mono block, returning the shifted samples (same length). An empty
+   * block is a no-op even before {@link prepare}; non-empty blocks require it.
+   */
   processMono(samples: Float32Array): Float32Array {
     return this.retune.processMono(samples);
   }

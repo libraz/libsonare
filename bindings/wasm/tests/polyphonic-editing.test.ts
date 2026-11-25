@@ -382,16 +382,26 @@ describe('PolyphonicAnalysis.render', () => {
     expect(edited.noteEnvelope(lower)).toHaveLength(0);
   });
 
-  it('refuses an envelope point that is not a usable linear gain, on the way out', () => {
-    // The C ABI checks an edit where the render checks it, so setting it is not
-    // the refusal.
-    edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, -1]) });
-    expect(expectRefusalOf(() => edited.render()).message).toBe(
-      'PolyphonicAnalysis.render: analysis.notes[0].edit.amplitudeEnvelope must be finite and at least 0',
-    );
-    edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, 0.25]) });
-    expectEdited(edited.render(), identity);
+  it('refuses an unusable envelope point by index before replacing the edit', () => {
+    const validEnvelope = new Float32Array([1, 0.25]);
+    edited.setNoteEdit(lower, { gainDb: -6, amplitudeEnvelope: validEnvelope });
+
+    for (const invalid of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const error = expectRefusalOf(() =>
+        edited.setNoteEdit(lower, {
+          gainDb: -3,
+          amplitudeEnvelope: new Float32Array([1, invalid]),
+        }),
+      );
+      expect(error.message).toBe(
+        'PolyphonicAnalysis.setNoteEdit: edit.amplitudeEnvelope[1] must be finite and at least 0',
+      );
+      expect(edited.notes()[lower].edit.gainDb).toBe(-6);
+      expect(edited.noteEnvelope(lower)).toEqual(validEnvelope);
+    }
+
     edited.setNoteEdit(lower, {});
+    expect(edited.noteEnvelope(lower)).toHaveLength(0);
   });
 
   it('rejects a non-positive or non-finite fade or vibrato cutoff as out of range', () => {

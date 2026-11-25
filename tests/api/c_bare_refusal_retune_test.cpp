@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "streaming/realtime_limits.h"
 #include "support/alloc_guard.h"
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
@@ -77,7 +78,7 @@ TEST_CASE("streaming retune prepare uses the realtime sample-rate domain",
   REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
 
   CHECK(sonare_streaming_retune_prepare(retune, 7999, kBlock) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "sample_rate must be finite and within [8000, 384000]");
+  CHECK(last_message() == "sample_rate must be an integer in [8000, 384000]");
   REQUIRE(sonare_streaming_retune_prepare(retune, 8000, kBlock) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_prepare(retune, 384000, kBlock) == SONARE_OK);
 
@@ -87,7 +88,22 @@ TEST_CASE("streaming retune prepare uses the realtime sample-rate domain",
   REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency_before) == SONARE_OK);
   CHECK(grain_before > 0);
   CHECK(sonare_streaming_retune_prepare(retune, 384001, kBlock) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "sample_rate must be finite and within [8000, 384000]");
+  CHECK(last_message() == "sample_rate must be an integer in [8000, 384000]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "sample_rate");
+
+  CHECK(sonare_streaming_retune_prepare(retune, 7999, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "sample_rate must be an integer in [8000, 384000]");
+  CHECK(sonare_streaming_retune_prepare(retune, 48000, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "max_block_size must be an integer in [1, 1048576]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "max_block_size");
+  CHECK(sonare_streaming_retune_prepare(retune, 48000, sonare::kMaxRealtimeBlockSize + 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "max_block_size must be an integer in [1, 1048576]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "max_block_size");
+
   int grain_after = 0;
   int latency_after = 0;
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain_after) == SONARE_OK);

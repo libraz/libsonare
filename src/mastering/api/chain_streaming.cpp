@@ -269,17 +269,8 @@ StreamingMasteringChain& StreamingMasteringChain::operator=(StreamingMasteringCh
     default;
 
 void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, int num_channels) {
-  if (!is_valid_realtime_sample_rate(sample_rate)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "sample_rate must be finite and within [" +
-                              std::to_string(kMinAudioSampleRate) + ", " +
-                              std::to_string(kMaxAudioSampleRate) + "]");
-  }
-  if (!is_valid_realtime_block_size(max_block_size)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
-  }
+  util::check::within(sample_rate, kAudioSampleRateDomain, "sample_rate");
+  util::check::integer_within(max_block_size, kRealtimeBlockSizeDomain, "max_block_size");
   util::check::integer_within(num_channels, kStreamingChainChannelCountDomain, "num_channels");
 
   // Build replacement stages in locals. Keep the current stages, counters,

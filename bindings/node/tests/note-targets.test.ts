@@ -139,7 +139,14 @@ describe('noteTargetsFromSmf', () => {
   it('reads track 0 by default, and refuses an index the file does not have', () => {
     const data = twoQuarterNotesSmf();
     expect(noteTargetsFromSmf({ data })).toEqual(noteTargetsFromSmf({ data, trackIndex: 0 }));
-    expect(() => noteTargetsFromSmf({ data, trackIndex: 1 })).toThrow();
+    let caught: unknown;
+    try {
+      noteTargetsFromSmf({ data, trackIndex: 1 });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toContain('trackIndex must be an integer in [0, 0]');
     expect(() => noteTargetsFromSmf({ data, trackIndex: -1 })).toThrow();
   });
 

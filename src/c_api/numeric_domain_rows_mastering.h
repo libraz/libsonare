@@ -36,6 +36,7 @@
 #include "metering/clipping.h"
 #include "metering/dynamic_range.h"
 #include "metering/waveform.h"
+#include "streaming/realtime_limits.h"
 #include "streaming/stream_config.h"
 #include "util/frame.h"
 
@@ -296,8 +297,11 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"stream_analyzer_create", "config.n_fft", sonare::kStreamConfigNFftDomain, nullptr},
     {"stream_analyzer_create", "config.n_mels", sonare::kStreamConfigNMelsDomain, nullptr},
     {"stream_analyzer_create", "config.sample_rate", sonare::kAudioSampleRateDomain, nullptr},
+    {"streaming_mastering_chain_prepare", "max_block_size",
+     sonare::util::check::with_sentinel(sonare::kRealtimeBlockSizeDomain, 0), nullptr},
     {"streaming_mastering_chain_prepare", "num_channels",
      sonare::mastering::api::kStreamingChainChannelCountDomain, nullptr},
+    {"streaming_mastering_chain_prepare", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"synthesize_rir", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain,
      nullptr},
     {"synthesize_rir", "config.crossfade_ms", sonare::effects::common::kRirCrossfadeMsDomain,

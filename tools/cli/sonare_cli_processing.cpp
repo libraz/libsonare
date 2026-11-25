@@ -12,6 +12,7 @@
 #include "analysis/analysis_rate.h"
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
+#include "util/exception.h"
 #include "util/refusal_predicates.h"
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/note_model/note_extractor.h"
@@ -725,8 +726,13 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
   // answerable from the arguments alone, so neither is worth a pitch track first.
   // The other front-end reads it in the same place, so the two cannot report a
   // different failure for one command line.
-  const std::vector<editing::note_model::NoteTarget> targets =
-      midi::note_targets_from_smf(smf.data(), smf.size(), args.get_int("track", 0));
+  std::vector<editing::note_model::NoteTarget> targets;
+  try {
+    targets = midi::note_targets_from_smf(smf.data(), smf.size(), args.get_int("track", 0));
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    if (refusal.subject() != "track_index") throw;
+    throw sonare::SonareException(refusal.code(), "argument --track: " + refusal.predicate());
+  }
 
   // The command advertises no analysis geometry, so the contour is pYIN at the
   // library's own defaults -- the track the Python CLI measures for it.

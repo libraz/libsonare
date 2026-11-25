@@ -9685,10 +9685,10 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::removed names and po
 [[entry]]
 kind = "option"
 old = "PolyphonicAnalysis.setNoteEdit(edit)"
-changed = "optional (absent clears the edit), as on Node"
+changed = "Optional: an absent edit clears the stored edit. A non-finite or negative amplitudeEnvelope point is refused by index when setNoteEdit is called, leaving the previous edit intact."
 domain = "analysis"
 rule = "individual"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::bare setNoteEdit clears the edit"
+test = "bindings/wasm/tests/polyphonic-editing.test.ts::refuses an unusable envelope point by index before replacing the edit"
 
 [[entry]]
 kind = "option"
@@ -35486,10 +35486,10 @@ rule = "channel-planes"
 [[entry]]
 kind = "method"
 old = "StreamingRetune.prepare"
-changed = "a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through)"
+changed = "sampleRate must be an integer in [8000, 384000] Hz and maxBlockSize an integer in [1, 1048576]; fractions and values outside either domain raise RangeError with the argument's domain text, and a refused re-prepare preserves the previous prepared state (1.x passed a fractional sample rate to the core)."
 domain = "effects"
 rule = "finite-or-refused"
-test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+test = "bindings/wasm/tests/streaming-retune.test.ts::keeps the previous prepared state after a refused re-prepare"
 
 [[entry]]
 kind = "method"
@@ -37913,3 +37913,11 @@ changed = "sampleRate must be an integer in [8000, 384000] Hz. The constructor r
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/playback.test.ts::refuses a playback loudness meter sample rate outside the audio domain"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.processMono"
+changed = "An empty block returns an empty Float32Array without requiring prepare; nonempty blocks still require a prepared stage."
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/streaming-retune.test.ts::treats an empty block as a no-op before and after prepare"

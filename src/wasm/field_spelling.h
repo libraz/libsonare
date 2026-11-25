@@ -210,6 +210,16 @@ inline std::string SurfaceSpelling(std::string_view entry, std::string_view subj
   if (const Override* row = Find(kOverrides, entry, subject)) {
     return std::string(row->spelling);
   }
+  const std::size_t bracket = subject.rfind('[');
+  if (bracket != std::string_view::npos && bracket > 0 && subject.back() == ']' &&
+      bracket + 2 < subject.size()) {
+    const std::string_view index = subject.substr(bracket + 1, subject.size() - bracket - 2);
+    if (std::all_of(index.begin(), index.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+      if (const Override* row = Find(kOverrides, entry, subject.substr(0, bracket))) {
+        return std::string(row->spelling) + "[" + std::string(index) + "]";
+      }
+    }
+  }
   return sonare::util::check::camel_path(std::string(subject));
 }
 

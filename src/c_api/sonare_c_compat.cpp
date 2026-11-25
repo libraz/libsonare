@@ -257,18 +257,22 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
   // binding needs them too and calls the core directly, never this layer.
   const CommonSplitReport report = split_common_with_report(
       signals, lengths, signal_count, top_db, core_length(frame_length), core_length(hop_length));
-  if (out_report != nullptr) {
-    out_report->silence_ceiling_db = report.silence_ceiling_db;
-    out_report->max_signal_intervals = static_cast<int32_t>(report.max_signal_intervals);
-    out_report->min_signal_intervals = static_cast<int32_t>(report.min_signal_intervals);
-  }
   std::vector<int> flat;
   flat.reserve(report.intervals.size() * 2);
   for (const auto& range : report.intervals) {
     flat.push_back(range.first);
     flat.push_back(range.second);
   }
-  return copy_vector(flat, out_intervals, out_interval_count);
+  if (const SonareError err = copy_vector(flat, out_intervals, out_interval_count);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (out_report != nullptr) {
+    out_report->silence_ceiling_db = report.silence_ceiling_db;
+    out_report->max_signal_intervals = static_cast<int32_t>(report.max_signal_intervals);
+    out_report->min_signal_intervals = static_cast<int32_t>(report.min_signal_intervals);
+  }
+  return SONARE_OK;
   SONARE_C_CATCH
 }
 
@@ -281,9 +285,14 @@ SonareError sonare_frame_signal(const float* samples, size_t length, size_t fram
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_TRY
-  *out_n_frames = frame_count(length, core_length(frame_length), core_length(hop_length));
-  return copy_vector(frame(samples, length, core_length(frame_length), core_length(hop_length)),
-                     out, out_length);
+  const int n_frames = frame_count(length, core_length(frame_length), core_length(hop_length));
+  const std::vector<float> result =
+      frame(samples, length, core_length(frame_length), core_length(hop_length));
+  if (const SonareError err = copy_vector(result, out, out_length); err != SONARE_OK) {
+    return err;
+  }
+  *out_n_frames = n_frames;
+  return SONARE_OK;
   SONARE_C_CATCH
 }
 

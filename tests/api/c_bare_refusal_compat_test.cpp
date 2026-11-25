@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "support/alloc_guard.h"
 
 namespace {
 
@@ -107,6 +108,100 @@ TEST_CASE("the emphasis filters and split_silence name the refused buffer", "[c_
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "out_length must not be NULL");
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_frame_signal publishes its frame count after copying the output",
+          "[c_api][compat][allocation]") {
+  const std::vector<float> samples(32, 0.25f);
+  const auto count_allocations = [&] {
+    float* out = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+    size_t allocations = 0;
+    SonareError error = SONARE_ERROR_UNKNOWN;
+    {
+      sonare::test::AllocationGuard guard;
+      error =
+          sonare_frame_signal(samples.data(), samples.size(), 4, 2, &out, &out_length, &n_frames);
+      allocations = guard.count();
+    }
+    REQUIRE(error == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length > 0);
+    REQUIRE(n_frames > 0);
+    sonare_free_floats(out);
+    return allocations;
+  };
+
+  const size_t warm_allocations = count_allocations();
+  const size_t allocations = count_allocations();
+  REQUIRE(allocations > 0);
+  REQUIRE(allocations == warm_allocations);
+
+  float sentinel = 0.0f;
+  float* out = &sentinel;
+  size_t out_length = 99;
+  int n_frames = 99;
+  SonareError error = SONARE_OK;
+  {
+    sonare::test::AllocationFailureAtGuard fail_output_copy(allocations);
+    error = sonare_frame_signal(samples.data(), samples.size(), 4, 2, &out, &out_length, &n_frames);
+  }
+  CHECK(error == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(out == nullptr);
+  CHECK(out_length == 0);
+  CHECK(n_frames == 0);
+  sonare_free_floats(out);
+}
+
+TEST_CASE("sonare_split_silence_common publishes its report after copying intervals",
+          "[c_api][compat][allocation]") {
+  const std::vector<float> take(32, 0.25f);
+  const std::array<const float*, 2> signals{take.data(), take.data()};
+  const std::array<size_t, 2> lengths{take.size(), take.size()};
+  const auto count_allocations = [&] {
+    int* intervals = nullptr;
+    size_t interval_count = 0;
+    SonareSilenceCommonReport report{};
+    size_t allocations = 0;
+    SonareError error = SONARE_ERROR_UNKNOWN;
+    {
+      sonare::test::AllocationGuard guard;
+      error = sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), 60.0f, 4,
+                                          2, &intervals, &interval_count, &report);
+      allocations = guard.count();
+    }
+    REQUIRE(error == SONARE_OK);
+    REQUIRE(interval_count > 0);
+    REQUIRE(intervals != nullptr);
+    sonare_free_ints(intervals);
+    return allocations;
+  };
+
+  const size_t warm_allocations = count_allocations();
+  const size_t allocations = count_allocations();
+  REQUIRE(allocations > 0);
+  REQUIRE(allocations == warm_allocations);
+
+  int sentinel = 0;
+  int* intervals = &sentinel;
+  size_t interval_count = 99;
+  SonareSilenceCommonReport report{99.0f, 99, 99};
+  SonareError error = SONARE_OK;
+  {
+    sonare::test::AllocationFailureAtGuard fail_output_copy(allocations);
+    error = sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), 60.0f, 4, 2,
+                                        &intervals, &interval_count, &report);
+  }
+  CHECK(error == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(intervals == nullptr);
+  CHECK(interval_count == 0);
+  CHECK(report.silence_ceiling_db == 0.0f);
+  CHECK(report.max_signal_intervals == 0);
+  CHECK(report.min_signal_intervals == 0);
+  sonare_free_ints(intervals);
+}
+#endif
 
 TEST_CASE("sonare_split_silence_common refuses its arguments in header order", "[c_api][compat]") {
   const std::vector<float> take(16, 0.1f);

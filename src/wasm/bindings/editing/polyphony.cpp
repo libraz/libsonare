@@ -23,12 +23,14 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/polyphonic_analysis_names.h"
 #include "c_api/transcribe_input_domains.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/polyphony/polyphonic_edit.h"
+#include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/common/note_val.h"
@@ -156,9 +158,12 @@ class PolyphonicAnalysisWasm {
   void setNoteEdit(double note, val edit) {
     const std::size_t index = noteIndex(note);
     std::size_t cumulative_count = 0;
-    // Whatever the render rejects about an edit it rejects on the way out, so a
-    // field is not checked twice here and a refusal names one place.
-    analysis_.notes[index].edit = noteEditFromVal(edit, "edit", &cumulative_count);
+    // Match the C setter: validate the replacement before storing any of it.
+    editing::note_model::NoteEdit replacement = noteEditFromVal(edit, "edit", &cumulative_count);
+    editing::note_model::validate_amplitude_envelope(replacement.amplitude_envelope.data(),
+                                                     replacement.amplitude_envelope.size(),
+                                                     "edit.amplitudeEnvelope");
+    analysis_.notes[index].edit = std::move(replacement);
   }
 
   val polyphony() const { return vectorToInt32Array(analysis_.track.polyphony); }

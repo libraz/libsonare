@@ -4341,10 +4341,10 @@ test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_spectral_bandwidth a
 [[entry]]
 kind = "function"
 old = "sonare_split_silence_common"
-changed = "takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added"
+changed = "takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added; a failed call clears a supplied report, including when the final interval copy fails"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_features_extra_test.cpp::sonare_split_silence_common report separates the three ways one interval happens"
+test = "tests/api/c_bare_refusal_compat_test.cpp::sonare_split_silence_common publishes its report after copying intervals"
 
 [[entry]]
 kind = "function"
@@ -7457,3 +7457,11 @@ changed = "BPM and any nonzero ramp target must be finite and in [1e-6, 100000] 
 domain = "engine"
 rule = "finite-or-refused"
 test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine tempo floor accepts its endpoint and refuses sub-floor BPM without mutation"
+
+[[entry]]
+kind = "function"
+old = "sonare_frame_signal"
+changed = "A failed call leaves all provided outputs cleared, including out_n_frames."
+domain = "analysis"
+rule = "c-error-path"
+test = "tests/api/c_bare_refusal_compat_test.cpp::sonare_frame_signal publishes its frame count after copying the output"

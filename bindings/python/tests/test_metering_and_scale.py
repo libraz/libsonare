@@ -225,8 +225,14 @@ def test_a_bucket_width_that_would_wrap_is_refused_like_the_zero_it_became() -> 
     # 2**64 is the 0 refused by name; 2**64 + 2 is the width just accepted. One
     # used to come back as the core's own complaint, the other not at all.
     for level in (0, 2**64, 2**64 + 2):
-        with pytest.raises(libsonare.SonareValueError):
-            libsonare.waveform_peak_pyramid(samples, 2, samples_per_bucket_levels=[level])
+        with pytest.raises(
+            libsonare.SonareValueError,
+            match=(
+                r"^waveform_peak_pyramid: "
+                r"samples_per_bucket_levels\[1\] must be an integer of at least 1$"
+            ),
+        ):
+            libsonare.waveform_peak_pyramid(samples, 2, samples_per_bucket_levels=[2, level])
 
 
 def test_waveform_peaks_default_bucket_width_and_pyramid_levels() -> None:

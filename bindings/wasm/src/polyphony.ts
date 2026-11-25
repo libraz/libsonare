@@ -130,11 +130,13 @@ export class PolyphonicAnalysis {
    * are per-frame linear gains over the note's span on top of `gainDb` — stretched
    * over whatever length the note renders at, so one entry is a constant gain and
    * the count need not match the note's frame count. Every value must be finite
-   * and non-negative, which {@link render} is where it is checked, so one refusal
-   * names one place.
+   * and non-negative; {@link setNoteEdit} checks each point before replacing the
+   * edit and names an invalid point as edit.amplitudeEnvelope[i], with a
+   * zero-based point index.
    *
    * @param note - Index below {@link noteCount}
-   * @throws {RangeError} when `note` is out of range
+   * @throws {RangeError} when note is out of range or a point in
+   *   edit.amplitudeEnvelope is negative or non-finite
    */
   setNoteEdit(note: number, edit?: NoteEditInput): void {
     let nativeEdit: NoteEditInput = edit ?? {};
@@ -252,9 +254,8 @@ export class PolyphonicAnalysis {
    * cannot tell from two renders whether a claim set divided the energy correctly.
    *
    * @throws {RangeError} on a negative or non-finite `fadeMs` or `vibratoCutoffHz`
-   * @throws {RangeError} on an edit field the renderer
-   *   rejects — a non-positive stretch ratio, a negative or non-finite envelope
-   *   point, or a vibrato or drift edit on a note carrying no usable pitch curve
+   * @throws {RangeError} on a vibrato or drift edit on a note carrying no usable
+   *   pitch curve
    */
   render(options: PolyphonicRenderOptions = {}): Float32Array {
     return this.handle().render(options as Record<string, unknown>);

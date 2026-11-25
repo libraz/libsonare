@@ -16880,6 +16880,14 @@ test = "bindings/node/tests/audio-facade-delegation.test.ts::refuses a direct co
 
 [[entry]]
 kind = "method"
+old = "StreamingRetune.prepare"
+changed = "sampleRate must be an integer in [8000, 384000] Hz and maxBlockSize an integer in [1, 1048576]; fractions and values outside either domain raise RangeError with the argument's domain text (1.x passed a fractional sample rate to the core)."
+domain = "effects"
+rule = "finite-or-refused"
+test = "bindings/node/tests/core-validation-refusals.test.ts::uses the shared domains for fractional and unrepresentable prepare values"
+
+[[entry]]
+kind = "method"
 old = "StreamingRetune.setConfig"
 changed = "the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). Finite out-of-domain pitch and mix values raise RangeError. A grain outside the supported multiples also raises RangeError. The old configuration clamped controls and rounded the effective grain."
 domain = "effects"
@@ -20358,3 +20366,19 @@ changed = "BPM and any nonzero ramp target must be finite and in [1e-6, 100000] 
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/node/tests/engine.test.ts::rejects a sub-floor tempo without replacing the active tempo map"
+
+[[entry]]
+kind = "function"
+old = "noteTargetsFromSmf"
+changed = "A trackIndex with no MIDI-bearing track is refused as a RangeError naming the allowed integer interval, instead of a generic missing-track refusal."
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/note-targets.test.ts::reads track 0 by default, and refuses an index the file does not have"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.setNoteEdit"
+changed = "A non-finite or negative amplitudeEnvelope point is refused by index when setNoteEdit is called, leaving the previous edit intact; previously it reached the renderer."
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/refusal-spelling.test.ts::keeps the edit root on an indexed envelope refusal"

@@ -915,10 +915,22 @@ Napi::Value StreamingRetuneWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
-  double sample_rate = 0.0;
+  double sample_rate_value = 0.0;
+  if (!RequiredDomainDoubleValue(env, info[0], "sampleRate", &sample_rate_value)) {
+    return env.Undefined();
+  }
+  double max_block_size_value = 0.0;
+  if (!RequiredDomainDoubleValue(env, info[1], "maxBlockSize", &max_block_size_value)) {
+    return env.Undefined();
+  }
+  int sample_rate = 0;
+  if (!RequiredDomainValue(env, Napi::Number::New(env, sample_rate_value), "sampleRate",
+                           sonare::kAudioSampleRateDomain, &sample_rate)) {
+    return env.Undefined();
+  }
   int max_block_size = 0;
-  if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate) ||
-      !RequiredIntArg(env, info, 1, "maxBlockSize", &max_block_size)) {
+  if (!RequiredDomainValue(env, Napi::Number::New(env, max_block_size_value), "maxBlockSize",
+                           sonare::kRealtimeBlockSizeDomain, &max_block_size)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_streaming_retune_prepare(retune_, sample_rate, max_block_size));

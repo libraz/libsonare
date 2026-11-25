@@ -974,7 +974,10 @@ SonareError probe_streaming_chain_prepare(const std::string& param, double value
   SonareStreamingMasteringChain* chain = nullptr;
   REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
   const int num_channels = is_param(param, "num_channels") ? as_int(value) : 2;
-  const SonareError err = sonare_streaming_mastering_chain_prepare(chain, 48000, 512, num_channels);
+  const int sample_rate = is_param(param, "sample_rate") ? as_int(value) : kAnalysisRate;
+  const int max_block_size = is_param(param, "max_block_size") ? as_int(value) : 512;
+  const SonareError err =
+      sonare_streaming_mastering_chain_prepare(chain, sample_rate, max_block_size, num_channels);
   sonare_streaming_mastering_chain_destroy(chain);
   return err;
 }

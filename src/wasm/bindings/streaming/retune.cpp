@@ -6,7 +6,8 @@
 #include <cmath>
 #include <string>
 
-#include "util/numeric_validation.h"
+#include "editing/voice_changer/streaming_retune.h"
+#include "streaming/realtime_limits.h"
 #include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
@@ -63,68 +64,110 @@ val streamingRetuneConfigToVal(const editing::voice_changer::StreamingRetuneConf
   return out;
 }
 
+namespace {
+
+void checkStreamingRetune(SonareError error) {
+  if (error != SONARE_OK) {
+    throwCodedCError(error, CErrorReasonMode::kCurrentEntry);
+  }
+}
+
+}  // namespace
+
 class StreamingRetuneWrapper {
  public:
-  explicit StreamingRetuneWrapper(val config)
-      : StreamingRetuneWrapper(streamingRetuneConfigFromVal(config)) {}
+  explicit StreamingRetuneWrapper(val config) {
+    const editing::voice_changer::StreamingRetuneConfig resolved =
+        streamingRetuneConfigFromVal(config);
+    checkStreamingRetune(sonare_streaming_retune_create(resolved.semitones, resolved.mix,
+                                                        resolved.grain_size, &retune_));
+    if (retune_ == nullptr) throwLastCError();
+  }
+
+  ~StreamingRetuneWrapper() { sonare_streaming_retune_destroy(retune_); }
+
+  StreamingRetuneWrapper(const StreamingRetuneWrapper&) = delete;
+  StreamingRetuneWrapper& operator=(const StreamingRetuneWrapper&) = delete;
 
   void prepare(const val& sample_rate_val, const val& max_block_size_val) {
-    const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
-    const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
-    retune_.prepare(sample_rate, max_block_size);
+    // Check every argument's shape before any domain reader can refuse a value.
+    if (!sample_rate_val.isNumber()) throw WasmTypeError("sampleRate must be a number");
+    if (!max_block_size_val.isNumber()) throw WasmTypeError("maxBlockSize must be a number");
+    const int sample_rate =
+        domainNumberFromVal<int>(sample_rate_val, "sampleRate", sonare::kAudioSampleRateDomain);
+    const int max_block_size = domainNumberFromVal<int>(max_block_size_val, "maxBlockSize",
+                                                        sonare::kRealtimeBlockSizeDomain);
+    checkStreamingRetune(sonare_streaming_retune_prepare(retune_, sample_rate, max_block_size));
+    // Publish the local allocation bound only after the C entry has committed its new stage.
     max_block_size_ = max_block_size;
-    prepared_ = true;
   }
 
-  void reset() { retune_.reset(); }
+  void reset() { checkStreamingRetune(sonare_streaming_retune_reset(retune_)); }
 
   void setConfig(val config) {
-    // Seed from the configured controls so an object carrying one key leaves the
-    // others alone, matching Node and Python.
-    retune_.set_config(streamingRetuneConfigFromVal(config, retune_.config()));
+    float semitones = 0.0f;
+    float mix = 1.0f;
+    int grain_size = 0;
+    checkStreamingRetune(sonare_streaming_retune_config(retune_, &semitones, &mix, &grain_size));
+    editing::voice_changer::StreamingRetuneConfig seed;
+    seed.semitones = semitones;
+    seed.mix = mix;
+    seed.grain_size = grain_size;
+    const editing::voice_changer::StreamingRetuneConfig resolved =
+        streamingRetuneConfigFromVal(config, seed);
+    checkStreamingRetune(sonare_streaming_retune_set_config(retune_, resolved.semitones,
+                                                            resolved.mix, resolved.grain_size));
   }
 
-  val config() const { return streamingRetuneConfigToVal(retune_.config()); }
+  val config() const {
+    editing::voice_changer::StreamingRetuneConfig config;
+    checkStreamingRetune(sonare_streaming_retune_config(retune_, &config.semitones, &config.mix,
+                                                        &config.grain_size));
+    return streamingRetuneConfigToVal(config);
+  }
 
-  int grainSizeSamples() const { return retune_.grain_size(); }
+  int grainSizeSamples() const {
+    int grain_size = 0;
+    checkStreamingRetune(sonare_streaming_retune_grain_size_samples(retune_, &grain_size));
+    return grain_size;
+  }
 
-  int latencySamples() const { return retune_.latency_samples(); }
+  int latencySamples() const {
+    int latency = 0;
+    checkStreamingRetune(sonare_streaming_retune_latency_samples(retune_, &latency));
+    return latency;
+  }
 
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
-    ensurePrepared();
+    if (length == 0) {
+      checkStreamingRetune(sonare_streaming_retune_process_mono(retune_, nullptr, 0));
+      return vectorToFloat32Array(std::vector<float>{});
+    }
+    if (max_block_size_ == 0) {
+      throw WasmCodedError(sonare::ErrorCode::InvalidState,
+                           editing::voice_changer::kStreamingRetuneNotPreparedMessage,
+                           std::nullopt);
+    }
     validateBlockLength(length);
     std::vector<float> block = float32ArrayToVector(samples, "samples");
-    // Refuse a non-finite sample rather than zeroing it, in the C ABI's words.
-    if (!sonare::numeric::all_finite(block.data(), block.size())) {
-      throw WasmRangeError("samples must contain only finite samples");
-    }
-    std::vector<float> out(block.size());
-    retune_.process_block(block.data(), out.data(), static_cast<int>(block.size()));
-    return vectorToFloat32Array(out);
+    checkStreamingRetune(
+        sonare_streaming_retune_process_mono(retune_, elementData(block), block.size()));
+    return vectorToFloat32Array(block);
   }
 
  private:
-  explicit StreamingRetuneWrapper(const editing::voice_changer::StreamingRetuneConfig& config)
-      : retune_(config) {}
-
-  void ensurePrepared() const {
-    if (!prepared_) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                    "StreamingRetune must be prepared before processing");
-    }
-  }
-
   void validateBlockLength(std::size_t length) const {
+    // Keep the allocation preflight before copying an untrusted JS-sized block; the C entry
+    // repeats this domain check before it touches the buffer.
     if (length > static_cast<std::size_t>(max_block_size_)) {
       throw WasmRangeError("samples.length " + sonare::util::refusal::integer_range_predicate(
                                                    0.0, static_cast<double>(max_block_size_)));
     }
   }
 
-  editing::voice_changer::StreamingRetune retune_;
+  SonareStreamingRetune* retune_ = nullptr;
   int max_block_size_ = 0;
-  bool prepared_ = false;
 };
 
 StreamingRetuneWrapper* createStreamingRetune(val config) {

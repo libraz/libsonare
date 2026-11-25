@@ -385,8 +385,9 @@ typedef struct {
   /// bound is rejected with @c SONARE_ERROR_INVALID_PARAMETER rather than resolving to the
   /// default. Default 0.
   float fmin_hz;
-  /// Maximum Mel frequency in Hz (0.0 = Nyquist). Must be finite, at most Nyquist, and
-  /// greater than @c fmin_hz after resolving 0. Default 0.
+  /// Maximum Mel frequency in Hz (0.0 = sample_rate / 2, Nyquist). Must be finite and at
+  /// most sample_rate / 2; values above Nyquist are refused. After resolving 0, it
+  /// must exceed @c fmin_hz. Default 0.
   float fmax_hz;
   /// Non-zero uses the HTK Mel formula instead of Slaney. Default 0.
   int32_t htk;
@@ -397,7 +398,8 @@ void sonare_mel_spectrogram_options_init(SonareMelSpectrogramOptions* options);
 
 /// @brief Mel spectrogram; an explicit Mel range lets a forward transform round-trip with the
 ///        inverse API (sonare_mel_to_stft / _to_audio).
-/// @details A NULL @p options takes the defaults (fmin 0, fmax sr/2, Slaney).
+/// @details A NULL @p options takes the defaults (fmin 0, fmax @p sample_rate / 2, Slaney).
+///          A finite fmax above Nyquist is refused.
 /// @param out Receives heap-owned arrays; free with sonare_free_mel_result.
 SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
                                    size_t hop_length, int n_mels,
@@ -411,8 +413,9 @@ typedef struct {
   uint32_t struct_size;
   /// Lower edge of the lowest band in Hz; finite and at least 0. Default 0.
   float fmin_hz;
-  /// Upper edge of the highest band in Hz; finite and at least 0, where 0 reads as the Nyquist
-  /// and the resolved edge must exceed @c fmin_hz and be at most Nyquist. Default 0.
+  /// Upper edge of the highest band in Hz; finite and at least 0, where 0 reads as sample_rate
+  /// / 2 (Nyquist). The resolved edge must exceed @c fmin_hz and be at most Nyquist; values above
+  /// Nyquist are refused. Default 0.
   float fmax_hz;
   /// Non-zero uses the HTK mel formula instead of Slaney's. Default 0.
   int32_t htk;
@@ -536,8 +539,9 @@ void sonare_mel_to_stft_options_init(SonareMelToStftOptions* options);
 /// @param sample_rate Sample rate of the audio that produced @p mel (Hz).
 /// @param n_fft FFT size of the source STFT (sets output bins = n_fft/2 + 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
-/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = Nyquist), finite and at most Nyquist.
-///        The resolved edge must exceed @p fmin_hz.
+/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = @p sample_rate / 2, Nyquist), finite and
+///        at most Nyquist; values above Nyquist are refused. The resolved edge must
+///        exceed @p fmin_hz.
 /// @param options NULL takes the defaults (Slaney).
 /// @param out Receives an [(n_fft/2 + 1) x n_frames] STFT magnitude matrix (not squared).
 SonareError sonare_mel_to_stft(const float* mel, size_t input_length, int n_mels, int n_frames,
@@ -567,8 +571,9 @@ void sonare_mel_to_audio_options_init(SonareMelToAudioOptions* options);
 /// @param hop_length Hop length used for reconstruction, or 0 for a
 /// quarter of @p n_fft (at least 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
-/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = Nyquist), finite and at most Nyquist.
-///        The resolved edge must exceed @p fmin_hz.
+/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = @p sample_rate / 2, Nyquist), finite and
+///        at most Nyquist; values above Nyquist are refused. The resolved edge must
+///        exceed @p fmin_hz.
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
 /// @param options NULL takes the defaults (Slaney).
 /// @param out Receives the reconstructed audio samples (caller frees with
@@ -638,8 +643,9 @@ void sonare_mfcc_to_audio_options_init(SonareMfccToAudioOptions* options);
 /// @param hop_length Hop length used for reconstruction, or 0 for a
 /// quarter of @p n_fft (at least 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
-/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = Nyquist), finite and at most Nyquist.
-///        The resolved edge must exceed @p fmin_hz.
+/// @param fmax_hz Maximum Mel frequency in Hz (0.0 = @p sample_rate / 2, Nyquist), finite and
+///        at most Nyquist; values above Nyquist are refused. The resolved edge must
+///        exceed @p fmin_hz.
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
 /// @param options NULL takes the defaults (Slaney, no lifter).
 /// @param out Receives the reconstructed audio samples (caller frees with
@@ -1256,6 +1262,7 @@ typedef struct {
 ///   is rejected, as there.
 /// @param out_report When non-NULL, receives the diagnosis described by
 ///   @ref SonareSilenceCommonReport; a caller cutting takes has no use for it and passes NULL.
+/// @note On failure, all provided output slots are cleared.
 /// @note Free @p out_intervals with @ref sonare_free_ints.
 SonareError sonare_split_silence_common(const float* const* signals, size_t signal_count,
                                         const size_t* lengths, float top_db, size_t frame_length,
@@ -1266,6 +1273,7 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
 /// @note Free @p out with @ref sonare_free_floats.
 /// @note A @p hop_length that would make the framed output pass 500000000 elements is refused with
 /// @c SONARE_ERROR_INVALID_PARAMETER naming it.
+/// @note On failure, all provided output slots are cleared.
 SonareError sonare_frame_signal(const float* samples, size_t length, size_t frame_length,
                                 size_t hop_length, float** out, size_t* out_length,
                                 int* out_n_frames);
@@ -1379,8 +1387,9 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
                                      float** out, size_t* out_length, int* out_n_frames);
 
 /// @brief Aggregated tempogram values at integer tempo ratios of a reference tempo.
-/// @details If @p factors is NULL or @p n_factors is 0, the library default
-///   factors {0.5, 1, 2, 3, 4} are used. The output contains one value per factor.
+/// @details A zero @p n_factors selects the library default factors {0.5, 1, 2, 3, 4};
+///   @p factors may be NULL or non-NULL in that case. A positive @p n_factors requires a non-NULL
+///   @p factors array. The output contains one value per effective factor.
 ///
 ///   Rejected with SONARE_ERROR_INVALID_PARAMETER: an EMPTY @p tempogram
 ///   (@p length == 0), a @p length below @p win_length (fewer than one frame),

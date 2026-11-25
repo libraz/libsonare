@@ -9,7 +9,8 @@ leave unbound is looked up among the facade names on the same entry, plus on Nod
 and WASM the fields of the entry's object-typed parameters (``ts_request_fields.cjs``),
 by canonical name and then, on every surface, by the per-surface ruled renames in
 ``field_spelling_renames.toml``, which bind only where the entry carries the renamed
-spelling. A ``[<surface>.length_of]`` row binds an entry's count subject to the array
+spelling. A terminal decimal index inherits its base subject's rename and keeps the index.
+A ``[<surface>.length_of]`` row binds an entry's count subject to the array
 keyword whose length it is, and outranks a rename ruled for that subject; the refusal
 names it as "<keyword> length" in Python and "<keyword>.length" on Node and WASM. It also
 binds a count the parity extractors fold into its array, which carries no pairing,
@@ -503,6 +504,16 @@ inline std::string SurfaceSpelling(std::string_view entry, std::string_view subj
   if (const Override* row = Find(kOverrides, entry, subject)) {{
     return std::string(row->spelling);
   }}
+  const std::size_t bracket = subject.rfind('[');
+  if (bracket != std::string_view::npos && bracket > 0 && subject.back() == ']' &&
+      bracket + 2 < subject.size()) {{
+    const std::string_view index = subject.substr(bracket + 1, subject.size() - bracket - 2);
+    if (std::all_of(index.begin(), index.end(), [](char c) {{ return c >= '0' && c <= '9'; }})) {{
+      if (const Override* row = Find(kOverrides, entry, subject.substr(0, bracket))) {{
+        return std::string(row->spelling) + "[" + std::string(index) + "]";
+      }}
+    }}
+  }}
   return sonare::util::check::camel_path(std::string(subject));
 }}
 
@@ -676,7 +687,17 @@ def surface_spelling(entry: str, subject: str) -> str:
     length = LENGTHS.get((entry, subject))
     if length is not None:
         return f"{{length}} length"
-    return OVERRIDES.get((entry, subject), subject)
+    override = OVERRIDES.get((entry, subject))
+    if override is not None:
+        return override
+    bracket = subject.rfind("[")
+    if bracket > 0 and subject.endswith("]"):
+        index = subject[bracket + 1 : -1]
+        if index and index.isascii() and index.isdecimal():
+            base = OVERRIDES.get((entry, subject[:bracket]))
+            if base is not None:
+                return f"{{base}}[{{index}}]"
+    return subject
 '''
 
 

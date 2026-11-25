@@ -894,6 +894,8 @@ def test_stream_names_carry_their_unit() -> None:
         assert analyzer.current_time_sec == 0.0
         analyzer.set_reference_hz(440.0)
         analyzer.set_expected_duration(duration_sec=10.0)
+        with pytest.raises(SonareValueError, match="duration_sec must be finite and at least 0"):
+            analyzer.set_expected_duration(duration_sec=-1.0)
         analyzer.process(_signal())
         frames = analyzer.read_frames(8)
         assert len(frames.timestamps_sec) == frames.n_frames > 0

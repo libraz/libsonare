@@ -15,6 +15,8 @@ namespace sonare {
 
 /// @brief Largest accepted per-call block, in frames.
 inline constexpr int kMaxRealtimeBlockSize = 1 << 20;
+inline constexpr util::check::NumericDomain kRealtimeBlockSizeDomain =
+    util::check::integer_domain(1, kMaxRealtimeBlockSize);
 
 /// @brief True when @p hz is finite and in [kMinAudioSampleRate, kMaxAudioSampleRate].
 inline bool is_valid_realtime_sample_rate(double hz) noexcept {

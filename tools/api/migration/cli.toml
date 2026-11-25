@@ -1976,10 +1976,10 @@ test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refu
 [[entry]]
 kind = "flag"
 old = "tune-to-midi --track"
-changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3), and the refusal states the upper bound the field holds (\"must be an integer in [N, 2147483647]\")"
+changed = "A value outside the integer domain is refused as a usage error (exit 2) before the input is read. An in-domain index with no corresponding MIDI-bearing track is refused after reading the reference, with exit 3 and the valid track interval."
 domain = "project"
 rule = "cli-front-end-parity"
-test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+test = "tests/cli/cli_project_test.cpp::a track beyond the reference range names --track"
 
 [[entry]]
 kind = "flag"

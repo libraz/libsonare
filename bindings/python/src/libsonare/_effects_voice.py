@@ -9,7 +9,7 @@ import functools
 import json
 import operator
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Literal, TypeAlias, cast, get_args
+from typing import Any, Literal, SupportsIndex, TypeAlias, cast, get_args
 
 import numpy as np
 
@@ -20,6 +20,7 @@ from ._ffi import (
     SonareRealtimeVoiceChangerConfig,
     SonareVoiceChangeConfig,
 )
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
 from ._narrowing import _domain_float, _is_number, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -1198,14 +1199,32 @@ class StreamingRetune:
 
     @_entry("StreamingRetune.prepare")
     def prepare(self, sample_rate: int, max_block_size: int) -> None:
-        """Allocate native state for an integer ``sample_rate`` in Hz and resolve the grain size."""
+        """Allocate for an integer rate [8000, 384000] Hz and block size [1, 1048576]."""
+        handle = self._require_handle()
+        for value, name in ((sample_rate, "sample_rate"), (max_block_size, "max_block_size")):
+            if isinstance(value, bool) or not (
+                isinstance(value, SupportsIndex) or _is_number(value)
+            ):
+                raise _refuse_type(f"{name} must be an integer")
+
+        sample_rate_lo, sample_rate_hi, _ = _INTEGER_DOMAINS[
+            ("StreamingRetune.prepare", "sample_rate")
+        ]
+        max_block_size_lo, max_block_size_hi, _ = _INTEGER_DOMAINS[
+            ("StreamingRetune.prepare", "max_block_size")
+        ]
+        if sample_rate_hi is None or max_block_size_hi is None:
+            raise AssertionError("streaming retune prepare domains must be bounded")
+        sample_rate_value = _narrow_int(sample_rate, "sample_rate", sample_rate_lo, sample_rate_hi)
+        max_block_size_value = _narrow_int(
+            max_block_size, "max_block_size", max_block_size_lo, max_block_size_hi
+        )
+
         _check(
             self._lib.sonare_streaming_retune_prepare(
-                self._require_handle(),
-                _to_c_int(
-                    _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX), "sample_rate"
-                ),
-                _to_c_int(max_block_size, "max_block_size"),
+                handle,
+                _to_c_int(sample_rate_value, "sample_rate"),
+                _to_c_int(max_block_size_value, "max_block_size"),
             )
         )
 

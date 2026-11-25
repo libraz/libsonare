@@ -1029,6 +1029,19 @@ SonareError probe_assign_note_targets(const std::string& param, double value) {
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 
+SonareError probe_streaming_retune_prepare(const std::string& param, double value) {
+  SonareStreamingRetune* retune = nullptr;
+  const SonareError created = sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune);
+  if (created != SONARE_OK) return created;
+  int sample_rate = 48000;
+  int max_block_size = 512;
+  if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
+  if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
+  const SonareError result = sonare_streaming_retune_prepare(retune, sample_rate, max_block_size);
+  sonare_streaming_retune_destroy(retune);
+  return result;
+}
+
 SonareError probe_realtime_voice_changer_render(const std::string&, double value) {
   float* out = nullptr;
   size_t out_length = 0;
@@ -1275,6 +1288,7 @@ const std::map<std::string, Probe>& probes() {
 #if defined(SONARE_WITH_VOICE_CHANGER)
       {"realtime_voice_changer_preset_config", probe_realtime_voice_changer_preset_config},
       {"realtime_voice_changer_render", probe_realtime_voice_changer_render},
+      {"streaming_retune_prepare", probe_streaming_retune_prepare},
 #endif
   };
   return table;

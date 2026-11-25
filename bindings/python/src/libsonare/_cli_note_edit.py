@@ -40,9 +40,9 @@ from ._cli_options import (
     _read_integer_text,
     _read_number_text,
 )
-from ._effects_note_ops import _UNMATCHED_POLICIES
+from ._effects_note_ops import _UNMATCHED_POLICIES, _note_targets_from_smf
 from ._narrowing import _resolve_sample_bound
-from ._runtime import _UINT32_MAX
+from ._runtime import _UINT32_MAX, _Respelling
 
 if TYPE_CHECKING:
     from .analyzer import NoteEdit
@@ -203,7 +203,6 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
     from . import (
         assign_note_targets,
         extract_notes,
-        note_targets_from_smf,
         pitch_pyin,
         render_notes,
     )
@@ -220,9 +219,10 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
     # Read ahead of the pitch track, which is what the command costs: the native
     # front-end receives its audio already decoded and reads the reference next,
     # so refusing an unreadable one here keeps the two orders identical.
-    targets = note_targets_from_smf(
+    targets = _note_targets_from_smf(
         _read_bounded(args.reference_smf, _MAX_PROJECT_OR_MIDI_BYTES),
         track_index=args.track,
+        respelled={"track_index": _Respelling("argument --track:")},
     )
     pitch = pitch_pyin(
         samples,

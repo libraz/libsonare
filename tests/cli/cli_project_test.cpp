@@ -1022,6 +1022,13 @@ TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class
     REQUIRE_THAT(output, ContainsSubstring("--track"));
   }
 
+  SECTION("a track beyond the reference range names --track") {
+    auto [code, output] = exec_command(base + " --track 1");
+    INFO(output);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("argument --track: must be an integer in [0, 0]"));
+  }
+
   SECTION("an overlap ratio outside [0, 1] is an invalid parameter") {
     for (const char* value : {"-0.1", "1.5"}) {
       CAPTURE(value);

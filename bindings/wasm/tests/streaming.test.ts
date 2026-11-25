@@ -4,7 +4,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CHORD_QUALITIES, detectKey, init, StreamAnalyzer } from '../dist/index.js';
-import { unknownKeyError } from './_helpers';
+import { expectRefusalOf, unknownKeyError } from './_helpers';
 
 const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -938,6 +938,8 @@ describe('StreamAnalyzer', () => {
       // Should not throw
       analyzer.setExpectedDuration(60.0);
       analyzer.setExpectedDuration(120.0);
+      const refusal = expectRefusalOf(() => analyzer.setExpectedDuration(-1));
+      expect(refusal.message).toContain('durationSec must be finite and at least 0');
 
       // Process some audio to verify it still works after setting duration
       const samples = new Float32Array(sampleRate);

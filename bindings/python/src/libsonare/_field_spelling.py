@@ -259,7 +259,17 @@ def surface_spelling(entry: str, subject: str) -> str:
     length = LENGTHS.get((entry, subject))
     if length is not None:
         return f"{length} length"
-    return OVERRIDES.get((entry, subject), subject)
+    override = OVERRIDES.get((entry, subject))
+    if override is not None:
+        return override
+    bracket = subject.rfind("[")
+    if bracket > 0 and subject.endswith("]"):
+        index = subject[bracket + 1 : -1]
+        if index and index.isascii() and index.isdecimal():
+            base = OVERRIDES.get((entry, subject[:bracket]))
+            if base is not None:
+                return f"{base}[{index}]"
+    return subject
 
 
 OMIT_FOR_POSITIVE_DEFAULT = "must be greater than 0; omit it for the default"

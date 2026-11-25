@@ -552,7 +552,7 @@ def test_tune_to_midi_cli_track_index_reaches_the_smf_reader() -> None:
         )
 
         assert result.returncode == 3, result.stdout
-        assert "no MIDI-bearing track at index 1" in result.stderr
+        assert "argument --track: must be an integer in [0, 0]" in result.stderr
 
 
 # A 440 Hz tone: one semitone below the 70 the corrector is told to aim for, so
@@ -858,7 +858,7 @@ def test_note_edit_cli_scales_the_pyin_frame_with_the_input_rate(
     monkeypatch.setattr(libsonare, "pitch_pyin", fake_pyin)
     monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 1000, sample_rate))
     monkeypatch.setattr(_cli_note_edit, "_read_bounded", lambda *_args: b"")
-    monkeypatch.setattr(libsonare, "note_targets_from_smf", lambda *_a, **_k: [])
+    monkeypatch.setattr(_cli_note_edit, "_note_targets_from_smf", lambda *_a, **_k: [])
     args = argparse.Namespace(
         file="in.wav",
         hop_length=512,

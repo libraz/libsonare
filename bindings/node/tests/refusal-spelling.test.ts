@@ -680,6 +680,19 @@ describe('refusal spelling sweep', () => {
     expect(ROWS.length).toBeGreaterThan(0);
   });
 
+  it('keeps the edit root on an indexed envelope refusal', () => {
+    expect(() =>
+      withHandle(analyzePolyphonic({ samples: TONE, sampleRate: SR }), (analysis) => {
+        expect(analysis.noteCount).toBeGreaterThan(0);
+        analysis.setNoteEdit(0, { amplitudeEnvelope: Float32Array.of(-1) });
+      }),
+    ).toThrow(
+      new RangeError(
+        'PolyphonicAnalysis.setNoteEdit: edit.amplitudeEnvelope[0] must be finite and at least 0',
+      ),
+    );
+  });
+
   it.each(ROWS.map((row) => [key(row), row] as const))(
     '%s is refused under the caller spelling',
     (_name, row) => {

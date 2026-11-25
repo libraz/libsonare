@@ -662,7 +662,7 @@ describe('streaming retune prepare refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = literal(message as string);
+    const text = publicText(message as string);
     const retune = new StreamingRetune();
     const handle = raw().createStreamingRetune({});
     try {

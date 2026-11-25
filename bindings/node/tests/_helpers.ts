@@ -117,7 +117,7 @@ export function writePcm16Wav(filePath: string, planes: Float32Array[], sampleRa
 export function expectRefusal(
   run: () => unknown,
   expected: ErrorConstructor | ErrorCode,
-  message?: RegExp,
+  message?: string | RegExp,
 ): void {
   let caught: unknown;
   try {

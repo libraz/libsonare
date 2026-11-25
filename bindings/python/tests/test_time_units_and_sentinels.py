@@ -15,6 +15,7 @@ from libsonare import (
     SonareValueError,
     SpectralRegionOp,
 )
+from libsonare._features_metering import _dynamic_range_args
 
 SR = 22050
 
@@ -333,6 +334,18 @@ class TestSentinelsAreAbsence:
         for gamma in (-1.0, float("nan")):
             with pytest.raises(SonareValueError, match="gamma"):
                 libsonare.vqt_to_audio(magnitude, SR, gamma=gamma, n_iter=1)
+
+    def test_dynamic_range_absence_uses_the_c_sentinel(self) -> None:
+        assert _dynamic_range_args(None, None, None, None) == (0, 0, -1, -1)
+        for field in ("low_percentile", "high_percentile"):
+            for value in (-1.0, -0.5, -2.0):
+                with pytest.raises(SonareValueError, match=field):
+                    _dynamic_range_args(
+                        None,
+                        None,
+                        value if field == "low_percentile" else None,
+                        value if field == "high_percentile" else None,
+                    )
 
     def test_metering_percentiles(self) -> None:
         samples = _noise(SR * 4)

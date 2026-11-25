@@ -53,6 +53,7 @@ from ._runtime import (
     _narrow_float,
     _out_float_array,
     _resolve_sample_bound,
+    _Respelling,
     _respellings,
     _to_c_float,
     _to_c_float_array,
@@ -843,6 +844,15 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
         >>> targets = libsonare.note_targets_from_smf(Path("melody.mid").read_bytes())
         >>> result = libsonare.assign_note_targets(notes, sr, targets)
     """
+    return _note_targets_from_smf(data, track_index=track_index)
+
+
+def _note_targets_from_smf(
+    data: bytes | bytearray,
+    *,
+    track_index: int = 0,
+    respelled: dict[str, _Respelling] | None = None,
+) -> list[NoteTarget]:
     lib = _get_lib()
 
     raw = bytes(data)
@@ -856,7 +866,8 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
             _to_c_int(track_index, "track_index"),
             ctypes.byref(out),
             ctypes.byref(out_count),
-        )
+        ),
+        respelled=respelled,
     )
     try:
         return [

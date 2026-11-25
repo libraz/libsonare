@@ -418,8 +418,8 @@ class StreamingMasteringChain {
   /// Must be called before process_block(). @p num_channels must be 1 or 2 and
   /// determines whether stereo-only stages (stereo.imager, stereo.monoMaker)
   /// participate (they are skipped for mono).
-  /// @throws SonareException (InvalidParameter) for a @p sample_rate that is not finite or
-  ///         outside [kMinAudioSampleRate, kMaxAudioSampleRate], a @p max_block_size outside
+  /// @throws SonareException (InvalidParameter) for a @p sample_rate that is not an integer
+  ///         in [kMinAudioSampleRate, kMaxAudioSampleRate], a @p max_block_size outside
   ///         [1, kMaxRealtimeBlockSize], or a @p num_channels other than 1 or 2.
   void prepare(double sample_rate, int max_block_size, int num_channels);
 

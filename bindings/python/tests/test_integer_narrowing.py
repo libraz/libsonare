@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 
 import libsonare as ls
+import libsonare._effects_voice as voice_module
 from libsonare import AutomationPoint, SonareValueError
 
 SAMPLE_RATE = 22050
@@ -71,13 +72,58 @@ def test_a_negative_size_is_refused_rather_than_read_as_the_largest_one() -> Non
                 analyzer.read_frames(value)
 
 
-def test_a_streaming_retune_rate_is_an_integer() -> None:
-    """The C prepare takes an int rate, so a float rate is refused rather than truncated."""
+def test_a_streaming_retune_rate_and_block_use_their_integer_domains() -> None:
+    """The C prepare takes int values; domain refusals keep the core's full bounds."""
     with ls.StreamingRetune() as retune:
         retune.prepare(48000, 256)
-        for value in (48000.0, 44100.5):
-            with pytest.raises(SonareValueError, match="sample_rate"):
+        for value in (48000.0, 44100.5, 7999, 384001, 1e100):
+            with pytest.raises(SonareValueError) as refused:
                 retune.prepare(value, 256)
+            assert str(refused.value).endswith("sample_rate must be an integer in [8000, 384000]")
+
+        for value in (0, 0.5, 1048577, 1e100):
+            with pytest.raises(SonareValueError) as refused:
+                retune.prepare(48000, value)
+            assert str(refused.value).endswith("max_block_size must be an integer in [1, 1048576]")
+        with pytest.raises(TypeError, match="max_block_size must be an integer"):
+            retune.prepare(7999, "invalid")
+        with pytest.raises(SonareValueError) as refused:
+            retune.prepare(7999, 1e100)
+        assert str(refused.value).endswith("sample_rate must be an integer in [8000, 384000]")
+
+
+def test_streaming_retune_domain_refusal_does_not_call_native_prepare(monkeypatch) -> None:
+    prepare_calls: list[tuple[int, int]] = []
+
+    class FakeRetuneLibrary:
+        def sonare_streaming_retune_create(self, *_args) -> int:
+            out_handle = ctypes.cast(_args[-1], ctypes.POINTER(ctypes.c_void_p))
+            out_handle[0] = ctypes.c_void_p(1)
+            return 0
+
+        def sonare_streaming_retune_prepare(
+            self, _handle: object, sample_rate: ctypes.c_int, max_block_size: ctypes.c_int
+        ) -> int:
+            sample_rate_value = int(getattr(sample_rate, "value", sample_rate))
+            block_size_value = int(getattr(max_block_size, "value", max_block_size))
+            prepare_calls.append((sample_rate_value, block_size_value))
+            if sample_rate_value != 48000:
+                raise AssertionError("a refused rate reached the native prepare entry")
+            return 0
+
+        def sonare_streaming_retune_destroy(self, _handle: object) -> None:
+            return None
+
+    monkeypatch.setattr(voice_module, "_get_lib", FakeRetuneLibrary)
+    with ls.StreamingRetune() as retune:
+        with pytest.raises(
+            SonareValueError, match=r"sample_rate must be an integer in \[8000, 384000\]"
+        ):
+            retune.prepare(7999, 256)
+        assert prepare_calls == []
+
+        retune.prepare(48000, 256)
+        assert prepare_calls == [(48000, 256)]
 
 
 def test_a_wrapped_bitmask_is_refused_rather_than_read_as_a_different_scale() -> None:

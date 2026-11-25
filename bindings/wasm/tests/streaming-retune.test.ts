@@ -18,8 +18,14 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, StreamingRetune, type StreamingRetuneConfig } from '../dist/index.js';
-import { unknownKeyError } from './_helpers';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  StreamingRetune,
+  type StreamingRetuneConfig,
+} from '../dist/index.js';
+import { expectRefusalOf, unknownKeyError } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -216,5 +222,106 @@ describe('StreamingRetune grain', () => {
       expect(retune.grainSizeSamples).toBe(2232);
       expect(retune.config().grainSizeSamples).toBe(2232);
     });
+  });
+});
+
+describe('StreamingRetune prepare and empty blocks', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('reports the coded unprepared state before reading a nonempty block', () => {
+    const retune = new StreamingRetune();
+    try {
+      let caught: unknown;
+      try {
+        retune.processMono(Float32Array.of(Number.NaN));
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidState);
+      expect((caught as Error).message).toBe(
+        'StreamingRetune.processMono: the retune stage has not been prepared',
+      );
+    } finally {
+      retune.destroy();
+    }
+  });
+
+  it('treats an empty block as a no-op before and after prepare', () => {
+    const retune = new StreamingRetune();
+    try {
+      expect(retune.grainSizeSamples).toBe(0);
+      const unprepared = retune.processMono(new Float32Array(0));
+      expect(unprepared).toBeInstanceOf(Float32Array);
+      expect(unprepared).toHaveLength(0);
+      expect(retune.grainSizeSamples).toBe(0);
+
+      retune.prepare(SR, BLOCK);
+      const grainSize = retune.grainSizeSamples;
+      expect(retune.processMono(new Float32Array(0))).toHaveLength(0);
+      expect(retune.grainSizeSamples).toBe(grainSize);
+    } finally {
+      retune.destroy();
+    }
+  });
+
+  it('keeps the previous prepared state after a refused re-prepare', () => {
+    const config = { pitchSemitones: 3, mix: 0.75, grainSizeSamples: 512 };
+    const retune = new StreamingRetune(config);
+    const control = new StreamingRetune(config);
+    try {
+      retune.prepare(SR, BLOCK);
+      control.prepare(SR, BLOCK);
+      const first = Float32Array.from({ length: BLOCK }, (_, i) => Math.sin(i * 0.03) * 0.2);
+      retune.processMono(first);
+      control.processMono(first);
+
+      const grainBefore = retune.grainSizeSamples;
+      const latencyBefore = retune.latencySamples;
+      expect(expectRefusalOf(() => retune.prepare(7999, BLOCK), RangeError).message).toBe(
+        'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+      );
+      expect(expectRefusalOf(() => retune.prepare(SR + 0.5, BLOCK)).message).toBe(
+        'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+      );
+      expect(expectRefusalOf(() => retune.prepare(1e100, BLOCK)).message).toBe(
+        'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+      );
+      const wrongSecondShape = expectRefusalOf(
+        () => retune.prepare(7999, 'invalid' as unknown as number),
+        TypeError,
+      );
+      expect(expectRefusalOf(() => retune.prepare(7999, 0.5)).message).toBe(
+        'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+      );
+      expect(wrongSecondShape.message).toBe(
+        'StreamingRetune.prepare: maxBlockSize must be a number',
+      );
+      expect(expectRefusalOf(() => retune.prepare(SR, 0)).message).toBe(
+        'StreamingRetune.prepare: maxBlockSize must be an integer in [1, 1048576]',
+      );
+      expect(expectRefusalOf(() => retune.prepare(SR, 0.5)).message).toBe(
+        'StreamingRetune.prepare: maxBlockSize must be an integer in [1, 1048576]',
+      );
+      expect(expectRefusalOf(() => retune.prepare(SR, 1e100)).message).toBe(
+        'StreamingRetune.prepare: maxBlockSize must be an integer in [1, 1048576]',
+      );
+      expect(retune.grainSizeSamples).toBe(grainBefore);
+      expect(retune.latencySamples).toBe(latencyBefore);
+
+      const next = Float32Array.from({ length: BLOCK }, (_, i) => Math.cos(i * 0.02) * 0.15);
+      const expected = control.processMono(next);
+      const actual = retune.processMono(next);
+      const scale = Math.max(...expected.map(Math.abs));
+      expect(scale).toBeGreaterThan(0);
+      expect(actual).toHaveLength(expected.length);
+      const maxError = Math.max(...expected.map((sample, i) => Math.abs(sample - actual[i])));
+      expect(maxError).toBeLessThanOrEqual(scale * 8 * 2 ** -23);
+    } finally {
+      retune.destroy();
+      control.destroy();
+    }
   });
 });

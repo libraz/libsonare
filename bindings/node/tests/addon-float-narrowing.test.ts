@@ -1836,7 +1836,14 @@ describe('setExpectedDuration reaches the core, and 1e39 does not reach it at al
     expect(() => analyzer().setExpectedDuration(30)).not.toThrow();
     // The core owns the non-negative half of the domain, so the argument
     // demonstrably arrives: its refusal lacks the reader's float-range wording.
-    expect(() => analyzer().setExpectedDuration(-1)).toThrow(RangeError);
+    let caught: unknown;
+    try {
+      analyzer().setExpectedDuration(-1);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toContain('durationSec must be finite and at least 0');
     expect(() => analyzer().setExpectedDuration(-1)).not.toThrow(
       /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
     );

@@ -5496,10 +5496,10 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_streaming_r
 [[entry]]
 kind = "option"
 old = "StreamingRetune.prepare(sample_rate)"
-changed = "sample_rate is an integer in Hz; a float, even a whole one, raises SonareValueError"
+changed = "sample_rate is an integer in [8000, 384000] Hz and max_block_size is an integer in [1, 1048576]; fractions and values outside either domain raise SonareValueError with that domain's bounds (1.x passed a fractional sample rate to the core)"
 domain = "effects"
 rule = "c-count-types"
-test = "bindings/python/tests/test_integer_narrowing.py::test_a_streaming_retune_rate_is_an_integer"
+test = "bindings/python/tests/test_integer_narrowing.py::test_a_streaming_retune_rate_and_block_use_their_integer_domains"
 
 [[entry]]
 kind = "field"
@@ -10957,6 +10957,22 @@ changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (th
 domain = "effects"
 rule = "frozen-results"
 test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assignment_and_copy_through_replace"
+
+[[entry]]
+kind = "function"
+old = "note_targets_from_smf"
+changed = "An out-of-range track_index is refused with its allowed integer interval instead of a generic missing-track refusal."
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_note_targets.py::test_the_conductor_track_is_not_counted_in_the_track_index"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.set_note_edit"
+changed = "A non-finite or negative amplitude_envelope point is refused by index when set_note_edit is called, leaving the previous edit intact; previously it reached the renderer."
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_refusal_spelling.py::test_indexed_polyphonic_edit_refusal_keeps_the_caller_root"
 
 [[entry]]
 kind = "type"

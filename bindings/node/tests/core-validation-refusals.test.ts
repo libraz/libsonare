@@ -637,12 +637,61 @@ describe('streaming retune prepare refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = literal(message as string);
+    const text = publicText(message as string);
     const retune = new StreamingRetune();
     const raw = new addon.StreamingRetune({});
     try {
       expectRefusal(() => retune.prepare(sample_rate, max_block_size), kind, text);
       expectRefusal(() => raw.prepare(sample_rate, max_block_size), kind, text);
+    } finally {
+      retune.destroy();
+      raw.destroy();
+    }
+  });
+
+  it('uses the shared domains for fractional and unrepresentable prepare values', () => {
+    const retune = new StreamingRetune();
+    const raw = new addon.StreamingRetune({});
+    try {
+      expectRefusal(
+        () => retune.prepare(7999, 'invalid' as unknown as number),
+        TypeError,
+        'StreamingRetune.prepare: maxBlockSize must be a number',
+      );
+      expectRefusal(
+        () => raw.prepare(null as unknown as number, 16),
+        TypeError,
+        'StreamingRetune.prepare: sampleRate must be a number',
+      );
+      expectRefusal(
+        () => retune.prepare(7999, 0.5),
+        RangeError,
+        'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+      );
+      for (const sampleRate of [48000.5, 1e100]) {
+        expectRefusal(
+          () => retune.prepare(sampleRate, 512),
+          RangeError,
+          'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+        );
+        expectRefusal(
+          () => raw.prepare(sampleRate, 512),
+          RangeError,
+          'StreamingRetune.prepare: sampleRate must be an integer in [8000, 384000]',
+        );
+      }
+      for (const maxBlockSize of [0.5, 1e100]) {
+        expectRefusal(
+          () => retune.prepare(48000, maxBlockSize),
+          RangeError,
+          'StreamingRetune.prepare: maxBlockSize must be an integer in [1, 1048576]',
+        );
+        expectRefusal(
+          () => raw.prepare(48000, maxBlockSize),
+          RangeError,
+          'StreamingRetune.prepare: maxBlockSize must be an integer in [1, 1048576]',
+        );
+      }
     } finally {
       retune.destroy();
       raw.destroy();

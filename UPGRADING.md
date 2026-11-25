@@ -284,7 +284,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_spectral_bandwidth_ex` | removed: call sonare_spectral_bandwidth with SonareSpectralBandwidthOptions p set |
 | `sonare_spectral_bandwidth` | takes const SonareSpectralBandwidthOptions* options (NULL = defaults; sonare_spectral_bandwidth_options_init) before out; p moved into the struct |
 | `sonare_split_silence_common_ex` | removed: call sonare_split_silence_common, which takes the nullable out_report |
-| `sonare_split_silence_common` | takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added |
+| `sonare_split_silence_common` | takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added; a failed call clears a supplied report, including when the final interval copy fails |
 | `sonare_stft` | Takes const SonareStftOptions* options before out. Initialize with sonare_stft_options_init or pass NULL for defaults. Nonzero options->db fills out.db with magnitude in dB and nonzero options->phase fills out.phase in radians. Both pointers are NULL unless their planes are requested. Release the owned output with sonare_free_stft_result. |
 | `sonare_stream_analyzer_config_default` | removed: call sonare_stream_config_init(&config) on a caller-owned struct instead |
 | `sonare_stream_analyzer_read_frames_i16_ex` | removed: call sonare_stream_analyzer_read_quantized_frames_i16, which now takes the config |
@@ -408,6 +408,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_frame_signal` | A failed call leaves all provided outputs cleared, including out_n_frames. |
 | `sonare_hz_to_note` | returns SonareError and writes a caller-owned name through out_string, released with sonare_free_string |
 | `sonare_polyphonic_set_note_edit` | A nonfinite or negative envelope point is refused at the setter under amplitude_envelope and its index, leaving the previous edit intact. The refusal previously arrived when rendering. |
 | `sonare_stream_analyzer_create` | Requesting the unsupported magnitude plane returns SONARE_ERROR_NOT_SUPPORTED with config.compute_magnitude in the message instead of SONARE_ERROR_INVALID_PARAMETER. |
@@ -2523,6 +2524,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Chord.roman_numeral` | `AnalysisChord.roman_numeral` |
 | `FunctionalChord.name` | `Chord.name`: the name field FunctionalChord inherits from Chord, filled by the analysis functions, with no fallback spelling built from root and quality |
 | `FunctionalChord.roman` | `FunctionalChord.roman_numeral` |
+| `PolyphonicAnalysis.set_note_edit` | A non-finite or negative amplitude_envelope point is refused by index when set_note_edit is called, leaving the previous edit intact; previously it reached the renderer. |
 | `Section.canonical_name` | `Section.name` |
 | `Section.name` | a field filled by the analysis functions, with no fallback spelling built from type; a Section built by hand takes name and group, which no longer default to an empty string and 0 |
 | `StreamAnalyzer.reset(base_sample_offset)` | `StreamAnalyzer.reset(start_sample)` |
@@ -2857,7 +2859,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingRetune.prepare(sample_rate)` | sample_rate is an integer in Hz; a float, even a whole one, raises SonareValueError |
+| `StreamingRetune.prepare(sample_rate)` | sample_rate is an integer in [8000, 384000] Hz and max_block_size is an integer in [1, 1048576]; fractions and values outside either domain raise SonareValueError with that domain's bounds (1.x passed a fractional sample rate to the core) |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -2997,6 +2999,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); the new keyword link_channels=True restores the union |
 | `mastering_repair_detect_clipping(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `merge_notes` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
+| `note_targets_from_smf` | An out-of-range track_index is refused with its allowed integer interval instead of a generic missing-track refusal. |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
 | `pitch_correct_timevarying(voiced_prob)` | voiced_prob= together with voiced= raises SonareValueError where voiced used to win; pass at most one |
@@ -5789,6 +5792,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `OnsetStrengthMultiRequest.fmin` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
 | `OnsetStrengthMultiRequest.htk` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
 | `PcenOptions` | removed: put timeConstant, gain, bias, power and eps on PcenRequest |
+| `PolyphonicAnalysis.setNoteEdit` | A non-finite or negative amplitudeEnvelope point is refused by index when setNoteEdit is called, leaving the previous edit intact; previously it reached the renderer. |
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` | norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of 0 rows |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
@@ -5994,6 +5998,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AssignNoteTargetsRequest.maxCorrectionSemitones` | finite and non-negative; out-of-domain values are refused by the core |
 | `AssignNoteTargetsRequest.minOverlapRatio` | finite in [0, 1]; out-of-domain values are refused by the core |
+| `StreamingRetune.prepare` | sampleRate must be an integer in [8000, 384000] Hz and maxBlockSize an integer in [1, 1048576]; fractions and values outside either domain raise RangeError with the argument's domain text (1.x passed a fractional sample rate to the core). |
 | `assignNoteTargets` | minOverlapRatio must be finite in [0, 1], maxCorrectionSemitones finite and non-negative, and each note span must have a non-negative onset and a greater offset; the ratio and correction already had native bounds. Refusals now name the offending field or indexed note span |
 
 #### String values are lowerCamelCase tokens
@@ -6323,6 +6328,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
 | `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). Finite out-of-domain pitch and mix values raise RangeError. A grain outside the supported multiples also raises RangeError. The old configuration clamped controls and rounded the effective grain. |
 | `VoiceChangeRealtimeRequest.preset` | `RealtimeVoiceChangerRenderRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
+| `noteTargetsFromSmf` | A trackIndex with no MIDI-bearing track is refused as a RangeError naming the allowed integer interval, instead of a generic missing-track refusal. |
 | `roomMorphStereo` | Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. Omitted receiverSpacingM is up to 0.5 m, reduced to keep both receivers in the room. Catch RangeError naming receiverSpacingM when the pair from an explicit spacing falls outside the room. The equivalent 1.x call raised SonareError InvalidParameter. |
 | `roomMorph` | Omitted source and listener coordinates scale with the room. Pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false for the released default. An absorption or bandAbsorption value outside [0, 1] is a RangeError 'roomMorph: <field> must be finite and in [0, 1]' (1.x: '<field> must be within [0, 1]'). |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
@@ -10426,7 +10432,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PcenRequest.options` | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
 | `PitchYinRequest.fillNa` (`./analysis`) | removed: drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError) |
 | `PitchYinRequest.fillNa` | removed: drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError) |
-| `PolyphonicAnalysis.setNoteEdit(edit)` | optional (absent clears the edit), as on Node |
+| `PolyphonicAnalysis.setNoteEdit(edit)` | Optional: an absent edit clears the stored edit. A non-finite or negative amplitudeEnvelope point is refused by index when setNoteEdit is called, leaving the previous edit intact. |
 | `VqtToAudioRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` (`./analysis`) | norm option removed; an empty onset envelope returns winLength / 2 + 1 rows and no columns instead of a RangeError |
@@ -10734,7 +10740,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingRetune.prepare` | a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through) |
+| `StreamingRetune.prepare` | sampleRate must be an integer in [8000, 384000] Hz and maxBlockSize an integer in [1, 1048576]; fractions and values outside either domain raise RangeError with the argument's domain text, and a refused re-prepare preserves the previous prepared state (1.x passed a fractional sample rate to the core). |
 | `decomposeStemsLinked` | an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
 
 #### String values are lowerCamelCase tokens
@@ -11211,6 +11217,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomMorphStereoRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
+| `StreamingRetune.processMono` | An empty block returns an empty Float32Array without requiring prepare; nonempty blocks still require a prepared stage. |
 | `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix). A finite pitch or mix outside its domain and a grain size outside the supported multiples are now refused instead of clamped or rounded. |
 | `VoiceChangeRealtimeRequest.preset` | `RealtimeVoiceChangerRenderRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
 | `roomMorphStereo` | A listener whose receiver pair falls outside the room with explicitly supplied spacing yields RangeError naming receiverSpacingM rather than SonareError InvalidParameter. An omitted spacing may be reduced to fit. Omitted source and listener scale with the room or target room; pass explicit coordinates to preserve the fixed 1.x placement. Air absorption is enabled when omitted. Pass airAbsorptionEnabled: false to retain the former default. |
@@ -14310,7 +14317,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `tune-to-midi --max-correction-semitones` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `tune-to-midi --min-overlap-ratio` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `tune-to-midi --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `tune-to-midi --track` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3), and the refusal states the upper bound the field holds ("must be an integer in [N, 2147483647]") |
+| `tune-to-midi --track` | A value outside the integer domain is refused as a usage error (exit 2) before the input is read. An in-domain index with no corresponding MIDI-bearing track is refused after reading the reference, with exit 3 and the valid track interval. |
 | `tune-to-midi --unmatched-policy` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 
 #### Other individual changes
