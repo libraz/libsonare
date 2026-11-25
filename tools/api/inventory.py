@@ -624,16 +624,26 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
         stem, node, file = hit
         line = getattr(node, "lineno", 0)
         # A name defined in a private module is stubbed in the public module re-exporting it.
-        stub = pkg.stub_node(stem, name) or next(
-            (pkg.stub_node(m, name) for m in modules if pkg.stub_node(m, name) is not None), None
-        )
+        stub_stem = next((m for m in (stem, *modules) if pkg.stub_node(m, name) is not None), None)
+        stub = pkg.stub_node(stub_stem, name) if stub_stem else None
         files_pref = (f"{PY_PACKAGE}/{stem}.pyi", file)
         common = {"in_all": in_all, "modules": modules}
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             f = pick_sig(name, files_pref)
             kw = _py_kwargs(pkg, stem, None, node, {p["name"] for p in _py_params(f)})
             out.extend(
-                _py_function("python", name, f, node, stub, file, line, common, kw_params=kw)
+                _py_function(
+                    "python",
+                    name,
+                    f,
+                    node,
+                    stub,
+                    file,
+                    line,
+                    common,
+                    kw_params=kw,
+                    stub_decls=_py_declarations(pkg.pyi[stub_stem].tree, name) if stub_stem else (),
+                )
             )
         elif isinstance(node, ast.ClassDef):
             out.extend(_py_class(pkg, name, node, stub, stem, file, pick_sig, sigs, common))
@@ -875,8 +885,28 @@ def _py_kwargs(pkg, stem, owner, fn, bound: set[str], depth: int = 0) -> list[di
     return None
 
 
+def _py_declarations(container, name):
+    return [
+        node
+        for node in getattr(container, "body", [])
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
+    ]
+
+
 def _py_function(
-    surface, qual, f, node, stub, file, line, extra, kind="function", owner="", kw_params=()
+    surface,
+    qual,
+    f,
+    node,
+    stub,
+    file,
+    line,
+    extra,
+    kind="function",
+    owner="",
+    kw_params=(),
+    *,
+    stub_decls=(),
 ):
     params = _py_params(f)
     returns = f.returns if f is not None else _unparse(getattr(node, "returns", None))
@@ -893,6 +923,13 @@ def _py_function(
         owner=owner,
         member=qual.split(".")[-1] if owner else "",
         **extra,
+    )
+    rec["declarations"] = list(
+        dict.fromkeys(
+            f"({_unparse(decl.args)}) -> {_unparse(decl.returns) or 'unannotated'}"
+            for decl in (*stub_decls, stub, node)
+            if isinstance(decl, (ast.FunctionDef, ast.AsyncFunctionDef))
+        )
     )
     if kw_params is None:
         rec["kwargs_unresolved"] = True
@@ -973,6 +1010,19 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
                     member=fname,
                     type=ann,
                     optional="None" in ann or c.value is not None,
+                    field_default=_unparse(c.value),
+                    field_omittable=(
+                        ann.startswith(("NotRequired[", "typing.NotRequired["))
+                        or (
+                            "TypedDict" in base_names
+                            and any(
+                                k.arg == "total" and _unparse(k.value) == "False"
+                                for k in node.keywords
+                            )
+                            and not ann.startswith(("Required[", "typing.Required["))
+                        )
+                        or c.value is not None
+                    ),
                     index=idx,
                     literals=_literal_tokens(ann),
                     inline_literals=bool(_literal_tokens(ann)),
@@ -1018,16 +1068,8 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
             ),
             None,
         )
-        snode = None
-        if isinstance(stub, ast.ClassDef):
-            snode = next(
-                (
-                    c
-                    for c in stub.body
-                    if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef)) and c.name == meth
-                ),
-                None,
-            )
+        stub_decls = _py_declarations(stub, meth)
+        snode = next(iter(stub_decls), None)
         if mnode is None and f is not None:
             mnode = _node_at(pkg, f.file, f.line)
         if mnode is None:
@@ -1048,11 +1090,14 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
                 kind="method",
                 owner=name,
                 kw_params=kw,
+                stub_decls=stub_decls,
             )
         )
     if kind == "class":
         options, resolved = _py_constructor(pkg, name, node, stub, stem, file)
-        out.extend(options)
+        out.extend(options[1:])
+        if options:
+            top["declarations"] = options[0]["declarations"]
         if not resolved:
             top["kwargs_unresolved"] = True
     return out
@@ -1068,16 +1113,8 @@ def _py_constructor(pkg, name, node, stub, stem, file) -> tuple[list[dict], bool
     init = _own_init(pkg, node)
     if init is None:
         return [], True
-    sinit = None
-    if isinstance(stub, ast.ClassDef):
-        sinit = next(
-            (
-                c
-                for c in stub.body
-                if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef)) and c.name == "__init__"
-            ),
-            None,
-        )
+    stub_decls = _py_declarations(stub, "__init__")
+    sinit = next(iter(stub_decls), None)
     sig = python_pyi._params_from_args((sinit or init).args)
     params = [p for p in sig if not p.raw_name.startswith("_")]
     bound = {p.raw_name for p in params}
@@ -1095,8 +1132,9 @@ def _py_constructor(pkg, name, node, stub, stem, file) -> tuple[list[dict], bool
         kind="method",
         owner=name,
         kw_params=kw,
+        stub_decls=stub_decls,
     )
-    return group[1:], kw is not None
+    return group, kw is not None
 
 
 def _node_at(pkg: _PyPackage, rel: str, line: int):
@@ -1217,7 +1255,7 @@ def _blank_comments(raw: str) -> str:
     return re.sub(r"/\*.*?\*/|//[^\n]*", blank, raw, flags=re.DOTALL)
 
 
-def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
+def extract_c(root: Path, *, snapshot: bool = False) -> tuple[list[dict], dict[str, int]]:
     ex = c_api.extract(root)
     headers = c_api._collect_api_headers(root)
     header_set = {str(h.relative_to(root)) for h in headers if h.exists()}
@@ -1228,14 +1266,15 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
     out: list[dict] = []
 
     def doc_at(file, line):
-        return line > 0 and _c_doc_before(lines_by_file[file], line - 1)
+        return not snapshot and line > 0 and _c_doc_before(lines_by_file[file], line - 1)
 
     for f in ex.functions:
         line = f.line
-        stripped = stripped_by_file.get(f.file, "")
-        m = re.search(rf"\b{re.escape(f.raw_name)}\s*\(", stripped)
-        if m:
-            line = _line_of(stripped, m.start())
+        if not snapshot:
+            stripped = stripped_by_file.get(f.file, "")
+            m = re.search(rf"\b{re.escape(f.raw_name)}\s*\(", stripped)
+            if m:
+                line = _line_of(stripped, m.start())
         rec = _record(
             "c",
             "function",
@@ -1260,6 +1299,8 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
             ],
         )
         out.append(rec)
+        if snapshot:
+            continue
         param_docs = (
             _c_param_docs(_c_doc_text(lines_by_file[f.file], line - 1))
             if line and f.file in lines_by_file
@@ -1288,9 +1329,12 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
     declared_types: set[str] = set()
     for r in ex.records:
         raw = raw_by_file.get(r.file, "")
-        stripped = stripped_by_file.get(r.file, "")
-        m = re.search(rf"\}}\s*{re.escape(r.raw_name)}\s*;", stripped)
-        start = stripped.rfind("typedef", 0, m.start()) if m else -1
+        start, m = -1, None
+        if not snapshot:
+            stripped = stripped_by_file.get(r.file, "")
+            m = re.search(rf"\}}\s*{re.escape(r.raw_name)}\s*;", stripped)
+            if m:
+                start = stripped.rfind("typedef", 0, m.start())
         line = _line_of(raw, start) if start >= 0 else r.line
         declared_types.add(r.raw_name)
         out.append(
@@ -1344,6 +1388,26 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
             line = _line_of(raw, m.start())
             out.append(_record("c", "type", name, file, line, doc_at(file, line), c_kind="enum"))
             body_off = m.start("body")
+            if snapshot:
+                for i, value in enumerate(_top_level_split(m.group("body")), 1):
+                    member, _, initializer = value.partition("=")
+                    member = member.strip()
+                    if member:
+                        out.append(
+                            _record(
+                                "c",
+                                "value",
+                                f"{name}.{member}",
+                                file,
+                                line,
+                                False,
+                                owner=name,
+                                member=member,
+                                index=i,
+                                type=" ".join(initializer.split()),
+                            )
+                        )
+                continue
             for vm in re.finditer(r"\b(SONARE_\w+)\b\s*(=|,|$)", m.group("body"), re.MULTILINE):
                 vline = _line_of(raw, body_off + vm.start())
                 out.append(
@@ -1369,8 +1433,20 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
                     continue
                 declared_types.add(name)
                 line = _line_of(raw, m.start())
-                out.append(_record("c", "type", name, file, line, doc_at(file, line), c_kind=ckind))
-        for m in _C_DEFINE.finditer(stripped):
+                out.append(
+                    _record(
+                        "c",
+                        "type",
+                        name,
+                        file,
+                        line,
+                        doc_at(file, line),
+                        c_kind=ckind,
+                        type=" ".join(m[0].split()),
+                    )
+                )
+        defines = stripped.replace("\\\n", "  ") if snapshot else stripped
+        for m in _C_DEFINE.finditer(defines):
             name = m.group("name")
             if not m.group("rest").strip() and not m.group("fn"):
                 continue
@@ -1384,7 +1460,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
                     line,
                     doc_at(file, line),
                     c_kind="macro",
-                    type=m.group("rest").strip(),
+                    type=" ".join(m.group("rest").split()) if snapshot else m.group("rest").strip(),
                 )
             )
     seen = set()
@@ -1478,18 +1554,46 @@ def _top_level_split(text: str) -> list[str]:
     return parts
 
 
-def _native_unbuilt_options(call: str, kind: str) -> list[str]:
-    """Entries of a registration's option list that build no option inside the call itself."""
+def _native_option_entries(call: str, kind: str) -> list[str]:
     args = _top_level_split(call)
     at = 3 if kind == "add_command" else 1
     if len(args) <= at or not args[at].startswith("{"):
         return []
+    return _top_level_split(args[at][1:-1])
+
+
+def _native_unbuilt_options(entries: list[str]) -> list[str]:
+    """Entries of a registration's option list that build no option inside the call itself."""
     fixed = re.compile(rf"\b(?:{'|'.join(_NATIVE_FIXED)})\s*\(")
     return [
         entry
-        for entry in _top_level_split(args[at][1:-1])
+        for entry in entries
         if entry and not (_NATIVE_BUILDER.search(entry) or fixed.search(entry))
     ]
+
+
+def _native_snapshot_specs(entries: list[str]) -> dict[str, str]:
+    specs = {}
+    fixed = re.compile(rf"\b({'|'.join(_NATIVE_FIXED)})\s*\(")
+    stated_default = re.compile(r"\b(library_default|with_stated_default)\s*\(")
+    for entry in entries:
+        option = _NATIVE_OPTION.search(entry)
+        fixed_option = fixed.search(entry) if option is None else None
+        match = option or fixed_option
+        if match is None:
+            continue
+        name = option[1] if option else _NATIVE_FIXED[match[1]]
+        opening = entry.index("(", match.start())
+        end = _balanced(entry, opening)
+        spec = " ".join(entry[match.start() : end + 1].split())
+        default = stated_default.search(entry, 0, match.start())
+        if default:
+            closing = _balanced(entry, default.end() - 1)
+            args = _top_level_split(entry[default.end() : closing])
+            if len(args) == 2:
+                spec += f" {default[1]}({' '.join(args[1].split())})"
+        specs[name] = spec
+    return specs
 
 
 def _native_forwarded(text: str, at: int, name: str) -> bool:
@@ -1500,7 +1604,9 @@ def _native_forwarded(text: str, at: int, name: str) -> bool:
     )
 
 
-def _native_cli(root: Path) -> tuple[dict[str, dict], int, int, list[str]]:
+def _native_cli(
+    root: Path, *, snapshot: bool = False
+) -> tuple[dict[str, dict], int, int, list[str]]:
     """Commands and flags of the native CLI registry, its flag registrations and its problems.
 
     A command name is a string literal, a `for (const char* x : {...})` loop variable, or a
@@ -1555,7 +1661,8 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int, int, list[str]]:
             if not names:
                 continue
             # An option built elsewhere and passed in is invisible to this scan.
-            for entry in _native_unbuilt_options(call, m.group(1)):
+            options = _native_option_entries(call, m.group(1))
+            for entry in _native_unbuilt_options(options):
                 problems.append(
                     f"{rel}:{_line_of(raw, m.start())}: option {entry} is not built in the call"
                 )
@@ -1567,6 +1674,7 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int, int, list[str]]:
                 flags += spellings
                 if primary in switches:
                     switches |= set(spellings)
+            specs = _native_snapshot_specs(options) if snapshot else {}
             for n in names:
                 entry = commands.setdefault(
                     n,
@@ -1578,6 +1686,8 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int, int, list[str]]:
                         "aliases": {},
                     },
                 )
+                if snapshot:
+                    entry.setdefault("specs", {}).update(specs)
                 entry["switches"] |= switches
                 for primary, spellings in aliases.items():
                     for a in spellings:
@@ -1594,15 +1704,17 @@ _PY_SWITCH_ACTIONS = {"store_true", "store_false", "store_const", "count", "Bool
 class _PyCliScan:
     """Commands and long flags of the Python argparse CLI, parents and helpers resolved."""
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, snapshot: bool = False):
         self.base = root / PY_PACKAGE
         self.root = root
+        self.snapshot = snapshot
         self.files = [self.base / "cli.py", *sorted(self.base.glob("_cli_*.py"))]
         self.parents: dict[str, list[str]] = {}
         self.parent_flags: dict[str, list[str]] = collections.defaultdict(list)
         self.helpers: dict[str, list[str]] = {}
         self.commands: dict[str, dict] = {}
         self.switches: set[str] = set()
+        self.defaults: set[tuple[str, str, str, str]] = set()
         self.help: dict[str, list[str]] = collections.defaultdict(list)
         # Every later long spelling of one add_argument, mapped to its first.
         self.alias_of: dict[str, str] = {}
@@ -1661,6 +1773,15 @@ class _PyCliScan:
         switched, valued = set(), set()
         for path, tree in trees:
             loops = self._loops(tree)
+            parents = (
+                {
+                    child: parent
+                    for parent in ast.walk(tree)
+                    for child in ast.iter_child_nodes(parent)
+                }
+                if self.snapshot
+                else {}
+            )
             for c in ast.walk(tree):
                 if not (isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "add_argument"):
                     continue
@@ -1678,6 +1799,14 @@ class _PyCliScan:
                 )
                 names = self._long_flags(c, loops)
                 bucket.update(names)
+                default = next((_unparse(k.value) for k in c.keywords if k.arg == "default"), "")
+                if self.snapshot and default and names:
+                    owner = parents.get(c)
+                    while owner is not None and not isinstance(owner, ast.FunctionDef):
+                        owner = parents.get(owner)
+                    scope = owner.name if isinstance(owner, ast.FunctionDef) else "<module>"
+                    receiver = _unparse(c.func.value)
+                    self.defaults.add((path.name, f"{scope}:{receiver}", names[0], default))
                 if not (c.args and isinstance(c.args[0], ast.Name)):
                     for alias in names[1:]:
                         self.alias_of[alias] = names[0]
@@ -1866,8 +1995,8 @@ def zero_registrations(registrations: dict[str, int]) -> list[str]:
     return [f"{s}: 0 flag registrations" for s, n in registrations.items() if n == 0]
 
 
-def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
-    scan = _PyCliScan(root)
+def extract_cli(root: Path, *, snapshot: bool = False) -> tuple[list[dict], dict[str, int], dict]:
+    scan = _PyCliScan(root, snapshot=snapshot)
     scan.scan()
     py_cmds = scan.commands
     parity_names = {f.raw_name for f in parity_cli.extract(root, "python").functions}
@@ -1876,7 +2005,7 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
         raise InventoryError(
             f"python CLI scan missed commands the parity extractor sees: {missing}"
         )
-    nat_cmds, nat_files, nat_regs, nat_problems = _native_cli(root)
+    nat_cmds, nat_files, nat_regs, nat_problems = _native_cli(root, snapshot=snapshot)
     out = []
     for surface, cmds in (("cli-python", py_cmds), ("cli-native", nat_cmds)):
         for name in sorted(cmds):
@@ -1902,6 +2031,7 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
                         member=fl,
                         boolean=fl in switches,
                         alias_of=aliases.get(fl, ""),
+                        spec=c.get("specs", {}).get(fl, ""),
                         doc_text="\n".join(scan.help.get(fl, []))
                         if surface == "cli-python"
                         else "",
@@ -1919,6 +2049,8 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
         "cli_registrations": registrations,
         "cli_problems": problems,
     }
+    if snapshot:
+        meta["cli_python_defaults"] = sorted(scan.defaults)
     return out, {"cli-python": len(scan.files), "cli-native": nat_files}, meta
 
 

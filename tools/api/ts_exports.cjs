@@ -1,6 +1,6 @@
 // Dumps every export of a TypeScript package's entry points through the type checker.
 //
-// Usage: node tools/api/ts_exports.cjs <packageDir> <entry.ts>...
+// Usage: node tools/api/ts_exports.cjs <packageDir> [--snapshot] <entry.ts>...
 // Entries are resolved under <packageDir>/src. The package must have typescript in its
 // own node_modules. Output is a JSON array on stdout, one object per (entry, export):
 // name, kind, declaring file and line, doc presence, structured call signatures (params
@@ -13,7 +13,9 @@
 'use strict';
 const path = require('path');
 
-const [pkgArg, ...entries] = process.argv.slice(2);
+const [pkgArg, ...args] = process.argv.slice(2);
+const snapshot = args[0] === '--snapshot';
+const entries = snapshot ? args.slice(1) : args;
 const pkgDir = path.resolve(pkgArg);
 const ts = require(path.join(pkgDir, 'node_modules/typescript'));
 const cfgPath = ts.findConfigFile(pkgDir, ts.sys.fileExists, 'tsconfig.json');
@@ -28,8 +30,9 @@ const checker = program.getTypeChecker();
 const root = path.resolve(pkgDir, '../..');
 const TF = ts.TypeFormatFlags.NoTruncation;
 const MAX_TEXT = 4000;
+const printer = ts.createPrinter({ removeComments: true, newLine: ts.NewLineKind.LineFeed });
 
-const clip = (s) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
+const clip = (s) => (!snapshot && s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
 const where = (d) => {
   const sf = d.getSourceFile();
   const { line } = sf.getLineAndCharacterOfPosition(d.getStart());
@@ -91,6 +94,7 @@ const describeSignature = (g) => {
       type: typeText(pt),
       boolean: isBoolean(pt),
       literals: stringLiterals(pt),
+      ...(snapshot && pd && ts.isParameter(pd) ? { default: literalDefault(pd.initializer) } : {}),
     };
   });
   return {
@@ -98,6 +102,25 @@ const describeSignature = (g) => {
     params,
     returns: typeText(checker.getReturnTypeOfSignature(g)),
   };
+};
+
+// Keep the literal spelling, without evaluating expressions or following aliases.
+const literalDefault = (n) => {
+  if (!n) return undefined;
+  if (
+    ts.isStringLiteral(n) ||
+    ts.isNoSubstitutionTemplateLiteral(n) ||
+    ts.isNumericLiteral(n) ||
+    (ts.isPrefixUnaryExpression(n) &&
+      (n.operator === ts.SyntaxKind.MinusToken || n.operator === ts.SyntaxKind.PlusToken) &&
+      ts.isNumericLiteral(n.operand)) ||
+    [ts.SyntaxKind.NullKeyword, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(n.kind)
+  ) {
+    return n.getText();
+  }
+  if (ts.isArrayLiteralExpression(n) && !n.elements.length) return '[]';
+  if (ts.isObjectLiteralExpression(n) && !n.properties.length) return '{}';
+  return undefined;
 };
 
 const isHidden = (md) =>
@@ -152,11 +175,14 @@ const describeMember = (m, isStatic, seen = new Set()) => {
     kind,
     static: isStatic,
     optional: !!(m.flags & ts.SymbolFlags.Optional),
-    readonly: !!(ts.getCombinedModifierFlags(md) & ts.ModifierFlags.Readonly),
+    readonly:
+      !!(ts.getCombinedModifierFlags(md) & ts.ModifierFlags.Readonly) ||
+      (snapshot && kind === 'accessor' &&
+        !(m.declarations || []).some((d) => ts.isSetAccessorDeclaration(d) && !isHidden(d))),
     ...where(md),
-    doc: symHasDoc(m),
-    docText: symDocText(m),
-    sigs: kind === 'method' ? cs.map(describeSignature) : [],
+    doc: !snapshot && symHasDoc(m),
+    docText: snapshot ? '' : symDocText(m),
+    sigs: kind === 'method' || snapshot ? cs.map(describeSignature) : [],
     type: typeText(mt),
     boolean: kind !== 'method' && isBoolean(mt),
     literals: kind !== 'method' ? stringLiterals(mt) : [],
@@ -195,6 +221,7 @@ const kindOf = (s) => {
 };
 
 const out = [];
+const snapshotExports = new Map();
 for (let i = 0; i < files.length; i++) {
   const sf = program.getSourceFile(files[i]);
   if (!sf) {
@@ -207,21 +234,25 @@ for (let i = 0; i < files.length; i++) {
     if (s.flags & ts.SymbolFlags.Alias) s = checker.getAliasedSymbol(s);
     const d = (s.declarations || [])[0];
     if (!d) continue;
+    if (snapshot && snapshotExports.has(s)) {
+      out.push({ ...snapshotExports.get(s), entry: entries[i], name: exportName });
+      continue;
+    }
     const kind = kindOf(s);
     const row = {
       entry: entries[i],
       name: exportName,
       kind,
       ...where(d),
-      doc: symHasDoc(s),
-      docText: symDocText(s),
+      doc: !snapshot && symHasDoc(s),
+      docText: snapshot ? '' : symDocText(s),
       sigs: [],
       members: [],
       enumMembers: [],
       literals: [],
       type: '',
       ctorPrivate: false,
-      platformMirror: platformMirror(s, d),
+      platformMirror: snapshot ? null : platformMirror(s, d),
     };
     if (kind === 'function') {
       const t = checker.getTypeOfSymbolAtLocation(s, d);
@@ -232,8 +263,11 @@ for (let i = 0; i < files.length; i++) {
       row.sigs = t.getCallSignatures().map(describeSignature);
     } else if (kind === 'type') {
       const t = checker.getDeclaredTypeOfSymbol(s);
-      row.type = clip(d.getText().replace(/\s+/g, ' '));
+      row.type = snapshot
+        ? printer.printNode(ts.EmitHint.Unspecified, d, d.getSourceFile())
+        : clip(d.getText().replace(/\s+/g, ' '));
       row.literals = stringLiterals(t);
+      if (snapshot) row.sigs = t.getCallSignatures().map(describeSignature);
       // An object union (a discriminated union, or `Union & { ... }` distributed over it)
       // contributes every property any arm declares.
       const objectFlags = ts.TypeFlags.Object | ts.TypeFlags.Intersection;
@@ -274,6 +308,7 @@ for (let i = 0; i < files.length; i++) {
     }
     if (kind === 'class' || kind === 'interface') {
       const inst = checker.getDeclaredTypeOfSymbol(s);
+      if (snapshot && kind === 'interface') row.sigs = inst.getCallSignatures().map(describeSignature);
       for (const m of checker.getPropertiesOfType(inst)) {
         const r = describeMember(m, false);
         if (r) row.members.push(r);
@@ -297,7 +332,50 @@ for (let i = 0; i < files.length; i++) {
           : [];
       }
     }
+    if (snapshot) snapshotExports.set(s, row);
     out.push(row);
   }
 }
-process.stdout.write(JSON.stringify(out));
+// Overload declarations do not carry implementation defaults. Collect literal initializers
+// and nullish fallbacks from the same compiler program, including nested normalizer callbacks.
+const fallbackDefaults = () => {
+  const result = [];
+  const src = path.join(pkgDir, 'src') + path.sep;
+  for (const file of program.getSourceFiles()) {
+    if (file.isDeclarationFile || !file.fileName.startsWith(src)) continue;
+    const visit = (n, scope) => {
+      if (ts.isFunctionLike(n) && n.name) {
+        scope = [...scope, n.name.getText()];
+      } else if (ts.isConstructorDeclaration(n)) {
+        scope = [...scope, 'constructor'];
+      } else if (ts.isClassLike(n) && n.name) {
+        scope = [...scope, n.name.getText()];
+      } else if (ts.isVariableDeclaration(n) && n.initializer &&
+          (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) {
+        scope = [...scope, n.name.getText()];
+      }
+      if (scope.length) {
+        let field;
+        let value;
+        if (ts.isParameter(n) || ts.isBindingElement(n)) {
+          field = (n.propertyName || n.name).getText();
+          value = literalDefault(n.initializer);
+        } else if (ts.isBinaryExpression(n) &&
+            n.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+            (ts.isIdentifier(n.left) || ts.isPropertyAccessExpression(n.left) ||
+             ts.isElementAccessExpression(n.left))) {
+          field = n.left.getText();
+          value = literalDefault(n.right);
+        }
+        if (value !== undefined) {
+          result.push({ file: path.relative(src, file.fileName), scope: scope.join('.'), field, value });
+        }
+      }
+      ts.forEachChild(n, (child) => visit(child, scope));
+    };
+    visit(file, []);
+  }
+  return result;
+};
+
+process.stdout.write(JSON.stringify(snapshot ? { exports: out, defaults: fallbackDefaults() } : out));

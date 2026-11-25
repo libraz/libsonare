@@ -3,7 +3,7 @@
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check scene-token-cases result-null-means processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
-       surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
+       surface-snapshot surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
        gs-classic-models gs-classic-check gs-classic-overlays-check gs-efx-soundings-drift \
@@ -480,6 +480,7 @@ lint-static:
 	$(CHECK) python3 tools/api/gen_integer_domains.py --check
 # UPGRADING.md renders from the migration ledgers alone; a ledger edit owes it in the same commit.
 	$(CHECK) $(MAKE) upgrade-notes-check
+	$(CHECK) python3 tools/api/gen_surface_snapshot.py --check
 	$(CHECK_REPORT)
 
 lint-gs-efx-sr-coefficient:
@@ -828,6 +829,9 @@ parity: conformance-checks
 	$(CHECK) python3 tools/parity/check_parity.py
 	$(CHECK_REPORT)
 
+surface-snapshot:
+	python3 tools/api/gen_surface_snapshot.py
+
 # Tracked per-runtime capability matrix, derived from the same reachability
 # decision the parity checker makes. The check variant leaves the worktree
 # untouched and fails when the table no longer matches the surfaces.
@@ -843,7 +847,7 @@ surface-coverage-check:
 # Narrow it with SURFACE_CHECK_ARGS, e.g. "--surface python --domain core".
 surface-check:
 	$(CHECK_BEGIN)
-	$(CHECK) python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
+	$(CHECK) python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py tools/api/test_gen_surface_snapshot.py
 	$(CHECK) python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
 	$(CHECK_REPORT)
 
