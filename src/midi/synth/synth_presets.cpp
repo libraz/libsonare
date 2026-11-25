@@ -24,6 +24,12 @@ NativeSynthConfig from_clamped_patch(const NativeSynthPatch& patch) noexcept {
   return from_patch(clamp_synth_patch(patch));
 }
 
+// Built out of line so the authored preset rows share one aggregate initialization.
+[[gnu::noinline]]
+NativeSynthPatch default_preset_patch() noexcept {
+  return {};
+}
+
 /// Most catalog entries are the voiced GM fallback patches under their
 /// instrument name (one data table, two address spaces); the pure-synth
 /// entries are voiced here.
@@ -42,7 +48,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   };
 
   // --- subtractive ---
-  NativeSynthPatch sine{};
+  NativeSynthPatch sine = default_preset_patch();
   sine.waveform = VaWaveform::kSine;
   sine.cutoff_hz = 20000.0f;
   sine.amp_env.attack_ms = 3.0f;
@@ -135,7 +141,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   {
     SynthPreset& kit = t[i++];
     kit.name = "drumKit";
-    NativeSynthPatch patch{};
+    NativeSynthPatch patch = default_preset_patch();
     patch.mode = SynthEngineMode::kPercussion;
     patch.percussion.gm_kit = true;
     patch.cutoff_hz = 20000.0f;
@@ -162,7 +168,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // Open flute: softer and darker than the principal (a wide, breathy stop).
     SynthPreset& flute = t[i++];
     flute.name = "churchFlute";
-    NativeSynthPatch patch{};
+    NativeSynthPatch patch = default_preset_patch();
     patch.mode = SynthEngineMode::kPipeOrgan;
     patch.amp_env.attack_ms = 12.0f;
     patch.amp_env.sustain = 1.0f;
@@ -183,7 +189,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // hollow flute).
     SynthPreset& bourdon = t[i++];
     bourdon.name = "churchBourdon";
-    NativeSynthPatch patch{};
+    NativeSynthPatch patch = default_preset_patch();
     patch.mode = SynthEngineMode::kPipeOrgan;
     patch.amp_env.attack_ms = 14.0f;
     patch.amp_env.sustain = 1.0f;
@@ -207,7 +213,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // A lingual reed stop voiced directly on the pipe-organ waveguide (an 8'
     // reed under a 4'): the saturating reed valve buzzes into a bright,
     // self-oscillating tone. Not the GM Reed Organ, which is a free-reed core.
-    NativeSynthPatch patch{};
+    NativeSynthPatch patch = default_preset_patch();
     patch.mode = SynthEngineMode::kPipeOrgan;
     patch.amp_env.attack_ms = 14.0f;
     patch.amp_env.sustain = 1.0f;
@@ -239,7 +245,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                      float damping, float attack_ms, float release_ms, float body_mix, float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kBowedString;
       patch.amp_env.attack_ms = 20.0f;
       patch.amp_env.sustain = 1.0f;
@@ -280,7 +286,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                     float breath, float body_mix, float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kReed;
       patch.amp_env.attack_ms = 15.0f;
       patch.amp_env.sustain = 1.0f;
@@ -350,7 +356,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                      float mute = 0.0f, float mute_norm = 0.0f) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kBrass;
       patch.amp_env.attack_ms = 12.0f;
       patch.amp_env.sustain = 1.0f;
@@ -425,7 +431,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                      float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kFlute;
       patch.amp_env.attack_ms = 8.0f;
       patch.amp_env.sustain = 1.0f;
@@ -463,7 +469,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                        float pick_position, float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kPluckedString;
       patch.amp_env.attack_ms = 0.0f;
       patch.amp_env.sustain = 1.0f;
@@ -494,7 +500,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                      float breath_noise, float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kVocal;
       patch.amp_env.attack_ms = 20.0f;
       patch.amp_env.sustain = 1.0f;
@@ -521,7 +527,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                          float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
-      NativeSynthPatch patch{};
+      NativeSynthPatch patch = default_preset_patch();
       patch.mode = SynthEngineMode::kFreeReed;
       patch.amp_env.attack_ms = 12.0f;
       patch.amp_env.sustain = 1.0f;
@@ -546,7 +552,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   {
     SynthPreset& v = t[i++];
     v.name = "singingVoice";
-    NativeSynthPatch patch{};
+    NativeSynthPatch patch = default_preset_patch();
     patch.mode = SynthEngineMode::kSinging;
     patch.amp_env.attack_ms = 0.0f;
     patch.amp_env.sustain = 1.0f;
