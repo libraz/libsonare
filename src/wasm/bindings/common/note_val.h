@@ -32,6 +32,12 @@ inline std::vector<float> noteEnvelopeFromVal(const val& edit, const std::string
   const val envelope = objectProperty(edit, "amplitudeEnvelope");
   if (envelope.isUndefined()) return {};
   const std::string name = elementField(at, "amplitudeEnvelope");
+  // The envelope alone widens to a number array, so its refusal says so.
+  if (envelope.isNull() ||
+      !(envelope.instanceof
+        (val::global("Float32Array")) || val::global("Array").call<bool>("isArray", envelope))) {
+    throw WasmTypeError(name + " must be a Float32Array or a number array");
+  }
   accumulateWasmFloat32ArrayLength(envelope, name.c_str(), cumulative_count);
   return float32ArrayToVector(envelope, name.c_str());
 }

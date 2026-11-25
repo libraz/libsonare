@@ -329,6 +329,30 @@ def test_a_negative_note_index_is_refused_before_it_wraps(
         analysis.set_note_edit(-1, libsonare.NoteEdit())
 
 
+# RED WHEN: an envelope NumPy cannot convert escapes as a bare ValueError, or an edit of the wrong
+# type escapes as an AttributeError, instead of a refusal naming the field.
+@pytest.mark.parametrize("envelope", ["nope", 0])
+def test_an_envelope_that_is_not_a_buffer_is_refused_by_name(
+    analysis: libsonare.PolyphonicAnalysis, envelope: object
+) -> None:
+    with pytest.raises(
+        SonareValueError,
+        match=r"^PolyphonicAnalysis\.set_note_edit: edit\.amplitude_envelope must be a sequence "
+        r"of numbers or a numpy array$",
+    ):
+        analysis.set_note_edit(0, libsonare.NoteEditInput(amplitude_envelope=envelope))  # type: ignore[arg-type]
+
+
+def test_an_edit_of_the_wrong_type_is_refused_by_name(
+    analysis: libsonare.PolyphonicAnalysis,
+) -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"^PolyphonicAnalysis\.set_note_edit: edit must be a NoteEdit or a NoteEditInput$",
+    ):
+        analysis.set_note_edit(0, {"amplitude_envelope": [1.0]})  # type: ignore[arg-type]
+
+
 # ---------------------------------------------------------------------------
 # Editing and rendering
 # ---------------------------------------------------------------------------

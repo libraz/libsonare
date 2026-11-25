@@ -32,6 +32,7 @@ from ._runtime import (
     _get_lib,
     _int_refusal,
     _narrow_int,
+    _not_a_buffer,
     _resolve_sample_bound,
     _resolve_time_offset,
     _Respelling,
@@ -599,9 +600,17 @@ def _note_edit_to_c(
     Returns the struct, the envelope curve it indexes and the resolved time
     offset, whose respelling the caller hands to :func:`_check`.
     """
-    curve = np.asarray(edit.amplitude_envelope, dtype=np.float32)
+    if not isinstance(edit, (NoteEdit, NoteEditInput)):
+        raise _refuse_type(f"{subject} must be a NoteEdit or a NoteEditInput")
+    envelope = f"{subject}.amplitude_envelope"
+    try:
+        curve = np.asarray(edit.amplitude_envelope, dtype=np.float32)
+    except (TypeError, ValueError) as exc:
+        raise _not_a_buffer(edit.amplitude_envelope, envelope) from exc
+    if curve.ndim == 0:
+        raise _not_a_buffer(edit.amplitude_envelope, envelope)
     if curve.ndim != 1:
-        raise _refuse(f"{subject}.amplitude_envelope must be one-dimensional")
+        raise _refuse(f"{envelope} must be one-dimensional")
     # Narrowed rather than coerced: int(0.5) is 0, which is this field's identity,
     # so a sub-sample shift would render unmoved and report success. Int64-bounded:
     # the ctypes field is c_int64.

@@ -560,3 +560,17 @@ describe('PolyphonicAnalysis disposal', () => {
     expect(() => handle.destroy()).not.toThrow();
   });
 });
+
+// RED WHEN: a non-array envelope is refused as "a Float32Array" alone on one surface, though a
+// number array is accepted on both.
+describe('setNoteEdit envelope type', () => {
+  it('refuses an amplitude envelope that is neither a Float32Array nor a number array', () => {
+    for (const amplitudeEnvelope of ['nope', 0, Number.NaN]) {
+      expect(() => analysis.setNoteEdit(0, { amplitudeEnvelope } as never)).toThrow(
+        new TypeError(
+          'PolyphonicAnalysis.setNoteEdit: edit.amplitudeEnvelope must be a Float32Array or a number array',
+        ),
+      );
+    }
+  });
+});

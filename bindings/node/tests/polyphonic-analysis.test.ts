@@ -346,6 +346,20 @@ describe('a polyphonic note edit', () => {
     });
   });
 
+  // RED WHEN: a non-array envelope is refused as "a Float32Array" alone on one surface, though a
+  // number array is accepted on both.
+  it('refuses an amplitude envelope that is neither a Float32Array nor a number array', () => {
+    withAnalysis((analysis) => {
+      for (const amplitudeEnvelope of ['nope', 0, Number.NaN]) {
+        expect(() => analysis.setNoteEdit(0, { amplitudeEnvelope } as never)).toThrow(
+          new TypeError(
+            'PolyphonicAnalysis.setNoteEdit: edit.amplitudeEnvelope must be a Float32Array or a number array',
+          ),
+        );
+      }
+    });
+  });
+
   it('refuses a zero stretch ratio rather than reading it as one', () => {
     withAnalysis((analysis) => {
       for (const timeStretchRatio of [0, -1]) {
