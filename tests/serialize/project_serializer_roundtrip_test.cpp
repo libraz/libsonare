@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -26,6 +27,7 @@
 #endif
 #include "serialize/project_serializer.h"
 #include "serialize/project_serializer_internal.h"
+#include "serialize/project_serializer_private.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -1308,6 +1310,14 @@ TEST_CASE("project loader refuses tempo below the named floor before normalizati
       if (d.code == c.code && d.message == c.message) matched = true;
     }
     CHECK(matched);
+
+    // The refusal handed to the C ABI is a document refusal, so it carries InvalidFormat.
+    std::optional<SonareParameterRefusal> refusal;
+    const auto with_refusal = serialize::detail::project_from_json_with_refusal(c.json, &refusal);
+    CHECK_FALSE(with_refusal.ok());
+    REQUIRE(refusal.has_value());
+    CHECK(refusal->code() == ErrorCode::InvalidFormat);
+    CHECK(std::string(refusal->what()) == c.message);
   }
 
   const auto at_floor = project_from_json(R"json({"version":7,"tempoSegments":[

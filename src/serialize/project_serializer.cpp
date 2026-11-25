@@ -650,7 +650,12 @@ DeserializeResult detail::project_from_json_with_refusal(
         try {
           transport::check_public_tempo_segment(s, index, "tempoSegments", "endBpm");
         } catch (const SonareParameterRefusal& e) {
-          if (refusal_out != nullptr) *refusal_out = e;
+          // The value came from the document, so the stored refusal is a document refusal.
+          if (refusal_out != nullptr) {
+            *refusal_out = e.respelled(
+                ErrorCode::InvalidFormat, [](const std::string& subject) { return subject; },
+                e.caller_spelled());
+          }
           const bool is_start = e.subject() == schema::child_path(at, "bpm");
           const double bpm = is_start ? s.bpm : s.end_bpm;
           const char* diagnostic = std::isfinite(bpm) && bpm > transport::kMaxPublicTempoBpm
