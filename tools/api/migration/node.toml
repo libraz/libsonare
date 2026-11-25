@@ -11421,7 +11421,7 @@ test = "bindings/node/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.autoTempo"
-changed = "takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are options. Read the former numeric result from result.bpm. The result also has bpmConfidence and the detected timeSignature, even when applyTimeSignatures is false. The returned fields and the detected timeSignature fields are readonly."
+changed = "takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are options. Read the former numeric result from result.bpm. The result also has bpmConfidence and the detected timeSignature, even when applyTimeSignatures is false. The returned fields and the detected timeSignature fields are readonly. With applyTimeSignatures omitted or false, the installed tempo map opens with a constant lead-in segment from ppq 0 that lands the first detected beat on a whole ppq, so every detected beat sits on an integer beat line; it used to install the detected tempo alone, which left the beat grid off the detected beats by the first beat's offset. A first beat a few milliseconds in gives a one-beat lead-in at thousands of BPM. With the meter installed the map is unchanged."
 domain = "project"
 rule = "no-positional-bools"
 test = "bindings/node/tests/surface/project.test.ts::installs a tempo from options"

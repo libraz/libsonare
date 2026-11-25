@@ -15159,6 +15159,14 @@ test = "bindings/python/tests/test_project.py::test_auto_tempo_returns_selected_
 
 [[entry]]
 kind = "option"
+old = "Project.auto_tempo(apply_time_signatures)"
+changed = "with apply_time_signatures=False, the installed tempo map opens with a constant lead-in segment from ppq 0 that lands the first detected beat on a whole ppq, so every detected beat sits on an integer beat line; it used to install the detected tempo alone, which left the beat grid off the detected beats by the first beat's offset. A first beat a few milliseconds in gives a one-beat lead-in at thousands of BPM. With the meter installed the map is unchanged."
+domain = "project"
+rule = "individual"
+test = "tests/mir/auto_tempo_phase_test.cpp::auto tempo maps put every detected beat on a beat line with and without the meter"
+
+[[entry]]
+kind = "option"
 old = "Project.set_clip_fade(fade_in_length_ppq)"
 new = "Project.set_clip_fade(fade_in_ppq)"
 domain = "project"

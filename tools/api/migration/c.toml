@@ -4832,7 +4832,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_auto_tempo"
-changed = "takes options (NULL for defaults), candidate_index and apply_time_signatures, followed by required SonareProjectAutoTempoResult* out. apply_time_signatures is int32_t: zero leaves the stored meter alone and a nonzero value installs the detected signatures in the same undoable edit as tempo. Read out.bpm for the selected tempo, out.bpm_confidence for its score and out.time_signature for the detected meter."
+changed = "takes options (NULL for defaults), candidate_index and apply_time_signatures, followed by required SonareProjectAutoTempoResult* out. apply_time_signatures is int32_t: zero leaves the stored meter alone and a nonzero value installs the detected signatures in the same undoable edit as tempo. Read out.bpm for the selected tempo, out.bpm_confidence for its score and out.time_signature for the detected meter. With apply_time_signatures zero, the installed tempo map opens with a constant lead-in segment from ppq 0 that lands the first detected beat on a whole ppq, so every detected beat sits on an integer beat line; it used to install the detected tempo alone, which left the beat grid off the detected beats by the first beat's offset. A first beat a few milliseconds in gives a one-beat lead-in at thousands of BPM. With the meter installed the map is unchanged."
 domain = "project"
 rule = "options-struct"
 test = "tests/api/project_auto_tempo_result_test.cpp::project auto tempo result reports selected tempo and detected meter"

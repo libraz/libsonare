@@ -21005,7 +21005,7 @@ test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config
 [[entry]]
 kind = "method"
 old = "Project.autoTempo"
-changed = "Both the request and (samples, sampleRate, options?) forms return ProjectAutoTempoResult { bpm, bpmConfidence, timeSignature: { numerator, denominator, confidence } }. The detected meter is returned even when applyTimeSignatures is omitted or false. The returned fields and the detected timeSignature fields are readonly."
+changed = "Both the request and (samples, sampleRate, options?) forms return ProjectAutoTempoResult { bpm, bpmConfidence, timeSignature: { numerator, denominator, confidence } }. The detected meter is returned even when applyTimeSignatures is omitted or false. The returned fields and the detected timeSignature fields are readonly. With applyTimeSignatures omitted or false, the installed tempo map opens with a constant lead-in segment from ppq 0 that lands the first detected beat on a whole ppq, so every detected beat sits on an integer beat line; it used to install the detected tempo alone, which left the beat grid off the detected beats by the first beat's offset. A first beat a few milliseconds in gives a one-beat lead-in at thousands of BPM. With the meter installed the map is unchanged."
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::installs a tempo from options with no positional boolean"
