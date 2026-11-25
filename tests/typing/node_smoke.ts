@@ -439,11 +439,11 @@ const keyCandidates: KeyCandidate[] = detectKeyCandidates({
 masterAudio({ samples, sampleRate: 22050, preset: 'invalidPreset' });
 
 presets satisfies MasteringPreset[];
-acoustic.rt60Bands satisfies Float32Array;
+acoustic.rt60Bands satisfies Float32Array | undefined;
 blindAcoustic.isBlind satisfies boolean;
 rir.rir satisfies Float32Array;
 rir.diagnostics satisfies RirResult['diagnostics'];
-roomEstimate.rt60Bands satisfies Float32Array;
+roomEstimate.rt60Bands satisfies Float32Array | undefined;
 roomEstimate.confidence satisfies number;
 morphed.audio satisfies Float32Array;
 downbeats satisfies Float32Array;
