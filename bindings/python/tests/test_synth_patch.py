@@ -1335,8 +1335,8 @@ def test_a_root_less_patch_names_its_routing_list() -> None:
         ls.RealtimeEngine(sample_rate=48000, max_block_size=256) as engine,
         pytest.raises(
             ls.SonareValueError,
-            match=r"^RealtimeEngine\.set_synth_instrument: synth patch mod_routings must contain at "
-            r"most 8 entries$",
+            match=r"^RealtimeEngine\.set_synth_instrument: synth patch mod_routings must contain "
+            r"at most 8 entries$",
         ),
     ):
         engine.set_synth_instrument(SynthPatch(mod_routings=routings))

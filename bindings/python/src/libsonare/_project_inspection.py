@@ -1275,7 +1275,7 @@ class _ProjectInspectionMixin:
     @_entry("Project.bar_start_ppq")
     def bar_start_ppq(self, bar_index: int) -> float:
         """Read the PPQ start of a zero-based project bar."""
-        # No bar past the int64 range has a representable start, so it is refused in the core's terms.
+        # No bar past the int64 range has a representable start; the core's terms refuse it.
         if (
             isinstance(bar_index, numbers.Integral)
             and not isinstance(bar_index, bool)
