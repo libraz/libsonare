@@ -201,14 +201,9 @@ std::string choice_names(const std::vector<api::detail::EnumChoice>& choices) {
   return out;
 }
 
-/// Reads one stage object through @p reader, the stage's catalog config builder. An empty build
-/// first declares the keys and enum choices the builder reads, so an unknown key is refused by
-/// name rather than ignored and a choice may be given by name.
-template <typename Reader>
-auto read_settings(const json::Object& object, const std::string& stage_path, Reader reader) {
-  ParamMap declared;
-  (void)reader(declared);
-  ParamMap map;
+// Decodes the caller's fields against the declarations for the selected repair stage.
+void read_stage_params(const json::Object& object, const std::string& stage_path,
+                       const ParamMap& declared, ParamMap& map) {
   for (const auto& [key, value] : object) {
     if (key == "stage") continue;
     if (declared.probed_keys().count(key) == 0) refuse_unknown_setting(stage_path, key, declared);
@@ -235,6 +230,17 @@ auto read_settings(const json::Object& object, const std::string& stage_path, Re
                                                "must be a number, a boolean or a choice name");
     }
   }
+}
+
+/// Reads one stage object through @p reader, the stage's catalog config builder. An empty build
+/// first declares the keys and enum choices the builder reads, so an unknown key is refused by
+/// name rather than ignored and a choice may be given by name.
+template <typename Reader>
+auto read_settings(const json::Object& object, const std::string& stage_path, Reader reader) {
+  ParamMap declared;
+  (void)reader(declared);
+  ParamMap map;
+  read_stage_params(object, stage_path, declared, map);
   // A processor names a setting by its C field; the stage key is that name in camel case.
   try {
     return reader(map);
