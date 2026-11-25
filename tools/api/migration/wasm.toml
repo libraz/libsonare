@@ -28324,7 +28324,7 @@ rule = "engine-vocabulary"
 [[entry]]
 kind = "method"
 old = "Project.setMidiEvents"
-changed = "events are { ppq, word0, word1? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError"
+changed = "events are { ppq, word0, word1?, sysex? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/wasm/tests/project.test.ts::refuses a tuple event and the data0/data1 keys"

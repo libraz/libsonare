@@ -7998,7 +7998,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.setMidiEvents` | events are { ppq, word0, word1? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError |
+| `Project.setMidiEvents` | events are { ppq, word0, word1?, sysex? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError |
 
 #### Historical aliases are removed
 
@@ -13815,7 +13815,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.setMidiEvents` | events are { ppq, word0, word1? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError |
+| `Project.setMidiEvents` | events are { ppq, word0, word1?, sysex? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError |
 
 #### Historical aliases are removed
 

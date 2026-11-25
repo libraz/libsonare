@@ -772,7 +772,7 @@ export function projectMidiEventsToNative(
   return events.map((event: unknown, index) => {
     const prefix = `events[${index}]`;
     if (event === null || typeof event !== 'object' || Array.isArray(event)) {
-      throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
+      throw refuseType(`${prefix} must be a { ppq, word0, word1?, sysex? } object`);
     }
     const record = event as ProjectMidiEvent;
     const ppq = record.ppq;
