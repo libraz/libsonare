@@ -104,13 +104,14 @@ namespace {
 int python_floordiv_by2(float x) { return static_cast<int>(std::floor(x * 0.5f)); }
 
 bool checked_wavelet_bounds(float length, int& start, int& end) {
-  const long double start_wide = std::floor(-static_cast<long double>(length) * 0.5L);
-  const long double end_wide = std::floor(static_cast<long double>(length) * 0.5L);
+  // A float and its half are exactly representable in double, including subnormals.
+  const double start_wide = std::floor(-static_cast<double>(length) * 0.5);
+  const double end_wide = std::floor(static_cast<double>(length) * 0.5);
   if (!std::isfinite(start_wide) || !std::isfinite(end_wide) ||
-      start_wide < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
-      start_wide > static_cast<long double>(std::numeric_limits<int>::max()) ||
-      end_wide < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
-      end_wide > static_cast<long double>(std::numeric_limits<int>::max())) {
+      start_wide < static_cast<double>(std::numeric_limits<int>::lowest()) ||
+      start_wide > static_cast<double>(std::numeric_limits<int>::max()) ||
+      end_wide < static_cast<double>(std::numeric_limits<int>::lowest()) ||
+      end_wide > static_cast<double>(std::numeric_limits<int>::max())) {
     return false;
   }
   start = python_floordiv_by2(-length);
@@ -154,10 +155,10 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
   size_t n_fft = 0;
   if (pad_fft) {
     // Empty input still reports the minimum padded FFT length.
-    const long double max_ceil_wide = std::max(1.0L, std::ceil(static_cast<long double>(max_ilen)));
+    const double max_ceil_wide = std::max(1.0, std::ceil(static_cast<double>(max_ilen)));
     constexpr int kMaxIntPowerOfTwo = 1 << 30;
-    if (!std::isfinite(max_ceil_wide) || max_ceil_wide < 1.0L ||
-        max_ceil_wide > static_cast<long double>(kMaxIntPowerOfTwo)) {
+    if (!std::isfinite(max_ceil_wide) || max_ceil_wide < 1.0 ||
+        max_ceil_wide > static_cast<double>(kMaxIntPowerOfTwo)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "FFT length is outside the supported range");
     }
