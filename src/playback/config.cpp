@@ -72,7 +72,7 @@ bool read_bool(const Value& value, const std::string& key) {
   return value.as_bool();
 }
 
-std::string read_string(const Value& value, const std::string& key) {
+const std::string& read_string(const Value& value, const std::string& key) {
   if (!value.is_string()) refuse_kind(key, schema::Kind::String);
   return value.as_string();
 }
@@ -158,7 +158,7 @@ void parse_input(const Value& input, PrepareConfig& prepare) {
   for (int i = 0; i < length; ++i) {
     const std::string key = schema::index_path(map_path, static_cast<size_t>(i));
     SpeakerRole role = SpeakerRole::L;
-    const std::string token = read_string(items[static_cast<size_t>(i)], key);
+    const std::string& token = read_string(items[static_cast<size_t>(i)], key);
     if (!parse_speaker_role(token, &role)) refuse_at(key, "must be a speaker role");
     prepare.channel_map[static_cast<size_t>(i)] = role;
   }
