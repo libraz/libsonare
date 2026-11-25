@@ -266,7 +266,11 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
 /// @details @p candidate_index is the zero-based index into the ranked
 ///          candidates @ref sonare_project_analyze_tempo returns for the same
 ///          audio and @p options, so a caller pairs the two rather than mixing
-///          option sets. When
+///          option sets. Every detected beat lands on a beat line of the
+///          installed grid in both modes: with the meter the bar grid carries
+///          the first beat's phase, and without it a constant lead-in segment
+///          from ppq 0 lands the first beat on a whole ppq (a first beat a few
+///          milliseconds in gives a one-beat lead-in at thousands of BPM). When
 ///          @p apply_time_signatures is nonzero, the candidate's complete
 ///          detected meter sequence is also installed; its first signature
 ///          starts on the first downbeat's bar phase, at most one bar in, so

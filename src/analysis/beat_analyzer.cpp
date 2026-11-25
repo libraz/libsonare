@@ -12,6 +12,7 @@
 #include "analysis/meter_analyzer.h"
 #include "core/convert.h"
 #include "feature/onset.h"
+#include "transport/tempo_map.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -160,6 +161,12 @@ void prepend_missed_initial_beat(std::vector<int>& beat_frames, float period) {
 
 }  // namespace
 
+void place_first_event_within_lead_in_on_zero(std::vector<Beat>& events) noexcept {
+  if (!events.empty() && events.front().time < transport::kMinLeadInSec) {
+    events.front().time = 0.0f;
+  }
+}
+
 BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
     : bpm_(kNotMeasured),
       time_signature_{4, 4, 0.0f},
@@ -241,6 +248,8 @@ void BeatAnalyzer::refine_beat_times(const Audio& audio, float half_window_s) {
     for (Beat& beat : downbeats_) {
       beat.time = std::max(0.0f, beat.time + offset);
     }
+    place_first_event_within_lead_in_on_zero(beats_);
+    place_first_event_within_lead_in_on_zero(downbeats_);
   }
   read_accents(audio, refined);
 }
@@ -571,6 +580,7 @@ void BeatAnalyzer::track_beats() {
         max_onset_index >= 0 ? onset_strength_[std::clamp(f, 0, max_onset_index)] : 0.0f;
     beats_.push_back(beat);
   }
+  place_first_event_within_lead_in_on_zero(beats_);
   if (beats_.size() >= 2 && beats_.front().frame == 0 &&
       beats_.front().strength < beats_[1].strength * 0.1f) {
     beats_.front().strength = beats_[1].strength;

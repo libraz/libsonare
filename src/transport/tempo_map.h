@@ -24,6 +24,9 @@ inline constexpr double kMaxPublicPpq = 1.0e12;
 /// far above a musical tempo while keeping MIDI-clock and beat-grid work
 /// bounded enough for realtime code to enforce a small per-block budget.
 inline constexpr double kMaxPublicTempoBpm = 100000.0;
+/// Shortest lead-in a map can draw as one beat at kMaxPublicTempoBpm; beat detection places
+/// a first beat nearer sample 0 than this on sample 0.
+inline constexpr double kMinLeadInSec = ::sonare::constants::kSecondsPerMinute / kMaxPublicTempoBpm;
 /// Lowest tempo accepted by public controls and used by internal tempo producers.
 inline constexpr double kMinPublicTempoBpm = 1.0e-6;
 /// Public tempo accepted by scalar controls and tempo segment endpoints.

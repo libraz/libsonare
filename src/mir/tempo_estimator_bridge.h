@@ -80,9 +80,16 @@ struct TempoEstimatorConfig {
 
 /// @brief One tempo / time-signature hypothesis ready for TempoMap.
 struct TempoEstimate {
-  /// Tempo segments (start_ppq, bpm, start_sample, optional end_bpm ramp),
-  /// directly consumable by transport::TempoMap::set_segments.
+  /// Tempo segments (start_ppq, bpm, start_sample, optional end_bpm ramp) for a map installed
+  /// with @ref time_sigs, directly consumable by transport::TempoMap::set_segments. Detected
+  /// beat k sits at the first beat's lead-in plus k, on a beat line of the bar grid
+  /// @ref time_sigs draws; on their own these segments leave that grid out of phase.
   std::vector<transport::TempoSegment> segments;
+  /// The same tempo for a map installed without @ref time_sigs: a constant lead-in segment from
+  /// ppq 0 lands the first detected beat on a whole ppq, so every detected beat sits on an
+  /// integer beat line. A first beat a few milliseconds in yields a one-beat lead-in at a tempo
+  /// in the thousands of BPM. Equal to @ref segments when the first beat is on sample 0.
+  std::vector<transport::TempoSegment> unmetered_segments;
   /// Time-signature segments, consumable by set_time_signatures. The first starts on the
   /// first downbeat's bar phase, at most one bar in, so only the opening bar is truncated.
   std::vector<transport::TimeSignatureSegment> time_sigs;

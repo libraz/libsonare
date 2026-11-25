@@ -1,6 +1,7 @@
 #include "mir/tempo_estimator_bridge.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <vector>
 
@@ -202,16 +203,28 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
   return segments;
 }
 
-// TempoMap pins ppq 0 to sample 0, so a first beat after silence needs a
-// lead-in: shift every tempo and meter start by the first beat's time, played
-// at the first segment's tempo, so detected beat k lands on its grid line.
+// TempoMap pins ppq 0 to sample 0, so a first beat after silence needs a lead-in. With the meter,
+// every tempo and meter start moves by the first beat's time at the first segment's tempo and
+// the bar grid carries the phase. Without it a constant segment from ppq 0 carries it: N beats
+// at 60 N / t0 BPM, N >= 1 the count whose tempo is nearest the detected one.
 void apply_lead_in(const BeatAnalysisInput& input, TempoEstimate& est) {
+  est.unmetered_segments = est.segments;
   if (input.beats.empty() || est.segments.empty()) return;
   const double first_beat_s = static_cast<double>(input.beats.front().time);
+  // The analyzer puts a nearer first beat on sample 0, so every lead-in fits the tempo range.
+  assert(!(first_beat_s > 0.0 && first_beat_s < transport::kMinLeadInSec));
   if (!(first_beat_s > 0.0)) return;
   const double lead_in_ppq = first_beat_s * est.segments.front().bpm / kSecondsPerMinute;
   for (transport::TempoSegment& seg : est.segments) seg.start_ppq += lead_in_ppq;
   for (transport::TimeSignatureSegment& sig : est.time_sigs) sig.start_ppq += lead_in_ppq;
+
+  const double lead_in_beats = std::max(1.0, std::round(lead_in_ppq));
+  for (transport::TempoSegment& seg : est.unmetered_segments) seg.start_ppq += lead_in_beats;
+  transport::TempoSegment lead_in;
+  lead_in.start_ppq = 0.0;
+  lead_in.bpm = lead_in_beats * kSecondsPerMinute / first_beat_s;
+  lead_in.start_sample = 0.0;
+  est.unmetered_segments.insert(est.unmetered_segments.begin(), lead_in);
 }
 
 // Reduces the first signature's start by whole bars, so the bars before the first downbeat

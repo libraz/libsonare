@@ -158,9 +158,12 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
   result.time_signature = {selected.meter.numerator, selected.meter.denominator,
                            selected.meter.confidence};
 
+  // Either way detected beat k lands on a beat line; the meter decides only which map carries it.
+  const bool with_meter = apply_time_signatures != 0 && !selected.time_sigs.empty();
   std::vector<arr::EditCommandPtr> commands;
-  commands.push_back(std::make_unique<arr::SetTempoSegment>(selected.segments));
-  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
+  commands.push_back(std::make_unique<arr::SetTempoSegment>(
+      with_meter ? selected.segments : selected.unmetered_segments));
+  if (with_meter) {
     commands.push_back(std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs));
   }
   if (!project->history.apply_transaction(std::move(commands))) {

@@ -31,6 +31,10 @@ struct Beat {
   float strength;
 };
 
+/// @brief Places a first event nearer sample 0 than transport::kMinLeadInSec on sample 0, so a
+///        tempo map can always draw its lead-in; every other event is untouched.
+void place_first_event_within_lead_in_on_zero(std::vector<Beat>& events) noexcept;
+
 /// @brief Per-beat accent evidence read from the audio, the meter estimate's input.
 /// @details Every accent is the loudest 5 ms RMS (peak_short_time_rms()) near the event: at a
 ///          beat's own refined attack where its evidence window holds one, otherwise around the
