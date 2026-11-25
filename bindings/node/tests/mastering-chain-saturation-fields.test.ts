@@ -50,7 +50,12 @@ describe('mastering chain saturation fields', () => {
       masterAudio(samples, sampleRate, {
         overrides: { saturation: { tape: { enabled: true, driveDb: 6, oversampleFactor: 3 } } },
       }),
-    ).toThrow(/oversample_factor/);
+    ).toThrow(
+      expect.objectContaining({
+        name: 'RangeError',
+        message: 'masterAudio: overrides.saturation.tape.oversampleFactor must be one of 1, 2, 4',
+      }),
+    );
   });
 
   it('reads the exciter antialiasing mode', () => {
