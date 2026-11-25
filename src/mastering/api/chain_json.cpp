@@ -30,11 +30,11 @@ namespace schema = sonare::util::json::schema;
 // and survives a dump -> parse round-trip without drift.
 
 void add_field(sonare::util::json::Object& params, const char* key, bool value) {
-  params.emplace(key, JsonValue(value));
+  util::json::put(params, key, value);
 }
 
 void add_field(sonare::util::json::Object& params, const char* key, double value) {
-  params.emplace(key, JsonValue(value));
+  util::json::put(params, key, value);
 }
 
 // Integer config fields (int, std::size_t, etc.) must route to the `double`
@@ -42,13 +42,13 @@ void add_field(sonare::util::json::Object& params, const char* key, double value
 template <typename Int,
           typename = std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>>>
 void add_field(sonare::util::json::Object& params, const char* key, Int value) {
-  params.emplace(key, JsonValue(static_cast<double>(value)));
+  util::json::put(params, key, static_cast<double>(value));
 }
 
 // Enum config fields serialize as the name the reader resolves back to the value.
 template <typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>, typename = void>
 void add_field(sonare::util::json::Object& params, const char* key, Enum value) {
-  params.emplace(key, detail::enum_param_value(key, value));
+  util::json::put(params, key, detail::enum_param_value(key, value));
 }
 
 sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cfg) {
