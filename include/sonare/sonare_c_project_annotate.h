@@ -379,7 +379,8 @@ static_assert(sizeof(SonareProjectSectionList) == sizeof(void*) + sizeof(size_t)
 #endif
 
 /// @brief Copies the stored key annotations. An empty result has NULL items and zero count.
-/// @details Release the copy with @ref sonare_free_project_key_segment_list.
+/// @details Release the copy with @ref sonare_free_project_key_segment_list. @p out is cleared on
+///          entry, so release a previous copy before passing the same list again.
 SonareError sonare_project_key_annotations(const SonareProject* project,
                                            SonareProjectKeySegmentList* out);
 

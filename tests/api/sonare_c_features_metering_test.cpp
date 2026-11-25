@@ -1478,8 +1478,10 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
       differs = checked.data[i] != unlifted.data[i];
     }
     CHECK(differs);
+    SonareInverseResult refused{};
     CHECK(sonare_mfcc_to_mel(mfcc.coefficients, total - 1, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
-                             &inverse_options, &unlifted) == SONARE_ERROR_INVALID_PARAMETER);
+                             &inverse_options, &refused) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_inverse_result(&refused);
 
     float* audio = nullptr;
     size_t audio_length = 0;

@@ -740,6 +740,7 @@ TEST_CASE("project key annotations round-trip in stored order",
             SONARE_OK);
     REQUIRE(sonare_project_key_annotations(project.handle, &snapshot.list) == SONARE_OK);
     CHECK(snapshot.list.items != first.list.items);
+    sonare_free_project_key_segment_list(&snapshot.list);
     REQUIRE(sonare_project_key_annotations(project.handle, &snapshot.list) == SONARE_OK);
     REQUIRE(sonare_project_annotate_keys(project.handle, nullptr, 0) == SONARE_OK);
     SonareProjectKeySegmentList cleared{};

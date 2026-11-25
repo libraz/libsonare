@@ -197,7 +197,8 @@ void sonare_pitch_correction_config_init(SonarePitchCorrectionConfig* config);
 /// @param hop_length  F0 hop in samples (> 0), with the centered-frame voicing
 ///                    rule of @ref sonare_pitch_correct_to_midi_timevarying.
 /// @note The returned array is heap-allocated and MUST be released with
-///       @ref sonare_free_floats.
+///       @ref sonare_free_floats. @p out is cleared on entry, so release a previous
+///       array before passing the same pointer again.
 SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length, int sample_rate,
                                              const float* f0_hz, const float* voiced_prob,
                                              const int32_t* voiced, size_t n_frames,

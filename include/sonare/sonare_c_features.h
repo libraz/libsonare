@@ -612,7 +612,8 @@ void sonare_mfcc_to_mel_options_init(SonareMfccToMelOptions* options);
 /// @param n_frames Number of time frames.
 /// @param n_mels Number of Mel bins to reconstruct.
 /// @param options NULL takes the defaults (no lifter).
-/// @param out Receives an [n_mels x n_frames] Mel power matrix.
+/// @param out Receives an [n_mels x n_frames] Mel power matrix. Cleared on entry, so release a
+///        previous result with @ref sonare_free_inverse_result before passing it again.
 SonareError sonare_mfcc_to_mel(const float* coefficients, size_t input_length, int n_mfcc,
                                int n_frames, int n_mels, const SonareMfccToMelOptions* options,
                                SonareInverseResult* out);

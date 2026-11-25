@@ -263,6 +263,7 @@ TEST_CASE("the correction config is refused member by member", "[c_api][engine_r
   bad.scale_reference_midi = 0.0f;
   bad.target_mode = SONARE_PITCH_TARGET_SCALE;
   CHECK(run(bad) == SONARE_OK);
+  sonare_free_floats(out);
 
   bad = config;
   bad.target_mode = 5;
