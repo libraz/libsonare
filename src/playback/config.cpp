@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "util/exception.h"
@@ -72,7 +73,7 @@ bool read_bool(const Value& value, const std::string& key) {
   return value.as_bool();
 }
 
-const std::string& read_string(const Value& value, const std::string& key) {
+std::string_view read_string(const Value& value, const std::string& key) {
   if (!value.is_string()) refuse_kind(key, schema::Kind::String);
   return value.as_string();
 }
@@ -130,7 +131,7 @@ void check_channel_map(const PrepareConfig& prepare, ErrorCode code) {
 void parse_input(const Value& input, PrepareConfig& prepare) {
   check_keys(input, "input", {"layout", "channelMap"});
   if (const Value* layout = input.find("layout")) {
-    const std::string& text = read_string(*layout, input_key("layout"));
+    const std::string_view text = read_string(*layout, input_key("layout"));
     ChannelLayout bed = ChannelLayout::Stereo;
     if (text == "auto") {
       prepare.input_layout = InputLayout::Auto;
@@ -158,7 +159,7 @@ void parse_input(const Value& input, PrepareConfig& prepare) {
   for (int i = 0; i < length; ++i) {
     const std::string key = schema::index_path(map_path, static_cast<size_t>(i));
     SpeakerRole role = SpeakerRole::L;
-    const std::string& token = read_string(items[static_cast<size_t>(i)], key);
+    const std::string_view token = read_string(items[static_cast<size_t>(i)], key);
     if (!parse_speaker_role(token, &role)) refuse_at(key, "must be a speaker role");
     prepare.channel_map[static_cast<size_t>(i)] = role;
   }
@@ -179,7 +180,7 @@ void parse_speaker(const Value& speaker, SpeakerRole role, RendererConfig& confi
         read_float(*trim, speaker_key(role, "trimDb"));
   }
   if (const Value* size = speaker.find("size")) {
-    const std::string& text = read_string(*size, speaker_key(role, "size"));
+    const std::string_view text = read_string(*size, speaker_key(role, "size"));
     if (text == "large") {
       prepare.size = SpeakerSize::Large;
     } else if (text == "small") {
@@ -194,7 +195,7 @@ void parse_target(const Value& target, RendererConfig& config) {
   check_keys(target, "target", {"kind", "layout", "speakers", "bassManagement"});
   PrepareConfig& prepare = config.prepare;
   if (const Value* kind = target.find("kind")) {
-    const std::string& text = read_string(*kind, schema::child_path("target", "kind"));
+    const std::string_view text = read_string(*kind, schema::child_path("target", "kind"));
     if (text == "headphones") {
       prepare.target_kind = TargetKind::Headphones;
     } else if (text == "speakers") {
@@ -210,7 +211,7 @@ void parse_target(const Value& target, RendererConfig& config) {
       throw Refusal::wrong_type(kDocumentError, layout_path, "must be given for speakers")
           .as_caller_spelled();
     }
-    const std::string& text = read_string(*layout, layout_path);
+    const std::string_view text = read_string(*layout, layout_path);
     if (!channel_layout_from_string(text, prepare.target_layout) ||
         prepare.target_layout == ChannelLayout::Mono) {
       refuse_at(layout_path, kTargetLayoutDomain);
@@ -301,7 +302,7 @@ void parse_sections(const Value& root, RendererConfig& config) {
   if (const Value* room = root.find("room")) {
     check_keys(*room, "room", {"preset", "mixDb", "enabled"});
     if (const Value* v = room->find("preset")) {
-      const std::string& text = read_string(*v, schema::child_path("room", "preset"));
+      const std::string_view text = read_string(*v, schema::child_path("room", "preset"));
       bool found = false;
       for (RoomPreset preset : {RoomPreset::None, RoomPreset::LivingRoom, RoomPreset::HomeTheater,
                                 RoomPreset::ScreeningRoom}) {
