@@ -100,8 +100,8 @@ std::vector<float> center_onset_strength(std::vector<float> onset_env, int n_fft
   if (!center || onset_env.empty() || hop_length <= 0) return onset_env;
 
   // Frames to right-shift so onset spikes line up with centered STFT frame
-  // times. Integer division deliberately matches librosa's floor division.
-  return shift_onset_frames(std::move(onset_env), n_fft / (2 * hop_length));
+  // times. Dividing by two first keeps the same frame count without doubling the hop.
+  return shift_onset_frames(std::move(onset_env), n_fft / 2 / hop_length);
 }
 
 std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& mel_config,
@@ -123,7 +123,7 @@ int onset_center_shift_frames(const StftConfig& geometry, bool center) {
     return static_cast<int>(std::lround(static_cast<double>(geometry.win_length) /
                                         (2.0 * static_cast<double>(hop_length))));
   }
-  return geometry.actual_win_length() / (2 * hop_length);
+  return geometry.actual_win_length() / 2 / hop_length;
 }
 
 std::vector<float> center_onset_strength(std::vector<float> onset_env, const StftConfig& geometry,

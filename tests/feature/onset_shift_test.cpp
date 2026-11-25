@@ -3,6 +3,7 @@
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <vector>
 
 #include "core/convert.h"
@@ -93,6 +94,17 @@ TEST_CASE("onset centering shifts in place across every size boundary", "[onset]
   const std::vector<float> empty;
   REQUIRE(center_onset_strength(empty, 10, 1, true).empty());
   REQUIRE(center_onset_strength(empty, geometry, true).empty());
+}
+
+TEST_CASE("onset centering preserves the envelope when the hop exceeds half the int range",
+          "[onset][shift]") {
+  const std::vector<float> input{1.0f, 2.0f, 3.0f};
+  StftConfig geometry;
+  geometry.hop_length = std::numeric_limits<int>::max() / 2 + 1;
+
+  REQUIRE(center_onset_strength(input, geometry.n_fft, geometry.hop_length, true) == input);
+  REQUIRE(onset_center_shift_frames(geometry, true) == 0);
+  REQUIRE(center_onset_strength(input, geometry, true) == input);
 }
 
 TEST_CASE("envelope_frame_time converts envelope frames to event times", "[onset][shift]") {
