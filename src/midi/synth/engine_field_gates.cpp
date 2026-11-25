@@ -205,23 +205,32 @@ Gate base_freq(const GateSite& s) {
 struct GateRow {
   const char* member_path;
   Gate (*gate)(const GateSite&);
+  const char* positive_key = nullptr;
+
+  Gate make_gate(const GateSite& site) const {
+    return positive_key == nullptr ? gate(site) : above(positive_key, 0);
+  }
 };
+
+constexpr GateRow when_positive(const char* member_path, const char* key) {
+  return {member_path, nullptr, key};
+}
 
 const GateRow kEngineGates[] = {
     // Subtractive: the interval places an oscillator that is there only at a level.
-    {"va.osc2_interval_cents", [](const GateSite&) { return above("osc2Level", 0); }},
-    {"va.osc2_dry", [](const GateSite&) { return above("osc2Level", 0); }},
+    when_positive("va.osc2_interval_cents", "osc2Level"),
+    when_positive("va.osc2_dry", "osc2Level"),
     // Only the square oscillator has a duty to set.
     {"va.pulse_width", [](const GateSite&) { return wrapper_is("waveform", "square"); }},
     // A single oscillator has no detune position to pan by.
     {"va.unison_width", [](const GateSite&) { return wrapper_above("unison", 1); }},
     // The band's corners shape noise that is there only at a level.
-    {"va.band_noise_low_hz", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
-    {"va.band_noise_low_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
-    {"va.band_noise_high_hz", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
-    {"va.band_noise_high_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
+    when_positive("va.band_noise_low_hz", "bandNoiseLevel"),
+    when_positive("va.band_noise_low_key_track", "bandNoiseLevel"),
+    when_positive("va.band_noise_high_hz", "bandNoiseLevel"),
+    when_positive("va.band_noise_high_key_track", "bandNoiseLevel"),
     // The break places a slope that is there only above 0 dB per semitone.
-    {"va.sustain_key_break", [](const GateSite&) { return above("sustainKeySlopeDb", 0); }},
+    when_positive("va.sustain_key_break", "sustainKeySlopeDb"),
     // Pipe organ: the flat voicing builds the implicit 8' only.
     {"pipe_organ.stopped", [](const GateSite&) { return equals("rankCount", 0); }},
     {"pipe_organ.brightness", [](const GateSite&) { return equals("rankCount", 0); }},
@@ -240,38 +249,32 @@ const GateRow kEngineGates[] = {
     {"bowed_string.string_length_m",
      [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.force_ratio", [](const GateSite&) { return is("hyperbolicFriction", true); }},
-    {"bowed_string.section_rate_hz",
-     [](const GateSite&) { return above("sectionSpreadCents", 0.0); }},
+    when_positive("bowed_string.section_rate_hz", "sectionSpreadCents"),
     // Vocal: the section stage over the formant bank, as the bowed string's.
-    {"vocal.section_rate_hz", [](const GateSite&) { return above("sectionSpreadCents", 0.0); }},
+    when_positive("vocal.section_rate_hz", "sectionSpreadCents"),
     {"bowed_string.corpus_scale",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_series",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
-    {"bowed_string.string_loss_per_octave",
-     [](const GateSite&) { return above("stringLossHarmonic", 0); }},
+    when_positive("bowed_string.string_loss_per_octave", "stringLossHarmonic"),
     // Reed: the mass-spring valve, the growth cone and the Bernoulli valve.
     {"reed.reed_resonance", [](const GateSite&) { return is("dynamicReed", true); }},
     {"reed.cone_growth", [](const GateSite&) { return is("conical", true); }},
-    {"reed.zeta", [](const GateSite&) { return above("closingPressure", 0); }},
-    {"reed.pressure_scale", [](const GateSite&) { return above("closingPressure", 0); }},
+    when_positive("reed.zeta", "closingPressure"),
+    when_positive("reed.pressure_scale", "closingPressure"),
     // Brass and reed: a bell cutoff takes the radiation corner from the reflection pole.
     {"reed.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     // Brass: the normalisation scales the muted path, which a seated mute has to open.
-    {"brass.mute_norm", [](const GateSite&) { return above("mute", 0); }},
+    when_positive("brass.mute_norm", "mute"),
     // Brass, flute, reed and free reed: the settle and the velocity slope shape an overshoot
     // that has to be there.
-    {"brass.onset_breath_settle_ms",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
-    {"brass.onset_breath_overshoot_vel_db",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
-    {"flute.onset_breath_settle_ms",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
-    {"flute.onset_breath_overshoot_vel_db",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    when_positive("brass.onset_breath_settle_ms", "onsetBreathOvershootDb"),
+    when_positive("brass.onset_breath_overshoot_vel_db", "onsetBreathOvershootDb"),
+    when_positive("flute.onset_breath_settle_ms", "onsetBreathOvershootDb"),
+    when_positive("flute.onset_breath_overshoot_vel_db", "onsetBreathOvershootDb"),
     // Flute: the jet offset, the receptivity and the deflection limit shape the jet-drive source.
     {"flute.jet_offset", [](const GateSite&) { return is("jetDrive", true); }},
     {"flute.jet_receptivity_window", [](const GateSite&) { return is("jetDrive", true); }},
@@ -281,7 +284,7 @@ const GateRow kEngineGates[] = {
     {"flute.jet_deflection_limit",
      [](const GateSite&) { return is("jetDrive", true) & is("jetCycleMean", true); }},
     // Reed: the overshoot acts through the Bernoulli valve's loop gain; the table has no headroom.
-    {"reed.onset_breath_overshoot_db", [](const GateSite&) { return above("closingPressure", 0); }},
+    when_positive("reed.onset_breath_overshoot_db", "closingPressure"),
     {"reed.onset_breath_settle_ms",
      [](const GateSite&) {
        return above("onsetBreathOvershootDb", 0) & above("closingPressure", 0);
@@ -290,18 +293,15 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) {
        return above("onsetBreathOvershootDb", 0) & above("closingPressure", 0);
      }},
-    {"free_reed.onset_breath_settle_ms",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
-    {"free_reed.onset_breath_overshoot_vel_db",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
-    {"free_reed.onset_breath_overshoot_key_db",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    when_positive("free_reed.onset_breath_settle_ms", "onsetBreathOvershootDb"),
+    when_positive("free_reed.onset_breath_overshoot_vel_db", "onsetBreathOvershootDb"),
+    when_positive("free_reed.onset_breath_overshoot_key_db", "onsetBreathOvershootDb"),
     // Modal: a mallet contact time replaces the hardness curve and its two inputs.
     {"modal.strike_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
     {"modal.vel_to_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
-    {"modal.mallet_vel_exp", [](const GateSite&) { return above("malletMs", 0); }},
-    {"modal.mallet_shape", [](const GateSite&) { return above("malletMs", 0); }},
-    {"modal.contact_ms", [](const GateSite&) { return above("contact", 0); }},
+    when_positive("modal.mallet_vel_exp", "malletMs"),
+    when_positive("modal.mallet_shape", "malletMs"),
+    when_positive("modal.contact_ms", "contact"),
     // The vane phase moves LFO2, which reaches the voice only through a mod-matrix route.
     {"modal.tremolo_phase_deg", [](const GateSite&) { return wrapper_above("lfo2RateHz", 0); }},
     // A mode slot sounds only below the mode count.
@@ -316,13 +316,13 @@ const GateRow kEngineGates[] = {
     {"ks.vel_to_brightness", [](const GateSite&) { return equals("pluckMs", 0); }},
     {"ks.pluck_style", [](const GateSite&) { return equals("pluckMs", 0); }},
     {"ks.nail", [](const GateSite&) { return equals("pluckMs", 0); }},
-    {"ks.pluck_vel_exp", [](const GateSite&) { return above("pluckMs", 0); }},
+    when_positive("ks.pluck_vel_exp", "pluckMs"),
     // Karplus-Strong: the pick key track scales a pick position that has to be there, the hand
     // damps only the halo bank, the second plane's tuning needs the plane, and the air mode
     // belongs to the guitar body the wrapper selects.
-    {"ks.pick_position_per_octave", [](const GateSite&) { return above("pickPosition", 0); }},
+    when_positive("ks.pick_position_per_octave", "pickPosition"),
     {"ks.halo_damp_s", [](const GateSite&) { return is("sympathetic", true); }},
-    {"ks.pol_detune_cents", [](const GateSite&) { return above("polarization", 0); }},
+    when_positive("ks.pol_detune_cents", "polarization"),
     {"ks.body_air_hz",
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
     {"ks.body_air_t60_s",
@@ -335,23 +335,22 @@ const GateRow kEngineGates[] = {
     {"plucked_string.exc_brightness_per_octave",
      [](const GateSite&) { return equals("pluckMs", 0); }},
     {"plucked_string.vel_to_brightness", [](const GateSite&) { return equals("pluckMs", 0); }},
-    {"plucked_string.pluck_vel_exp", [](const GateSite&) { return above("pluckMs", 0); }},
+    when_positive("plucked_string.pluck_vel_exp", "pluckMs"),
     // Plucked string: the mid anchor is a second pole of the quoted loss solve, and the pick key
     // track scales a pick position that has to be there.
-    {"plucked_string.mid_decay_s", [](const GateSite&) { return above("hfDecayS", 0); }},
-    {"plucked_string.pick_position_per_octave",
-     [](const GateSite&) { return above("pickPosition", 0); }},
+    when_positive("plucked_string.mid_decay_s", "hfDecayS"),
+    when_positive("plucked_string.pick_position_per_octave", "pickPosition"),
     // Free reed: the flat tongue joins only a detuned musette.
-    {"free_reed.musette_flat", [](const GateSite&) { return above("detune", 0); }},
-    {"free_reed.musette_partner_level", [](const GateSite&) { return above("detune", 0); }},
-    {"free_reed.musette_taper", [](const GateSite&) { return above("detune", 0); }},
+    when_positive("free_reed.musette_flat", "detune"),
+    when_positive("free_reed.musette_partner_level", "detune"),
+    when_positive("free_reed.musette_taper", "detune"),
     // Free reed: the slot flow replaces the shaped saw.
-    {"free_reed.slot_return", [](const GateSite&) { return above("slotDuty", 0); }},
-    {"free_reed.slot_gap", [](const GateSite&) { return above("slotDuty", 0); }},
+    when_positive("free_reed.slot_return", "slotDuty"),
+    when_positive("free_reed.slot_gap", "slotDuty"),
     {"free_reed.radiation_keytrack",
      [](const GateSite&) { return above("slotDuty", 0) & above("radiation", 0); }},
-    {"free_reed.slot_swing", [](const GateSite&) { return above("slotDuty", 0); }},
-    {"free_reed.radiation", [](const GateSite&) { return above("slotDuty", 0); }},
+    when_positive("free_reed.slot_swing", "slotDuty"),
+    when_positive("free_reed.radiation", "slotDuty"),
     // Harpsichord: each choir's fields reach it only once it is drawn.
     {"harpsichord.pluck_8b", [](const GateSite&) { return is("eightB", true); }},
     {"harpsichord.unison_detune_cents", [](const GateSite&) { return is("eightB", true); }},
@@ -360,9 +359,9 @@ const GateRow kEngineGates[] = {
     {"harpsichord.undamped_from_note", [](const GateSite&) { return is("four", true); }},
     // The ripple's length acts only with a depth, the second plane's tuning and
     // decay only with a coupling.
-    {"harpsichord.ripple_ratio", [](const GateSite&) { return above("rippleLossShare", 0); }},
-    {"harpsichord.pol_detune_cents", [](const GateSite&) { return above("polCoupling", 0); }},
-    {"harpsichord.pol_t60_ratio", [](const GateSite&) { return above("polCoupling", 0); }},
+    when_positive("harpsichord.ripple_ratio", "rippleLossShare"),
+    when_positive("harpsichord.pol_detune_cents", "polCoupling"),
+    when_positive("harpsichord.pol_t60_ratio", "polCoupling"),
     // Additive: the percussion harmonic.
     {"additive.percussion_decay_ms",
      [](const GateSite&) { return at_least("percussionHarmonic", 2); }},
@@ -485,7 +484,7 @@ std::vector<ActiveAlternative> engine_field_gates(const std::string& member_path
   const GateSite s{own_key, index, base};
   Gate gate;
   for (const GateRow& row : kEngineGates) {
-    if (gate_row_matches(row.member_path, member_path)) gate = gate & row.gate(s);
+    if (gate_row_matches(row.member_path, member_path)) gate = gate & row.make_gate(s);
   }
   if (gate.any.size() == 1 && gate.any.front().empty()) return {};
   return std::move(gate.any);
