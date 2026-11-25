@@ -157,6 +157,7 @@ struct Assignment {
 };
 
 /// One field: apply an override, fill a probe, read it, or assign it by key.
+/// Keep the pass dispatch methods out of line to avoid copying their switches per field.
 ///
 /// @p member, where given, is the path with its index removed: the walker
 /// passes it at every site whose path it built from an array index, so an
@@ -168,6 +169,7 @@ struct Fields {
   Assignment* assignment = nullptr;
   const std::string* prefix = nullptr;
 
+  [[gnu::noinline]]
   float operator()(const char* path, float current, const char* member = nullptr) const {
     switch (pass) {
       case FieldPass::kFill:
@@ -205,6 +207,7 @@ struct Fields {
   /// field is wide open and left to `clamp_synth_patch` to narrow — the same
   /// arrangement the float probe relies on. A narrow type states its own,
   /// because a probe that overflows it measures the wraparound.
+  [[gnu::noinline]]
   int as_int(const char* path, int current, int lo, int hi, const char* member = nullptr) const {
     switch (pass) {
       case FieldPass::kFill:
