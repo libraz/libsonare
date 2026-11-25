@@ -1190,6 +1190,19 @@ TEST_CASE("sonare_metering_spectrum", "[c_api]") {
           "n_fft must be a power of two in [2, 4194304]");
   }
 
+  SECTION("refuses a power of two outside [2, 4194304]") {
+    auto samples = generate_sine(440.0f, 48000, 0.1f);
+    for (const int n_fft : {1, 8388608}) {
+      CAPTURE(n_fft);
+      SonareSpectrumResult result = {};
+      REQUIRE(sonare_metering_spectrum(samples.data(), samples.size(), 48000, n_fft, 0, 0, 0.0f,
+                                       0.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "n_fft must be a power of two in [2, 4194304]");
+      CHECK(result.bin_count == 0);
+    }
+  }
+
   SECTION("names a refused dB knob rather than leaving the message empty") {
     auto samples = generate_sine(440.0f, 48000, 0.1f);
     SonareSpectrumResult result = {};
