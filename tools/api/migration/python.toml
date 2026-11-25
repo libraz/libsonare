@@ -6634,7 +6634,7 @@ test = "bindings/python/tests/test_decode_channels.py::test_downmix_refuses_an_u
 [[entry]]
 kind = "function"
 old = "synth_preset_names"
-changed = "lists the NativeSynth presets in lowerCamel (sawLead, ePiano, drumKit, ...)"
+changed = "lists the NativeSynth presets in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
 domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_synth_patch.py::test_synth_preset_names_lists_the_catalog"
@@ -6642,7 +6642,7 @@ test = "bindings/python/tests/test_synth_patch.py::test_synth_preset_names_lists
 [[entry]]
 kind = "function"
 old = "synth_preset_patch"
-changed = "accepts only the lowerCamel preset names synth_preset_names lists"
+changed = "accepts only the lowerCamel preset names synth_preset_names lists; a 1.x kebab-case name is refused (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
 domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_synth_patch.py::test_synth_preset_patch_round_trips"
@@ -10038,7 +10038,7 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "method"
 old = "Project.bounce"
-changed = "returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate. Pass ProjectInstrumentBinding(instrument=..., destination_id=...) for external, built-in and synth instruments, and ProjectSf2InstrumentBinding(instrument=..., destination_id=..., sound_font_uri=...) for SF2. an omitted destination_id (None) is destination 0, and sound_font_uri=None selects the default font. Pass ProjectControllerProfileBinding records in controller_profiles and ProjectArticulationBinding records in articulations. Their fields are required keyword arguments, and tuple entries are removed."
+changed = "returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate. Pass ProjectInstrumentBinding(instrument=..., destination_id=...) for external, built-in and synth instruments, and ProjectSf2InstrumentBinding(instrument=..., destination_id=..., sound_font_uri=...) for SF2. an omitted destination_id (None) is destination 0, and sound_font_uri=None selects the default font. Pass ProjectControllerProfileBinding records in controller_profiles and ProjectArticulationBinding records in articulations. Their fields are required keyword arguments, and tuple entries are removed. A refused instrument field is named where the caller wrote it, as synth_instruments[i].instrument.<field> (likewise builtin_instruments and sf2_instruments)."
 domain = "project"
 rule = "planar-channels"
 test = "bindings/python/tests/test_project_bounce.py::test_bounce_is_bit_exact_across_two_renders"
@@ -15190,7 +15190,7 @@ test = "bindings/python/tests/test_project.py::test_add_midi_clip_is_one_undo_tr
 [[entry]]
 kind = "method"
 old = "Project.from_json"
-changed = "a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document. Allocation failure while decoding raises SonareError with code OUT_OF_MEMORY. In 1.x this could be reported as INVALID_FORMAT."
+changed = "Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code INVALID_FORMAT (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document. Allocation failure while decoding raises SonareError with code OUT_OF_MEMORY. In 1.x this could be reported as INVALID_FORMAT."
 domain = "project"
 rule = "json-input-kinds"
 test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
@@ -15407,7 +15407,7 @@ test = "bindings/python/tests/test_engine.py::test_engine_tempo_domain_and_refus
 [[entry]]
 kind = "method"
 old = "Project.from_json_with_diagnostics"
-changed = "An allocation failure while decoding raises SonareError with code OUT_OF_MEMORY rather than INVALID_FORMAT."
+changed = "Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code INVALID_FORMAT (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An allocation failure while decoding raises SonareError with code OUT_OF_MEMORY rather than INVALID_FORMAT."
 domain = "project"
 rule = "error-class-by-cause"
 test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
@@ -15599,7 +15599,7 @@ test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defa
 [[entry]]
 kind = "option"
 old = "detect_key(n_fft)"
-changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
@@ -15607,7 +15607,7 @@ test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_s
 [[entry]]
 kind = "option"
 old = "detect_key_candidates(n_fft)"
-changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
@@ -15615,7 +15615,7 @@ test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_s
 [[entry]]
 kind = "option"
 old = "Audio.detect_key(n_fft)"
-changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end"
 domain = "core"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
@@ -15623,7 +15623,7 @@ test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_s
 [[entry]]
 kind = "option"
 old = "Audio.detect_key_candidates(n_fft)"
-changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end"
 domain = "core"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"

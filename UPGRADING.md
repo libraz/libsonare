@@ -250,12 +250,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_detect_chords` | takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync; default chord options use CQT and the HMM instead of the plain 1.x entry's STFT and no HMM; with no options they restrict chords to triads |
 | `sonare_detect_key_candidates_with_extended_options` | removed: call sonare_detect_key_candidates with SonareDetectKeyOptions profile_type and genre_hint set |
 | `sonare_detect_key_candidates_with_modes` | removed: call sonare_detect_key_candidates with SonareDetectKeyOptions modes and mode_count set |
-| `sonare_detect_key_candidates` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct |
+| `sonare_detect_key_candidates` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with options.n_fft = 4096 and options.chroma_high_pass_hz = 0, and no option selects the former front end |
 | `sonare_detect_key_with_extended_options` | removed: call sonare_detect_key with SonareDetectKeyOptions profile_type and genre_hint set |
 | `sonare_detect_key_with_options_and_modes` | removed: call sonare_detect_key with SonareDetectKeyOptions modes and mode_count set |
 | `sonare_detect_key_with_options` | removed: call sonare_detect_key with SonareDetectKeyOptions n_fft, hop_length, use_hpss, loudness_weighted and chroma_high_pass_hz set |
 | `sonare_detect_key_with_tuning` | removed: call sonare_detect_key with SonareDetectKeyOptions tuning_cents and tuning_auto set, and out_tuning_cents |
-| `sonare_detect_key` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former settings |
+| `sonare_detect_key` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with options.n_fft = 4096 and options.chroma_high_pass_hz = 0, and no option selects the former front end |
 | `sonare_detect_onsets_ex` | removed: call sonare_detect_onsets, which takes the SonareOnsetDetectConfig |
 | `sonare_detect_onsets` | takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `sonare_downmix_ex` | removed: call sonare_downmix with a SonareDownmixOptions filled by sonare_downmix_options_init, setting include_lfe and normalize there |
@@ -1100,8 +1100,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_synth_enum_names` | lists every NativeSynth enum token in lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...); the moog-ladder input spelling is gone |
-| `sonare_synth_preset_names` | lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) |
-| `sonare_synth_preset_patch` | accepts only the lowerCamel preset names that sonare_synth_preset_names lists |
+| `sonare_synth_preset_names` | lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
+| `sonare_synth_preset_patch` | accepts only the lowerCamel preset names that sonare_synth_preset_names lists; a 1.x kebab-case name is refused (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
 
 #### Results are typed values, not JSON strings
 
@@ -1288,7 +1288,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. Allocation failure while reading the document or formatting diagnostics returns SONARE_ERROR_OUT_OF_MEMORY with both outputs cleared. |
+| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded, and no supported path carries a 1.x project into 2.0; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. Allocation failure while reading the document or formatting diagnostics returns SONARE_ERROR_OUT_OF_MEMORY with both outputs cleared. |
 | `sonare_project_fade_curve_from_name` | accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER and the message 'name must be one of linear, equalPower, exponential, logarithmic' |
 
 #### Results are typed values, not JSON strings
@@ -1612,8 +1612,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.detect_chords(use_hmm)` | defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting |
 | `Audio.detect_chords(use_triads_only)` | defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting |
 | `Audio.detect_clipping(min_region_samples)` | omitted or 0 hands the core its default (was the literal 1) |
-| `Audio.detect_key(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
-| `Audio.detect_key_candidates(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
+| `Audio.detect_key(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end |
+| `Audio.detect_key_candidates(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end |
 | `Audio.mastering(true_peak_oversample)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
 | `Audio.pitch_correct_to_midi(current_midi)` | current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 | `Audio.pitch_correct_to_midi(target_midi)` | target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
@@ -1982,8 +1982,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `chord_functional_analysis(use_triads_only)` | defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting |
 | `detect_chords(use_hmm)` | defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting |
 | `detect_chords(use_triads_only)` | defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting |
-| `detect_key(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
-| `detect_key_candidates(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
+| `detect_key(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end |
+| `detect_key_candidates(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with n_fft=4096 and chroma_high_pass_hz=0, and no option selects the former front end |
 | `estimate_meter(compound_subdivision_threshold)` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `griffin_lim(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
 | `griffin_lim(n_fft)` | omitted is implied by the bin count, (n_bins - 1) * 2 (was 2048); an explicit value that disagrees raises SonareValueError |
@@ -3649,8 +3649,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `SynthPatch.filter_model` | takes the exact lowerCamel filter model token (transistorLadder, diodeLadder, sallenKey, svf4Pole); the moog-ladder input spelling is removed |
 | `SynthPatch.sample_loop` | takes keyDown instead of key-down |
 | `synth_enum_tables` | every NativeSynth enum token is lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...) |
-| `synth_preset_names` | lists the NativeSynth presets in lowerCamel (sawLead, ePiano, drumKit, ...) |
-| `synth_preset_patch` | accepts only the lowerCamel preset names synth_preset_names lists |
+| `synth_preset_names` | lists the NativeSynth presets in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
+| `synth_preset_patch` | accepts only the lowerCamel preset names synth_preset_names lists; a 1.x kebab-case name is refused (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -4267,7 +4267,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.from_json_with_diagnostics` | An allocation failure while decoding raises SonareError with code OUT_OF_MEMORY rather than INVALID_FORMAT. |
+| `Project.from_json_with_diagnostics` | Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code INVALID_FORMAT (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An allocation failure while decoding raises SonareError with code OUT_OF_MEMORY rather than INVALID_FORMAT. |
 | `Project.preview_midi_fx_count` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `Project.set_max_history_bytes(bytes)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a non-integer number or one outside [0, SIZE_MAX] stays SonareValueError |
 
@@ -4328,7 +4328,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.bounce` | returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate. Pass ProjectInstrumentBinding(instrument=..., destination_id=...) for external, built-in and synth instruments, and ProjectSf2InstrumentBinding(instrument=..., destination_id=..., sound_font_uri=...) for SF2. an omitted destination_id (None) is destination 0, and sound_font_uri=None selects the default font. Pass ProjectControllerProfileBinding records in controller_profiles and ProjectArticulationBinding records in articulations. Their fields are required keyword arguments, and tuple entries are removed. |
+| `Project.bounce` | returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate. Pass ProjectInstrumentBinding(instrument=..., destination_id=...) for external, built-in and synth instruments, and ProjectSf2InstrumentBinding(instrument=..., destination_id=..., sound_font_uri=...) for SF2. an omitted destination_id (None) is destination 0, and sound_font_uri=None selects the default font. Pass ProjectControllerProfileBinding records in controller_profiles and ProjectArticulationBinding records in articulations. Their fields are required keyword arguments, and tuple entries are removed. A refused instrument field is named where the caller wrote it, as synth_instruments[i].instrument.<field> (likewise builtin_instruments and sf2_instruments). |
 | `Project.set_source_audio(audio)` | removed: pass the PCM as channels, equal-length channel buffers or a channels-first ndarray, instead of an interleaved audio buffer |
 | `Project.set_source_audio(channels)` | channels now supplies the planar PCM itself as equal-length channel buffers or a channels-first ndarray; pass sample_rate as the third argument |
 
@@ -4369,7 +4369,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.from_json(json)` | `Project.from_json(document)` |
 | `Project.from_json_with_diagnostics(json)` | `Project.from_json_with_diagnostics(document)` |
-| `Project.from_json` | a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document. Allocation failure while decoding raises SonareError with code OUT_OF_MEMORY. In 1.x this could be reported as INVALID_FORMAT. |
+| `Project.from_json` | Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code INVALID_FORMAT (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document. Allocation failure while decoding raises SonareError with code OUT_OF_MEMORY. In 1.x this could be reported as INVALID_FORMAT. |
 | `Project.set_mixer_scene_json` | removed: parse JSON into a MixSceneDocument mapping and call project.set_mixer_scene(scene); pass None to clear the scene |
 
 #### Historical aliases are removed
@@ -5433,8 +5433,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `detectChords(threshold)` | removed: pass threshold as a field of DetectChordsRequest |
 | `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
-| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
+| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `estimateTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(hopLength)` | removed: pass hopLength as a field of EstimateTuningRequest |
@@ -7232,6 +7232,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SynthModSource='key-track'` | `SynthModSource='keyTrack'` |
 | `SynthModSource='mod-wheel'` | `SynthModSource='modWheel'` |
 | `SynthModSource='pitch-bend'` | `SynthModSource='pitchBend'` |
+| `synthPresetNames` | lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
+| `synthPresetPatch` | accepts only the lowerCamel preset names synthPresetNames lists; a 1.x kebab-case name is refused with RangeError (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -7647,7 +7649,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.delete` | removed: call destroy() |
+| `Project.delete` | removed: call destroy(), or declare the project with using; a 1.x finally { project.delete() } now throws TypeError (project.delete is not a function) from the finally block, which replaces the try block's own result or error, so rename every such call to project.destroy() |
 | `ProjectTimeline.dispose` | `ProjectTimeline.destroy` |
 | `VocalEditDraft.dispose` | removed: call destroy() |
 | `VocalEditSession.dispose` | removed: call destroy() |
@@ -7812,35 +7814,35 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.gmFamilyName` | removed: call the module function gmFamilyName |
 | `Project.gmInstrumentName` | removed: call the module function gmInstrumentName |
 | `Project.gmProgramForName` | removed: call the module function gmProgramForName |
-| `Project.midi2AssignableController` | removed: call the module function midi2AssignableController |
-| `Project.midi2AssignablePerNoteController` | removed: call the module function midi2AssignablePerNoteController |
-| `Project.midi2Cc` | removed: call the module function midi2Cc |
-| `Project.midi2ChannelPressure` | removed: call the module function midi2ChannelPressure |
-| `Project.midi2NoteOff` | removed: call the module function midi2NoteOff |
-| `Project.midi2NoteOn` | removed: call the module function midi2NoteOn |
-| `Project.midi2PerNoteManagement` | removed: call the module function midi2PerNoteManagement |
-| `Project.midi2PerNotePitchBend` | removed: call the module function midi2PerNotePitchBend |
-| `Project.midi2PitchBend` | removed: call the module function midi2PitchBend |
-| `Project.midi2PolyPressure` | removed: call the module function midi2PolyPressure |
-| `Project.midi2Program` | removed: call the module function midi2Program |
-| `Project.midi2RegisteredController` | removed: call the module function midi2RegisteredController |
-| `Project.midi2RegisteredPerNoteController` | removed: call the module function midi2RegisteredPerNoteController |
-| `Project.midi2RelativeAssignableController` | removed: call the module function midi2RelativeAssignableController |
-| `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
-| `Project.midiBankProgram` | removed: call the module function midiBankProgram |
+| `Project.midi2AssignableController` | removed: call the module function midi2AssignableController with one request object, midi2AssignableController({ ppq, group, channel, bank, index, value32 }), in place of Project.midi2AssignableController(ppq, group, channel, bank, index, value32) |
+| `Project.midi2AssignablePerNoteController` | removed: call the module function midi2AssignablePerNoteController with one request object, midi2AssignablePerNoteController({ ppq, group, channel, note, index, value32 }), in place of Project.midi2AssignablePerNoteController(ppq, group, channel, note, index, value32) |
+| `Project.midi2Cc` | removed: call the module function midi2Cc with one request object, midi2Cc({ ppq, group, channel, controller, value32 }), in place of Project.midi2Cc(ppq, group, channel, controller, value32) |
+| `Project.midi2ChannelPressure` | removed: call the module function midi2ChannelPressure with one request object, midi2ChannelPressure({ ppq, group, channel, pressure32 }), in place of Project.midi2ChannelPressure(ppq, group, channel, pressure32) |
+| `Project.midi2NoteOff` | removed: call the module function midi2NoteOff with one request object, midi2NoteOff({ ppq, group, channel, note, velocity16? }), in place of Project.midi2NoteOff(ppq, group, channel, note, velocity16?) |
+| `Project.midi2NoteOn` | removed: call the module function midi2NoteOn with one request object, midi2NoteOn({ ppq, group, channel, note, velocity16, attributeType?, attributeData? }), in place of Project.midi2NoteOn(ppq, group, channel, note, velocity16, attributeType?, attributeData?) |
+| `Project.midi2PerNoteManagement` | removed: call the module function midi2PerNoteManagement with one request object, midi2PerNoteManagement({ ppq, group, channel, note, detach?, reset? }), in place of Project.midi2PerNoteManagement(ppq, group, channel, note, detach?, reset?) |
+| `Project.midi2PerNotePitchBend` | removed: call the module function midi2PerNotePitchBend with one request object, midi2PerNotePitchBend({ ppq, group, channel, note, bend32 }), in place of Project.midi2PerNotePitchBend(ppq, group, channel, note, bend32) |
+| `Project.midi2PitchBend` | removed: call the module function midi2PitchBend with one request object, midi2PitchBend({ ppq, group, channel, bend32 }), in place of Project.midi2PitchBend(ppq, group, channel, bend32) |
+| `Project.midi2PolyPressure` | removed: call the module function midi2PolyPressure with one request object, midi2PolyPressure({ ppq, group, channel, note, pressure32 }), in place of Project.midi2PolyPressure(ppq, group, channel, note, pressure32) |
+| `Project.midi2Program` | removed: call the module function midi2Program with one request object, midi2Program({ ppq, group, channel, program, bank? }), in place of Project.midi2Program(ppq, group, channel, program, bankValid?, bankMsb?, bankLsb?); bank?: { msb, lsb } replaces bankValid, bankMsb and bankLsb |
+| `Project.midi2RegisteredController` | removed: call the module function midi2RegisteredController with one request object, midi2RegisteredController({ ppq, group, channel, bank, index, value32 }), in place of Project.midi2RegisteredController(ppq, group, channel, bank, index, value32) |
+| `Project.midi2RegisteredPerNoteController` | removed: call the module function midi2RegisteredPerNoteController with one request object, midi2RegisteredPerNoteController({ ppq, group, channel, note, index, value32 }), in place of Project.midi2RegisteredPerNoteController(ppq, group, channel, note, index, value32) |
+| `Project.midi2RelativeAssignableController` | removed: call the module function midi2RelativeAssignableController with one request object, midi2RelativeAssignableController({ ppq, group, channel, bank, index, delta32 }), in place of Project.midi2RelativeAssignableController(ppq, group, channel, bank, index, delta32) |
+| `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController with one request object, midi2RelativeRegisteredController({ ppq, group, channel, bank, index, delta32 }), in place of Project.midi2RelativeRegisteredController(ppq, group, channel, bank, index, delta32) |
+| `Project.midiBankProgram` | removed: call the module function midiBankProgram with one request object, midiBankProgram({ ppq, group, channel, program, bank }), in place of Project.midiBankProgram(ppq, group, channel, bankMsb, bankLsb, program); bank: { msb, lsb } replaces bankMsb and bankLsb |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
 | `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. A wrongly typed payload is refused before numeric learn domains. |
 | `Project.midiCcName` | removed: call the module function midiCcName |
 | `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: call the module function midiCcToBreakpoint; a valid SysEx event now reaches the core and raises coded NotSupported. The payload is read as bytes, including embedded zeros. A wrongly typed payload is refused before CC domains. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
-| `Project.midiCc` | removed: call the module function midiCc |
-| `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
-| `Project.midiNoteOff` | removed: call the module function midiNoteOff |
-| `Project.midiNoteOn` | removed: call the module function midiNoteOn |
-| `Project.midiParamToCc` | removed: call the module function midiParamToCc, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
-| `Project.midiPitchBend` | removed: call the module function midiPitchBend |
-| `Project.midiPolyPressure` | removed: call the module function midiPolyPressure |
-| `Project.midiProgram` | removed: call the module function midiProgram |
-| `Project.midiRouteEvents` | removed: call the module function midiRouteEvents |
+| `Project.midiCc` | removed: call the module function midiCc with one request object, midiCc({ ppq, group, channel, controller, value }), in place of Project.midiCc(ppq, group, channel, controller, value) |
+| `Project.midiChannelPressure` | removed: call the module function midiChannelPressure with one request object, midiChannelPressure({ ppq, group, channel, pressure }), in place of Project.midiChannelPressure(ppq, group, channel, pressure) |
+| `Project.midiNoteOff` | removed: call the module function midiNoteOff with one request object, midiNoteOff({ ppq, group, channel, note, velocity? }), in place of Project.midiNoteOff(ppq, group, channel, note, velocity?) |
+| `Project.midiNoteOn` | removed: call the module function midiNoteOn with one request object, midiNoteOn({ ppq, group, channel, note, velocity }), in place of Project.midiNoteOn(ppq, group, channel, note, velocity) |
+| `Project.midiParamToCc` | removed: call the module function midiParamToCc with one request object, midiParamToCc({ bindings, paramId, unitValue, group, ppq? }), in place of Project.midiParamToCc(bindings, paramId, unitValue, group, ppq?). In it, a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
+| `Project.midiPitchBend` | removed: call the module function midiPitchBend with one request object, midiPitchBend({ ppq, group, channel, bend }), in place of Project.midiPitchBend(ppq, group, channel, bend) |
+| `Project.midiPolyPressure` | removed: call the module function midiPolyPressure with one request object, midiPolyPressure({ ppq, group, channel, note, pressure }), in place of Project.midiPolyPressure(ppq, group, channel, note, pressure) |
+| `Project.midiProgram` | removed: call the module function midiProgram with one request object, midiProgram({ ppq, group, channel, program }), in place of Project.midiProgram(ppq, group, channel, program) |
+| `Project.midiRouteEvents` | removed: call the module function midiRouteEvents with one request object, midiRouteEvents({ filterGroup?, filterChannel?, remapChannel?, thru?, events }), in place of Project.midiRouteEvents(events, config?); the config fields sit beside events in the request |
 | `Project.perNoteControllerName` | removed: call the module function perNoteControllerName |
 
 #### C extends an operation through an Options struct
@@ -7903,8 +7905,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.bounceWithInstruments` | removed: Call bounce({ ...options, instruments: [...] }). |
 | `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [{ instrument, destinationId, soundFontUri }] }). Omit soundFontUri for the default font. |
 | `Project.bounceWithSf2Instruments` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
-| `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
-| `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
+| `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sawLead' } }] }); a preset name is the lowerCamel id synthPresetNames lists (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit), and a 1.x kebab-case name is refused naming synthInstruments[i].instrument.preset. |
+| `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sawLead' } }] }); a preset name is the lowerCamel id synthPresetNames lists (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit), and a 1.x kebab-case name is refused naming synthInstruments[i].instrument.preset. |
 | `Project.compileTimeline` | removed: Call compile({ withTimeline: true }); the result then also carries timeline. |
 | `Project.setMarkerEx` | removed: Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id. |
 | `Project.setMidiFx` | removed: Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object. |
@@ -7935,7 +7937,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `ExternalSeparatedStem.planarSamples` | `ExternalSeparatedStem.channels` |
 | `Project.addClip` | audio comes as planar channels with sampleRate |
-| `Project.bounce` | returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. |
+| `Project.bounce` | returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. A key inside a binding's instrument that its type does not declare raises TypeError naming it (1.x ignored it), and a refused instrument field is named where the caller wrote it, as synthInstruments[i].instrument.<field> (likewise builtinInstruments and sf2Instruments). |
 | `Project.importExternalStems` | each stem carries channels instead of planarSamples, and layout is a name |
 | `Project.setSourceAudio(audio)` | removed: pass it as channels in ProjectSourceAudioRequest |
 | `Project.setSourceAudio(channels)` | removed: drop the count; the channel count is channels.length in ProjectSourceAudioRequest |
@@ -8024,8 +8026,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AlignTakeToReferenceRequest.binsPerOctave` | a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter') |
 | `AlignTakeToReferenceRequest.hopLength` | an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage |
 | `Project.clearSoundFont` | clearSoundFont({ uri }?) releases one named SoundFont. Omit the URI for the default font. |
-| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
-| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.fromJsonWithDiagnostics` | Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code InvalidFormat (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.fromJson` | Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code InvalidFormat (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.importClipFile` | keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event. |
 | `Project.importSmf` | a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both). |
 | `Project.loadSoundFont` | loadSoundFont(data, { uri }?) loads or replaces one named SoundFont. Omit the URI for the default font. |
@@ -8203,7 +8205,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.analyzeWithProgress` | removed: call analyze with onProgress in the options |
-| `OfflineWorkerCallOptions.onProgress` | removed: pass onProgress in the request object; it receives (progress, stage) on the calling thread |
+| `OfflineWorkerCallOptions.onProgress` | removed: pass onProgress in the request object; it receives (progress, stage) on the calling thread. An onProgress left in the call options, like any other undeclared options key, rejects the call with TypeError naming options.onProgress before any work is dispatched, rather than running it with no progress |
 | `OfflineWorkerProgress` | removed: removed with the options callback; the request onProgress takes (progress, stage) as ProgressCallback |
 
 #### Onset strength has one name on every surface
@@ -8305,7 +8307,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.fromMemoryWithBrowserFallback` | fallback failures throw SonareError NotSupported (no decoding context) or DecodeFailed with the decoder error as cause |
 | `ErrorCode.AbiMismatch` | a C-ABI failure coded as an ABI mismatch (10) now arrives as SonareError AbiMismatch instead of InvalidState |
 | `ErrorCode.Unknown` | a C-ABI failure the library codes as unknown (99) now arrives as SonareError Unknown instead of InvalidState |
-| `OfflineWorkerClient` | constructor without a Worker throws SonareError NotSupported; a worker crash or malformed message rejects pending calls with a SonareError |
+| `OfflineWorkerClient` | constructor without a Worker throws SonareError NotSupported; a worker crash or malformed message rejects pending calls with a SonareError; a call-options argument with an undeclared key, a copy that is not a boolean or a signal that is not an AbortSignal rejects the call with TypeError naming it before any work is dispatched, where 1.x ignored it |
 | `SonareError.codeName` | typed as the ErrorCodeName union instead of string, and derived from code |
 | `SonareError.code` | typed as the ErrorCode union instead of number |
 
@@ -9707,10 +9709,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectDownbeats` (`./analysis`) | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
-| `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
-| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
-| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
+| `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end |
+| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end |
+| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end |
 | `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `estimateTuning(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of EstimateTuningRequest |
@@ -12609,6 +12611,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SynthModSource='key-track'` | `SynthModSource='keyTrack'` |
 | `SynthModSource='mod-wheel'` | `SynthModSource='modWheel'` |
 | `SynthModSource='pitch-bend'` | `SynthModSource='pitchBend'` |
+| `synthPresetNames` | lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
+| `synthPresetPatch` | accepts only the lowerCamel preset names synthPresetNames lists; a 1.x kebab-case name is refused with RangeError (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -13368,7 +13372,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipPageStreamer.close` | removed: call destroy() |
 | `ClipPageStreamer.delete` | removed: call destroy() |
 | `OpfsClipPageProviderBinding.close` | `OpfsClipPageProviderBinding.destroy` |
-| `Project.delete` | removed: call destroy() |
+| `Project.delete` | removed: call destroy(), or declare the project with using; a 1.x finally { project.delete() } now throws TypeError (project.delete is not a function) from the finally block, which replaces the try block's own result or error, so rename every such call to project.destroy() |
 | `ProjectTimeline.delete` | removed: call destroy() |
 | `ProjectTimeline.dispose` | removed: call destroy() |
 | `VocalEditDraft.delete` | removed: call destroy() |
@@ -13628,35 +13632,35 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.gmFamilyName` | removed: call the module function gmFamilyName |
 | `Project.gmInstrumentName` | removed: call the module function gmInstrumentName |
 | `Project.gmProgramForName` | removed: call the module function gmProgramForName |
-| `Project.midi2AssignableController` | removed: call the module function midi2AssignableController |
-| `Project.midi2AssignablePerNoteController` | removed: call the module function midi2AssignablePerNoteController |
-| `Project.midi2Cc` | removed: call the module function midi2Cc |
-| `Project.midi2ChannelPressure` | removed: call the module function midi2ChannelPressure |
-| `Project.midi2NoteOff` | removed: call the module function midi2NoteOff |
-| `Project.midi2NoteOn` | removed: call the module function midi2NoteOn |
-| `Project.midi2PerNoteManagement` | removed: call the module function midi2PerNoteManagement |
-| `Project.midi2PerNotePitchBend` | removed: call the module function midi2PerNotePitchBend |
-| `Project.midi2PitchBend` | removed: call the module function midi2PitchBend |
-| `Project.midi2PolyPressure` | removed: call the module function midi2PolyPressure |
-| `Project.midi2Program` | removed: call the module function midi2Program |
-| `Project.midi2RegisteredController` | removed: call the module function midi2RegisteredController |
-| `Project.midi2RegisteredPerNoteController` | removed: call the module function midi2RegisteredPerNoteController |
-| `Project.midi2RelativeAssignableController` | removed: call the module function midi2RelativeAssignableController |
-| `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
-| `Project.midiBankProgram` | removed: call the module function midiBankProgram, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
+| `Project.midi2AssignableController` | removed: call the module function midi2AssignableController with one request object, midi2AssignableController({ ppq, group, channel, bank, index, value32 }), in place of Project.midi2AssignableController(ppq, group, channel, bank, index, value32) |
+| `Project.midi2AssignablePerNoteController` | removed: call the module function midi2AssignablePerNoteController with one request object, midi2AssignablePerNoteController({ ppq, group, channel, note, index, value32 }), in place of Project.midi2AssignablePerNoteController(ppq, group, channel, note, index, value32) |
+| `Project.midi2Cc` | removed: call the module function midi2Cc with one request object, midi2Cc({ ppq, group, channel, controller, value32 }), in place of Project.midi2Cc(ppq, group, channel, controller, value32) |
+| `Project.midi2ChannelPressure` | removed: call the module function midi2ChannelPressure with one request object, midi2ChannelPressure({ ppq, group, channel, pressure32 }), in place of Project.midi2ChannelPressure(ppq, group, channel, pressure32) |
+| `Project.midi2NoteOff` | removed: call the module function midi2NoteOff with one request object, midi2NoteOff({ ppq, group, channel, note, velocity16? }), in place of Project.midi2NoteOff(ppq, group, channel, note, velocity16?) |
+| `Project.midi2NoteOn` | removed: call the module function midi2NoteOn with one request object, midi2NoteOn({ ppq, group, channel, note, velocity16, attributeType?, attributeData? }), in place of Project.midi2NoteOn(ppq, group, channel, note, velocity16, attributeType?, attributeData?) |
+| `Project.midi2PerNoteManagement` | removed: call the module function midi2PerNoteManagement with one request object, midi2PerNoteManagement({ ppq, group, channel, note, detach?, reset? }), in place of Project.midi2PerNoteManagement(ppq, group, channel, note, detach?, reset?) |
+| `Project.midi2PerNotePitchBend` | removed: call the module function midi2PerNotePitchBend with one request object, midi2PerNotePitchBend({ ppq, group, channel, note, bend32 }), in place of Project.midi2PerNotePitchBend(ppq, group, channel, note, bend32) |
+| `Project.midi2PitchBend` | removed: call the module function midi2PitchBend with one request object, midi2PitchBend({ ppq, group, channel, bend32 }), in place of Project.midi2PitchBend(ppq, group, channel, bend32) |
+| `Project.midi2PolyPressure` | removed: call the module function midi2PolyPressure with one request object, midi2PolyPressure({ ppq, group, channel, note, pressure32 }), in place of Project.midi2PolyPressure(ppq, group, channel, note, pressure32) |
+| `Project.midi2Program` | removed: call the module function midi2Program with one request object, midi2Program({ ppq, group, channel, program, bank? }), in place of Project.midi2Program(ppq, group, channel, program, bankValid?, bankMsb?, bankLsb?); bank?: { msb, lsb } replaces bankValid, bankMsb and bankLsb |
+| `Project.midi2RegisteredController` | removed: call the module function midi2RegisteredController with one request object, midi2RegisteredController({ ppq, group, channel, bank, index, value32 }), in place of Project.midi2RegisteredController(ppq, group, channel, bank, index, value32) |
+| `Project.midi2RegisteredPerNoteController` | removed: call the module function midi2RegisteredPerNoteController with one request object, midi2RegisteredPerNoteController({ ppq, group, channel, note, index, value32 }), in place of Project.midi2RegisteredPerNoteController(ppq, group, channel, note, index, value32) |
+| `Project.midi2RelativeAssignableController` | removed: call the module function midi2RelativeAssignableController with one request object, midi2RelativeAssignableController({ ppq, group, channel, bank, index, delta32 }), in place of Project.midi2RelativeAssignableController(ppq, group, channel, bank, index, delta32) |
+| `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController with one request object, midi2RelativeRegisteredController({ ppq, group, channel, bank, index, delta32 }), in place of Project.midi2RelativeRegisteredController(ppq, group, channel, bank, index, delta32) |
+| `Project.midiBankProgram` | removed: call the module function midiBankProgram with one request object, midiBankProgram({ ppq, group, channel, program, bank }), in place of Project.midiBankProgram(ppq, group, channel, bankMsb, bankLsb, program); bank: { msb, lsb } replaces bankMsb and bankLsb. It refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
 | `Project.midiCcLearn` | `midiCcLearn`: Call midiCcLearn. Learning skips a well-formed SysEx event. A payload on a channel event is refused under its indexed sysex field. A wrongly typed payload is refused before numeric learn domains. |
 | `Project.midiCcName` | removed: call the module function midiCcName |
 | `Project.midiCcToBreakpoint` | `midiCcToBreakpoint`: use the standalone midiCcToBreakpoint function; a valid SysEx event is refused as NotSupported (1.x rejected a Data64 word as InvalidParameter). The payload is read as bytes, including embedded zeros. A wrongly typed payload is refused before CC domains. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them). |
-| `Project.midiCc` | removed: call the module function midiCc |
-| `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
-| `Project.midiNoteOff` | removed: call the module function midiNoteOff |
-| `Project.midiNoteOn` | removed: call the module function midiNoteOn |
-| `Project.midiParamToCc` | removed: call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it, and in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
-| `Project.midiPitchBend` | removed: call the module function midiPitchBend |
-| `Project.midiPolyPressure` | removed: call the module function midiPolyPressure |
-| `Project.midiProgram` | removed: call the module function midiProgram |
-| `Project.midiRouteEvents` | removed: call the module function midiRouteEvents |
+| `Project.midiCc` | removed: call the module function midiCc with one request object, midiCc({ ppq, group, channel, controller, value }), in place of Project.midiCc(ppq, group, channel, controller, value) |
+| `Project.midiChannelPressure` | removed: call the module function midiChannelPressure with one request object, midiChannelPressure({ ppq, group, channel, pressure }), in place of Project.midiChannelPressure(ppq, group, channel, pressure) |
+| `Project.midiNoteOff` | removed: call the module function midiNoteOff with one request object, midiNoteOff({ ppq, group, channel, note, velocity? }), in place of Project.midiNoteOff(ppq, group, channel, note, velocity?) |
+| `Project.midiNoteOn` | removed: call the module function midiNoteOn with one request object, midiNoteOn({ ppq, group, channel, note, velocity }), in place of Project.midiNoteOn(ppq, group, channel, note, velocity) |
+| `Project.midiParamToCc` | removed: call the module function midiParamToCc with one request object, midiParamToCc({ bindings, paramId, unitValue, group, ppq? }), in place of Project.midiParamToCc(bindings, paramId, unitValue, group, ppq?). It refuses a NaN, infinite or out-of-range ppq with RangeError naming it. A nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them) |
+| `Project.midiPitchBend` | removed: call the module function midiPitchBend with one request object, midiPitchBend({ ppq, group, channel, bend }), in place of Project.midiPitchBend(ppq, group, channel, bend) |
+| `Project.midiPolyPressure` | removed: call the module function midiPolyPressure with one request object, midiPolyPressure({ ppq, group, channel, note, pressure }), in place of Project.midiPolyPressure(ppq, group, channel, note, pressure) |
+| `Project.midiProgram` | removed: call the module function midiProgram with one request object, midiProgram({ ppq, group, channel, program }), in place of Project.midiProgram(ppq, group, channel, program) |
+| `Project.midiRouteEvents` | removed: call the module function midiRouteEvents with one request object, midiRouteEvents({ filterGroup?, filterChannel?, remapChannel?, thru?, events }), in place of Project.midiRouteEvents(events, config?); the config fields sit beside events in the request |
 | `Project.perNoteControllerName` | removed: call the module function perNoteControllerName |
 
 #### C extends an operation through an Options struct
@@ -13677,7 +13681,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectAutomationLaneDesc.targetParamId` | an absent targetParamId is a TypeError 'targetParamId must be an integer', as on Node (1.x read it as 0 and refused it with RangeError 'targetParamId must be an integer in [1, 4294967295]') |
 | `ProjectTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
 | `VocalEditDraft.apply` | An operation without kind raises TypeError naming operation.kind; 1.x refused the resulting empty token with RangeError. |
-| `VocalEditWorkerClient` | constructor without a Worker throws SonareError NotSupported instead of Error; a draft or session misuse inside the Worker (no open draft, a second draft, undo/redo/export with a draft open, an unknown or reused session id) rejects with SonareError InvalidState instead of Unknown |
+| `VocalEditWorkerClient` | constructor without a Worker throws SonareError NotSupported instead of Error; a draft or session misuse inside the Worker (no open draft, a second draft, undo/redo/export with a draft open, an unknown or reused session id) rejects with SonareError InvalidState instead of Unknown; a call-options argument with an undeclared key, a copy that is not a boolean or a signal that is not an AbortSignal rejects the call with TypeError naming it before any work is dispatched, where 1.x ignored it |
 | `VocalEditWorkerStaleResultError` | removed: Catch a SonareError and test isSonareError(e) && e.code === ErrorCode.StaleResult. |
 | `VocalTransition.curve` | A missing or non-string curve raises TypeError; a string other than smoothstep raises RangeError. 1.x reported RangeError for an omitted curve. |
 
@@ -13731,8 +13735,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.bounceWithInstruments` | removed: Call bounce({ ...options, instruments: [...] }). |
 | `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [{ instrument, destinationId, soundFontUri }] }). Omit soundFontUri for the default font. |
 | `Project.bounceWithSf2Instruments` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
-| `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
-| `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
+| `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sawLead' } }] }); a preset name is the lowerCamel id synthPresetNames lists (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit), and a 1.x kebab-case name is refused naming synthInstruments[i].instrument.preset. |
+| `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sawLead' } }] }); a preset name is the lowerCamel id synthPresetNames lists (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit), and a 1.x kebab-case name is refused naming synthInstruments[i].instrument.preset. |
 | `Project.compileTimeline` | removed: Call compile({ withTimeline: true }); the result then also carries timeline. |
 | `Project.setMarkerEx` | removed: Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id. |
 | `Project.setMidiFx` | removed: Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object. |
@@ -13764,7 +13768,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `ExternalSeparatedStem.planarSamples` | `ExternalSeparatedStem.channels` |
 | `Project.addClip` | addClip takes planar channels plus sampleRate instead of audio, audioChannels and audioSampleRate |
-| `Project.bounce` | bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. |
+| `Project.bounce` | bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. A key inside a binding's instrument that its type does not declare raises TypeError naming it (1.x ignored it), and a refused instrument field is named where the caller wrote it, as synthInstruments[i].instrument.<field> (likewise builtinInstruments and sf2Instruments). |
 | `Project.importExternalStems` | each stem takes channels instead of planarSamples and layout is 'mono' \| 'stereo' |
 | `Project.setSourceAudio(audio)` | removed: pass it as channels in ProjectSourceAudioInput |
 | `Project.setSourceAudio(channels)` | removed: drop the count; the channel count is channels.length in ProjectSourceAudioInput |
@@ -13875,8 +13879,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.clearSoundFont` | Accepts ({ uri }?). Omit the URI to clear only the default SoundFont. |
 | `Project.exportClipFile` | writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
 | `Project.exportSmf` | writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
-| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
-| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.fromJsonWithDiagnostics` | Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code InvalidFormat (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.fromJson` | Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code InvalidFormat (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.loadSoundFont` | Accepts (data, { uri }?). Omit the URI to replace the default SoundFont. A supplied empty URI is refused. |
 | `Project.setMaxUndoDepth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention. |
 | `Project.setMixerSceneJson` | removed: Pass a MixSceneDocumentInput to setMixerScene(scene), or omit scene to clear it. Unknown scene keys and wrong field types are TypeError. Out-of-domain values are RangeError. |
@@ -14396,8 +14400,8 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | 1.x | 2.0.0 |
 |---|---|
 | `playback --room` | values are kebab-case (living-room, home-theater, screening-room), read in any letter case; the snake_case spellings are refused as a usage error (exit 2) |
-| `project.bounce --synth` | takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings and a name no NativeSynth preset carries are refused as a usage error (exit 2) before the project is read |
-| `project.synth-presets` | lists the library synth preset ids (sawLead, warmPad, ...) rather than their kebab-case spellings |
+| `project.bounce --synth` | takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) and a name no NativeSynth preset carries are refused as a usage error (exit 2) before the project is read |
+| `project.synth-presets` | lists the library synth preset ids (sawLead, warmPad, ...) rather than their kebab-case spellings (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) |
 
 #### Both CLIs share command names, flags, defaults and failures
 
@@ -14446,15 +14450,15 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `midi-render --in` | removed: pass the project file as the positional argument: midi-render project.json |
-| `project.align-takes --in` | removed: pass the project file as the positional argument: project align-takes project.json |
-| `project.bounce --in` | removed: pass the project file as the positional argument: project bounce project.json |
-| `project.compile --in` | removed: pass the project file as the positional argument: project compile project.json |
-| `project.export-midi2 --in` | removed: pass the project file as the positional argument: project export-midi2 project.json |
-| `project.export-smf --in` | removed: pass the project file as the positional argument: project export-smf project.json |
+| `midi-render --in` | removed: pass the project file as the positional argument: midi-render project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
+| `project.align-takes --in` | removed: pass the project file as the positional argument: project align-takes project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
+| `project.bounce --in` | removed: pass the project file as the positional argument: project bounce project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
+| `project.compile --in` | removed: pass the project file as the positional argument: project compile project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
+| `project.export-midi2 --in` | removed: pass the project file as the positional argument: project export-midi2 project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
+| `project.export-smf --in` | removed: pass the project file as the positional argument: project export-smf project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
 | `project.import-midi2 --midi2` | removed: pass the input file as the positional argument: project import-midi2 clip.midi2 |
 | `project.import-smf --smf` | removed: pass the input file as the positional argument: project import-smf song.mid |
-| `project.validate --in` | removed: pass the project file as the positional argument: project validate project.json |
+| `project.validate --in` | removed: pass the project file as the positional argument: project validate project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0 |
 
 #### Both CLIs share command names, flags, defaults and failures
 
@@ -14579,7 +14583,7 @@ sonare resample song.wav --target-sample-rate 16000 -o song16k.wav
 
 ### Handles are released with destroy() and close()
 
-Every JavaScript handle class releases its native resources with `destroy()` and `[Symbol.dispose]()`; `dispose`, `close` and `delete` are no longer public. Python handles use `close()` and the context manager; the `destroy` and `delete` aliases are gone.
+Every JavaScript handle class releases its native resources with `destroy()` and `[Symbol.dispose]()`; `dispose`, `close` and `delete` are no longer public. Python handles use `close()` and the context manager; the `destroy` and `delete` aliases are gone. A removed teardown call left in a `finally` block (`delete()`, `dispose()` or `close()` in JavaScript, `delete()` or `destroy()` in Python) now throws from that block (`TypeError` / `AttributeError`), which replaces the try block's own result or error, so rename each one.
 
 WASM, 1.x:
 

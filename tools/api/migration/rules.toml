@@ -64,7 +64,7 @@ sonare resample song.wav --target-sample-rate 16000 -o song16k.wav
 [[rule]]
 slug = "teardown"
 title = "Handles are released with destroy() and close()"
-summary = "Every JavaScript handle class releases its native resources with `destroy()` and `[Symbol.dispose]()`; `dispose`, `close` and `delete` are no longer public. Python handles use `close()` and the context manager; the `destroy` and `delete` aliases are gone."
+summary = "Every JavaScript handle class releases its native resources with `destroy()` and `[Symbol.dispose]()`; `dispose`, `close` and `delete` are no longer public. Python handles use `close()` and the context manager; the `destroy` and `delete` aliases are gone. A removed teardown call left in a `finally` block (`delete()`, `dispose()` or `close()` in JavaScript, `delete()` or `destroy()` in Python) now throws from that block (`TypeError` / `AttributeError`), which replaces the try block's own result or error, so rename each one."
 [[rule.example]]
 surface = "wasm"
 before = '''

@@ -892,7 +892,7 @@ test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
 [[entry]]
 kind = "flag"
 old = "project.bounce --synth"
-changed = "takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings and a name no NativeSynth preset carries are refused as a usage error (exit 2) before the project is read"
+changed = "takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit) and a name no NativeSynth preset carries are refused as a usage error (exit 2) before the project is read"
 domain = "engine"
 rule = "token-case"
 test = "tests/cli/cli_project_test.cpp::CLI project command group"
@@ -900,7 +900,7 @@ test = "tests/cli/cli_project_test.cpp::CLI project command group"
 [[entry]]
 kind = "command"
 old = "project.synth-presets"
-changed = "lists the library synth preset ids (sawLead, warmPad, ...) rather than their kebab-case spellings"
+changed = "lists the library synth preset ids (sawLead, warmPad, ...) rather than their kebab-case spellings (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
 domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_cli_synth_preset_spelling.py::test_the_preset_listing_is_the_library_ids"
@@ -924,42 +924,42 @@ test = "tests/cli/cli_project_test.cpp::compile JSON keeps one human message per
 [[entry]]
 kind = "flag"
 old = "project.validate --in"
-removed = "pass the project file as the positional argument: project validate project.json"
+removed = "pass the project file as the positional argument: project validate project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 
 [[entry]]
 kind = "flag"
 old = "project.compile --in"
-removed = "pass the project file as the positional argument: project compile project.json"
+removed = "pass the project file as the positional argument: project compile project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 
 [[entry]]
 kind = "flag"
 old = "project.bounce --in"
-removed = "pass the project file as the positional argument: project bounce project.json"
+removed = "pass the project file as the positional argument: project bounce project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 
 [[entry]]
 kind = "flag"
 old = "project.align-takes --in"
-removed = "pass the project file as the positional argument: project align-takes project.json"
+removed = "pass the project file as the positional argument: project align-takes project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 
 [[entry]]
 kind = "flag"
 old = "project.export-smf --in"
-removed = "pass the project file as the positional argument: project export-smf project.json"
+removed = "pass the project file as the positional argument: project export-smf project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 
 [[entry]]
 kind = "flag"
 old = "project.export-midi2 --in"
-removed = "pass the project file as the positional argument: project export-midi2 project.json"
+removed = "pass the project file as the positional argument: project export-midi2 project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 
@@ -980,7 +980,7 @@ rule = "cli-positional-input"
 [[entry]]
 kind = "flag"
 old = "midi-render --in"
-removed = "pass the project file as the positional argument: midi-render project.json"
+removed = "pass the project file as the positional argument: midi-render project.json; a 1.x project document (version 5 or earlier) is refused as an invalid format (exit 5, unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0"
 domain = "project"
 rule = "cli-positional-input"
 

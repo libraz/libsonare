@@ -1045,7 +1045,7 @@ test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API names its ma
 [[entry]]
 kind = "function"
 old = "sonare_synth_preset_names"
-changed = "lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...)"
+changed = "lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
 domain = "engine"
 rule = "token-case"
 test = "tests/bindings/binding_synth_patch_test.cpp::synth preset catalog lists every"
@@ -1053,7 +1053,7 @@ test = "tests/bindings/binding_synth_patch_test.cpp::synth preset catalog lists 
 [[entry]]
 kind = "function"
 old = "sonare_synth_preset_patch"
-changed = "accepts only the lowerCamel preset names that sonare_synth_preset_names lists"
+changed = "accepts only the lowerCamel preset names that sonare_synth_preset_names lists; a 1.x kebab-case name is refused (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
 domain = "engine"
 rule = "token-case"
 test = "tests/bindings/binding_synth_patch_test.cpp::synth preset catalog lists every"
@@ -1077,7 +1077,7 @@ test = "tests/api/sonare_c_assist_test.cpp::sonare_assist_module_ids names both 
 [[entry]]
 kind = "function"
 old = "sonare_project_deserialize"
-changed = "reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. Allocation failure while reading the document or formatting diagnostics returns SONARE_ERROR_OUT_OF_MEMORY with both outputs cleared."
+changed = "reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded, and no supported path carries a 1.x project into 2.0; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one. An unread insert parameter in an embedded mixer scene is refused as SONARE_ERROR_INVALID_FORMAT under scene.strips or scene.buses, with the insert's accepted keys. Allocation failure while reading the document or formatting diagnostics returns SONARE_ERROR_OUT_OF_MEMORY with both outputs cleared."
 domain = "project"
 rule = "token-case"
 test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
@@ -4349,7 +4349,7 @@ test = "tests/api/c_bare_refusal_compat_test.cpp::sonare_split_silence_common pu
 [[entry]]
 kind = "function"
 old = "sonare_detect_key"
-changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former settings"
+changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with options.n_fft = 4096 and options.chroma_high_pass_hz = 0, and no option selects the former front end"
 domain = "analysis"
 rule = "options-struct"
 test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
@@ -4357,7 +4357,7 @@ test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-po
 [[entry]]
 kind = "function"
 old = "sonare_detect_key_candidates"
-changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct"
+changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with options.n_fft = 4096 and options.chroma_high_pass_hz = 0, and no option selects the former front end"
 domain = "analysis"
 rule = "options-struct"
 test = "tests/api/sonare_c_core_test.cpp::sonare_detect_key"

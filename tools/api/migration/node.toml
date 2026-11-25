@@ -222,7 +222,7 @@ rule = "teardown"
 [[entry]]
 kind = "method"
 old = "Project.delete"
-removed = "call destroy()"
+removed = "call destroy(), or declare the project with using; a 1.x finally { project.delete() } now throws TypeError (project.delete is not a function) from the finally block, which replaces the try block's own result or error, so rename every such call to project.destroy()"
 domain = "project"
 rule = "teardown"
 
@@ -5107,7 +5107,7 @@ test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar p
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end"
 domain = "analysis"
 rule = "one-positional-form"
 test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
@@ -5115,7 +5115,7 @@ test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-po
 [[entry]]
 kind = "function"
 old = "detectKeyCandidates"
-changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings"
+changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former window and filter; the chroma is now the constant-Q chord chroma rather than the STFT chroma, so a key decision can differ from 1.x even with nFft: 4096 and chromaHighPassHz: 0, and no option selects the former front end"
 domain = "analysis"
 rule = "one-positional-form"
 test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
@@ -11289,7 +11289,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSynthInstrument"
-removed = "Call bounce({ ...options, synthInstruments: [...] })."
+removed = "Call bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sawLead' } }] }); a preset name is the lowerCamel id synthPresetNames lists (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit), and a 1.x kebab-case name is refused naming synthInstruments[i].instrument.preset."
 domain = "project"
 rule = "one-entry-per-operation"
 
@@ -11437,7 +11437,7 @@ test = "bindings/node/tests/surface/project.test.ts::installs a tempo from optio
 [[entry]]
 kind = "method"
 old = "Project.bounce"
-changed = "returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri."
+changed = "returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default. A per-call sf2Instruments binding may select a loaded SoundFont by soundFontUri. A key inside a binding's instrument that its type does not declare raises TypeError naming it (1.x ignored it), and a refused instrument field is named where the caller wrote it, as synthInstruments[i].instrument.<field> (likewise builtinInstruments and sf2Instruments)."
 domain = "project"
 rule = "planar-channels"
 test = "bindings/node/tests/surface/project.test.ts::bounces to planar channels"
@@ -12092,168 +12092,168 @@ test = "bindings/node/tests/project-edit-extra.test.ts::refuses a curve ordinal 
 [[entry]]
 kind = "method"
 old = "Project.midiNoteOn"
-removed = "call the module function midiNoteOn"
+removed = "call the module function midiNoteOn with one request object, midiNoteOn({ ppq, group, channel, note, velocity }), in place of Project.midiNoteOn(ppq, group, channel, note, velocity)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiNoteOff"
-removed = "call the module function midiNoteOff"
+removed = "call the module function midiNoteOff with one request object, midiNoteOff({ ppq, group, channel, note, velocity? }), in place of Project.midiNoteOff(ppq, group, channel, note, velocity?)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCc"
-removed = "call the module function midiCc"
+removed = "call the module function midiCc with one request object, midiCc({ ppq, group, channel, controller, value }), in place of Project.midiCc(ppq, group, channel, controller, value)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiPolyPressure"
-removed = "call the module function midiPolyPressure"
+removed = "call the module function midiPolyPressure with one request object, midiPolyPressure({ ppq, group, channel, note, pressure }), in place of Project.midiPolyPressure(ppq, group, channel, note, pressure)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiProgram"
-removed = "call the module function midiProgram"
+removed = "call the module function midiProgram with one request object, midiProgram({ ppq, group, channel, program }), in place of Project.midiProgram(ppq, group, channel, program)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2NoteOn"
-removed = "call the module function midi2NoteOn"
+removed = "call the module function midi2NoteOn with one request object, midi2NoteOn({ ppq, group, channel, note, velocity16, attributeType?, attributeData? }), in place of Project.midi2NoteOn(ppq, group, channel, note, velocity16, attributeType?, attributeData?)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2NoteOff"
-removed = "call the module function midi2NoteOff"
+removed = "call the module function midi2NoteOff with one request object, midi2NoteOff({ ppq, group, channel, note, velocity16? }), in place of Project.midi2NoteOff(ppq, group, channel, note, velocity16?)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2Cc"
-removed = "call the module function midi2Cc"
+removed = "call the module function midi2Cc with one request object, midi2Cc({ ppq, group, channel, controller, value32 }), in place of Project.midi2Cc(ppq, group, channel, controller, value32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PolyPressure"
-removed = "call the module function midi2PolyPressure"
+removed = "call the module function midi2PolyPressure with one request object, midi2PolyPressure({ ppq, group, channel, note, pressure32 }), in place of Project.midi2PolyPressure(ppq, group, channel, note, pressure32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2ChannelPressure"
-removed = "call the module function midi2ChannelPressure"
+removed = "call the module function midi2ChannelPressure with one request object, midi2ChannelPressure({ ppq, group, channel, pressure32 }), in place of Project.midi2ChannelPressure(ppq, group, channel, pressure32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PitchBend"
-removed = "call the module function midi2PitchBend"
+removed = "call the module function midi2PitchBend with one request object, midi2PitchBend({ ppq, group, channel, bend32 }), in place of Project.midi2PitchBend(ppq, group, channel, bend32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2Program"
-removed = "call the module function midi2Program"
+removed = "call the module function midi2Program with one request object, midi2Program({ ppq, group, channel, program, bank? }), in place of Project.midi2Program(ppq, group, channel, program, bankValid?, bankMsb?, bankLsb?); bank?: { msb, lsb } replaces bankValid, bankMsb and bankLsb"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RegisteredController"
-removed = "call the module function midi2RegisteredController"
+removed = "call the module function midi2RegisteredController with one request object, midi2RegisteredController({ ppq, group, channel, bank, index, value32 }), in place of Project.midi2RegisteredController(ppq, group, channel, bank, index, value32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2AssignableController"
-removed = "call the module function midi2AssignableController"
+removed = "call the module function midi2AssignableController with one request object, midi2AssignableController({ ppq, group, channel, bank, index, value32 }), in place of Project.midi2AssignableController(ppq, group, channel, bank, index, value32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RelativeRegisteredController"
-removed = "call the module function midi2RelativeRegisteredController"
+removed = "call the module function midi2RelativeRegisteredController with one request object, midi2RelativeRegisteredController({ ppq, group, channel, bank, index, delta32 }), in place of Project.midi2RelativeRegisteredController(ppq, group, channel, bank, index, delta32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RelativeAssignableController"
-removed = "call the module function midi2RelativeAssignableController"
+removed = "call the module function midi2RelativeAssignableController with one request object, midi2RelativeAssignableController({ ppq, group, channel, bank, index, delta32 }), in place of Project.midi2RelativeAssignableController(ppq, group, channel, bank, index, delta32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RegisteredPerNoteController"
-removed = "call the module function midi2RegisteredPerNoteController"
+removed = "call the module function midi2RegisteredPerNoteController with one request object, midi2RegisteredPerNoteController({ ppq, group, channel, note, index, value32 }), in place of Project.midi2RegisteredPerNoteController(ppq, group, channel, note, index, value32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2AssignablePerNoteController"
-removed = "call the module function midi2AssignablePerNoteController"
+removed = "call the module function midi2AssignablePerNoteController with one request object, midi2AssignablePerNoteController({ ppq, group, channel, note, index, value32 }), in place of Project.midi2AssignablePerNoteController(ppq, group, channel, note, index, value32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PerNotePitchBend"
-removed = "call the module function midi2PerNotePitchBend"
+removed = "call the module function midi2PerNotePitchBend with one request object, midi2PerNotePitchBend({ ppq, group, channel, note, bend32 }), in place of Project.midi2PerNotePitchBend(ppq, group, channel, note, bend32)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PerNoteManagement"
-removed = "call the module function midi2PerNoteManagement"
+removed = "call the module function midi2PerNoteManagement with one request object, midi2PerNoteManagement({ ppq, group, channel, note, detach?, reset? }), in place of Project.midi2PerNoteManagement(ppq, group, channel, note, detach?, reset?)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiBankProgram"
-removed = "call the module function midiBankProgram"
+removed = "call the module function midiBankProgram with one request object, midiBankProgram({ ppq, group, channel, program, bank }), in place of Project.midiBankProgram(ppq, group, channel, bankMsb, bankLsb, program); bank: { msb, lsb } replaces bankMsb and bankLsb"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiParamToCc"
-removed = "call the module function midiParamToCc, in which a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
+removed = "call the module function midiParamToCc with one request object, midiParamToCc({ bindings, paramId, unitValue, group, ppq? }), in place of Project.midiParamToCc(bindings, paramId, unitValue, group, ppq?). In it, a nonzero ccLsbNumber is refused unless kind is control-change 14, and a nonzero selectorMsb or selectorLsb unless kind is RPN or NRPN, with RangeError naming the field and the kind (1.x accepted and ignored them)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiChannelPressure"
-removed = "call the module function midiChannelPressure"
+removed = "call the module function midiChannelPressure with one request object, midiChannelPressure({ ppq, group, channel, pressure }), in place of Project.midiChannelPressure(ppq, group, channel, pressure)"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiPitchBend"
-removed = "call the module function midiPitchBend"
+removed = "call the module function midiPitchBend with one request object, midiPitchBend({ ppq, group, channel, bend }), in place of Project.midiPitchBend(ppq, group, channel, bend)"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -12344,7 +12344,7 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midiRouteEvents"
-removed = "call the module function midiRouteEvents"
+removed = "call the module function midiRouteEvents with one request object, midiRouteEvents({ filterGroup?, filterChannel?, remapChannel?, thru?, events }), in place of Project.midiRouteEvents(events, config?); the config fields sit beside events in the request"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -19464,9 +19464,25 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSynthInstruments"
-removed = "Call bounce({ ...options, synthInstruments: [...] })."
+removed = "Call bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sawLead' } }] }); a preset name is the lowerCamel id synthPresetNames lists (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit), and a 1.x kebab-case name is refused naming synthInstruments[i].instrument.preset."
 domain = "project"
 rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "synthPresetNames"
+changed = "lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) rather than kebab-case (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/node/tests/synth-patch.test.ts::lists the catalog names"
+
+[[entry]]
+kind = "function"
+old = "synthPresetPatch"
+changed = "accepts only the lowerCamel preset names synthPresetNames lists; a 1.x kebab-case name is refused with RangeError (1.x saw-lead is now sawLead, warm-pad warmPad, e-piano ePiano, drum-kit drumKit)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/node/tests/synth-patch.test.ts::fetches preset patches with canonical enum names"
 
 [[entry]]
 kind = "method"
@@ -20274,7 +20290,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "method"
 old = "Project.fromJson"
-changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat."
+changed = "Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code InvalidFormat (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat."
 domain = "project"
 rule = "individual"
 test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
@@ -20282,7 +20298,7 @@ test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project dia
 [[entry]]
 kind = "method"
 old = "Project.fromJsonWithDiagnostics"
-changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat."
+changed = "Reads only the current document version (7): a 1.x document (version 5 or earlier) is refused as a SonareError with code InvalidFormat (unsupported_schema_version) and cannot be loaded, and no supported path carries a 1.x project into 2.0. An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat."
 domain = "project"
 rule = "individual"
 test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
