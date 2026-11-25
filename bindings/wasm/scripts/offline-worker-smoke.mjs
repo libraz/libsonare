@@ -200,6 +200,30 @@ function connectCdp(endpoint) {
             socket.send(JSON.stringify(message));
           });
         },
+        async waitForPageContext(sessionId, origin) {
+          let listen;
+          let timeout;
+          const ready = new Promise((resolveContext, rejectContext) => {
+            listen = (event) => {
+              const message = JSON.parse(String(event.data));
+              if (message.sessionId !== sessionId ||
+                  message.method !== 'Runtime.executionContextCreated') return;
+              const { context } = message.params;
+              if (context.auxData?.isDefault && context.origin === origin) resolveContext();
+            };
+            socket.addEventListener('message', listen);
+            timeout = setTimeout(
+              () => rejectContext(new Error(`timed out waiting for the page execution context at ${origin}`)),
+              10000,
+            );
+          });
+          try {
+            await Promise.all([ready, this.send('Runtime.enable', {}, sessionId)]);
+          } finally {
+            clearTimeout(timeout);
+            socket.removeEventListener('message', listen);
+          }
+        },
         close() {
           socket.close();
         },
@@ -272,6 +296,7 @@ async function runBrowserSmoke(chromePath, url, userDataDir) {
     cdp = await connectCdp(await waitForDevToolsEndpoint(chrome, () => stderr));
     const { targetId } = await cdp.send('Target.createTarget', { url });
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
+    await cdp.waitForPageContext(sessionId, new URL(url).origin);
     const deadline = Date.now() + 90000;
     let state = null;
     while (Date.now() < deadline) {
