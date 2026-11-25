@@ -11,6 +11,7 @@ import {
   StreamingMasteringChain,
   StreamingRetune,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers.js';
 
 describe('Sonare WASM Module', () => {
   beforeAll(async () => {
@@ -170,10 +171,8 @@ describe('Sonare WASM Module', () => {
       try {
         const input = new Float32Array(64);
         input[3] = Number.NaN;
-        expect(() => chain.processMono(input)).toThrow(
-          new RangeError(
-            'StreamingMasteringChain.processMono: numChannels must match the prepared channel count',
-          ),
+        expect(expectRefusalOf(() => chain.processMono(input)).message).toBe(
+          'StreamingMasteringChain.processMono: samples must match the prepared channel count',
         );
       } finally {
         chain.destroy();
@@ -188,13 +187,28 @@ describe('Sonare WASM Module', () => {
         const left = new Float32Array(64);
         left[3] = Number.NaN;
         const right = new Float32Array(64);
-        expect(() => stereo.processStereo(left, right)).toThrow(
-          new RangeError(
-            'StreamingMasteringChain.processStereo: numChannels must match the prepared channel count',
-          ),
+        expect(expectRefusalOf(() => stereo.processStereo(left, right)).message).toBe(
+          'StreamingMasteringChain.processStereo: left and right must match the prepared channel count',
         );
       } finally {
         stereo.destroy();
+      }
+    });
+
+    it('names a float-width refusal after resolving a valid streaming parameter', () => {
+      const chain = new StreamingMasteringChain({
+        sampleRate: 48000,
+        numChannels: 1,
+        eq: { tilt: { enabled: true, tiltDb: 1 } },
+      });
+      try {
+        const key = 'eq.tilt.tiltDb';
+        expect(() => chain.setParameter(key, 2)).not.toThrow();
+        expect(expectRefusalOf(() => chain.setParameter(key, Number.MAX_VALUE)).message).toBe(
+          'StreamingMasteringChain.setParameter: value must be finite and in [-3.4028235e38, 3.4028235e38]',
+        );
+      } finally {
+        chain.destroy();
       }
     });
 

@@ -18,9 +18,6 @@ import { expectRefusal } from './_helpers.js';
 
 const SIZE_T_TEXT =
   'must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER or the native size_t maximum';
-const PREPARED_CHANNEL_MISMATCH =
-  /^StreamingMasteringChain\.process(?:Mono|Stereo): .*num[_C]hannels must match the prepared channel count$/i;
-
 function exactly(text: string): RegExp {
   return new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
 }
@@ -175,9 +172,17 @@ describe('runtime refusal parity (Node)', () => {
       expectRefusal(
         () => mono.processStereo(nonFinite, new Float32Array(64)),
         RangeError,
-        PREPARED_CHANNEL_MISMATCH,
+        exactly(
+          'StreamingMasteringChain.processStereo: left and right must match the prepared channel count',
+        ),
       );
-      expectRefusal(() => stereo.processMono(nonFinite), RangeError, PREPARED_CHANNEL_MISMATCH);
+      expectRefusal(
+        () => stereo.processMono(nonFinite),
+        RangeError,
+        exactly(
+          'StreamingMasteringChain.processMono: samples must match the prepared channel count',
+        ),
+      );
       retune.prepare(48000, 128);
       expectRefusal(
         () => retune.processMono(tooLong),

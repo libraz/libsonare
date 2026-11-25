@@ -27,7 +27,10 @@ import os
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Mapping
+from dataclasses import fields, is_dataclass
 from functools import cache, wraps
+from inspect import signature
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,9 +110,65 @@ def misnamed(
     return found
 
 
-def pytest_configure(config) -> None:
-    from libsonare import _runtime
+def _python_paths(value, path, depth=0):
+    """Snapshot paths in ordinary arguments without traversing audio buffers."""
+    if value is None:
+        return
+    yield path
+    if depth == 4:
+        return
+    if type(value) is dict:
+        for name, child in value.items():
+            if isinstance(name, str):
+                yield from _python_paths(child, f"{path}.{name}", depth + 1)
+    elif type(value) in (list, tuple):
+        yield f"{path}.length"
+        for index, child in enumerate(value[:64]):
+            yield from _python_paths(child, f"{path}[{index}]", depth + 1)
+    elif type(value).__module__.startswith("libsonare.") and is_dataclass(value):
+        for field in fields(value):
+            if not field.name.startswith("_"):
+                yield from _python_paths(
+                    getattr(value, field.name), f"{path}.{field.name}", depth + 1
+                )
 
+
+def _python_argument_paths(frame, entry_code):
+    # The decorator still holds the actual arguments, before default filling and conversion.
+    given = {}
+    while frame is not None:
+        if frame.f_code is entry_code:
+            local = frame.f_locals
+            try:
+                given = signature(local["fn"]).bind(*local["args"], **local["kwargs"]).arguments
+            except (TypeError, ValueError):
+                pass
+        frame = frame.f_back
+    return sorted(
+        {
+            path
+            for name, value in given.items()
+            if name not in {"self", "cls"}
+            for path in _python_paths(value, name)
+        }
+    )
+
+
+def _converted_subjects(subjects, root, respelled):
+    """Read the selected alias separately from the rendered message."""
+    if not isinstance(respelled, Mapping):
+        return None
+    prefix = f"{root}." if root is not None else ""
+    return [
+        given.name if (given := respelled.get(subject.removeprefix(prefix))) is not None else None
+        for subject in subjects
+    ]
+
+
+def pytest_configure(config) -> None:
+    from libsonare import _errors, _runtime
+
+    entry_code = _errors._entry("")(lambda: None).__code__
     original = _runtime._render_as_given
     enabled = os.environ.get("SONARE_EMITTED_PAIRS") == "1"
 
@@ -148,15 +207,25 @@ def pytest_configure(config) -> None:
         capture = RenderCapture(lib)
         result = original(capture, *args, **kwargs)
         if capture.subjects:
+            root = args[0] if args else kwargs.get("root")
+            respelled = args[1] if len(args) > 1 else kwargs.get("respelled")
+            aliases = _converted_subjects(subjects, root, respelled)
+            witness = (
+                {"argumentPaths": _python_argument_paths(sys._getframe(1), entry_code)}
+                if aliases and any(name is not None for name in aliases)
+                else {}
+            )
             _emitted.append(
                 {
                     "entry": entry,
+                    **witness,
                     "refusal": {
+                        **({"convertedSubjects": aliases} if witness else {}),
                         "cEntry": entry,
                         "code": _INVALID_PARAMETER if result and result[1] else code,
                         "subjects": capture.subjects,
                         "typedDocument": kwargs.get("typed_document", False),
-                        "flattened": args[0] if args else None,
+                        "flattened": root,
                         "raw": {
                             "code": code,
                             "subjects": subjects,
@@ -293,14 +362,16 @@ def emitted_pairs(surface, rows, facts):
         if key is None:
             continue
         args = row.get("args", [])
-        supplied = {p for arg in args for p in argument_paths(arg)}
+        supplied = set(row.get("argumentPaths", ())) | {
+            path for arg in args for path in argument_paths(arg)
+        }
         rooted_paths = {
             path
             for index, name in records.get(entry, ())
             if index < len(args)
             for path in argument_paths(args[index], name)
         }
-        positional = not any(isinstance(arg, dict) for arg in args)
+        positional = surface != "python" and not any(isinstance(arg, dict) for arg in args)
         names = params.get(key, set())
         prefix, root = documents.get(key, ("", ""))
         subjects = final["subjects"]
@@ -333,10 +404,11 @@ def emitted_pairs(surface, rows, facts):
                 direct
                 and not flattened
                 and original in supplied
-                and (raw["callerSpelled"] or final.get("form") == "unknownKey")
+                and (raw["callerSpelled"] or raw_root in names or final.get("form") == "unknownKey")
             ):
                 matches = {
-                    name for name in names
+                    name
+                    for name in names
                     if bound.get((key, name), mechanical(name, surface)) == raw_root
                 }
                 if len(matches) == 1:
@@ -360,7 +432,17 @@ def emitted_pairs(surface, rows, facts):
             lost_root = original in row.get("strings", []) or any(
                 path.endswith(f".{original}") for path in supplied
             )
-            if raw_root not in names and (not direct or lost_root):
+            # A direct bridge can lower a record into separate member parameters.
+            # Require the converter's exact member alias and its supplied public root.
+            member = (
+                direct
+                and raw["callerSpelled"]
+                and conversion is not None
+                and conversion in supplied
+                and conversion.endswith(f".{original}")
+                and (key, conversion.partition(".")[0]) in visible
+            )
+            if raw_root not in names and (not direct or lost_root and not member):
                 failures.add(f"{entry} ({key}): {original!r} names no C argument")
                 continue
             # Explicit conversions are declared at the call site. Check that the target exists
@@ -368,8 +450,12 @@ def emitted_pairs(surface, rows, facts):
             if conversion is not None and (
                 conversion in supplied
                 or conversion in rooted_paths
-                or positional and (key, conversion) in visible
+                or positional
+                and (key, conversion) in visible
             ):
+                # A string can stand for a preset, while an object supplies its own field.
+                if leaf.startswith(f"{conversion}.") and leaf in supplied:
+                    conversion = leaf
                 stem = position_stem(original)
                 if stem is not None and position_stem(conversion) not in {None, stem}:
                     alternatives = {path for path in supplied if position_stem(path) == stem}

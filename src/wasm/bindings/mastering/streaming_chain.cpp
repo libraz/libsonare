@@ -5,6 +5,7 @@
 
 #include <limits>
 
+#include "c_api/streaming_mastering_chain_process.h"
 #include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
@@ -87,8 +88,8 @@ class StreamingMasteringChainWrapper {
     validateBlockLength(length, "samples");
     std::vector<float> block = float32ArrayToVector(samples, "samples");
     if (!block.empty()) {
-      float* channels[] = {block.data()};
-      chain_.process_block(channels, 1, static_cast<int>(block.size()));
+      sonare_c_detail::streaming_mastering_chain_process_mono(chain_, block.data(),
+                                                              static_cast<int>(block.size()));
     }
     return vectorToFloat32Array(block);
   }
@@ -100,8 +101,8 @@ class StreamingMasteringChainWrapper {
     std::vector<float> left = float32ArrayToVector(left_samples, "left");
     std::vector<float> right = float32ArrayToVector(right_samples, "right");
     if (!left.empty()) {
-      float* channels[] = {left.data(), right.data()};
-      chain_.process_block(channels, 2, static_cast<int>(left.size()));
+      sonare_c_detail::streaming_mastering_chain_process_stereo(chain_, left.data(), right.data(),
+                                                                static_cast<int>(left.size()));
     }
     val out = val::object();
     out.set("left", vectorToFloat32Array(left));

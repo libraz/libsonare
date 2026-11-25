@@ -11,6 +11,7 @@
 #include "c_api/eq_band_json.h"
 #include "c_api/mastering_input_domains.h"
 #include "c_api/sonare_c_internal.h"
+#include "c_api/streaming_mastering_chain_process.h"
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/streaming_retune.h"
@@ -288,8 +289,8 @@ Napi::Value StreamingMasteringChainWrap::ProcessMono(const Napi::CallbackInfo& i
   if (length > 0) {
     std::memcpy(sonare_node::ElementData(out_arr), sonare_node::ElementData(typed),
                 length * sizeof(float));
-    float* channels[] = {sonare_node::ElementData(out_arr)};
-    chain_->process_block(channels, 1, static_cast<int>(length));
+    sonare_c_detail::streaming_mastering_chain_process_mono(
+        *chain_, sonare_node::ElementData(out_arr), static_cast<int>(length));
   }
   return out_arr;
   SONARE_NODE_CATCH(env)
@@ -317,8 +318,9 @@ Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo&
                 length * sizeof(float));
     std::memcpy(sonare_node::ElementData(right_out), sonare_node::ElementData(right),
                 length * sizeof(float));
-    float* channels[] = {sonare_node::ElementData(left_out), sonare_node::ElementData(right_out)};
-    chain_->process_block(channels, 2, static_cast<int>(length));
+    sonare_c_detail::streaming_mastering_chain_process_stereo(
+        *chain_, sonare_node::ElementData(left_out), sonare_node::ElementData(right_out),
+        static_cast<int>(length));
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", left_out);

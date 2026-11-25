@@ -194,6 +194,15 @@ def test_control_streaming_mastering_chain_checks_prepared_channels_before_input
     ):
         chain.process_stereo([math.nan], [0.0])
 
+    with (
+        StreamingMasteringChain(sample_rate=48000, num_channels=2) as chain,
+        raises_coded(
+            ErrorCode.INVALID_PARAMETER,
+            match="samples must match the prepared channel count",
+        ),
+    ):
+        chain.process_mono([math.nan])
+
 
 def test_streaming_mastering_chain_flushes_delayed_output() -> None:
     """flush_mono drains latency once and then reports completion."""

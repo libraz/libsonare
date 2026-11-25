@@ -221,6 +221,110 @@ class EmittedPairsTest(unittest.TestCase):
             plugin.emitted_pairs("node", [row], facts), ({(key, "config_json")}, set(), set())
         )
 
+    def test_native_bridge_config_predicate_keeps_supplied_root(self):
+        key = "streaming_loudness_gain_stereo"
+        subject = "config.eq.tilt.tiltDb"
+        facts = ({key: {"config"}}, {(key, "config")}, {}, {}, set(), {})
+        row = {
+            "entry": "streamingLoudnessGainStereo",
+            "args": [{"config": {"eq": {"tilt": {"tiltDb": 1}}}}],
+            "refusal": {
+                "cEntry": key,
+                "code": 4,
+                "form": "predicate",
+                "subjects": [subject],
+                "raw": {
+                    "code": 4,
+                    "subjects": [subject],
+                    "callerSpelled": False,
+                    "fromC": False,
+                },
+            },
+        }
+        self.assertEqual(
+            plugin.emitted_pairs("wasm", [row], facts), ({(key, "config")}, set(), set())
+        )
+        row["refusal"]["subjects"] = ["eq.tilt.tiltDb"]
+        self.assertEqual(len(plugin.emitted_pairs("wasm", [row], facts)[2]), 1)
+
+    def test_direct_bridge_member_needs_explicit_observed_alias(self):
+        key = "estimate_meter_json"
+        path = "observations.accent"
+        facts = ({key: {"beats"}}, set(), {}, {}, {(key, "observations")}, {})
+        native = {
+            "code": 4,
+            "subjects": ["accent"],
+            "callerSpelled": True,
+            "fromC": False,
+        }
+        final = {
+            "cEntry": key,
+            "code": 4,
+            "subjects": [path],
+            "convertedSubjects": [path],
+            "raw": native,
+        }
+        row = {
+            "entry": "estimateMeter",
+            "args": [{"observations": {"accent": [], "hasAttack": []}}],
+            "refusal": final,
+        }
+        self.assertEqual(plugin.emitted_pairs("wasm", [row], facts)[2], set())
+        final["subjects"] = ["observations.hasAttack"]
+        self.assertEqual(len(plugin.emitted_pairs("wasm", [row], facts)[2]), 1)
+        final["subjects"] = [path]
+        native["fromC"] = True
+        self.assertEqual(len(plugin.emitted_pairs("wasm", [row], facts)[2]), 1)
+        native["fromC"] = False
+        del final["convertedSubjects"]
+        self.assertEqual(len(plugin.emitted_pairs("wasm", [row], facts)[2]), 1)
+
+    def test_python_observation_distinguishes_selected_seconds_from_sibling(self):
+        key = "engine_set_capture_timing"
+        native = "punch_end_sample"
+        path = "punch.end_sec"
+        facts = ({key: {native}}, {(key, native)}, {}, {}, set(), {})
+        final = {
+            "cEntry": key,
+            "code": 4,
+            "subjects": [path],
+            "convertedSubjects": [path],
+            "raw": {"code": 4, "subjects": [native], "callerSpelled": False, "fromC": True},
+        }
+        row = {
+            "entry": key,
+            "argumentPaths": ["punch", "punch.start_sec", "punch.end_sec"],
+            "refusal": final,
+        }
+        self.assertEqual(
+            plugin.emitted_pairs("python", [row], facts), ({(key, native)}, set(), set())
+        )
+        final["subjects"] = final["convertedSubjects"] = ["punch.start_sec"]
+        self.assertEqual(len(plugin.emitted_pairs("python", [row], facts)[2]), 1)
+        final["subjects"] = final["convertedSubjects"] = [path]
+        row["argumentPaths"].remove(path)
+        self.assertEqual(len(plugin.emitted_pairs("python", [row], facts)[2]), 1)
+
+
+    def test_python_string_alias_cannot_hide_a_supplied_record_member(self):
+        key = "engine_set_synth_instrument"
+        native = "binding.patch.preset"
+        facts = ({key: {"binding"}}, set(), {(key, "patch"): "patch"}, {}, set(), {})
+        final = {
+            "cEntry": key,
+            "code": 4,
+            "flattened": "binding",
+            "subjects": ["patch"],
+            "convertedSubjects": ["patch"],
+            "raw": {"code": 4, "subjects": [native], "callerSpelled": False, "fromC": True},
+        }
+        row = {"entry": key, "argumentPaths": ["patch"], "refusal": final}
+        self.assertEqual(plugin.emitted_pairs("python", [row], facts)[2], set())
+        row["argumentPaths"].append("patch.preset")
+        self.assertTrue(
+            any("expected 'patch.preset'" in f for f in plugin.emitted_pairs("python", [row], facts)[2])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
