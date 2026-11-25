@@ -69,6 +69,23 @@ std::array<float, 12> rotate_pattern(const std::array<float, 12>& pattern, int s
   return rotated;
 }
 
+constexpr std::array<ChordQuality, 4> kTriadQualities = {
+    ChordQuality::Major, ChordQuality::Minor, ChordQuality::Diminished, ChordQuality::Augmented};
+constexpr std::array<ChordQuality, 3> kSeventhQualities = {
+    ChordQuality::Dominant7, ChordQuality::Major7, ChordQuality::Minor7};
+constexpr std::array<ChordQuality, 9> kOtherBaseQualities = {
+    ChordQuality::Sus2,      ChordQuality::Sus4,      ChordQuality::Add9,
+    ChordQuality::MinorAdd9, ChordQuality::Dim7,      ChordQuality::HalfDim7,
+    ChordQuality::Major9,    ChordQuality::Dominant9, ChordQuality::Sus2Add4};
+
+/// @brief Appends templates for an ordered set of chord qualities.
+[[gnu::noinline]] void append_templates(std::vector<ChordTemplate>& templates, PitchClass root,
+                                        const ChordQuality* qualities, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    templates.push_back(create_chord_template(root, qualities[i]));
+  }
+}
+
 }  // namespace
 
 std::string pitch_class_to_string(PitchClass pc) {
@@ -508,30 +525,16 @@ ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones) {
 
 std::vector<ChordTemplate> generate_all_chord_templates() {
   std::vector<ChordTemplate> templates;
-  templates.reserve(12 * (16 + extended_chord_qualities().size()));
+  const auto& extended = extended_chord_qualities();
+  templates.reserve(12 * (kTriadQualities.size() + kSeventhQualities.size() +
+                          kOtherBaseQualities.size() + extended.size()));
 
   for (int root = 0; root < 12; ++root) {
-    PitchClass pc = static_cast<PitchClass>(root);
-
-    templates.push_back(create_major_template(pc));
-    templates.push_back(create_minor_template(pc));
-    templates.push_back(create_diminished_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::Augmented));
-    templates.push_back(create_dominant7_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::Major7));
-    templates.push_back(create_chord_template(pc, ChordQuality::Minor7));
-    templates.push_back(create_chord_template(pc, ChordQuality::Sus2));
-    templates.push_back(create_chord_template(pc, ChordQuality::Sus4));
-    templates.push_back(create_add9_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::MinorAdd9));
-    templates.push_back(create_chord_template(pc, ChordQuality::Dim7));
-    templates.push_back(create_half_dim7_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::Major9));
-    templates.push_back(create_dominant9_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::Sus2Add4));
-    for (ChordQuality quality : extended_chord_qualities()) {
-      templates.push_back(create_chord_template(pc, quality));
-    }
+    const PitchClass pc = static_cast<PitchClass>(root);
+    append_templates(templates, pc, kTriadQualities.data(), kTriadQualities.size());
+    append_templates(templates, pc, kSeventhQualities.data(), kSeventhQualities.size());
+    append_templates(templates, pc, kOtherBaseQualities.data(), kOtherBaseQualities.size());
+    append_templates(templates, pc, extended.data(), extended.size());
   }
 
   return templates;
@@ -539,15 +542,11 @@ std::vector<ChordTemplate> generate_all_chord_templates() {
 
 std::vector<ChordTemplate> generate_triad_templates() {
   std::vector<ChordTemplate> templates;
-  templates.reserve(12 * 4);
+  templates.reserve(12 * kTriadQualities.size());
 
   for (int root = 0; root < 12; ++root) {
-    PitchClass pc = static_cast<PitchClass>(root);
-
-    templates.push_back(create_major_template(pc));
-    templates.push_back(create_minor_template(pc));
-    templates.push_back(create_diminished_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::Augmented));
+    const PitchClass pc = static_cast<PitchClass>(root);
+    append_templates(templates, pc, kTriadQualities.data(), kTriadQualities.size());
   }
 
   return templates;
@@ -555,14 +554,11 @@ std::vector<ChordTemplate> generate_triad_templates() {
 
 std::vector<ChordTemplate> generate_seventh_templates() {
   std::vector<ChordTemplate> templates;
-  templates.reserve(12 * 3);
+  templates.reserve(12 * kSeventhQualities.size());
 
   for (int root = 0; root < 12; ++root) {
-    PitchClass pc = static_cast<PitchClass>(root);
-
-    templates.push_back(create_dominant7_template(pc));
-    templates.push_back(create_chord_template(pc, ChordQuality::Major7));
-    templates.push_back(create_chord_template(pc, ChordQuality::Minor7));
+    const PitchClass pc = static_cast<PitchClass>(root);
+    append_templates(templates, pc, kSeventhQualities.data(), kSeventhQualities.size());
   }
 
   return templates;
