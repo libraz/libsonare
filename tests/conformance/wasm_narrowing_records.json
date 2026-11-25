@@ -43,15 +43,30 @@
       "file": "bindings/realtime/midi_io.cpp",
       "symbol": "umpWordsFromVal",
       "reason": "Delegates every element's narrowing to the shared checkedWordFromVal and the array's length to the shared wasmArrayLength, so the conversion contract is single-sourced. What is local is the message's own domain: a UMP carries one to four words, which only the two raw-UMP push entry points ask."
+    },
+    {
+      "file": "bindings/project/project_bounce.cpp",
+      "symbol": "bankMidiByte",
+      "reason": "Delegates the narrowing to the shared optionalDomainValue against the C ABI's own sample-bank byte domain, so the conversion contract is single-sourced. What is local is only the absent-key spelling: an omitted descriptor byte maps to the C zero that selects the library default."
+    },
+    {
+      "file": "bindings/project/project_midi.cpp",
+      "symbol": "requireMidiEventListShapes",
+      "reason": "Returns the array's own length through the shared wasmArrayLength after checking each element's shape; it narrows no caller-supplied number, and every numeric field is read later by the shared readers under the indexed subject."
+    },
+    {
+      "file": "bindings/project/project_midi.cpp",
+      "symbol": "requireMidiCcBindingListShapes",
+      "reason": "Returns the array's own length through the shared wasmArrayLength after checking each binding's shape; it narrows no caller-supplied number, and every numeric field is read later by the shared readers under the indexed subject."
     }
   ],
   "positional": {
     "floor": {
       "registrations": 600,
       "declarations": 1300,
-      "parameters": 15,
-      "functions": 13,
-      "files": 4
+      "parameters": 10,
+      "functions": 7,
+      "files": 3
     },
     "shapes": [
       {
@@ -61,7 +76,7 @@
           "uint64_t"
         ],
         "parameter_pattern": ".",
-        "count": 18,
+        "count": 10,
         "status": "benign",
         "defect": "refuses",
         "mechanism": [

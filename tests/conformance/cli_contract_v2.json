@@ -22188,12 +22188,29 @@
             "{audio}",
             "-o",
             "{output}",
+            "--target-onset-sample",
+            "0",
             "--json"
           ],
           "exit": 0,
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "missing_target",
+          "argv": [
+            "note-move",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         },
         {
           "id": "success",

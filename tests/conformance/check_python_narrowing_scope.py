@@ -174,6 +174,7 @@ SHARED_READERS = (
     "_to_c_size_t",
     "_to_c_float",
     "_domain_float",
+    "_optional_nonzero_domain_float",
     "_float_data",
 )
 
