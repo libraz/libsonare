@@ -60,8 +60,9 @@ std::vector<float> analysis_input_trims(const std::vector<TrackProfile>& profile
 }
 
 void append(std::vector<SceneDelta>& into, std::vector<SceneDelta> from) {
-  into.insert(into.end(), std::make_move_iterator(from.begin()),
-              std::make_move_iterator(from.end()));
+  for (auto& delta : from) {
+    into.push_back(std::move(delta));
+  }
 }
 
 // Two tracks sharing a strip id produce two strips with that id, of which
