@@ -1071,6 +1071,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_seek_sample(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
 | `sonare_engine_set_parameter(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
 | `sonare_engine_set_solo_mute(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
+| `sonare_engine_set_tempo` | BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for sonare_engine_set_tempo, sonare_engine_set_tempo_segments and sonare_project_set_tempo_segments. A positive value below 1e-6 was accepted in 1.x and is refused by name. sonare_project_deserialize refuses a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. sonare_transcribe refuses positive sub-floor tempos; pass 0 to detect tempo, while negative and non-finite values are refused. |
 | `sonare_engine_set_track_monitor_mode(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
 | `sonare_engine_stop(render_frame)` | Only -1 selects the next block head. Lower values previously selected it too. They return SONARE_ERROR_INVALID_PARAMETER naming render_frame without adding a command. |
 | `sonare_sample_bank_add_sample` | desc.root_key above 127 is refused as SONARE_ERROR_INVALID_PARAMETER instead of being clamped; pass a MIDI key in [0, 127], where 0 keeps the default |
@@ -1396,8 +1397,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_engine_apply_project_timeline` | An empty timeline is refused under timeline before the live-driver state is checked. |
 | `sonare_project_clip_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched). |
-| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). |
-| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). |
 | `sonare_project_get_vocal_edit_dependencies` | returns SONARE_ERROR_INVALID_FORMAT naming <sidecar key>.sourceSampleCount when a supported envelope's source sample count is not positive or exceeds the audio buffer limit, with the list left empty (1.x returned SONARE_OK and listed the sidecar with the malformed reason for a count not positive, or the invalid-state reason for a count past the limit). An arrangement-disabled build clears an initialised result and returns SONARE_ERROR_NOT_SUPPORTED before checking either argument (1.x refused a NULL or uninitialised result with SONARE_ERROR_INVALID_PARAMETER). |
 | `sonare_project_last_bounce_compile_result` | Reports the last successful bounce. A refused bounce leaves that snapshot intact. The timeline flag, diagnostic rows and messages are published together, and allocation failure leaves the outputs cleared. |
 | `sonare_project_marker_count` | An arrangement-disabled build returns SONARE_ERROR_NOT_SUPPORTED and clears a provided out_count (1.x left out_count untouched). |
@@ -1490,6 +1489,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareProjectMarker.key_fifths` | a nonzero key_fifths on a marker whose kind is not key signature is refused by sonare_project_set_marker with SONARE_ERROR_INVALID_PARAMETER (1.x stored it through sonare_project_set_marker_ex); leave it 0 on other kinds |
 | `SonareProjectMarker.key_minor` | a nonzero key_minor on a marker whose kind is not key signature is refused by sonare_project_set_marker with SONARE_ERROR_INVALID_PARAMETER (1.x stored it through sonare_project_set_marker_ex); leave it 0 on other kinds |
 | `SonareSf2InstrumentBinding` | adds const char* sound_font_uri at the tail. Set it to NULL for the default font. Recompile code passing an array of these records. |
+| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. |
+| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. |
 | `sonare_project_set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now returns SONARE_ERROR_INVALID_PARAMETER. Use sonare_project_set_max_history_bytes(project, 0) to disable undo retention. |
 | `sonare_vocal_draft_apply` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale generation reports its conflict with the field expected_generation, where 1.x reported generation, with the same code, reason, message and values |
 | `sonare_vocal_draft_capture_snapshot` | a NULL snapshot output is refused naming snapshot, where 1.x named snapshot output |
@@ -3572,6 +3573,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `PlaybackLoudnessMeter.constructor(sample_rate)` | sample_rate must be an integer in [8000, 384000] Hz. The constructor raises SonareValueError naming sample_rate outside that domain; 1.x refused only a non-positive rate. |
+| `RealtimeEngine.set_tempo` | BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.set_tempo, RealtimeEngine.set_tempo_segments and Project.set_tempo_segments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.from_json and Project.from_json_with_diagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempo_bpm to detect. |
 
 #### String values are lowerCamelCase tokens
 
@@ -7066,6 +7068,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.pushMidiInputUmp` | a fractional word in words is refused with a RangeError instead of truncated |
 | `RealtimeEngine.pushMidiUmp` | a fractional word in words is refused with a RangeError instead of truncated |
 | `RealtimeEngine.setMidiClips` | a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core |
+| `RealtimeEngine.setTempo` | BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.setTempo, RealtimeEngine.setTempoSegments and Project.setTempoSegments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.fromJson and Project.fromJsonWithDiagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempoBpm to detect. |
 
 #### String values are lowerCamelCase tokens
 
@@ -12379,7 +12382,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted |
 | `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
 | `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
-| `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
+| `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through). BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.setTempo, RealtimeEngine.setTempoSegments, Project.setTempoSegments, SonareEngine.setTempo, SonareEngine.setTempoSegments, SonareEngineTransportFacade.setTempo and SonareEngineTransportFacade.setTempoSegments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.fromJson and Project.fromJsonWithDiagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempoBpm to detect. Refusal occurs before synchronizing the worklet. |
 | `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `SonareEngine.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
 | `SonareEngineOptions.scopeIntervalFrames` (`./worklet`) | Scope intervals must be integers in [0, 2147483647]. A larger safe integer raises RangeError during construction, even without a telemetry sink. Zero still disables scope capture. |
@@ -13854,6 +13857,12 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 |---|---|
 | `pitch` | --frames lists f0 for the voiced frames only, beside their frame indices in f0_frame, rather than one value per frame with null for an unvoiced frame; voiced_ratio, median_f0 and mean_f0 are absent rather than null when nothing was measured |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `transcribe --tempo-bpm` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo. Both CLIs require --tempo-bpm in [1e-6, 100000] and refuse values outside the range before opening audio (exit 2). 1.x accepted positive sub-floor values and reported above-ceiling values through the project setter (exit 3). Omit the flag to detect tempo. |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -13876,7 +13885,6 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `rhythm --bpm-max` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
 | `rhythm --bpm-min` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
 | `rhythm --start-bpm` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
-| `transcribe --tempo-bpm` | a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
 

@@ -833,9 +833,9 @@
       "command": "transcribe",
       "option": "tempo-bpm",
       "choices": [],
-      "minimum": 0.0,
-      "exclusive_minimum": true,
-      "maximum": null,
+      "minimum": 1e-06,
+      "exclusive_minimum": false,
+      "maximum": 100000.0,
       "exclusive_maximum": false
     },
     {

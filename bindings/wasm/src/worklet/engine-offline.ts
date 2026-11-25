@@ -116,11 +116,15 @@ export interface SonareEngineTransportFacade {
   seekPpq(ppq: number, renderFrame?: number): void;
   /** Moves the playhead to `timeSec` seconds (non-negative, rounded to a sample) at `renderFrame`. */
   seekSec(timeSec: number, renderFrame?: number): void;
-  /** Sets a single finite tempo in (0, 100000] BPM, replacing any tempo map. An invalid value is refused by the offline mirror. */
+  /**
+   * Sets a single finite tempo in [1e-6, 100000] BPM, replacing any tempo map.
+   * An invalid value is refused by the offline mirror.
+   */
   setTempo(bpm: number): void;
   /**
    * Installs a tempo map. Each segment needs a finite non-negative `startPpq` and a `bpm` in
-   * (0, 100000]; an `endBpm` in the same range ramps within the segment. An empty list clears the map.
+   * [1e-6, 100000]; a nonzero `endBpm` in the same range ramps within the segment. An empty list
+   * clears the map.
    */
   setTempoSegments(segments: readonly EngineTempoSegment[]): void;
   /** Sets the loop region in quarter notes and enables or disables it (`enabled` omitted: enabled). */

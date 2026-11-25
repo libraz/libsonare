@@ -372,7 +372,10 @@ export class SonareEngine {
     await this.context.resume?.();
   }
 
-  /** Sets one constant tempo, `bpm` in beats per minute (finite, greater than 0, at most 100000), on both engines. */
+  /**
+   * Sets one constant tempo, `bpm` in beats per minute (finite, in [1e-6, 100000]), on both
+   * engines.
+   */
   setTempo(bpm: number): void {
     tempo.setTempo(this.tempoContext, bpm);
   }

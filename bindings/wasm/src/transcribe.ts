@@ -1,10 +1,9 @@
 import { withEntry } from './internal/entry.js';
 import { withMonoHeap } from './internal/memory_budget.js';
-import { isAbsent } from './internal/value_guards.js';
 import { projectModule } from './project_internal.js';
 import type { TranscribeOptions, TranscribeResult } from './project_types.js';
 import type { OptionsOf } from './validation.js';
-import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './validation.js';
+import { assertAudioInput, sampleOneShot } from './validation.js';
 
 /**
  * Canonical request form for {@link transcribe}.
@@ -17,8 +16,8 @@ export interface TranscribeRequest extends TranscribeOptions {
   /**
    * Tempo the PPQ grid is built on, in BPM. **Omit to have it detected** from
    * `samples`, which costs an onset/tempo pass; a detector that finds nothing
-   * usable falls back to 120 rather than failing the transcription. A value
-   * `<= 0` is a `RangeError`.
+   * usable falls back to 120 rather than failing the transcription. A supplied
+   * value must be finite and at least `1e-6` BPM.
    *
    * Supplying a tempo is not a claim about the audio — it is the coordinate
    * system the events come back in. Twice the tempo is twice as many beats per
@@ -64,7 +63,7 @@ export interface TranscribeRequest extends TranscribeOptions {
  * @throws {RangeError} also on an option outside its domain that the reader
  *   refuses — a non-negative `velocityFloorDb`, a `fixedVelocity` outside
  *   `[1, 127]`, a written `0` on any field but `group`, `channel`, `minFramePeakRatio` and
- *   `minRidgePeakRatio`, or a negative ratio
+ *   `minRidgePeakRatio`, or a negative ratio; a supplied `tempoBpm` below 1e-6
  * @throws {RangeError} on a `group` or `channel` outside
  *   `[0, 15]` or an `f0MaxHz` at or below `f0MinHz`, which the C ABI refuses
  * @throws {SonareError} `NotSupported` when the library was built without the pitch editor
@@ -88,9 +87,6 @@ export function transcribe(...args: unknown[]): TranscribeResult {
     const request = sampleOneShot<TranscribeRequest>('transcribe', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const { samples, sampleRate, tempoBpm, ...rest } = request;
-    if (!isAbsent(tempoBpm)) {
-      assertPositiveFloatValue(tempoBpm, 'tempoBpm');
-    }
     return withMonoHeap(samples, sampleRate, 1, () =>
       projectModule().transcribe(samples, sampleRate, tempoBpm, rest),
     );

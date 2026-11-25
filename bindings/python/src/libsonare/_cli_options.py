@@ -381,7 +381,7 @@ def _positive_finite_float(value: str) -> float:
 
 
 def _tempo_bpm(value: str) -> float:
-    """A tempo flag's value on every command that takes one: finite and greater than 0."""
+    """Parse a finite tempo; the option's domain record states the accepted range."""
     return _finite_float(value)
 
 

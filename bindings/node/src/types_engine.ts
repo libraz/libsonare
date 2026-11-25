@@ -950,9 +950,12 @@ export interface EngineLoop {
 export interface EngineTempoSegment {
   /** Segment start position in PPQ, in [0, 1e12]. */
   startPpq: number;
-  /** Tempo in BPM at the segment start. */
+  /** Tempo in BPM at the segment start, in [1e-6, 100000]. */
   bpm: number;
-  /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
+  /**
+   * Tempo in BPM at the segment end for a ramp, in [1e-6, 100000] when nonzero;
+   * `0` / omitted = constant tempo.
+   */
   endBpm?: number;
 }
 

@@ -614,7 +614,7 @@ export class RealtimeEngine {
     this.native.seekPpq(ppq, resolveRenderFrame(renderFrame));
   }
 
-  /** Set a finite tempo in the range (0, 100000] BPM. */
+  /** Set a finite tempo in the range [1e-6, 100000] BPM. */
   setTempo(bpm: number): void {
     this.native.setTempo(bpm);
   }
@@ -628,7 +628,7 @@ export class RealtimeEngine {
 
   /**
    * Installs a tempo map from ramp segments. Each segment needs a finite
-   * non-negative `startPpq` and a `bpm` in (0, 100000]; a non-zero `endBpm`
+   * non-negative `startPpq` and a `bpm` in [1e-6, 100000]; a non-zero `endBpm`
    * uses the same range. An empty array clears the map to the single tempo.
    * Of two segments at one `startPpq`, the later-supplied one takes effect.
    */

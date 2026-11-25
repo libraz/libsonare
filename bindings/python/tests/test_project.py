@@ -37,6 +37,7 @@ from libsonare import (
 )
 from libsonare._project_model import _EXPECTED_PROJECT_ABI_VERSION
 from libsonare._runtime import _get_lib
+from libsonare._tempo_domains import PROJECT_TEMPO_MIN
 
 from ._helpers import raises_coded
 from ._project_helpers import _build_project, dangling_source_json
@@ -455,6 +456,34 @@ def test_malformed_deserialize_raises_without_crashing() -> None:
         Project.from_json(b"")
     with raises_coded(ErrorCode.INVALID_FORMAT):
         Project.from_json_with_diagnostics("{ this is not valid project json ]]")
+
+
+@pytest.mark.parametrize(
+    ("segment", "subject"),
+    [
+        ({"startPpq": 0.0, "bpm": 1e-8}, "tempoSegments[0].bpm"),
+        (
+            {"startPpq": 0.0, "bpm": 120.0, "endBpm": 1e-8},
+            "tempoSegments[0].endBpm",
+        ),
+    ],
+)
+def test_from_json_refuses_subfloor_tempo_at_document_path(
+    segment: dict[str, float], subject: str
+) -> None:
+    project = Project()
+    try:
+        document = json.loads(project.to_json())
+    finally:
+        project.close()
+    document["tempoSegments"] = [segment]
+    text = json.dumps(document)
+    for load in (Project.from_json, Project.from_json_with_diagnostics):
+        with raises_coded(
+            ErrorCode.INVALID_FORMAT,
+            match=rf"{re.escape(subject)} must be finite and in \[1e-6, 100000\]",
+        ):
+            load(text)
 
 
 @pytest.mark.parametrize("version", [1, 2, 6, 8])
@@ -1181,6 +1210,34 @@ def test_project_getters_setters_and_counts() -> None:
             restored.close()
         project.remove_clip(clip_id)
         assert project.clips() == []
+    finally:
+        project.close()
+
+
+def test_project_tempo_domain_refusals_preserve_stored_map() -> None:
+    project = Project()
+    try:
+        project.set_tempo_segments([{"start_ppq": 0.0, "bpm": PROJECT_TEMPO_MIN, "end_bpm": 0.0}])
+        assert project.tempo_segments() == [
+            {"start_ppq": 0.0, "bpm": PROJECT_TEMPO_MIN, "end_bpm": 0.0}
+        ]
+        before = project.tempo_segments()
+        invalid = (
+            ({"start_ppq": 0.0, "bpm": 1e-8}, "segments[0].bpm"),
+            ({"start_ppq": 0.0, "bpm": 100000.1}, "segments[0].bpm"),
+            ({"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 1e-8}, "segments[0].end_bpm"),
+            (
+                {"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 100000.1},
+                "segments[0].end_bpm",
+            ),
+        )
+        for segment, subject in invalid:
+            with pytest.raises(SonareValueError) as caught:
+                project.set_tempo_segments([segment])
+            assert (
+                f"Project.set_tempo_segments: {subject} must be finite and in [1e-6, 100000]"
+            ) in str(caught.value)
+            assert project.tempo_segments() == before
     finally:
         project.close()
 

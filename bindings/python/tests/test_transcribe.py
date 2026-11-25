@@ -16,6 +16,7 @@ import pytest
 
 import libsonare
 from libsonare import SonareValueError
+from libsonare._tempo_domains import TRANSCRIBE_TEMPO_MIN
 
 from ._helpers import LIB_AVAILABLE
 
@@ -127,6 +128,36 @@ def test_a_detected_tempo_is_reported(melody: np.ndarray) -> None:
     assert math.isfinite(detected.tempo_bpm)
     assert detected.tempo_bpm > 0.0
     assert detected.note_count == len(_EXPECTED_NOTES)
+
+
+def test_transcribe_tempo_floor_and_float32_rounding(melody: np.ndarray) -> None:
+    for refused in (0.0, 1e-8, 1e-50, 1e100, float("nan"), float("inf"), -float("inf")):
+        with pytest.raises(
+            SonareValueError,
+            match=r"transcribe: tempo_bpm must be finite and at least 1e-6",
+        ):
+            libsonare.transcribe(melody, SR, tempo_bpm=refused)
+
+    with pytest.raises(TypeError, match=r"transcribe: f0_min_hz must be a number"):
+        libsonare.transcribe(melody, SR, tempo_bpm=1e-8, f0_min_hz="bad")  # type: ignore[arg-type]
+
+    at_floor = libsonare.transcribe(melody, SR, tempo_bpm=TRANSCRIBE_TEMPO_MIN)
+    first_float32_above_floor = float(
+        np.nextafter(np.float32(TRANSCRIBE_TEMPO_MIN), np.float32(np.inf))
+    )
+    assert at_floor.tempo_bpm == first_float32_above_floor
+    # A double just above the floor whose nearest float lies below it is still accepted.
+    above_floor = libsonare.transcribe(melody, SR, tempo_bpm=TRANSCRIBE_TEMPO_MIN * (1 + 1e-9))
+    assert above_floor.tempo_bpm == first_float32_above_floor
+
+    above_project_max = libsonare.transcribe(melody, SR, tempo_bpm=100001.0)
+    assert above_project_max.tempo_bpm > 100000.0
+
+    with pytest.raises(
+        SonareValueError,
+        match=r"transcribe: tempo_bpm must be finite and at least 1e-6",
+    ):
+        libsonare.transcribe(melody, SR, tempo_bpm=1e100)
 
 
 def test_doubling_the_tempo_doubles_the_ppq_coordinates(melody: np.ndarray) -> None:
@@ -340,7 +371,7 @@ def test_transcribe_rejects_out_of_domain_options(
         ),
         pytest.param(
             lambda audio: libsonare.transcribe(audio, SR, tempo_bpm=0.0),
-            "transcribe: tempo_bpm must be greater than 0",
+            "transcribe: tempo_bpm must be finite and at least 1e-6",
             id="tempo_bpm",
         ),
     ],

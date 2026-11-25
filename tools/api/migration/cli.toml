@@ -274,10 +274,10 @@ test = "tests/conformance/cli_contract_v2.json::bpm_max_zero_refused_rhythm"
 [[entry]]
 kind = "flag"
 old = "transcribe --tempo-bpm"
-changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo. Both CLIs require --tempo-bpm in [1e-6, 100000] and refuse values outside the range before opening audio (exit 2). 1.x accepted positive sub-floor values and reported above-ceiling values through the project setter (exit 3). Omit the flag to detect tempo."
 domain = "analysis"
-rule = "tempo-range"
-test = "tests/conformance/cli_contract_v2.json::zero_tempo"
+rule = "finite-or-refused"
+test = "tests/conformance/cli_contract_v2.json::tempo_below_floor"
 
 [[entry]]
 kind = "flag"

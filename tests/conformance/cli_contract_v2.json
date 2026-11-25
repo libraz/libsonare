@@ -7781,9 +7781,9 @@
           "required": false,
           "domain": {
             "choices": [],
-            "minimum": 0,
-            "exclusive_minimum": true,
-            "maximum": null,
+            "minimum": 1e-06,
+            "exclusive_minimum": false,
+            "maximum": 100000,
             "exclusive_maximum": false,
             "names": []
           }
@@ -23504,9 +23504,9 @@
           "required": false,
           "domain": {
             "choices": [],
-            "minimum": 0,
-            "exclusive_minimum": true,
-            "maximum": null,
+            "minimum": 1e-06,
+            "exclusive_minimum": false,
+            "maximum": 100000,
             "exclusive_maximum": false,
             "names": []
           }
@@ -23613,6 +23613,62 @@
           "stderr_contains": [
             "tempo-bpm"
           ]
+        },
+        {
+          "id": "tempo_below_floor",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--tempo-bpm",
+            "1e-8",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--tempo-bpm: must be finite and in [1e-6, 100000]"
+          ]
+        },
+        {
+          "id": "tempo_above_ceiling",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--tempo-bpm",
+            "100001",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--tempo-bpm: must be finite and in [1e-6, 100000]"
+          ]
+        },
+        {
+          "id": "tempo_at_floor",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--tempo-bpm",
+            "1e-6",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         },
         {
           "id": "inverted_pitch_range",

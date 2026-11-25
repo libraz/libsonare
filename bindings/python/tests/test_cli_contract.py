@@ -559,6 +559,33 @@ def test_a_non_finite_option_value_is_a_usage_error(literal) -> None:
             assert raised.value.code == 2, argv
 
 
+@pytest.mark.parametrize(
+    ("tempo", "accepted"),
+    [
+        ("0.000000999", False),
+        ("0.000001", True),
+        ("100000", True),
+        ("100000.0001", False),
+    ],
+)
+def test_transcribe_cli_tempo_bpm_uses_project_domain(
+    tempo: str, accepted: bool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from libsonare import cli
+
+    argv = ["transcribe", "missing-input.wav", "-o", "unused.mid", "--tempo-bpm", tempo]
+    if accepted:
+        args = cli._build_parser().parse_args(argv)
+        assert args.tempo_bpm == float(tempo)
+    else:
+        with pytest.raises(SystemExit) as caught:
+            cli._build_parser().parse_args(argv)
+        assert caught.value.code == 2
+        assert "argument --tempo-bpm: must be finite and in [1e-6, 100000]" in (
+            capsys.readouterr().err
+        )
+
+
 @pytest.mark.parametrize("interrupt_point", ["parse", "dispatch"])
 def test_an_interrupt_reports_like_every_other_failure(
     monkeypatch, capsys, interrupt_point

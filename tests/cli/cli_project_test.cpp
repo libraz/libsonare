@@ -1234,6 +1234,20 @@ TEST_CASE("CLI transcribe reports detected tempo confidence and meter", "[cli][t
   CHECK(time_signature["confidence"].as_number() >= 0.0);
   CHECK(time_signature["confidence"].as_number() <= 1.0);
 
+  for (const char* invalid_tempo : {"1e-8", "100001"}) {
+    auto [invalid_code, invalid_error] = exec_command(
+        CLI + " transcribe " + clicks + " --tempo-bpm " + invalid_tempo + " -o " + output_midi);
+    CHECK(invalid_code == 2);
+    CHECK_THAT(invalid_error, Catch::Matchers::ContainsSubstring(
+                                  "--tempo-bpm: must be finite and in [1e-6, 100000]"));
+  }
+  const auto floor_tempo = run("--tempo-bpm 1e-6");
+  CHECK(floor_tempo["tempo_bpm"].as_number() == 1e-6);
+  const auto [floor_code, floor_summary] =
+      exec_command(CLI + " transcribe " + clicks + " --tempo-bpm 1e-6 -o " + output_midi);
+  CHECK(floor_code == 0);
+  CHECK_THAT(floor_summary, Catch::Matchers::ContainsSubstring("1.00e-06 BPM"));
+
   const auto explicit_tempo = run("--tempo-bpm 120");
   CHECK_FALSE(explicit_tempo.contains("tempo_confidence"));
   CHECK_FALSE(explicit_tempo.contains("time_signature"));

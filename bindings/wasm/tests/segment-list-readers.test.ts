@@ -70,7 +70,25 @@ const tempoCases: ReadonlyArray<readonly [string, Segment[], typeof TypeError, s
     'a tempo of 0 at the second element',
     [tempo, { startPpq: 960, bpm: 0 }],
     RangeError,
-    'segments[1].bpm must be finite and in (0, 100000]',
+    'segments[1].bpm must be finite and in [1e-6, 100000]',
+  ],
+  [
+    'a sub-floor tempo at the second element',
+    [tempo, { startPpq: 960, bpm: 1e-8 }],
+    RangeError,
+    'segments[1].bpm must be finite and in [1e-6, 100000]',
+  ],
+  [
+    'a sub-floor nonzero ramp target',
+    [{ ...tempo, endBpm: 1e-8 }],
+    RangeError,
+    'segments[0].endBpm must be finite and in [1e-6, 100000]',
+  ],
+  [
+    'a negative ramp target',
+    [{ ...tempo, endBpm: -1 }],
+    RangeError,
+    'segments[0].endBpm must be finite and in [1e-6, 100000]',
   ],
 ];
 
@@ -131,7 +149,13 @@ describe.each([
 
   it('accept a list with an omitted end tempo', () => {
     const target = make();
-    expect(() => target.tempo([tempo, { startPpq: 960, bpm: 90, endBpm: 100 }])).not.toThrow();
+    expect(() =>
+      target.tempo([
+        { ...tempo, bpm: 1e-6, endBpm: 1e-6 },
+        { startPpq: 960, bpm: 90, endBpm: 0 },
+        { startPpq: 1920, bpm: 90 },
+      ]),
+    ).not.toThrow();
     expect(() =>
       target.signatures([signature, { startPpq: 960, numerator: 3, denominator: 4 }]),
     ).not.toThrow();

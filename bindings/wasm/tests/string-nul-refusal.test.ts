@@ -623,12 +623,6 @@ describe('embedded NUL refusal, scan', () => {
     },
     {
       file: 'realtime/transport.cpp',
-      text: '(prefix + "',
-      count: 3,
-      reason: 'refusal name built from a literal list name, a segment index and a literal key',
-    },
-    {
-      file: 'realtime/transport.cpp',
       text: 'id_key.c_str()',
       count: 2,
       reason: 'refusal name built from a literal list name, a marker index and a literal key',

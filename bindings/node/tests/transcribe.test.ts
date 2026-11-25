@@ -113,12 +113,38 @@ describe('transcribe', () => {
     const detected = transcribe({ samples: audio, sampleRate: SR }).tempoBpm;
     expect(Number.isFinite(detected)).toBe(true);
     expect(detected).toBeGreaterThan(0);
-    // A written tempo <= 0 is refused; omitting the field is how to ask for detection.
-    for (const tempoBpm of [0, -1]) {
+    expect(() =>
+      transcribe({
+        samples: audio,
+        sampleRate: SR,
+        tempoBpm: 1e-8,
+        f0MinHz: 'bad' as unknown as number,
+      }),
+    ).toThrow(new TypeError('transcribe: f0MinHz must be a number'));
+    const atFloor = transcribe({ samples: audio, sampleRate: SR, tempoBpm: 1e-6 });
+    expect(atFloor.tempoBpm).toBeGreaterThanOrEqual(1e-6);
+    // A double just above the floor whose nearest float lies below it is still accepted.
+    const aboveFloor = transcribe({ samples: audio, sampleRate: SR, tempoBpm: 1e-6 * (1 + 1e-9) });
+    expect(aboveFloor.tempoBpm).toBeGreaterThanOrEqual(1e-6);
+    // Omit the field to detect tempo; every supplied value below the floor is refused.
+    for (const tempoBpm of [0, -1, 1e-8, 1e-50]) {
       expect(() => transcribe({ samples: audio, sampleRate: SR, tempoBpm })).toThrow(
         expect.objectContaining({
           name: 'RangeError',
-          message: 'transcribe: tempoBpm must be finite and greater than 0',
+          message: 'transcribe: tempoBpm must be finite and at least 1e-6',
+        }),
+      );
+    }
+    for (const tempoBpm of [
+      1e100,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(() => transcribe({ samples: audio, sampleRate: SR, tempoBpm })).toThrow(
+        expect.objectContaining({
+          name: 'RangeError',
+          message: 'transcribe: tempoBpm must be finite and at least 1e-6',
         }),
       );
     }

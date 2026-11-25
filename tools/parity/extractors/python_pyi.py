@@ -373,8 +373,8 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("_field_spelling.py",),
     ),
     (
-        "generated integer-domain table: tools/api/gen_integer_domains.py output, no public signatures",
-        ("_integer_domains.py",),
+        "generated numeric-domain mirrors: tools/api/gen_integer_domains.py output, no public signatures",
+        ("_integer_domains.py", "_tempo_domains.py"),
     ),
     (
         "generated null-means table: tools/conformance/gen_null_means.py output, no public signatures",

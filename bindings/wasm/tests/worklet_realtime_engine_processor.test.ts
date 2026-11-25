@@ -1712,6 +1712,43 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('reports a sub-floor sync tempo refusal without changing the active map', () => {
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
+      try {
+        processor.receiveMessage({
+          type: 'syncTempo',
+          bpm: 120,
+          timeSignature: { numerator: 4, denominator: 4 },
+        });
+        posted.length = 0;
+        processor.receiveMessage({
+          type: 'syncTempo',
+          bpm: 1e-8,
+          timeSignature: { numerator: 3, denominator: 4 },
+        });
+        expect(posted.at(-1)).toMatchObject({
+          type: 'syncError',
+          syncType: 'syncTempo',
+          message: 'RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]',
+        });
+        processor.receiveMessage({ type: 'transportRequest', requestId: 91, op: 'state' });
+        expect(posted.at(-1)).toMatchObject({
+          type: 'transportResponse',
+          requestId: 91,
+          ok: true,
+          state: { bpm: 120, timeSignature: { numerator: 4, denominator: 4 } },
+        });
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('releases its engine when it receives a destroy sync message', () => {
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,

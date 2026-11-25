@@ -29,6 +29,7 @@
 #ifdef SONARE_WITH_ARRANGEMENT
 #include "editing/note_model/note_transcriber.h"
 #include "editing/pitch_editor/note_segmenter.h"
+#include "transport/tempo_map.h"
 #endif
 #ifdef SONARE_WITH_PLAYBACK
 #include "playback/config.h"
@@ -1857,7 +1858,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "transcribe", true,
         {required_output(),
-         with_stated_default(tempo(number_value("tempo-bpm")), "detected from the audio"),
+         with_stated_default(
+             with_domain(number_value("tempo-bpm"), between(sonare::transport::kMinPublicTempoBpm,
+                                                            sonare::transport::kMaxPublicTempoBpm)),
+             "detected from the audio"),
          flag("polyphonic"),
          library_default(with_domain(number_value("reference-hz"), greater_than(0.0)),
                          transcribe_defaults.reference_hz),

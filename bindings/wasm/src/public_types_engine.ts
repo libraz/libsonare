@@ -498,9 +498,12 @@ export interface EngineProcessWithMonitorResult {
 export interface EngineTempoSegment {
   /** Segment start in pulses per quarter note, in [0, 1e12]. */
   startPpq: number;
-  /** Tempo at the segment start, in beats per minute. */
+  /** Tempo at the segment start, in beats per minute, in [1e-6, 100000]. */
   bpm: number;
-  /** Tempo at the segment end for a ramp, in beats per minute. Omitted: constant tempo at `bpm`. */
+  /**
+   * Tempo at the segment end for a ramp, in beats per minute, in [1e-6, 100000]
+   * when nonzero. Omitted: constant tempo at `bpm`.
+   */
   endBpm?: number;
 }
 

@@ -612,9 +612,12 @@ export type ProjectAutomationLane = {
 export interface ProjectTempoSegment {
   /** Segment start in PPQ, in [0, 1e12]. */
   startPpq: number;
-  /** Tempo in beats per minute at the segment start. */
+  /** Tempo in beats per minute at the segment start, in [1e-6, 100000]. */
   bpm: number;
-  /** Optional ramp end tempo in BPM (0 = constant tempo over the segment). */
+  /**
+   * Optional ramp end tempo in BPM, in [1e-6, 100000] when nonzero
+   * (0 = constant tempo over the segment).
+   */
   endBpm?: number;
 }
 

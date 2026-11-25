@@ -132,7 +132,7 @@ class ShippingTreeTest(unittest.TestCase):
     def test_every_registered_constant_is_located_with_a_value(self) -> None:
         for key, constant in check.CONSTANTS.items():
             with self.subTest(constant=key):
-                self.assertIsInstance(check.find(check.ROOT, constant), int)
+                self.assertIsInstance(check.find(check.ROOT, constant), (int, float))
 
     def test_every_claim_reaches_at_least_its_floor(self) -> None:
         sites = check.collect(check.ROOT, check.doc_blocks(check.ROOT))

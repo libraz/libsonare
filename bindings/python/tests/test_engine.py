@@ -19,6 +19,7 @@ from libsonare import (
     engine_abi_version,
     voice_changer_abi_version,
 )
+from libsonare._tempo_domains import PROJECT_TEMPO_MIN
 
 from ._helpers import raises_coded, scene_bus, scene_strip
 
@@ -49,6 +50,32 @@ def test_engine_rejects_hostile_tempo_and_metronome_lengths() -> None:
             engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=2.0))
         with pytest.raises(SonareError):
             engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=math.nan))
+
+
+def test_engine_tempo_domain_and_refused_segment_preserve_state() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        engine.set_tempo(PROJECT_TEMPO_MIN)
+        assert engine.transport_state().bpm == PROJECT_TEMPO_MIN
+
+        with pytest.raises(SonareValueError) as caught:
+            engine.set_tempo(1e-8)
+        assert "RealtimeEngine.set_tempo: bpm must be finite and in [1e-6, 100000]" in str(
+            caught.value
+        )
+        assert engine.transport_state().bpm == PROJECT_TEMPO_MIN
+
+        engine.set_tempo_segments([{"start_ppq": 0.0, "bpm": 90.0, "end_bpm": 0.0}])
+        before = engine.transport_state().bpm
+        for segments, subject in (
+            ([{"start_ppq": 0.0, "bpm": 1e-8}], "segments[0].bpm"),
+            ([{"start_ppq": 0.0, "bpm": 90.0, "end_bpm": 1e-8}], "segments[0].end_bpm"),
+        ):
+            with pytest.raises(SonareValueError) as caught:
+                engine.set_tempo_segments(segments)
+            assert (
+                f"RealtimeEngine.set_tempo_segments: {subject} must be finite and in [1e-6, 100000]"
+            ) in str(caught.value)
+            assert engine.transport_state().bpm == before
 
 
 def test_metronome_default_click_length_is_absent() -> None:

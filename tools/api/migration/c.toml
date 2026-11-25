@@ -5118,17 +5118,17 @@ test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clea
 [[entry]]
 kind = "function"
 old = "sonare_project_export_smf"
-changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count)."
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field."
 domain = "project"
-rule = "c-error-path"
+rule = "individual"
 test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
 
 [[entry]]
 kind = "function"
 old = "sonare_project_export_clip_file"
-changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count)."
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field."
 domain = "project"
-rule = "c-error-path"
+rule = "individual"
 test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
 
 [[entry]]
@@ -7449,3 +7449,11 @@ changed = "A refused send timing is named timing."
 domain = "mastering"
 rule = "entry-named-refusals"
 test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API enum refusals name their argument"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_tempo"
+changed = "BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for sonare_engine_set_tempo, sonare_engine_set_tempo_segments and sonare_project_set_tempo_segments. A positive value below 1e-6 was accepted in 1.x and is refused by name. sonare_project_deserialize refuses a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. sonare_transcribe refuses positive sub-floor tempos; pass 0 to detect tempo, while negative and non-finite values are refused."
+domain = "engine"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine tempo floor accepts its endpoint and refuses sub-floor BPM without mutation"

@@ -973,8 +973,9 @@ class _ProjectInspectionMixin:
 
         Each segment is a mapping with ``start_ppq``, ``bpm`` and an optional
         ``end_bpm``; sample positions are derived during normalization.
-        ``end_bpm`` 0 means a constant-tempo segment. Pass an empty sequence to
-        clear.
+        ``bpm`` and a non-zero ``end_bpm`` must be finite and in
+        ``[1e-6, 100000]`` BPM. ``end_bpm`` 0 means a constant-tempo segment.
+        Pass an empty sequence to clear.
         """
         rows = list(segments)
         count = len(rows)

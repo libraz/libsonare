@@ -35542,10 +35542,10 @@ test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments ref
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTempo"
-changed = "a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through)"
+changed = "a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through). BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.setTempo, RealtimeEngine.setTempoSegments, Project.setTempoSegments, SonareEngine.setTempo, SonareEngine.setTempoSegments, SonareEngineTransportFacade.setTempo and SonareEngineTransportFacade.setTempoSegments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.fromJson and Project.fromJsonWithDiagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempoBpm to detect. Refusal occurs before synchronizing the worklet."
 domain = "engine"
 rule = "finite-or-refused"
-test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+test = "bindings/wasm/tests/new-apis.test.ts::rejects a sub-floor tempo without replacing the active tempo map"
 
 [[entry]]
 kind = "method"

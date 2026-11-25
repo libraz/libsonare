@@ -426,7 +426,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     @_entry("RealtimeEngine.set_tempo")
     def set_tempo(self, bpm: float) -> None:
-        """Set a finite tempo in the range ``(0, 100000]`` BPM."""
+        """Set a finite tempo in the range ``[1e-6, 100000]`` BPM."""
         _check(
             _get_lib().sonare_engine_set_tempo(self._require_handle(), _narrow_double(bpm, "bpm"))
         )
@@ -450,8 +450,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
         Each segment is a mapping with ``start_ppq``, ``bpm`` and an optional
         ``end_bpm``.
-        ``bpm`` and a non-zero ``end_bpm`` must be at most 100000. ``end_bpm``
-        0 means a constant-tempo segment. Pass an empty sequence to clear the map.
+        ``bpm`` and a non-zero ``end_bpm`` must be finite and in
+        ``[1e-6, 100000]`` BPM. ``end_bpm`` 0 means a constant-tempo segment.
+        Pass an empty sequence to clear the map.
         """
         rows = list(segments)
         count = len(rows)

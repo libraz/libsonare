@@ -404,6 +404,39 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('refuses a sub-floor tempo without changing the mirror or posting sync', async () => {
+      const { engine, offline, posted } = await recordingEngine();
+      const state = engine as unknown as { tempoBpm: number; tempoSegments: unknown[] };
+      const offlineState = offline as unknown as {
+        transportState(): { bpm: number };
+      };
+      try {
+        engine.transport.setTempo(120);
+        expect(offlineState.transportState().bpm).toBe(120);
+        posted.length = 0;
+
+        expect(() => engine.transport.setTempo(1e-8)).toThrow(
+          new RangeError(
+            'SonareEngine.transport.setTempo: bpm must be finite and in [1e-6, 100000]',
+          ),
+        );
+        expect(state.tempoBpm).toBe(120);
+        expect(offlineState.transportState().bpm).toBe(120);
+        expect(posted).toEqual([]);
+
+        expect(() => engine.transport.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }])).toThrow(
+          new RangeError(
+            'SonareEngine.transport.setTempoSegments: segments[0].bpm must be finite and in [1e-6, 100000]',
+          ),
+        );
+        expect(state.tempoSegments).toEqual([{ startPpq: 0, bpm: 120 }]);
+        expect(offlineState.transportState().bpm).toBe(120);
+        expect(posted).toEqual([]);
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('owns the input monitor and the input track apart from the capture setup', async () => {
       const { engine, posted } = await recordingEngine();
       try {
@@ -856,7 +889,9 @@ describe('SonareRealtimeEngineNode', () => {
         port.onmessage?.({ data: reply } as MessageEvent<unknown>);
         expect(seen).toHaveLength(1);
         // One prefix, the consumer's entry, even though the audio thread raised through its own.
-        expect(seen[0].message).toBe('SonareEngine.setTempo: bpm must be finite');
+        expect(seen[0].message).toBe(
+          'SonareEngine.setTempo: bpm must be finite and in [1e-6, 100000]',
+        );
         expect(seen[0].message).not.toContain('RealtimeEngine.');
         expect(seen[0].failure?.message).toBe(seen[0].message);
       } finally {

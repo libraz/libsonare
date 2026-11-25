@@ -189,6 +189,18 @@ describe('construction', () => {
 });
 
 describe('transport and counts', () => {
+  it('refuses a sub-floor tempo and keeps the transport state', () => {
+    withEngine((engine) => {
+      engine.setTempo(120);
+      expect(() => engine.setTempo(1e-8)).toThrow(
+        new RangeError('RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]'),
+      );
+      expect(engine.transportState().bpm).toBe(120);
+      engine.setTempo(1e-6);
+      expect(engine.transportState().bpm).toBeGreaterThanOrEqual(1e-6);
+    });
+  });
+
   it('reads the transport state with transportState()', () => {
     withEngine((engine) => {
       const state = engine.transportState();

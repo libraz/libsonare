@@ -90,13 +90,13 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     return project_exit_code(err);
   }
 
-  float tempo_bpm = 0.0f;
+  double tempo_bpm = 0.0;
   SonareProjectAutoTempoResult detected{};
   if (tempo_given) {
-    tempo_bpm = args.get_float("tempo-bpm", 0.0f);
+    tempo_bpm = args.get_double("tempo-bpm", 0.0);
     SonareProjectTempoSegment segment{};
     segment.start_ppq = 0.0;
-    segment.bpm = static_cast<double>(tempo_bpm);
+    segment.bpm = tempo_bpm;
     err = sonare_project_set_tempo_segments(handle.ptr, &segment, 1);
     if (err != SONARE_OK) {
       project_report_error("set tempo", err);
@@ -213,9 +213,13 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     }
     json.end_object().print();
   } else if (!args.quiet) {
-    std::cout << color::green << "Transcribed " << note_count << " notes at " << std::fixed
-              << std::setprecision(2) << tempo_bpm << std::defaultfloat << " BPM to "
-              << args.output_file << color::reset << "\n";
+    std::cout << color::green << "Transcribed " << note_count << " notes at ";
+    if (tempo_bpm < 0.005) {
+      std::cout << std::scientific << std::setprecision(2) << tempo_bpm;
+    } else {
+      std::cout << std::fixed << std::setprecision(2) << tempo_bpm;
+    }
+    std::cout << std::defaultfloat << " BPM to " << args.output_file << color::reset << "\n";
   }
   return 0;
 }

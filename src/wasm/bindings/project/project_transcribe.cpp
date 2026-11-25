@@ -20,8 +20,12 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+#include <limits>
+
 #include "c_api/transcribe_input_domains.h"
 #include "project_wasm.h"
+#include "transport/tempo_map.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -112,11 +116,23 @@ std::vector<SonareMidiEventPod> takeTranscribeEvents(SonareTranscribeResult* res
 
 val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  // Omitted is the C ABI's "detect", which it spells as a non-positive tempo.
-  const float tempo_bpm = tempo_bpm_val.isUndefined() || tempo_bpm_val.isNull()
-                              ? 0.0f
-                              : checkedFloatFromVal(tempo_bpm_val, "tempoBpm");
+  // The C ABI's zero means detection; only an absent value selects it here.
+  const bool detect_tempo = tempo_bpm_val.isUndefined() || tempo_bpm_val.isNull();
+  const double supplied = detect_tempo ? 0.0 : numberFromVal(tempo_bpm_val, "tempoBpm");
   const SonareTranscribeConfig resolved = transcribeConfigFromVal(config);
+  float tempo_bpm = 0.0f;
+  if (!detect_tempo) {
+    tempo_bpm = sonare::util::check::saturated_float(supplied);
+    // The C ABI uses zero for detection, so keep a written zero or underflow distinct from absence.
+    if (tempo_bpm == 0.0f) {
+      tempo_bpm = std::copysign(std::numeric_limits<float>::min(), supplied);
+    }
+    if (supplied >= sonare::transport::kMinPublicTempoBpm &&
+        static_cast<double>(tempo_bpm) < sonare::transport::kMinPublicTempoBpm) {
+      tempo_bpm = std::nextafterf(static_cast<float>(sonare::transport::kMinPublicTempoBpm),
+                                  std::numeric_limits<float>::infinity());
+    }
+  }
   const std::vector<float> buffer = float32ArrayToVector(samples, "samples");
 
   SonareTranscribeResult result{};

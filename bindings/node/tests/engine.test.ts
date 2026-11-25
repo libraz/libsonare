@@ -210,9 +210,32 @@ describe('RealtimeEngine native binding', () => {
     expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 120, endBpm: 100000.1 }])).toThrow();
     expect(() => engine.setTempo(100000)).not.toThrow();
     expect(() => engine.setTempo(100000.1)).toThrow();
+    expect(() => engine.setTempo(1e-6)).not.toThrow();
     expect(() =>
       engine.setTimeSignatureSegments([{ startPpq: 0, numerator: 0, denominator: 4 }]),
     ).toThrow();
+  });
+
+  it('rejects a sub-floor tempo without replacing the active tempo map', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      engine.setTempo(120);
+      engine.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+      const refusal = 'must be finite and in [1e-6, 100000]';
+      expect(() => engine.setTempo(1e-8)).toThrow(
+        new RangeError(`RealtimeEngine.setTempo: bpm ${refusal}`),
+      );
+      expect(engine.sampleAtPpq(1)).toBe(24000);
+      expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }])).toThrow(
+        new RangeError(`RealtimeEngine.setTempoSegments: segments[0].bpm ${refusal}`),
+      );
+      expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 120, endBpm: 1e-8 }])).toThrow(
+        new RangeError(`RealtimeEngine.setTempoSegments: segments[0].endBpm ${refusal}`),
+      );
+      expect(engine.sampleAtPpq(1)).toBe(24000);
+    } finally {
+      engine.destroy();
+    }
   });
 
   it('rejects hostile metronome click lengths', () => {

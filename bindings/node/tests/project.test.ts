@@ -708,6 +708,38 @@ describe('Project native binding', () => {
     expect(() => project.setSampleRate(44100.5)).toThrow(RangeError);
   });
 
+  it('refuses sub-floor tempo values in both project JSON loaders', () => {
+    const current = new Project();
+    const parsed = JSON.parse(current.toJson()) as Record<string, unknown>;
+    current.destroy();
+    const badSegments = [[{ startPpq: 0, bpm: 1e-8 }], [{ startPpq: 0, bpm: 120, endBpm: 1e-8 }]];
+    const paths = ['tempoSegments[0].bpm', 'tempoSegments[0].endBpm'];
+    for (let i = 0; i < badSegments.length; i++) {
+      const document = JSON.stringify({ ...parsed, tempoSegments: badSegments[i] });
+      for (const [entry, load] of [
+        ['fromJson', () => Project.fromJson(document)],
+        ['fromJsonWithDiagnostics', () => Project.fromJsonWithDiagnostics(document)],
+      ] as const) {
+        let caught: unknown;
+        try {
+          load();
+        } catch (error) {
+          caught = error;
+        }
+        expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidFormat);
+        expect((caught as Error).message).toBe(
+          `Project.${entry}: ${paths[i]} must be finite and in [1e-6, 100000]`,
+        );
+      }
+    }
+
+    const atFloor = Project.fromJson(
+      JSON.stringify({ ...parsed, tempoSegments: [{ startPpq: 0, bpm: 1e-6, endBpm: 0 }] }),
+    );
+    expect(atFloor.tempoSegments()[0]?.bpm).toBe(1e-6);
+    atFloor.destroy();
+  });
+
   it('round-trips toJson -> fromJson -> toJson byte-for-byte', () => {
     const project = buildProject();
     const json = project.toJson();
@@ -1782,6 +1814,25 @@ describe('Project value-model accessors', () => {
     expect(target.tempoSegments()[1]).toEqual(readBack[1]);
     source.destroy();
     target.destroy();
+  });
+
+  it('refuses sub-floor tempo segments before storing them', () => {
+    const project = new Project();
+    try {
+      const valid = [{ startPpq: 0, bpm: 120 }];
+      project.setTempoSegments(valid);
+      const before = project.tempoSegments();
+      expect(() => project.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }])).toThrow(
+        new RangeError(
+          'Project.setTempoSegments: segments[0].bpm must be finite and in [1e-6, 100000]',
+        ),
+      );
+      expect(project.tempoSegments()).toEqual(before);
+      project.setTempoSegments([{ startPpq: 0, bpm: 1e-6, endBpm: 0 }]);
+      expect(project.tempoSegments()).toEqual([{ startPpq: 0, bpm: 1e-6, endBpm: 0 }]);
+    } finally {
+      project.destroy();
+    }
   });
 
   it('replaces time signatures and counts them', () => {

@@ -523,9 +523,12 @@ export interface ProjectCompileResult {
 export interface ProjectTempoSegment {
   /** Segment start position in PPQ, in [0, 1e12]. */
   startPpq: number;
-  /** Tempo in BPM at the segment start. */
+  /** Tempo in BPM at the segment start, in [1e-6, 100000]. */
   bpm: number;
-  /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
+  /**
+   * Tempo in BPM at the segment end for a ramp, in [1e-6, 100000] when nonzero;
+   * `0` / omitted = constant tempo.
+   */
   endBpm?: number;
 }
 
@@ -1349,8 +1352,8 @@ export interface TranscribeRequest extends TranscribeOptions {
   sampleRate: number;
   /**
    * The tempo the PPQ grid is built on, in BPM. Omit it to have it detected
-   * from {@link samples}, which costs an onset/tempo pass. A value `<= 0` is a
-   * `RangeError`.
+   * from {@link samples}, which costs an onset/tempo pass. A supplied value
+   * must be finite and at least `1e-6` BPM.
    * The one setting that reads it is {@link TranscribeOptions.minNoteDivision};
    * with a grid tempo that is not the music's, give `minNoteMs` instead.
    */

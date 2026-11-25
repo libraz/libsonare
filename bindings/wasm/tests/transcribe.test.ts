@@ -483,12 +483,40 @@ describe('WASM transcribe', () => {
     expect(transcribe({ samples, sampleRate, tempoBpm: 120 }).noteCount).toBe(baseline.noteCount);
   });
 
-  it('refuses a non-positive tempoBpm in both call forms and still detects when it is absent', () => {
-    for (const tempoBpm of [0, -1]) {
-      expect(() => transcribe({ samples, sampleRate, tempoBpm })).toThrow(RangeError);
-      expect(() => transcribe({ samples, sampleRate, tempoBpm })).toThrow(/tempoBpm/);
-      expect(() => transcribe(samples, sampleRate, { tempoBpm })).toThrow(RangeError);
-      expect(() => transcribe(samples, sampleRate, { tempoBpm })).toThrow(/tempoBpm/);
+  it('rejects a sub-floor tempo in both forms and still detects when it is absent', () => {
+    for (const tempoBpm of [0, -1, 1e-8, 1e-50]) {
+      expect(() => transcribe({ samples, sampleRate, tempoBpm })).toThrow(
+        new RangeError('transcribe: tempoBpm must be finite and at least 1e-6'),
+      );
+      expect(() => transcribe(samples, sampleRate, { tempoBpm })).toThrow(
+        new RangeError('transcribe: tempoBpm must be finite and at least 1e-6'),
+      );
+    }
+    expect(() =>
+      transcribe({ samples, sampleRate, tempoBpm: 1e-8, f0MinHz: 'bad' as unknown as number }),
+    ).toThrow(new TypeError('transcribe: f0MinHz must be a number'));
+    expect(transcribe({ samples, sampleRate, tempoBpm: 1e-6 }).tempoBpm).toBeGreaterThanOrEqual(
+      1e-6,
+    );
+    expect(transcribe(samples, sampleRate, { tempoBpm: 1e-6 }).tempoBpm).toBeGreaterThanOrEqual(
+      1e-6,
+    );
+    // A double just above the floor whose nearest float lies below it is still accepted.
+    expect(
+      transcribe({ samples, sampleRate, tempoBpm: 1e-6 * (1 + 1e-9) }).tempoBpm,
+    ).toBeGreaterThanOrEqual(1e-6);
+    for (const tempoBpm of [
+      1e100,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(() => transcribe({ samples, sampleRate, tempoBpm })).toThrow(
+        new RangeError('transcribe: tempoBpm must be finite and at least 1e-6'),
+      );
+      expect(() => transcribe(samples, sampleRate, { tempoBpm })).toThrow(
+        new RangeError('transcribe: tempoBpm must be finite and at least 1e-6'),
+      );
     }
     const detected = transcribe({ samples, sampleRate });
     expect(Number.isFinite(detected.tempoBpm)).toBe(true);

@@ -51,7 +51,12 @@ const cases: ReadonlyArray<readonly [string, () => unknown, string]> = [
   [
     'a tempo segment of 0 bpm',
     () => engine().setTempoSegments([{ startPpq: 0, bpm: 0 }]),
-    'RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in (0, 100000]',
+    'RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in [1e-6, 100000]',
+  ],
+  [
+    'a sub-floor tempo segment',
+    () => engine().setTempoSegments([{ startPpq: 0, bpm: 1e-8 }]),
+    'RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in [1e-6, 100000]',
   ],
   [
     'a negative tempo segment end, named by its index',
@@ -60,7 +65,7 @@ const cases: ReadonlyArray<readonly [string, () => unknown, string]> = [
         { startPpq: 0, bpm: 120 },
         { startPpq: 10, bpm: 120, endBpm: -1 },
       ]),
-    'RealtimeEngine.setTempoSegments: segments[1].endBpm must be finite and in [0, 100000]',
+    'RealtimeEngine.setTempoSegments: segments[1].endBpm must be finite and in [1e-6, 100000]',
   ],
   [
     'a clip page provider with no channels',

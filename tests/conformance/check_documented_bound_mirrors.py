@@ -72,6 +72,7 @@ CONSTANTS: dict[str, Constant] = {
     "max_stft_n_fft": Constant("src/core/spectrum.h", "kMaxStftNFft"),
     "min_sample_rate": Constant("src/core/audio.h", "kMinAudioSampleRate"),
     "max_sample_rate": Constant("src/core/audio.h", "kMaxAudioSampleRate"),
+    "min_public_tempo_bpm": Constant("src/transport/tempo_map.h", "kMinPublicTempoBpm"),
     "max_public_tempo_bpm": Constant("src/transport/tempo_map.h", "kMaxPublicTempoBpm"),
     "min_assistant_tempo_bpm": Constant("src/mixing/assistant/suggester.h", "kMinAssistantTempoBpm"),
     "max_assistant_tempo_bpm": Constant("src/mixing/assistant/suggester.h", "kMaxAssistantTempoBpm"),
@@ -163,11 +164,14 @@ CLAIMS: tuple[Claim, ...] = (
         floor=9,
     ),
     Claim(
-        key="public tempo ceiling",
-        # Anchored on a tempo or a range named before the interval: a bare
-        # `(0, 10000]` is also how a millisecond window is written.
-        pattern=r"(?:[Bb][Pp][Mm]|range)[\s\S]{0,40}?\(\s*0\s*,\s*(?P<max>\d{3,})\s*\]`{0,2}\s*(?:BPM|;|,)",
-        groups={"max": ("max_public_tempo_bpm", 0)},
+        key="public tempo range",
+        # Include an old open lower endpoint so a stale claim is reported. A four-digit
+        # ceiling keeps the mixing assistant's [20, 400] BPM range out of this claim.
+        pattern=(
+            r"\b(?:[Bb][Pp][Mm]|[Tt]empo)\b[^\[;.]{0,80}?\b(?:in|range)\s*`{0,2}"
+            r"[\[(]\s*(?P<min>\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*,\s*(?P<max>\d{4,})\s*\]"
+        ),
+        groups={"min": ("min_public_tempo_bpm", 0), "max": ("max_public_tempo_bpm", 0)},
         floor=7,
     ),
     Claim(
@@ -329,7 +333,7 @@ class Site(typing.NamedTuple):
     claim: str
     path: str
     line: int
-    values: dict[str, int]
+    values: dict[str, int | float]
 
     @property
     def display(self) -> str:
@@ -402,21 +406,22 @@ def _blank(match: re.Match[str]) -> str:
     return "".join(ch if ch == "\n" else " " for ch in match.group(0))
 
 
-def _number(text: str) -> int | None:
-    """An integral constant value, whether it was written as an int or a float."""
-    match = re.fullmatch(r"\s*(\d+)(?:\.(\d*))?[fFuUlL]*\s*", text)
-    if match is None or (match.group(2) or "").strip("0"):
+def _number(text: str) -> int | float | None:
+    """A decimal constant, retaining exact integral values."""
+    match = re.fullmatch(r"\s*(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)[fFuUlL]*\s*", text)
+    if match is None:
         return None
-    return int(match.group(1))
+    value = match.group(1)
+    return int(value) if value.isdigit() else float(value)
 
 
-def find(root: Path, constant: Constant) -> int | None:
+def find(root: Path, constant: Constant) -> int | float | None:
     """The value @p constant declares, or None -- never a near miss."""
     path = root / constant.path
     if not path.is_file():
         return None
     stripped = _CPP_LEXICAL.sub(_blank, path.read_text(encoding="utf-8"))
-    found: list[int] = []
+    found: list[int | float] = []
     stack: list[tuple[str, int]] = []
     depth = 0
     pending: str | None = None
@@ -456,12 +461,12 @@ def collect(
         pattern = re.compile(claim.pattern)
         for path, flat, origin in blocks:
             for match in pattern.finditer(flat):
-                values = {
-                    group: int(match.group(group).replace(",", "")) for group in claim.groups
-                }
-                sites[claim.key].append(
-                    Site(claim.key, path, origin[match.start()], values)
-                )
+                values: dict[str, int | float] = {}
+                for group in claim.groups:
+                    value = _number(match.group(group).replace(",", ""))
+                    assert value is not None
+                    values[group] = value
+                sites[claim.key].append(Site(claim.key, path, origin[match.start()], values))
     return sites
 
 
@@ -477,7 +482,7 @@ def evaluate(root: Path = ROOT, claims: tuple[Claim, ...] = CLAIMS) -> list[str]
         )
 
     used = {key for claim in claims for key, _ in claim.groups.values()}
-    values: dict[str, int | None] = {key: find(root, CONSTANTS[key]) for key in used}
+    values: dict[str, int | float | None] = {key: find(root, CONSTANTS[key]) for key in used}
     for key, value in values.items():
         if value is None:
             constant = CONSTANTS[key]

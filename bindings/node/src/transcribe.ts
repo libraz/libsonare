@@ -1,9 +1,8 @@
 import { withEntry } from './internal/entry.js';
-import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { TranscribeRequest, TranscribeResult } from './types.js';
 import type { OptionsOf } from './validation.js';
-import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './validation.js';
+import { assertAudioInput, sampleOneShot } from './validation.js';
 
 /**
  * Transcribe mono audio into MIDI note events on a constant-tempo grid.
@@ -35,7 +34,8 @@ import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './val
  * project.setMidiEvents(clipId, events);
  * ```
  *
- * @throws `RangeError` when `samples` is empty or `sampleRate` is out of range,
+ * @throws `RangeError` when `samples` is empty, `sampleRate` is out of range,
+ *         or a supplied `tempoBpm` is below 1e-6,
  *         `TypeError` when an option carries the wrong type, and a
  *         `SonareError` when the library was built without the pitch editor.
  */
@@ -49,10 +49,6 @@ export function transcribe(...args: unknown[]): TranscribeResult {
   return withEntry('transcribe', () => {
     const request = sampleOneShot<TranscribeRequest>('transcribe', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const { ...rest } = request;
-    if (!isAbsent(rest.tempoBpm)) {
-      assertPositiveFloatValue(rest.tempoBpm, 'tempoBpm');
-    }
-    return addon.transcribe(rest);
+    return addon.transcribe(request);
   });
 }

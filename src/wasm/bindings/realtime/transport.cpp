@@ -116,9 +116,7 @@ void RealtimeEngineWasm::seekPpq(double ppq, const val& render_frame_val) {
   }
 }
 
-void RealtimeEngineWasm::setTempo(const val& bpm) {
-  engine_.set_tempo(checkedDoubleFromVal(bpm, "bpm"));
-}
+void RealtimeEngineWasm::setTempo(const val& bpm) { engine_.set_tempo(numberFromVal(bpm, "bpm")); }
 void RealtimeEngineWasm::setTempoSegments(val segments) {
   std::vector<sonare::transport::TempoSegment> parsed;
   // Bounded before reserving, as the C-ABI setter is, so a crafted length cannot
@@ -132,14 +130,6 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
     segment.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
     segment.bpm = requiredDomainDoubleProperty(entry, "bpm", at);
     segment.end_bpm = optionalDomainDoubleProperty(entry, "endBpm", segment.end_bpm, at);
-    // Checked as the C-ABI setter checks it, one field at a time, under the request's names.
-    const std::string prefix = at + ".";
-    sonare::util::check::within(segment.start_ppq, sonare_c_detail::kPublicPpqDomain,
-                                (prefix + "startPpq").c_str());
-    sonare::util::check::in_interval(segment.bpm, 0.0, false, sonare::transport::kMaxPublicTempoBpm,
-                                     true, (prefix + "bpm").c_str());
-    sonare::util::check::in_range(segment.end_bpm, 0.0, sonare::transport::kMaxPublicTempoBpm,
-                                  (prefix + "endBpm").c_str());
     parsed.push_back(segment);
   }
   engine_.set_tempo_segments(std::move(parsed));

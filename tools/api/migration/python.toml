@@ -15339,3 +15339,11 @@ changed = "sample_rate must be an integer in [8000, 384000] Hz. The constructor 
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/python/tests/test_playback.py::test_loudness_meter_refuses_sample_rate_outside_audio_domain"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_tempo"
+changed = "BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.set_tempo, RealtimeEngine.set_tempo_segments and Project.set_tempo_segments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.from_json and Project.from_json_with_diagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempo_bpm to detect."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_engine.py::test_engine_tempo_domain_and_refused_segment_preserve_state"

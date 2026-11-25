@@ -44,6 +44,7 @@ from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RA
 from ._narrowing import _INT64_MAX, _INT64_MIN
 from ._project_instruments import ProjectInstrumentBinding, SynthPatch
 from ._runtime import _UINT32_MAX, ErrorCode, SonareError
+from ._tempo_domains import PROJECT_TEMPO_MAX, PROJECT_TEMPO_MIN
 
 # The only URI scheme --resolve-audio opens. The core never opens a URI itself,
 # so resolving one is this front-end's own file I/O, and it has no business
@@ -1093,11 +1094,15 @@ def register_project_parsers(
     transcribe_p = sub.add_parser(
         "transcribe", parents=[common], help="Transcribe audio to a Standard MIDI File"
     )
-    transcribe_p.add_argument(
-        "--tempo-bpm",
-        type=_tempo_bpm,
-        default=None,
-        help="Tempo the PPQ grid is built on (default: detected from the audio)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--tempo-bpm",
+            type=_tempo_bpm,
+            default=None,
+            help="Tempo the PPQ grid is built on (default: detected from the audio)",
+        ),
+        minimum=PROJECT_TEMPO_MIN,
+        maximum=PROJECT_TEMPO_MAX,
     )
     transcribe_p.add_argument(
         "--polyphonic",

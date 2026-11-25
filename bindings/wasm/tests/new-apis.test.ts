@@ -1426,15 +1426,19 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
-    it('rejects invalid tempo without replacing the active tempo map', () => {
+    it('rejects a sub-floor tempo without replacing the active tempo map', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(60);
       expect(engine.sampleAtPpq(1)).toBe(48000);
       for (const [invalid, message] of [
-        [0, 'RealtimeEngine.setTempo: tempo must be finite, positive, and at most 100000 BPM'],
-        [-1, 'RealtimeEngine.setTempo: tempo must be finite, positive, and at most 100000 BPM'],
-        [Number.NaN, 'RealtimeEngine.setTempo: bpm must be finite'],
-        [Number.POSITIVE_INFINITY, 'RealtimeEngine.setTempo: bpm must be finite'],
+        [0, 'RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]'],
+        [-1, 'RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]'],
+        [1e-8, 'RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]'],
+        [Number.NaN, 'RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]'],
+        [
+          Number.POSITIVE_INFINITY,
+          'RealtimeEngine.setTempo: bpm must be finite and in [1e-6, 100000]',
+        ],
       ] as const) {
         expect(expectRefusalOf(() => engine.setTempo(invalid), RangeError).message).toBe(message);
         expect(engine.sampleAtPpq(1)).toBe(48000);
@@ -1444,8 +1448,12 @@ describe('v1.2 feature additions (WASM)', () => {
           () => engine.setTempoSegments([{ startPpq: 0, bpm: Number.NaN }]),
           RangeError,
         ).message,
-      ).toBe('RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in (0, 100000]');
+      ).toBe(
+        'RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in [1e-6, 100000]',
+      );
       expect(engine.sampleAtPpq(1)).toBe(48000);
+      engine.setTempo(1e-6);
+      expect(engine.sampleAtPpq(1)).toBeGreaterThan(48000);
       engine.destroy();
     });
 

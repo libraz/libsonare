@@ -1,13 +1,16 @@
 #include "sonare_wrap_transcribe.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include "c_api/transcribe_input_domains.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
 #include "sonare_wrap_utils.h"
+#include "transport/tempo_map.h"
 
 namespace sonare_node {
 namespace {
@@ -118,11 +121,24 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   if (!ReadTranscribeSource(env, request, &samples, &sample_rate)) {
     return env.Undefined();
   }
-  // A tempo <= 0 is the C ABI's "detect it", which is also what an omitted key
-  // means, so the fallback and the sentinel are the same value.
-  const float tempo_bpm = FloatProperty(request, "tempoBpm", 0.0f);
+  // The C ABI's zero means detection; only an absent key selects it here.
+  const Napi::Value tempo_value = request.Get("tempoBpm");
+  const double supplied = DomainDoubleValue(env, tempo_value, "tempoBpm", 0.0);
   SonareTranscribeConfig config{};
   if (!ReadTranscribeConfig(env, request, &config)) return env.Undefined();
+  float tempo_bpm = 0.0f;
+  if (!tempo_value.IsUndefined() && !tempo_value.IsNull()) {
+    tempo_bpm = sonare::util::check::saturated_float(supplied);
+    // The C ABI uses zero for detection, so keep a written zero or underflow distinct from absence.
+    if (tempo_bpm == 0.0f) {
+      tempo_bpm = std::copysign(std::numeric_limits<float>::min(), supplied);
+    }
+    if (supplied >= sonare::transport::kMinPublicTempoBpm &&
+        static_cast<double>(tempo_bpm) < sonare::transport::kMinPublicTempoBpm) {
+      tempo_bpm = std::nextafterf(static_cast<float>(sonare::transport::kMinPublicTempoBpm),
+                                  std::numeric_limits<float>::infinity());
+    }
+  }
 
   TranscribeResultGuard result;
   const SonareError error =

@@ -59,6 +59,7 @@ void RealtimeEngineWasm::applyProjectTimeline(const val& timeline_id_val) {
     marker_strings_.clear();
     applied_timeline_.reset();
   }
+  if (result.refusal) std::rethrow_exception(result.refusal);
   if (!result.ok()) throw sonare::SonareException(result.code, result.message);
 }
 #endif

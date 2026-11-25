@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import math
 from collections.abc import Sequence
 from typing import Literal, cast
 
@@ -25,7 +26,6 @@ from ._effects_note_model import (
     _notes_to_c,
     _pitch_hz_from_c,
     _transcribe_config,
-    _transcribe_positive,
     _transcribe_result_from_c,
     _transcribe_sample_rate,
 )
@@ -42,6 +42,7 @@ from ._ffi import (
     SonarePitchDecompositionResult,
     SonareTranscribeResult,
 )
+from ._narrowing import _domain_float
 from ._runtime import (
     _call_float_array_transform,
     _check,
@@ -62,6 +63,7 @@ from ._runtime import (
     _to_c_size_t,
     _validate_samples,
 )
+from ._tempo_domains import TRANSCRIBE_TEMPO_MIN
 
 # The policy is published as a name, so the ordinals live here and go no further
 # than the ctypes boundary below.
@@ -70,6 +72,21 @@ _UNMATCHED_POLICIES = {
     "mute": SONARE_NOTE_TARGET_UNMATCHED_MUTE,
     "nearest": SONARE_NOTE_TARGET_UNMATCHED_NEAREST,
 }
+
+
+def _transcribe_tempo(value: float) -> float:
+    """Narrow a supplied tempo, preserving the C sentinel and every value at or above the floor.
+
+    The result is exactly representable as a C float, so the call site's conversion keeps it;
+    an infinity passes through for the core to refuse with the floor.
+    """
+    narrowed = _domain_float(value, "tempo_bpm").value
+    # Zero means detection to C, so keep a written zero or underflow distinct from absence.
+    if narrowed == 0.0:
+        narrowed = math.copysign(float(np.finfo(np.float32).tiny), narrowed)
+    if float(value) >= TRANSCRIBE_TEMPO_MIN and narrowed < TRANSCRIBE_TEMPO_MIN:
+        narrowed = float(np.nextafter(np.float32(TRANSCRIBE_TEMPO_MIN), np.float32(np.inf)))
+    return narrowed
 
 
 def _optional_note_voiced(
@@ -1024,10 +1041,10 @@ def transcribe(
         samples: Mono source audio (any sequence convertible to float32).
         sample_rate: Sample rate of ``samples`` in Hz.
         tempo_bpm: The tempo the PPQ grid is built on. ``None`` detects one from
-            ``samples``, which costs an onset/tempo pass; a non-positive value is
-            refused rather than read as a request to detect. Note that the
-            coordinates scale WITH it -- the same audio on twice the tempo is
-            twice as many beats long. The one setting that reads it is
+            ``samples``, which costs an onset/tempo pass; a supplied value must be
+            finite and at least ``1e-6`` BPM. Note that the coordinates scale WITH
+            it -- the same audio on twice the tempo is twice as many beats long.
+            The one setting that reads it is
             ``min_note_division``; with a grid tempo that is not the music's,
             give ``min_note_ms`` instead.
         polyphonic: Read the multi-F0 chain, which finds overlapping notes at
@@ -1123,7 +1140,6 @@ def transcribe(
     lib = _get_lib()
 
     rate = _transcribe_sample_rate(sample_rate)
-    tempo = 0.0 if tempo_bpm is None else _transcribe_positive(tempo_bpm, "tempo_bpm")
     config = _transcribe_config(
         polyphonic=polyphonic,
         reference_hz=reference_hz,
@@ -1142,6 +1158,7 @@ def transcribe(
         min_note_division=min_note_division,
         monophonic_model=monophonic_model,
     )
+    tempo = _domain_float(0.0 if tempo_bpm is None else _transcribe_tempo(tempo_bpm), "tempo_bpm")
     c_array, length = _to_c_float_array(samples)
 
     out = SonareTranscribeResult()
@@ -1151,7 +1168,7 @@ def transcribe(
                 c_array,
                 _to_c_size_t(length, "length"),
                 _to_c_int(rate, "sample_rate"),
-                _to_c_float(tempo, "tempo_bpm"),
+                tempo,
                 ctypes.byref(config),
                 ctypes.byref(out),
             ),
