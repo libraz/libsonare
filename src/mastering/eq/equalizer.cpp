@@ -114,9 +114,11 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size, int max
   // Bands stored before any rate was known meet it here and are refused as
   // set_band() refuses them; once prepared, a later rate designs them at its ceiling.
   if (!prepared_) {
-    for (const EqBand& band : bands_) {
+    for (size_t index = 0; index < bands_.size(); ++index) {
+      const EqBand& band = bands_[index];
       if (band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate * 0.5))) {
-        refuse_band_frequency(sample_rate);
+        const std::string subject = "band" + std::to_string(index) + ".frequencyHz";
+        refuse_band_frequency(sample_rate, subject.c_str());
       }
     }
   }

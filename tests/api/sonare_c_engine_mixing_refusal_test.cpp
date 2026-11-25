@@ -1069,4 +1069,25 @@ TEST_CASE("the master strip setter refuses a saved scene by name and keeps its s
   CHECK(bounce_and_destroy(engine) == bounce_after(StripSetter::Master, kSavedStrip));
 }
 
+TEST_CASE("master strip insert preparation names the indexed EQ frequency",
+          "[c_api][engine_refusal]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 16000, 128, 16, 16, 0) == SONARE_OK);
+  constexpr const char* kInsert =
+      R"({"slot":"pre","processor":"eq.equalizer","params":{"band0.type":1,)"
+      R"("band0.frequencyHz":12000,"band0.gainDb":3,"band0.q":1,"band0.enabled":true}})";
+  const std::string settings = strip_scene("master", inserts_member(kInsert, 1));
+  CHECK(sonare_engine_set_master_strip_json(engine, settings.c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_subject_count() == 1);
+  const char* subject = sonare_last_refusal_subject(0);
+  CHECK((subject != nullptr &&
+         std::string(subject) == "settings.inserts[0].params.band0.frequencyHz"));
+  CHECK_FALSE(sonare_last_refusal_is_shape());
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
+  CHECK(sonare_engine_set_master_strip_json(engine, settings.c_str()) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
 #endif  // defined(SONARE_WITH_MIXING)

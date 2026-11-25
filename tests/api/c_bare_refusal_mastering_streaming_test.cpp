@@ -193,6 +193,39 @@ TEST_CASE("the streaming chain names the supplied planes on a prepared-width mis
   }
 }
 
+TEST_CASE("the streaming chain names flush planes on a prepared-width mismatch",
+          "[c_api][mastering][streaming]") {
+  PreparedChain prepared;
+  float left = 0.0f;
+  float right = 0.0f;
+  size_t written = 9;
+
+  SECTION("mono input to a stereo chain") {
+    REQUIRE(sonare_streaming_mastering_chain_prepare(prepared.chain, 48000, 128, 2) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_flush_mono(prepared.chain, &left, 1, &written) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "samples must match the prepared channel count");
+    CHECK(written == 0);
+    REQUIRE(sonare_last_refusal_entry() != nullptr);
+    CHECK(std::string(sonare_last_refusal_entry()) == "streaming_mastering_chain_flush_mono");
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "samples");
+  }
+
+  SECTION("stereo input to a mono chain") {
+    REQUIRE(sonare_streaming_mastering_chain_prepare(prepared.chain, 48000, 128, 1) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_flush_stereo(
+                prepared.chain, &left, &right, 1, &written) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "left and right must match the prepared channel count");
+    CHECK(written == 0);
+    REQUIRE(sonare_last_refusal_entry() != nullptr);
+    CHECK(std::string(sonare_last_refusal_entry()) == "streaming_mastering_chain_flush_stereo");
+    REQUIRE(sonare_last_refusal_subject_count() == 2);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == "left");
+    CHECK(std::string(sonare_last_refusal_subject(1)) == "right");
+  }
+}
+
 TEST_CASE("the streaming chain names value when a direct setter cannot narrow it",
           "[c_api][mastering][streaming]") {
   using namespace sonare::mastering::api;

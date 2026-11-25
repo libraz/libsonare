@@ -8,10 +8,13 @@
 /// Subjects are spelled as the C entries name their arguments; each surface respells them
 /// through its own refusal-spelling mechanism.
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/checked_insert.h"
@@ -19,6 +22,7 @@
 #include "c_api/engine_eq_band_argument.h"
 #include "engine/insert_automation_targets.h"
 #include "engine/realtime_engine.h"
+#include "engine/strip_spec.h"
 #include "mastering/eq/parametric.h"
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
@@ -261,13 +265,13 @@ inline void check_mixer_surround_pan(double azimuth, double divergence, double l
 }
 
 /// @brief Throws the refusal for a refused strip setter. When the engine retained only its coarse
-///        insert-construction fault, replays @p inserts to raise the factory's structured parameter
+///        insert fault, replays @p inserts to raise the structured construction or prepare
 ///        refusal under `settings.inserts[i].params`; otherwise the retained cause, as
 ///        throw_mixer_edit_refusal raises it for MixerEditScope::kStrip.
 [[noreturn]] inline void throw_strip_edit_refusal(
     sonare::engine::RealtimeEngine& realtime,
     const std::vector<sonare::mixing::api::Insert>& inserts,
-    const sonare::mixing::api::StripEq* eq = nullptr) {
+    const sonare::mixing::api::StripEq* eq = nullptr, bool prepare_inserts = false) {
   using sonare::engine::MixerEditCause;
   namespace schema = sonare::util::json::schema;
   if (eq != nullptr && realtime.last_mixer_edit_fault().cause == MixerEditCause::kStripEqInvalid) {
@@ -283,20 +287,55 @@ inline void check_mixer_surround_pan(double azimuth, double divergence, double l
     }
   }
   if (realtime.last_mixer_edit_fault().cause == MixerEditCause::kStripInsertsRefused) {
+    struct BuiltInsert {
+      std::unique_ptr<sonare::rt::ProcessorBase> processor;
+      bool stereo_pair_only;
+    };
+    const auto params_path = [](size_t i) {
+      return schema::child_path(schema::index_path("settings.inserts", i), "params");
+    };
+    const bool replay_prepare = prepare_inserts && realtime.max_block_size() > 0;
+    std::vector<BuiltInsert> built;
+    if (replay_prepare) built.reserve(inserts.size());
     for (size_t i = 0; i < inserts.size(); ++i) {
-      const sonare::mixing::api::Insert& insert = inserts[i];
-      const std::string path =
-          schema::child_path(schema::index_path("settings.inserts", i), "params");
+      const auto& insert = inserts[i];
       try {
-        if (!sonare::mastering::api::make_checked_insert(insert.processor_name, insert.params_json,
-                                                         path, sonare::ErrorCode::InvalidParameter,
-                                                         realtime.sample_rate())) {
-          break;
-        }
+        bool stereo_pair_only = false;
+        const std::string path = params_path(i);
+        auto processor = sonare::engine::make_insert_processor(insert, realtime.sample_rate(),
+                                                               &stereo_pair_only, path.c_str());
+        if (!processor) break;
+        if (replay_prepare) built.push_back({std::move(processor), stereo_pair_only});
       } catch (const sonare::SonareParameterRefusal&) {
         throw;
       } catch (const sonare::SonareException&) {
         break;
+      }
+    }
+    // Construction precedes preparation, which runs in pre/post order.
+    if (replay_prepare && built.size() == inserts.size()) {
+      using Slot = sonare::mixing::api::InsertSlot;
+      for (Slot slot : {Slot::PreFader, Slot::PostFader}) {
+        for (size_t i = 0; i < built.size(); ++i) {
+          if (inserts[i].slot != slot) continue;
+          const int width = realtime.prepared_channels();
+          const int channels = built[i].stereo_pair_only ? std::min(width, 2) : width;
+          try {
+            built[i].processor->prepare(realtime.sample_rate(), realtime.max_block_size(),
+                                        channels);
+          } catch (const sonare::SonareParameterRefusal& refusal) {
+            if (refusal.code() == sonare::ErrorCode::InvalidParameter && !refusal.shape_error()) {
+              const std::string path = params_path(i);
+              throw refusal.respelled(
+                  refusal.code(),
+                  [&path](const std::string& subject) { return schema::child_path(path, subject); },
+                  true);
+            }
+            throw_mixer_edit_refusal(realtime, MixerEditScope::kStrip);
+          } catch (const sonare::SonareException&) {
+            throw_mixer_edit_refusal(realtime, MixerEditScope::kStrip);
+          }
+        }
       }
     }
   }

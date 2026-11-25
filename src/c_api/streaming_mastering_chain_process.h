@@ -22,4 +22,19 @@ inline void streaming_mastering_chain_process_stereo(
   with_c_pair_names(names, [&] { chain.process_block(channels, 2, num_samples); });
 }
 
+inline int streaming_mastering_chain_flush_mono(
+    sonare::mastering::api::StreamingMasteringChain& chain, float* samples, int capacity) {
+  float* channels[] = {samples};
+  const std::array<CName, 1> names{{{"num_channels", "samples"}}};
+  return with_c_names(names, [&] { return chain.flush(channels, 1, capacity); });
+}
+
+inline int streaming_mastering_chain_flush_stereo(
+    sonare::mastering::api::StreamingMasteringChain& chain, float* left, float* right,
+    int capacity) {
+  float* channels[] = {left, right};
+  const std::array<CPairName, 1> names{{{"num_channels", "left", "right"}}};
+  return with_c_pair_names(names, [&] { return chain.flush(channels, 2, capacity); });
+}
+
 }  // namespace sonare_c_detail

@@ -562,8 +562,10 @@ SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char
       mixing::api::strip_settings_from_json(settings_json, "settings");
   engine->engine.require_quiescent();
   if (engine->engine.set_master_strip(settings)) return SONARE_OK;
-  return run_validation(
-      [&] { throw_strip_edit_refusal(engine->engine, settings.inserts, &settings.eq); });
+  return run_validation([&] {
+    throw_strip_edit_refusal(engine->engine, settings.inserts, &settings.eq,
+                             /*prepare_inserts=*/true);
+  });
   SONARE_C_CATCH
 #endif
 }

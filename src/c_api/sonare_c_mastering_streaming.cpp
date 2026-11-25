@@ -379,8 +379,8 @@ SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMastering
   if (const SonareError err = check_flush_capacity(capacity); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(samples_written);
   SONARE_C_TRY
-  float* channels[] = {samples};
-  const int written = handle->chain->flush(channels, 1, static_cast<int>(capacity));
+  const int written =
+      streaming_mastering_chain_flush_mono(*handle->chain, samples, static_cast<int>(capacity));
   *samples_written = static_cast<size_t>(written);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -398,8 +398,8 @@ SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteri
   if (const SonareError err = check_flush_capacity(capacity); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(samples_written);
   SONARE_C_TRY
-  float* channels[] = {left, right};
-  const int written = handle->chain->flush(channels, 2, static_cast<int>(capacity));
+  const int written = streaming_mastering_chain_flush_stereo(*handle->chain, left, right,
+                                                             static_cast<int>(capacity));
   *samples_written = static_cast<size_t>(written);
   return SONARE_OK;
   SONARE_C_CATCH

@@ -478,8 +478,8 @@ int StreamingMasteringChain::flush(float* const* channels, int num_channels, int
                           "StreamingMasteringChain::flush called before prepare()");
   }
   if (num_channels != prepared_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain::flush num_channels mismatch with prepare()");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "num_channels",
+                                            "must match the prepared channel count");
   }
   if (max_samples < 0 || max_samples > max_block_size_) {
     throw SonareException(

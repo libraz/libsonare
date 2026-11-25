@@ -19,9 +19,10 @@ inline bool band_frequency_in_range(float frequency_hz, double sample_rate) noex
 inline bool band_q_valid(float q) noexcept { return q > 0.0f; }
 
 /// @brief Throws the refusal for a band frequency outside (0, Nyquist) at @p sample_rate.
-[[noreturn]] inline void refuse_band_frequency(double sample_rate) {
+[[noreturn]] inline void refuse_band_frequency(double sample_rate,
+                                               const char* subject = "frequency_hz") {
   throw SonareParameterRefusal::predicate(
-      ErrorCode::InvalidParameter, "frequency_hz",
+      ErrorCode::InvalidParameter, subject,
       util::refusal::interval_predicate(0.0, false, sample_rate * 0.5, false));
 }
 
