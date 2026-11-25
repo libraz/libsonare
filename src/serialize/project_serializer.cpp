@@ -49,18 +49,18 @@ using sonare::constants::kDefaultDawSampleRate;
 
 Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
   Object o;
-  o["destinationId"] = static_cast<double>(entry.destination_id);
-  o["part"] = static_cast<double>(entry.part);
-  o["mode"] = std::string(kPartRigModeNames[static_cast<size_t>(entry.rig.mode)]);
+  json::put(o, "destinationId", static_cast<double>(entry.destination_id));
+  json::put(o, "part", static_cast<double>(entry.part));
+  json::put(o, "mode", std::string(kPartRigModeNames[static_cast<size_t>(entry.rig.mode)]));
   if (entry.rig.mode == midi::PartRigMode::kChain) {
     Array inserts;
     for (const auto& stage : entry.rig.stages) {
       Object so;
-      so["processor"] = stage.processor;
-      so["params"] = json::parse(stage.params_json);
+      json::put(so, "processor", stage.processor);
+      json::put(so, "params", json::parse(stage.params_json));
       inserts.emplace_back(std::move(so));
     }
-    o["inserts"] = std::move(inserts);
+    json::put(o, "inserts", std::move(inserts));
   }
   return o;
 }
@@ -377,43 +377,43 @@ std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
 Value project_to_value(const arrangement::Project& project,
                        const arrangement::MidiContentStore& midi) {
   Object root;
-  root["version"] = static_cast<double>(SONARE_PROJECT_SCHEMA_VERSION);
-  root["sampleRate"] = project.sample_rate();
-  root["overlapPolicy"] = enum_token(project.overlap_policy());
+  json::put(root, "version", static_cast<double>(SONARE_PROJECT_SCHEMA_VERSION));
+  json::put(root, "sampleRate", project.sample_rate());
+  json::put(root, "overlapPolicy", enum_token(project.overlap_policy()));
 
   Array tempo;
   for (const auto& s : project.tempo_segments()) tempo.push_back(tempo_segment_to_json(s));
-  root["tempoSegments"] = std::move(tempo);
+  json::put(root, "tempoSegments", std::move(tempo));
 
   Array sigs;
   for (const auto& s : project.time_signatures()) sigs.push_back(time_signature_to_json(s));
-  root["timeSignatures"] = std::move(sigs);
+  json::put(root, "timeSignatures", std::move(sigs));
 
   Array sources;
   for (const auto& src : project.sources()) sources.push_back(source_to_json(src));
-  root["sources"] = std::move(sources);
+  json::put(root, "sources", std::move(sources));
 
   Array tracks;
   for (const auto& t : project.tracks()) tracks.push_back(track_to_json(t));
-  root["tracks"] = std::move(tracks);
+  json::put(root, "tracks", std::move(tracks));
 
   Array clips;
   for (const auto& c : project.clips()) clips.push_back(clip_to_json(c));
-  root["clips"] = std::move(clips);
+  json::put(root, "clips", std::move(clips));
 
   Array warp_maps;
   for (const auto& map : project.warp_maps()) warp_maps.push_back(warp_map_to_json(map));
-  root["warpMaps"] = std::move(warp_maps);
+  json::put(root, "warpMaps", std::move(warp_maps));
 
   if (!project.part_rigs().empty()) {
     Array part_rigs;
     for (const auto& entry : project.part_rigs()) part_rigs.push_back(part_rig_to_json(entry));
-    root["partRigs"] = std::move(part_rigs);
+    json::put(root, "partRigs", std::move(part_rigs));
   }
 
   Array markers;
   for (const auto& m : project.markers()) markers.push_back(marker_to_json(m));
-  root["markers"] = std::move(markers);
+  json::put(root, "markers", std::move(markers));
 
   // The next_*_id counters are deliberately NOT serialized: serialization must
   // be a pure function of the user-visible arrangement so that an edit + undo
@@ -423,9 +423,9 @@ Value project_to_value(const arrangement::Project& project,
   // live max-id scan below, so an id that was allocated and deleted before the
   // save can be re-allocated after a load. Hosts must not key external state
   // by project ids across save/load boundaries.
-  root["annotation"] = annotation_to_json(project.annotation());
-  root["midiContent"] = midi_content_to_json(midi);
-  if (const auto* scene = project.find_scene()) root["scene"] = scene_to_value(*scene);
+  json::put(root, "annotation", annotation_to_json(project.annotation()));
+  json::put(root, "midiContent", midi_content_to_json(midi));
+  if (const auto* scene = project.find_scene()) json::put(root, "scene", scene_to_value(*scene));
 
   Array instruments;
   std::size_t instrument_index = 0;
@@ -443,11 +443,11 @@ Value project_to_value(const arrangement::Project& project,
     instruments.push_back(destination_instrument_to_json(destination_id, binding));
     ++instrument_index;
   }
-  root["instruments"] = std::move(instruments);
+  json::put(root, "instruments", std::move(instruments));
 
   Array sidecars;
   for (const auto& s : project.assist_sidecars()) sidecars.push_back(sidecar_to_json(s));
-  root["assistSidecars"] = std::move(sidecars);
+  json::put(root, "assistSidecars", std::move(sidecars));
 
   return Value(std::move(root));
 }
