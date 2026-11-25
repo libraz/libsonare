@@ -11,6 +11,15 @@
 #include "util/math_utils.h"
 
 namespace sonare {
+namespace detail {
+
+[[gnu::noinline]] void sort_bpm_histogram_by_votes(BpmHistogramBin* bins, std::size_t count) {
+  if (count < 2) return;
+  std::sort(bins, bins + count,
+            [](const BpmHistogramBin& a, const BpmHistogramBin& b) { return a.votes > b.votes; });
+}
+
+}  // namespace detail
 
 std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
                                                  float bpm_min, float bpm_max, float bin_width) {
@@ -43,8 +52,7 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
     }
   }
 
-  std::sort(result.begin(), result.end(),
-            [](const BpmHistogramBin& a, const BpmHistogramBin& b) { return a.votes > b.votes; });
+  detail::sort_bpm_histogram_by_votes(result.data(), result.size());
 
   return result;
 }
@@ -561,8 +569,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
       histogram.push_back({bin_bpm(i), tempo_hist[i]});
     }
   }
-  std::sort(histogram.begin(), histogram.end(),
-            [](const BpmHistogramBin& a, const BpmHistogramBin& b) { return a.votes > b.votes; });
+  detail::sort_bpm_histogram_by_votes(histogram.data(), histogram.size());
 
   if (histogram.empty()) {
     /// Fall back to highest confidence candidate

@@ -154,8 +154,7 @@ TempoEstimate find_best_tempo(const std::vector<float>& autocorr, int sr, int ho
   if (max_votes <= 0) {
     return {0.0f, 0.0f, candidate_count};
   }
-  std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(n_candidates),
-            [](const BpmHistogramBin& a, const BpmHistogramBin& b) { return a.votes > b.votes; });
+  sonare::detail::sort_bpm_histogram_by_votes(candidates.data(), n_candidates);
   const BeatTempoChoice choice =
       choose_beat_tempo(candidates.data(), n_candidates, evidence.data(), n_evidence);
   if (choice.bpm <= 0.0f) {

@@ -155,6 +155,11 @@ struct BpmHistogramBin {
   int votes;         ///< Number of votes (tempo candidates in this bin)
 };
 
+namespace detail {
+/// @brief Sorts histogram bins by descending vote count.
+void sort_bpm_histogram_by_votes(BpmHistogramBin* bins, std::size_t count);
+}  // namespace detail
+
 /// @brief Harmonic cluster of related BPM candidates.
 /// @details Key is the base BPM, value is list of (bpm, votes) pairs in the cluster.
 using HarmonicClusterMap = std::map<float, std::vector<std::pair<float, int>>>;
