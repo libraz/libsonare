@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import builtins
 import dataclasses
 import json
 import math
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -581,3 +584,871 @@ def test_declip_link_channels_follow_the_corpus(case: dict[str, Any]) -> None:
     with pytest.raises(TypeError) as refused:
         call()
     assert type(refused.value).__name__ == _DECLIP_LINK["error"]["python"]
+
+
+_ONE_SHOT_RESULTS = json.loads(
+    (
+        Path(__file__).resolve().parents[3] / "tests/conformance/public_result_corpus.json"
+    ).read_text()
+)["one_shot_results"]
+_ONE_SHOT_SIGNAL_PATH = (
+    Path(__file__).resolve().parents[3] / "tests/conformance/public_result_signals.json"
+)
+_ONE_SHOT_SIGNALS: dict[str, list[float]] = (
+    json.loads(_ONE_SHOT_SIGNAL_PATH.read_text()) if _ONE_SHOT_SIGNAL_PATH.exists() else {}
+)
+
+
+def _one_shot_fixture(name: str) -> list[float]:
+    if name == "silence_excerpt":
+        return [0.0] * 8192
+    if name == "impulsive":
+        return [1.0 if i == 64 or 256 <= i < 260 else (i % 23 - 11) / 128 for i in range(512)]
+    if name == "historical_excerpt":
+        return _one_shot_fixture("historical_left")[:8192]
+    if name in _ONE_SHOT_SIGNALS:
+        return [float(value) for value in _ONE_SHOT_SIGNALS[name]]
+    frames = _ONE_SHOT_RESULTS["frames"]
+    if name in {"empty", "tagged_wav"}:
+        return []
+    if name in {"silence", "profile_silence"}:
+        return [0.0] * frames
+    if name not in {"tone", "clipped", "gapped"}:
+        raise AssertionError(f"unknown one-shot fixture: {name}")
+
+    def tone_sample(i: int) -> float:
+        return ((i % 109 - 54) + (i % 47 - 23) * 0.5) / (512 if i < frames // 2 else 256)
+
+    return [
+        0.0
+        if name == "gapped" and not frames // 2 <= i < frames // 2 + 256
+        else 1.0
+        if name == "clipped" and i % 109 < 8
+        else tone_sample(i)
+        for i in range(frames)
+    ]
+
+
+def _one_shot_signal(name: str, fallback: list[float]) -> list[float]:
+    return _one_shot_fixture(name) if name in _ONE_SHOT_SIGNALS else fallback
+
+
+def _interleave(left: list[float], right: list[float]) -> list[float]:
+    if len(left) != len(right):
+        raise AssertionError(f"stereo fixture lengths differ: {len(left)} and {len(right)}")
+    return [value for pair in zip(left, right, strict=True) for value in pair]
+
+
+def _one_shot_call(
+    entry: str,
+    samples: list[float],
+    fixture: str | None = None,
+    midi_kwargs: dict[str, Any] | None = None,
+    case: dict[str, Any] | None = None,
+) -> Any:
+    if not entry.startswith("sonare_"):
+        raise AssertionError(f"one-shot corpus entry is not a C symbol: {entry}")
+    if entry in {
+        "sonare_midi_cc_learn",
+        "sonare_midi_cc_to_breakpoint",
+        "sonare_midi_route_events",
+        "sonare_midi_param_to_cc",
+    }:
+        events = [libsonare.midi_cc(0.5, 1, 2, 74, 17), libsonare.midi_cc(1, 1, 2, 74, 101)]
+        if entry == "sonare_midi_cc_learn":
+            return libsonare.midi_cc_learn(events, 9)
+        if entry == "sonare_midi_route_events":
+            return libsonare.midi_route_events(events)
+        bindings = [libsonare.MidiCcBinding(cc_number=74, channel=2, param_id=9)]
+        if entry == "sonare_midi_cc_to_breakpoint":
+            return libsonare.midi_cc_to_breakpoint(bindings, events[1])
+        return libsonare.midi_param_to_cc(bindings, 9, 0.75, 1)
+    rate = _ONE_SHOT_RESULTS["sample_rate"]
+    if entry in {
+        "sonare_assign_note_targets",
+        "sonare_merge_notes",
+        "sonare_split_note",
+    }:
+        import numpy as np
+
+        f0_hz = np.full(32, 440.0, dtype=np.float32)
+        if entry == "sonare_merge_notes":
+            f0_hz[16:] = 660.0
+        voiced = np.ones(32, dtype=np.int32)
+        frame_rate = rate / 256
+        notes = libsonare.extract_notes(samples, rate, f0_hz, frame_rate, voiced=voiced)
+        if entry == "sonare_assign_note_targets":
+            target = libsonare.NoteTarget(start_sec=0.0, end_sec=1.0, target_midi=60.0)
+            return libsonare.assign_note_targets(notes, rate, [target])
+        notes[0].edit.amplitude_envelope = np.asarray([0.25, 0.5, 1.0], dtype=np.float32)
+        if entry == "sonare_split_note":
+            return libsonare.split_note(
+                samples, rate, f0_hz, frame_rate, notes, 0, 16, voiced=voiced
+            )
+        return libsonare.merge_notes(samples, rate, f0_hz, frame_rate, notes, 0, 1, voiced=voiced)
+    if entry == "sonare_mixer_process_stereo":
+        return libsonare.mix_stereo([(samples, [value * 0.5 for value in reversed(samples)])], rate)
+    if entry == "sonare_playback_render_interleaved":
+        return libsonare.render_playback(
+            samples,
+            num_channels=2,
+            sample_rate=rate,
+            config={"target": {"kind": "speakers", "layout": "stereo"}},
+        )
+    if entry == "sonare_capability_catalog_json":
+        if not libsonare.capabilities().features.mastering:
+            pytest.skip("capability catalog needs mastering")
+        return libsonare.capability_catalog()
+    if entry == "sonare_analyze_json":
+        return libsonare.analyze(samples, rate)
+    if entry == "sonare_mastering_amp_preset_catalog":
+        return libsonare.mastering_amp_preset_catalog()
+    if entry == "sonare_mastering_preset_params_json":
+        return libsonare.mastering_preset_params("pop")
+    if entry == "sonare_mastering_chain_config_from_json":
+        return libsonare.mastering_chain_config_from_json('{"params":{}}')
+    if entry == "sonare_mastering_insert_param_info":
+        return libsonare.mastering_insert_param_info("eq.parametric", sample_rate=48000)
+    if entry == "sonare_mixing_scene_preset_json":
+        return libsonare.mixing_scene_preset("vocalReverbSend")
+    if entry == "sonare_synth_engine_param_info":
+        return libsonare.synth_engine_param_info("subtractive")
+    if entry == "sonare_synth_enum_names":
+        return libsonare.synth_enum_tables()
+    if entry == "sonare_synth_preset_patch":
+        return libsonare.synth_preset_patch("sine")
+    if entry == "sonare_synth_patch_param_info":
+        return libsonare.synth_patch_param_info()
+    if entry == "sonare_waveform_peak_pyramid":
+        return libsonare.waveform_peak_pyramid(samples, 1, samples_per_bucket_levels=[1, 2, 4])
+    if entry in {"sonare_decode_channels", "sonare_read_audio_tags"}:
+        encoded = libsonare.encode_audio(
+            [[0.25, -0.25, 0.75, -0.5], [-0.125, 0.375, 0.5, -0.75]],
+            22050,
+            "wav",
+            tags={"title": "Morning", "artist": "Ada"},
+        )
+        return (
+            libsonare.decode_channels(encoded)
+            if entry == "sonare_decode_channels"
+            else libsonare.read_audio_tags(encoded)
+        )
+    if entry == "sonare_chord_symbol_from_analysis":
+        chord = libsonare.Chord(
+            root=0, quality="major", start_sec=0.0, end_sec=1.0, confidence=1.0, bass=0, name="C"
+        )
+        return libsonare.chord_symbol_from_analysis(chord)
+    if entry == "sonare_realtime_voice_changer_preset_config":
+        config = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+        with libsonare.RealtimeVoiceChanger(
+            rate, num_channels=1, config=config, max_block_size=128
+        ) as changer:
+            return json.loads(changer.config_json())
+    if entry == "sonare_realtime_voice_changer_preset_json":
+        return json.loads(libsonare.realtime_voice_changer_preset_json("neutralMonitor"))
+    if entry == "sonare_realtime_voice_changer_validate_preset_json":
+        document = libsonare.realtime_voice_changer_preset_json("neutralMonitor")
+        result = libsonare.validate_realtime_voice_changer_preset_json(document)
+        normalized = result.get("normalizedJson")
+        assert isinstance(normalized, str)
+        return {**result, "normalizedJson": json.loads(normalized)}
+    if entry == "sonare_split_silence_common":
+        return libsonare.split_silence_common_with_report([samples, samples[: len(samples) // 2]])
+    if entry == "sonare_align_take_to_reference":
+        return libsonare.align_take_to_reference(samples, samples, rate)
+    if entry == "sonare_mastering_repair_dereverb_apply_room_estimate":
+        import numpy as np
+
+        return libsonare.mastering_repair_dereverb_config_for_room(
+            libsonare.RoomEstimate(
+                volume=100.0,
+                length_m=None,
+                width_m=None,
+                height_m=None,
+                drr_db=None,
+                confidence=1.0,
+                band_absorption=np.empty(0, dtype=np.float32),
+                rt60_bands=np.asarray([0.125, 0.25, 0.375, 0.625], dtype=np.float32),
+            )
+        )
+    if entry == "sonare_room_geometry_from_estimate":
+        import numpy as np
+
+        return libsonare.room_geometry_from_estimate(
+            libsonare.RoomEstimate(
+                volume=None,
+                length_m=14,
+                width_m=5,
+                height_m=6,
+                drr_db=None,
+                confidence=1,
+                band_absorption=np.asarray([0.25, 0.5, 0.75], dtype=np.float32),
+                rt60_bands=np.empty(0, dtype=np.float32),
+            )
+        )
+    if entry == "sonare_synthesize_rir":
+        return libsonare.synthesize_rir(sample_rate=rate, max_sec=0.12)
+    if entry == "sonare_room_morph":
+        return libsonare.room_morph(samples, rate, 7, 5, 3, max_sec=0.12)
+    if entry == "sonare_room_morph_stereo":
+        return libsonare.room_morph_stereo(samples, samples[::-1], rate, 7, 5, 3, max_sec=0.12)
+    if entry == "sonare_lufs_series_interleaved":
+        right = (
+            [0.0] * len(samples)
+            if fixture == "silence"
+            else _one_shot_signal("historical_right", samples)
+        )
+        return libsonare.lufs_series_interleaved(_interleave(samples, right), 2, rate)
+    if entry == "sonare_decompose_note_pitch":
+        f0 = [0.0] * 7 if fixture == "empty" else [440.0, 441.0, 442.0, 0.0, 438.0, 437.0, 440.0]
+        return libsonare.decompose_note_pitch(f0, 100, None if fixture == "empty" else 440)
+    if entry == "sonare_note_targets_from_smf":
+        return libsonare.note_targets_from_smf(
+            bytes.fromhex("4d546864000000060000000100604d54726b0000000c00903c5060803c0000ff2f00")
+        )
+    if entry == "sonare_decompose":
+        spectrum = [3, 2, 1, 2, 3, 2, 1, 2, 4, 3, 2, 1, 2, 4, 3, 1, 2, 4, 4, 1, 3, 2, 1, 3]
+        return libsonare.decompose(spectrum, 4, 6, 2)
+    if entry == "sonare_decompose_stems_linked":
+        return libsonare.decompose_stems_linked(
+            [samples, _one_shot_fixture("historical_right")], rate
+        )
+    if entry == "sonare_estimate_meter_json":
+        import numpy as np
+
+        return libsonare.estimate_meter(
+            libsonare.BeatObservations(accent=np.asarray(samples, dtype=np.float32))
+        )
+    function_name = entry.removeprefix("sonare_")
+    function = getattr(libsonare, function_name, None)
+    if function is None and entry == "sonare_normalize_rms_stereo":
+        function = libsonare.normalize_stereo
+    if function is None and entry == "sonare_mastering_process":
+        function = libsonare.mastering
+    if function is None and entry == "sonare_mastering_analyze_pair_stereo":
+        function = libsonare.mastering_analyze_pair
+    if function is None:
+        raise AssertionError(f"no Python one-shot route for {entry}")
+    if midi_kwargs is not None:
+        return function(**midi_kwargs)
+    if entry.startswith("sonare_segment_") or entry in {"sonare_mel_to_stft", "sonare_mfcc_to_mel"}:
+        import numpy as np
+
+        if case is None or "input" not in case:
+            raise AssertionError(f"missing matrix input for {entry}")
+        source = case["input"]
+
+        def matrix(name: str) -> Any:
+            item = source[name]
+            return np.asarray(item["data"], dtype=np.float32).reshape(item["rows"], item["cols"])
+
+        routes = {
+            "sonare_segment_cross_similarity": lambda: function(matrix("x"), matrix("y")),
+            "sonare_segment_recurrence_matrix": lambda: function(matrix("data")),
+            "sonare_segment_recurrence_to_lag": lambda: function(matrix("recurrence")),
+            "sonare_segment_lag_to_recurrence": lambda: function(matrix("lag")),
+            "sonare_segment_subsegment": lambda: function(matrix("data"), source["boundaries"]),
+            "sonare_segment_agglomerative": lambda: function(matrix("data"), source["k"]),
+            "sonare_segment_path_enhance": lambda: function(matrix("recurrence"), source["win"]),
+            "sonare_mel_to_stft": lambda: function(matrix("mel"), sr=22050, n_fft=64),
+            "sonare_mfcc_to_mel": lambda: function(matrix("coefficients")),
+        }
+        return routes[entry]()
+
+    sample_rate = _ONE_SHOT_RESULTS["sample_rate"]
+    zeroes = [0.0] * len(samples)
+    left = samples
+    right = zeroes if fixture == "silence" else _one_shot_signal("historical_right", samples)
+    reference = _one_shot_signal("historical_reference", samples)
+    reference_right = (
+        zeroes
+        if fixture == "silence"
+        else _one_shot_signal("historical_reference_right", reference)
+    )
+
+    if entry in {
+        "sonare_mastering_repair_declick_stereo",
+        "sonare_mastering_repair_declip_stereo",
+        "sonare_mastering_repair_decrackle_stereo",
+    }:
+        return function(samples, samples[::-1], sample_rate)
+    if entry == "sonare_mastering_assistant_suggest_stereo":
+        return function(samples, samples, sample_rate)
+    if entry == "sonare_mastering_repair_apply":
+        return function([samples], sample_rate, stages=[libsonare.DeclickStage()])
+    if entry in {
+        "sonare_mastering_repair_dehum_stereo",
+        "sonare_mastering_repair_denoise_classical_stereo",
+        "sonare_mastering_repair_dereverb_classical_stereo",
+    }:
+        return function(samples, samples, sample_rate)
+    if entry in {
+        "sonare_mastering_repair_denoise_classical_linked",
+        "sonare_mastering_repair_dereverb_classical_linked",
+    }:
+        return function([samples, samples], sample_rate)
+    if entry == "sonare_mastering_repair_analyze":
+        return function([left, right], sample_rate)
+    if entry == "sonare_mastering_streaming_preview_stereo":
+        return function(left, right, sample_rate)
+    if entry == "sonare_mastering_streaming_preview":
+        return function(samples, sample_rate)
+    if entry == "sonare_mastering_repair_trim_silence":
+        return function(samples, sample_rate)
+    if entry == "sonare_mastering_repair_trim_silence_stereo":
+        return function(samples, samples, sample_rate)
+    if entry in {"sonare_piptrack", "sonare_reassigned_spectrogram"}:
+        return function(samples, sample_rate, n_fft=512, hop_length=128)
+    if entry == "sonare_master_audio":
+        return libsonare.master_audio(samples, sample_rate, overrides={})
+    if entry == "sonare_master_audio_stereo":
+        return libsonare.master_audio_stereo(samples, samples, sample_rate, overrides={})
+    if entry == "sonare_normalize_stereo":
+        return function(samples, samples, sample_rate)
+    if entry == "sonare_normalize_rms_stereo":
+        return libsonare.normalize_stereo(samples, samples, sample_rate, mode="rms")
+    if entry == "sonare_mastering_process":
+        return function(samples, sample_rate)
+    if entry == "sonare_mastering_ab_match_loudness":
+        return function(samples, reference, sample_rate)
+    if entry == "sonare_mastering_ab_match_loudness_stereo":
+        return function(samples, right, reference, reference_right, sample_rate)
+    if entry == "sonare_mastering_apply_processor":
+        return function("utility.gain", samples, sample_rate)
+    if entry == "sonare_mastering_apply_processor_stereo":
+        return function("utility.gain", samples, samples, sample_rate)
+    if entry == "sonare_mastering_apply_pair_processor":
+        return function("match.abCrossfade", samples, samples[::-1], sample_rate)
+    if entry == "sonare_mastering_apply_pair_processor_stereo":
+        return function(
+            "match.abCrossfade",
+            samples,
+            samples[::-1],
+            samples[::-1],
+            [sample * 0.5 for sample in reversed(samples)],
+            sample_rate,
+        )
+    if entry == "sonare_trim_silence":
+        return function(samples)
+    if entry == "sonare_mastering_audio_profile" and fixture in {
+        "profile_silence",
+        "clipped",
+        "historical_reference_right",
+    }:
+        return function(samples, sample_rate, {"detectDefects": True})
+    analysis_entries = {
+        "sonare_analyze_bpm",
+        "sonare_analyze_rhythm",
+        "sonare_analyze_melody",
+        "sonare_analyze_sections",
+        "sonare_analyze_impulse_response",
+        "sonare_detect_acoustic",
+        "sonare_estimate_room",
+    }
+    if entry in analysis_entries:
+        acoustic_entries = {
+            "sonare_analyze_impulse_response",
+            "sonare_detect_acoustic",
+            "sonare_estimate_room",
+        }
+        analysis_samples = (
+            _one_shot_signal("historical_rir", samples) if entry in acoustic_entries else samples
+        )
+        return function(analysis_samples, sample_rate)
+    if entry == "sonare_frame_signal":
+        return function(samples, 4, 2)
+    if entry == "sonare_mastering_audio_profile_stereo":
+        return function(left, right, sample_rate)
+    if entry == "sonare_streaming_loudness_gain":
+        return function(samples, sample_rate)
+    if entry == "sonare_streaming_loudness_gain_stereo":
+        return function(left, right, sample_rate)
+    if entry == "sonare_mastering_insert_timing":
+        return function("eq.parametric", sample_rate=sample_rate)
+    if entry in {
+        "sonare_mastering_repair_detect_clicks",
+        "sonare_mastering_repair_detect_crackle",
+        "sonare_mastering_repair_detect_hum",
+        "sonare_mastering_repair_detect_noise_floor",
+        "sonare_mastering_repair_detect_reverb",
+        "sonare_mastering_repair_detect_trim_range",
+    }:
+        return function(samples, sample_rate)
+    if entry == "sonare_mastering_repair_detect_trim_range_stereo":
+        return function(left, right, sample_rate)
+    if entry in {"sonare_mastering_analyze_pair", "sonare_mastering_analyze_pair_stereo"}:
+        if entry.endswith("_stereo"):
+            source: list[float] | list[list[float]] = [left, right]
+            reference_audio: list[float] | list[list[float]] = [reference, reference_right]
+        else:
+            source = left
+            reference_audio = reference
+        return function("match.tonalBalance", source, reference_audio, sample_rate)
+    if entry == "sonare_mastering_analyze_stereo":
+        return function("stereo.monoCompatCheck", left, right, sample_rate)
+    if entry == "sonare_metering_detect_clipping":
+        return function(samples, sample_rate)
+    if entry in {"sonare_metering_vectorscope", "sonare_metering_phase_scope"}:
+        return function(left, right, sample_rate)
+    if entry == "sonare_metering_spectrum":
+        return function(samples, sample_rate)
+    if entry == "sonare_metering_spectrum_frame":
+        return function(samples, sample_rate)
+    if entry == "sonare_lufs_interleaved":
+        return function(_interleave(left, right), 2, sample_rate)
+    if entry == "sonare_waveform_peaks":
+        return function(_interleave(left, right), 2)
+    if entry == "sonare_mixing_assistant_suggest":
+        from libsonare import MixAssistantTrack
+
+        tracks = [
+            MixAssistantTrack("tone", [samples]),
+            MixAssistantTrack("silent", [zeroes]),
+        ]
+        return function(tracks, sample_rate=sample_rate)
+    return function(samples, sample_rate)
+
+
+def _camel_field(name: str) -> str:
+    head, *tail = name.split("_")
+    return head + "".join(part[:1].upper() + part[1:] for part in tail)
+
+
+def _json_result_value(value: Any) -> Any:
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        fields: dict[str, Any] = {}
+        for field in dataclasses.fields(value):
+            field_value = getattr(value, field.name)
+            if field_value is not None:
+                field_name = _camel_field(field.name)
+                fields[field_name] = _json_result_value(field_value)
+        return fields
+    if isinstance(value, dict):
+        return {
+            _camel_field(str(key)): _json_result_value(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, (list, tuple)):
+        return [_json_result_value(item) for item in value]
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        return _json_result_value(tolist())
+    item = getattr(value, "item", None)
+    if callable(item):
+        return _json_result_value(item())
+    return value
+
+
+def _one_shot_public_result(entry: str, result: Any) -> Any:
+    if entry == "sonare_playback_render_interleaved":
+        assert result.ndim == 2
+        return {"samples": result.reshape(-1).tolist(), "numChannels": int(result.shape[1])}
+    if entry in {
+        "sonare_segment_cross_similarity",
+        "sonare_segment_recurrence_matrix",
+        "sonare_segment_recurrence_to_lag",
+        "sonare_segment_lag_to_recurrence",
+        "sonare_segment_path_enhance",
+        "sonare_mel_to_stft",
+        "sonare_mfcc_to_mel",
+    }:
+        import numpy as np
+
+        a = np.asarray(result)
+        return {"rows": int(a.shape[0]), "cols": int(a.shape[1]), "data": a.reshape(-1).tolist()}
+    if entry == "sonare_frame_signal":
+        rows, cols = result.shape
+        return {
+            "data": [float(value) for value in result.reshape(-1).tolist()],
+            "rows": int(rows),
+            "cols": int(cols),
+        }
+    if entry == "sonare_waveform_peak_pyramid":
+        converted = _json_result_value(result)
+        for report, wire in zip(result, converted, strict=True):
+            channels = int(report.num_channels)
+            buckets = int(report.bucket_count)
+            for field in ("min", "max"):
+                flat = wire[field]
+                wire[field] = [flat[i * buckets : (i + 1) * buckets] for i in range(channels)]
+            wire.pop("numChannels")
+        return converted
+    if entry == "sonare_waveform_peaks":
+        channels = int(result.num_channels)
+        buckets = int(result.bucket_count)
+        if channels != 2:
+            raise AssertionError(f"waveform_peaks fixture expected two channels, got {channels}")
+        converted = _json_result_value(result)
+        for field in ("min", "max"):
+            flat = converted[field]
+            converted[field] = [
+                flat[index * buckets : (index + 1) * buckets] for index in range(channels)
+            ]
+        # The common view stores channel-major planes as nested channel arrays;
+        # the channel count is already represented by that layout.
+        converted.pop("numChannels")
+        return converted
+    converted = _json_result_value(result)
+    if entry in {
+        "sonare_mastering_repair_declick_stereo",
+        "sonare_mastering_repair_declip_stereo",
+        "sonare_mastering_repair_decrackle_stereo",
+        "sonare_mastering_repair_dehum_stereo",
+        "sonare_mastering_repair_denoise_classical_stereo",
+        "sonare_mastering_repair_dereverb_classical_stereo",
+        "sonare_mastering_repair_trim_silence_stereo",
+    }:
+        left = converted.pop("left")
+        right = converted.pop("right")
+        assert converted.pop("length") == len(left) == len(right)
+        converted["channels"] = [left, right]
+        if "leftReport" in converted:
+            converted["reports"] = [converted.pop("leftReport"), converted.pop("rightReport")]
+        else:
+            converted["reports"] = [converted.pop("report")]
+        if entry == "sonare_mastering_repair_trim_silence_stereo":
+            converted["ranges"] = [converted.pop("leftRange"), converted.pop("rightRange")]
+    if entry in {
+        "sonare_mastering_repair_denoise_classical_linked",
+        "sonare_mastering_repair_dereverb_classical_linked",
+    }:
+        converted["reports"] = [converted.pop("report")]
+    if entry in {
+        "sonare_cqt",
+        "sonare_hybrid_cqt",
+        "sonare_pseudo_cqt",
+        "sonare_vqt",
+        "sonare_bass_chroma",
+        "sonare_chroma_cens",
+        "sonare_chroma_cqt",
+    }:
+        field = (
+            "features"
+            if entry in {"sonare_bass_chroma", "sonare_chroma_cens", "sonare_chroma_cqt"}
+            else "magnitude"
+        )
+        array = getattr(result, field)
+        rows, cols = array.shape
+        converted[field] = {"rows": rows, "cols": cols, "data": array.ravel().tolist()}
+    if entry == "sonare_hpss":
+        length = converted.pop("length")
+        assert length == len(converted["harmonic"]) == len(converted["percussive"])
+    if entry == "sonare_decompose":
+        for field in ("w", "h"):
+            array = getattr(result, field)
+            rows, cols = array.shape
+            converted[field] = {"rows": rows, "cols": cols, "data": array.ravel().tolist()}
+    if entry in {"sonare_decompose_stems", "sonare_decompose_stems_linked"}:
+        for field in ("w", "h"):
+            converted[field] = getattr(result, field).ravel().tolist()
+    if entry == "sonare_auto_tune":
+        converted["key"].update(name=result.key.name, shortName=result.key.short_name)
+    if entry == "sonare_room_geometry_from_estimate":
+        for key in ("source", "listener"):
+            converted[key] = dict(zip(("x", "y", "z"), converted[key], strict=True))
+    if entry == "sonare_align_take_to_reference":
+        converted["anchors"] = [
+            dict(zip(("warpSample", "sourceSample"), pair, strict=True))
+            for pair in converted["anchors"]
+        ]
+    if entry == "sonare_split_silence_common":
+        converted["intervals"] = [item for pair in converted["intervals"] for item in pair]
+    if entry == "sonare_mixing_assistant_suggest":
+        for track, wire in zip(result.tracks, converted["tracks"], strict=True):
+            # The C wire and the JS result use an empty display name for the unnamed track.
+            assert track.name != ""
+            if track.name is None:
+                wire["name"] = ""
+    elif entry == "sonare_metering_detect_clipping":
+        converted["clippedRatio"] = converted.pop("clippingRatio")
+    for field in {
+        "sonare_chroma": ("features",),
+        "sonare_mel_spectrogram": ("power", "db"),
+        "sonare_mfcc": ("coefficients",),
+        "sonare_stft": ("magnitude", "power", "db", "phase"),
+        "sonare_piptrack": ("pitches", "magnitudes"),
+        "sonare_reassigned_spectrogram": ("magnitude", "times", "frequencies"),
+    }.get(entry, ()):
+        if field in converted:
+            array = getattr(result, field)
+            rows, cols = array.shape
+            converted[field] = {"rows": rows, "cols": cols, "data": array.ravel().tolist()}
+    return converted
+
+
+def _catalog_without_null_fields(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_catalog_without_null_fields(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _catalog_without_null_fields(field)
+            for key, field in value.items()
+            if field is not None
+        }
+    return value
+
+
+def _facade_result_oracle(entry: str, value: Any) -> Any:
+    if entry == "sonare_capability_catalog_json":
+        return _catalog_without_null_fields(value)
+    if entry == "sonare_detect_key":
+        return {key: item for key, item in value.items() if key not in {"name", "shortName"}}
+    if entry == "sonare_analyze_json":
+        key = dict(value["key"])
+        key.pop("name")
+        key.pop("shortName")
+        if key["mode"] == 1:
+            key["mode"] = "minor"
+        chords = []
+        for chord in value["chords"]:
+            chord = dict(chord)
+            chord.pop("durationSec")
+            if chord["quality"] == 0:
+                chord["quality"] = "major"
+            chords.append(chord)
+        melody = dict(value["melody"])
+        melody["points"] = melody.pop("pitches")
+        sections = [
+            {**section, "type": "unknown" if section["type"] == 7 else section["type"]}
+            for section in value["sections"]
+        ]
+        return {**value, "key": key, "chords": chords, "melody": melody, "sections": sections}
+    if entry in {"sonare_normalize_stereo", "sonare_normalize_rms_stereo"}:
+        return {"left": value["left"], "right": value["right"], "length": len(value["left"])}
+    if entry == "sonare_mastering_insert_param_info":
+        return _catalog_without_null_fields(value)
+    if entry in {"sonare_mastering_assistant_suggest", "sonare_mastering_assistant_suggest_stereo"}:
+        return {**value, "chainConfig": value["chainConfig"]["params"]}
+    if entry in {"sonare_mastering_preset_params_json", "sonare_mastering_chain_config_from_json"}:
+        return value["params"]
+    if entry in {"sonare_synth_engine_param_info", "sonare_synth_patch_param_info"}:
+        # The Python record declares absent integer flags as False.
+        return [item if item["type"] == "enum" else {"integer": False, **item} for item in value]
+    return value
+
+
+def _expected_array_scale(expected: list[Any]) -> float:
+    values: list[float] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, bool):
+            return
+        if isinstance(value, (int, float)):
+            values.append(abs(float(value)))
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(expected)
+    return max(values, default=0.0)
+
+
+_INTEGER_RESULT_FIELDS = {
+    "bandFloorBand",
+    "first",
+    "group",
+    "harmonics",
+    "lastExclusive",
+    "nMels",
+    "endSample",
+    "flatRunCount",
+    "flatSampleCount",
+    "frame",
+    "frameStride",
+    "hopLength",
+    "index",
+    "length",
+    "longestFlatRunSamples",
+    "longestRunSamples",
+    "runCount",
+    "clippedSamples",
+    "onsetSample",
+    "offsetSample",
+    "frameStart",
+    "frameEnd",
+    "sampleRate",
+    "startSample",
+    "rows",
+    "cols",
+    "nFft",
+    "bucketCount",
+    "samplesPerBucket",
+    "numerator",
+    "denominator",
+    "numChannels",
+    "unison",
+    "polyphony",
+    "sampleSet",
+    "count",
+    "sampleCount",
+}
+
+
+def _result_field(path: str) -> str:
+    return path.rsplit(".", 1)[-1].split("[", 1)[0]
+
+
+def _path_tolerance(
+    tolerances: dict[str, float] | None, path: str, relative_tolerance: float, scale: float
+) -> float:
+    if tolerances is None:
+        return relative_tolerance * scale
+    if path == "result":
+        normalized = "result"
+    elif path.startswith("result."):
+        normalized = "result." + re.sub(r"\[\d+\]", "[]", path[len("result.") :])
+    elif path.startswith("result["):
+        normalized = "result" + re.sub(r"\[\d+\]", "[]", path[len("result") :])
+    else:
+        raise AssertionError(f"result path is not rooted at result: {path}")
+    candidates = [normalized]
+    while candidates[-1].endswith("[]"):
+        candidates.append(candidates[-1][:-2])
+    for candidate in candidates:
+        if candidate in tolerances:
+            return tolerances[candidate]
+    return tolerances.get("*", 0.0) * scale
+
+
+def _assert_result_matches(
+    actual: Any,
+    expected: Any,
+    relative_tolerance: float,
+    path: str,
+    tolerances: dict[str, float] | None = None,
+) -> None:
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict), f"{path}: expected an object, got {type(actual).__name__}"
+        assert set(actual) == set(expected), (
+            f"{path}: result fields differ; actual={sorted(actual)}, expected={sorted(expected)}"
+        )
+        for key, expected_value in expected.items():
+            _assert_result_matches(
+                actual[key], expected_value, relative_tolerance, f"{path}.{key}", tolerances
+            )
+        return
+    if isinstance(expected, list):
+        assert isinstance(actual, list), f"{path}: expected an array, got {type(actual).__name__}"
+        assert len(actual) == len(expected), (
+            f"{path}: array lengths differ; actual={len(actual)}, expected={len(expected)}"
+        )
+        scale = _expected_array_scale(expected)
+        for index, (actual_value, expected_value) in enumerate(zip(actual, expected, strict=True)):
+            item_path = f"{path}[{index}]"
+            if isinstance(expected_value, (dict, list)):
+                _assert_result_matches(
+                    actual_value, expected_value, relative_tolerance, item_path, tolerances
+                )
+            else:
+                _assert_numeric_or_exact(
+                    actual_value, expected_value, relative_tolerance, scale, item_path, tolerances
+                )
+        return
+    _assert_numeric_or_exact(actual, expected, relative_tolerance, None, path, tolerances)
+
+
+def _assert_numeric_or_exact(
+    actual: Any,
+    expected: Any,
+    relative_tolerance: float,
+    scale: float | None,
+    path: str,
+    tolerances: dict[str, float] | None,
+) -> None:
+    if isinstance(expected, str) and expected in {"NaN", "Infinity", "-Infinity"}:
+        assert type(actual) is float, f"{path}: expected a number, got {actual!r}"
+        matches = math.isnan(actual) if expected == "NaN" else actual == float(expected)
+        assert matches, f"{path}: actual={actual!r}, expected={expected}"
+    elif isinstance(expected, bool):
+        assert type(actual) is bool and actual is expected, (
+            f"{path}: actual={actual!r}, expected={expected!r}"
+        )
+    elif isinstance(expected, (int, float)):
+        if _result_field(path) in _INTEGER_RESULT_FIELDS:
+            assert type(actual) is int and actual == expected, (
+                f"{path}: expected exact integer {expected!r}, got {actual!r}"
+            )
+        else:
+            assert isinstance(actual, (int, float)) and not isinstance(actual, bool), (
+                f"{path}: expected numeric value, got {type(actual).__name__}"
+            )
+            comparison_scale = abs(float(expected)) if scale is None else scale
+            bound = _path_tolerance(tolerances, path, relative_tolerance, comparison_scale)
+            assert abs(float(actual) - float(expected)) <= bound, (
+                f"{path}: actual={actual!r}, expected={expected!r}, scale={comparison_scale!r}"
+            )
+    else:
+        assert type(actual) is type(expected) and actual == expected, (
+            f"{path}: actual={actual!r}, expected={expected!r}"
+        )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(case, marks=pytest.mark.slow) if case.get("slow") else case
+        for case in _ONE_SHOT_RESULTS["cases"]
+        if "python" in case.get("surfaces", ("python",))
+    ],
+    ids=lambda case: case["id"],
+)
+def test_public_one_shot_results_follow_the_shared_corpus(case: dict[str, Any]) -> None:
+    fixture = case["fixture"]
+    samples = [] if "midi" in case else _one_shot_fixture(fixture)
+    result = _one_shot_call(case["entry"], samples, fixture, case.get("midi"), case)
+    actual = _one_shot_public_result(case["entry"], result)
+    if case.get("catalogReference") == "all":
+        catalog = Path(__file__).resolve().parents[3] / "tools/capability-catalog.json"
+        expected = json.loads(catalog.read_text(encoding="utf-8"))
+        capabilities = libsonare.capabilities()
+        expected["encode"]["ffmpeg"] = list(capabilities.encode.ffmpeg)
+        for enabled, group in (
+            (capabilities.features.arrangement, "synth"),
+            (capabilities.features.mixing, "mixingScene"),
+            (capabilities.features.voice_changer, "voiceChanger"),
+            (capabilities.features.playback, "playbackRoom"),
+        ):
+            if not enabled:
+                expected["presets"][group] = []
+    else:
+        expected = case["result"]
+    _assert_result_matches(
+        actual,
+        _facade_result_oracle(case["entry"], expected),
+        _ONE_SHOT_RESULTS["relative_tolerance"],
+        "result",
+        case.get("tolerances"),
+    )
+
+
+@pytest.mark.parametrize("case", _ONE_SHOT_RESULTS["refusals"], ids=lambda case: case["id"])
+def test_public_one_shot_refusals_follow_the_shared_corpus(
+    case: dict[str, Any],
+) -> None:
+    expected_exception = getattr(
+        builtins, case["python_class"], getattr(libsonare, case["python_class"], None)
+    )
+    assert expected_exception is not None
+    with pytest.raises(expected_exception) as refused:
+        fixture = case["fixture"]
+        samples = [] if "midi" in case else _one_shot_fixture(fixture)
+        _one_shot_call(case["entry"], samples, fixture, case.get("midi"))
+    assert type(refused.value).__name__ == case["python_class"]
+    if case["code"] is None:
+        assert not isinstance(refused.value, SonareError)
+    else:
+        assert isinstance(refused.value, SonareError)
+        assert int(refused.value.code) == case["code"]
+
+
+def test_public_result_corpus_covers_python_exports() -> None:
+    root = Path(__file__).resolve().parents[3]
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "tests/conformance/check_result_corpus_coverage.py"),
+            "python",
+        ],
+        check=True,
+    )
