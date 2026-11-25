@@ -729226,7 +729226,8 @@
         },
         "tolerances": {
           "*": 4.3000000000000002e-05,
-          "result.channels[].reverb.lateDecayRatioDb": 0.00062
+          "result.channels[].reverb.lateDecayRatioDb": 0.00062,
+          "result.defects.reverb.lateDecayRatioDb": 0.00062
         }
       },
       {
