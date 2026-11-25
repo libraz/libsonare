@@ -597,7 +597,10 @@ def _element_is_none(samples: object, index: int) -> bool:
 
 
 def _is_array_like(value: object) -> bool:
-    """Whether ``value`` is a container NumPy reads as an array, as opposed to a scalar or text."""
+    """Whether ``value`` is a container NumPy reads as an array, not a Python scalar or text.
+
+    A NumPy scalar counts as array-like: it reads as a rank-0 array.
+    """
     if isinstance(value, (str, bytes, bytearray)):
         return False
     return (
@@ -610,8 +613,9 @@ def _is_array_like(value: object) -> bool:
 def _not_a_buffer(samples: object, arg_name: str) -> TypeError | SonareValueError:
     """Build the rejection for an input that does not read as a numeric buffer.
 
-    A value that is not array-like at all (``None``, a scalar, text, a mapping, a generator) is a
-    wrong type; an array-like whose shape or elements cannot make a numeric buffer is a wrong value.
+    A value that is not array-like at all (``None``, a Python scalar, text, a mapping, a
+    generator) is a wrong type; an array-like whose shape or elements cannot make a numeric
+    buffer is a wrong value.
     """
     message = f"{arg_name} must be a sequence of numbers or a numpy array"
     return _refuse(message) if _is_array_like(samples) else _refuse_type(message)

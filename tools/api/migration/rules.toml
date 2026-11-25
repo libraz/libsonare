@@ -345,7 +345,7 @@ const result = masteringAnalyzePair(request);
 [[rule]]
 slug = "array-results"
 title = "Python arrays are numpy arrays"
-summary = "Python audio is a `float32` ndarray of shape `(n,)` or `(channels, n)` and a matrix is `(rows, cols)`; `list[float]` returns, flat row-major lists and redundant length fields are gone. Inputs accept `npt.ArrayLike` of float dtype, and an integer dtype raises `TypeError`. A value that is not array-like at all (`None`, a scalar, a string, a mapping, a generator) raises `TypeError`; an array-like whose shape or elements cannot form the buffer raises `SonareValueError`."
+summary = "Python audio is a `float32` ndarray of shape `(n,)` or `(channels, n)` and a matrix is `(rows, cols)`; `list[float]` returns, flat row-major lists and redundant length fields are gone. Inputs accept `npt.ArrayLike` of float dtype, and an integer dtype raises `TypeError`. A value that is not array-like at all (`None`, a Python scalar, a string, a mapping, a generator) raises `TypeError`; an array-like whose shape or elements cannot form the buffer, a NumPy scalar included as a rank-0 array, raises `SonareValueError`."
 [[rule.example]]
 surface = "wasm"
 before = '''
