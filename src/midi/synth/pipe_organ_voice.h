@@ -29,6 +29,7 @@
 /// per-rank offset, so identical events render bit-identically.
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -40,6 +41,7 @@
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -58,13 +60,14 @@ inline constexpr float kPipeMinFundamentalHz = 16.0f;
 /// capacity — its convection delay is always shorter than the bore).
 inline int pipe_organ_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kPipeMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kPipeMinFundamentalHz) + 8.0);
 }
 
 /// Whole-voice slab capacity (samples) the host must allocate: a bore span AND a
 /// jet span for every rank slot.
 inline int pipe_organ_slab_capacity(double sample_rate) noexcept {
-  return 2 * kMaxPipeRanks * pipe_organ_buffer_capacity(sample_rate);
+  return ::sonare::numeric::saturating_int_count(2.0 * kMaxPipeRanks *
+                                                 pipe_organ_buffer_capacity(sample_rate));
 }
 
 /// One rank in a registration: an independent flue pipe at a footage (pitch)

@@ -25,6 +25,7 @@
 /// (voice_index, note, age) stream, so identical event streams render
 /// bit-identically. The buzz limiter is memoryless (no RNG), preserving that.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -33,6 +34,7 @@
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -44,7 +46,8 @@ inline constexpr float kPluckedStringMinFundamentalHz = 20.0f;
 /// the slab into spans of this size.
 inline int plucked_string_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kPluckedStringMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kPluckedStringMinFundamentalHz) +
+                                                 8.0);
 }
 
 /// Per-voice delay-SLAB capacity (samples) the host must allocate: a single

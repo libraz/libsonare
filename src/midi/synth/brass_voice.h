@@ -34,6 +34,7 @@
 /// breath turbulence and onset chiff come from the counter-based
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -47,6 +48,7 @@
 #include "rt/biquad_design.h"
 #include "rt/nonlinearities.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -60,7 +62,7 @@ inline constexpr float kBrassMinFundamentalHz = 20.0f;
 /// sizing for the whole period leaves bend-down headroom).
 inline int brass_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kBrassMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kBrassMinFundamentalHz) + 8.0);
 }
 
 /// Whole-voice slab capacity (samples) the host must allocate: one bore span.

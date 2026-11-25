@@ -25,6 +25,7 @@
 /// turbulence and onset chiff come from the counter-based
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -36,6 +37,7 @@
 #include "midi/synth/wind_breath.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -55,13 +57,14 @@ inline constexpr float kFluteBoreLengthPeriods = 1.0f;
 /// same size (its delay is jet_ratio * bore, always shorter).
 inline int flute_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(kFluteBoreLengthPeriods * sr / kFluteMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(
+      std::trunc(kFluteBoreLengthPeriods * sr / kFluteMinFundamentalHz) + 8.0);
 }
 
 /// Whole-voice slab capacity (samples) the host must allocate: a bore span plus
 /// a jet span.
 inline int flute_slab_capacity(double sample_rate) noexcept {
-  return 2 * flute_buffer_capacity(sample_rate);
+  return ::sonare::numeric::saturating_int_count(2.0 * flute_buffer_capacity(sample_rate));
 }
 
 /// Air-jet flute section of a NativeSynthPatch (used when mode == kFlute).

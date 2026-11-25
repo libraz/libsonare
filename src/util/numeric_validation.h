@@ -160,6 +160,15 @@ inline int64_t ceil_sample_count(double frames) noexcept {
   return static_cast<int64_t>(rounded_up);
 }
 
+/// Truncates a sample count to `int` for a buffer capacity. NaN and non-positive values give 0;
+/// a count past INT_MAX (infinity included) saturates there.
+inline int saturating_int_count(double count) noexcept {
+  if (!(count > 0.0)) return 0;
+  constexpr double kMax = static_cast<double>(std::numeric_limits<int>::max());
+  if (!(count < kMax)) return std::numeric_limits<int>::max();
+  return static_cast<int>(count);
+}
+
 /// Saturating integral subtraction for timeline/sample arithmetic.
 template <typename Int>
 inline Int saturating_sub(Int lhs, Int rhs) noexcept {

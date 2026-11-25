@@ -38,6 +38,7 @@
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -50,6 +51,7 @@
 #include "midi/synth/wind_breath.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -63,7 +65,7 @@ inline constexpr float kReedMinFundamentalHz = 20.0f;
 /// leaves room for the conical (full-period) bore and bend-down headroom).
 inline int reed_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kReedMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kReedMinFundamentalHz) + 8.0);
 }
 
 /// Whole-voice slab capacity (samples) the host must allocate: one bore span.

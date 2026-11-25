@@ -46,6 +46,7 @@
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -60,7 +61,7 @@ inline constexpr float kBowedMinFundamentalHz = 20.0f;
 /// so any bow position — which splits the period between them — fits).
 inline int bowed_string_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kBowedMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kBowedMinFundamentalHz) + 8.0);
 }
 
 /// Whole-voice slab capacity (samples) the host must allocate: four spans — the
@@ -69,7 +70,8 @@ inline int bowed_string_buffer_capacity(double sample_rate) noexcept {
 /// used only when gated on but always reserved, so attach() stays allocation-free.
 inline constexpr int kBowedSlabSpans = 4;
 inline int bowed_string_slab_capacity(double sample_rate) noexcept {
-  return kBowedSlabSpans * bowed_string_buffer_capacity(sample_rate);
+  return ::sonare::numeric::saturating_int_count(static_cast<double>(kBowedSlabSpans) *
+                                                 bowed_string_buffer_capacity(sample_rate));
 }
 
 /// Per-note contact-point offset in [-1, 1): the golden-ratio (Weyl) sequence over the note

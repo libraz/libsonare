@@ -27,15 +27,16 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 
 #include "midi/control_value.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -46,7 +47,8 @@ inline constexpr float kHarpsichordMinFundamentalHz = 20.0f;
 /// Per-LINE delay capacity (samples) for a speaking string.
 inline int harpsichord_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kHarpsichordMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kHarpsichordMinFundamentalHz) +
+                                                 8.0);
 }
 
 /// Per-voice delay-SLAB capacity (samples) the host must allocate: the two 8'
@@ -57,9 +59,8 @@ inline int harpsichord_buffer_capacity(double sample_rate) noexcept {
 /// so attach() stays allocation-free.
 inline int harpsichord_slab_capacity(double sample_rate) noexcept {
   const int64_t full = harpsichord_buffer_capacity(sample_rate);
-  // Saturates rather than overflowing at extreme rates.
-  const int64_t slab = 2 * (2 * full + full / 2) + full / 8;
-  return static_cast<int>(std::min<int64_t>(slab, std::numeric_limits<int>::max()));
+  return ::sonare::numeric::saturating_int_count(
+      static_cast<double>(2 * (2 * full + full / 2) + full / 8));
 }
 
 /// Highest in-band frequency as a fraction of the sample rate.

@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -46,6 +47,7 @@
 #include "midi/synth/string_loop.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -58,12 +60,13 @@ inline constexpr float kPianoMinFundamentalHz = 26.0f;
 /// Per-string delay capacity (samples) for @p sample_rate.
 inline int piano_string_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kPianoMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kPianoMinFundamentalHz) + 8.0);
 }
 
 /// Whole-voice slab capacity (samples) the host must allocate.
 inline int piano_slab_capacity(double sample_rate) noexcept {
-  return kMaxPianoStrings * piano_string_capacity(sample_rate);
+  return ::sonare::numeric::saturating_int_count(static_cast<double>(kMaxPianoStrings) *
+                                                 piano_string_capacity(sample_rate));
 }
 
 /// Stiff-string inharmonicity coefficient B for a MIDI @p note, where partial

@@ -19,6 +19,7 @@
 /// excitation noise is the counter-based (voice_index, note, age) stream, so
 /// identical events render bit-identically.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -27,6 +28,7 @@
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -42,7 +44,7 @@ inline constexpr int kKsDispersionStages = 2;
 /// polarization span. attach() carves the slab into spans of this size.
 inline int ks_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr / kKsMinFundamentalHz) + 8;
+  return ::sonare::numeric::saturating_int_count(std::trunc(sr / kKsMinFundamentalHz) + 8.0);
 }
 
 /// Returns the per-voice delay-SLAB capacity (in samples) the host must
@@ -51,7 +53,7 @@ inline int ks_buffer_capacity(double sample_rate) noexcept {
 /// allocation-free whether or not a note engages the polarization / octave
 /// gates.
 inline int ks_slab_capacity(double sample_rate) noexcept {
-  return 3 * ks_buffer_capacity(sample_rate);
+  return ::sonare::numeric::saturating_int_count(3.0 * ks_buffer_capacity(sample_rate));
 }
 
 /// Default mistuning of the second polarization, in cents: the detune every

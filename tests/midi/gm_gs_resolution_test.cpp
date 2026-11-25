@@ -20,10 +20,20 @@
 #include "midi/control_value.h"
 #include "midi/midi_event.h"
 #include "midi/program_map.h"
+#include "midi/synth/bowed_string_voice.h"
+#include "midi/synth/brass_voice.h"
+#include "midi/synth/flute_voice.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/harpsichord_voice.h"
+#include "midi/synth/ks_voice.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/piano_voice.h"
+#include "midi/synth/pipe_organ_voice.h"
+#include "midi/synth/plucked_string_voice.h"
+#include "midi/synth/reed_voice.h"
 #include "midi/synth/sf2_player.h"
+#include "midi/synth/vocal_voice.h"
 #include "midi/ump.h"
 #include "support/midi_render.h"
 
@@ -1217,6 +1227,41 @@ TEST_CASE("NativeSynth public tail saturates extreme sample-rate bounds", "[midi
   // The default subtractive patch needs no delay slabs, so this large but
   // finite rate exercises the tail arithmetic without allocating a giant
   // waveguide. The non-finite envelope input is sanitized at construction.
-  synth.prepare(1.0e10, 256);
+  REQUIRE_NOTHROW(synth.prepare(1.0e10, 256));
   CHECK(synth.tail_samples() == std::numeric_limits<int>::max());
+}
+
+TEST_CASE("Every delay span and slab capacity saturates at extreme sample rates", "[midi][synth]") {
+  namespace synth = sonare::midi::synth;
+  struct Sizing {
+    const char* name;
+    int (*span)(double);
+    int (*slab)(double);
+  };
+  const Sizing sizings[] = {
+      {"bowed string", synth::bowed_string_buffer_capacity, synth::bowed_string_slab_capacity},
+      {"brass", synth::brass_buffer_capacity, synth::brass_slab_capacity},
+      {"flute", synth::flute_buffer_capacity, synth::flute_slab_capacity},
+      {"harpsichord", synth::harpsichord_buffer_capacity, synth::harpsichord_slab_capacity},
+      {"karplus-strong", synth::ks_buffer_capacity, synth::ks_slab_capacity},
+      {"piano", synth::piano_string_capacity, synth::piano_slab_capacity},
+      {"pipe organ", synth::pipe_organ_buffer_capacity, synth::pipe_organ_slab_capacity},
+      {"plucked string", synth::plucked_string_buffer_capacity,
+       synth::plucked_string_slab_capacity},
+      {"reed", synth::reed_buffer_capacity, synth::reed_slab_capacity},
+      {"vocal", synth::vocal_slab_capacity, synth::vocal_slab_capacity},
+  };
+  constexpr int kMax = std::numeric_limits<int>::max();
+  for (const Sizing& sizing : sizings) {
+    INFO(sizing.name);
+    // At 10 GHz every span still fits; a slab spanning several of them must not wrap.
+    const int span = sizing.span(1.0e10);
+    CHECK(span > 0);
+    CHECK(sizing.slab(1.0e10) >= span);
+    for (const double rate : {1.0e12, std::numeric_limits<double>::max()}) {
+      INFO(rate);
+      CHECK(sizing.span(rate) == kMax);
+      CHECK(sizing.slab(rate) == kMax);
+    }
+  }
 }

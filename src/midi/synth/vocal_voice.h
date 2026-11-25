@@ -26,6 +26,7 @@
 /// aspiration noise is the counter-based (voice_index, note, age) stream, so
 /// identical event streams render bit-identically.
 
+#include <cmath>
 #include <cstdint>
 
 #include "midi/control_value.h"
@@ -35,6 +36,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -42,7 +44,8 @@ namespace sonare::midi::synth {
 /// span plus the widest, slowest wander and drift the clamps admit, at @p sample_rate.
 inline int vocal_slab_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr * (0.03 + SectionStage::kDriftReachS)) + 8;
+  return ::sonare::numeric::saturating_int_count(
+      std::trunc(sr * (0.03 + SectionStage::kDriftReachS)) + 8.0);
 }
 
 /// Formant bank size (F1..F5). Five poles cover a sung vowel's spectral
