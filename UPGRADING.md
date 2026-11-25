@@ -141,6 +141,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareMeterOptions.compound_subdivision_threshold` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
+| `SonareMusicAnalyzeOptions.compute_tempo_curve` | when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in |
+| `SonareMusicAnalyzeOptions.use_chord_hmm` | Viterbi smoothing of the chord sequence defaults to 1 instead of 0; set use_chord_hmm explicitly for the 1.x behavior |
+| `SonareMusicAnalyzeOptions.use_hpss` | harmonic-percussive separation before chroma defaults to 0 instead of 1; set use_hpss explicitly for the 1.x behavior |
+| `sonare_audio_detect_downbeats` | the tempo search defaults to 60–200 BPM instead of 30–300 |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -234,7 +238,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_analyze_sections(hop_length)` | removed: set SonareSectionOptions.hop_length on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections(min_section_sec)` | removed: set SonareSectionOptions.min_section_sec on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections(n_fft)` | removed: set SonareSectionOptions.n_fft on the options passed to sonare_analyze_sections |
-| `sonare_analyze_sections` | takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
+| `sonare_analyze_sections` | takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio; the omitted boundary threshold changes from 0.3 to 0.22 as section detection uses beat-grid novelty |
 | `sonare_boundary_options_default` | removed: call sonare_boundary_options_init(&config) on a caller-owned struct instead |
 | `sonare_chroma_cens_ex` | removed: call sonare_chroma_cens with SonareChromaCensOptions bins_per_octave set |
 | `sonare_chroma_cens` | takes const SonareChromaCensOptions* options (NULL = defaults; sonare_chroma_cens_options_init) before out; bins_per_octave moved into the struct |
@@ -243,7 +247,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_cqt_to_audio_checked` | removed: call sonare_cqt_to_audio, which now takes input_length after magnitude |
 | `sonare_cqt_to_audio` | takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_cqt_to_audio_checked is the only behaviour |
 | `sonare_detect_chords_ex` | removed: call sonare_detect_chords, which takes the const SonareChordDetectionOptions* options |
-| `sonare_detect_chords` | takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync |
+| `sonare_detect_chords` | takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync; default chord options use CQT and the HMM instead of the plain 1.x entry's STFT and no HMM; with no options they restrict chords to triads |
 | `sonare_detect_key_candidates_with_extended_options` | removed: call sonare_detect_key_candidates with SonareDetectKeyOptions profile_type and genre_hint set |
 | `sonare_detect_key_candidates_with_modes` | removed: call sonare_detect_key_candidates with SonareDetectKeyOptions modes and mode_count set |
 | `sonare_detect_key_candidates` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct |
@@ -251,7 +255,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_detect_key_with_options_and_modes` | removed: call sonare_detect_key with SonareDetectKeyOptions modes and mode_count set |
 | `sonare_detect_key_with_options` | removed: call sonare_detect_key with SonareDetectKeyOptions n_fft, hop_length, use_hpss, loudness_weighted and chroma_high_pass_hz set |
 | `sonare_detect_key_with_tuning` | removed: call sonare_detect_key with SonareDetectKeyOptions tuning_cents and tuning_auto set, and out_tuning_cents |
-| `sonare_detect_key` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct |
+| `sonare_detect_key` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former settings |
 | `sonare_detect_onsets_ex` | removed: call sonare_detect_onsets, which takes the SonareOnsetDetectConfig |
 | `sonare_detect_onsets` | takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `sonare_downmix_ex` | removed: call sonare_downmix with a SonareDownmixOptions filled by sonare_downmix_options_init, setting include_lfe and normalize there |
@@ -502,7 +506,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_chirp` | fmin_hz and fmax_hz must be finite; a linear sweep refuses a negative fmin_hz and an fmax_hz at or below 0, and an exponential sweep refuses either at or below 0, as SONARE_ERROR_INVALID_PARAMETER '<name> must be finite and greater than 0' (or 'at least 0' for a linear fmin_hz) with the outputs cleared (1.x accepted any linear value that survived the float cast) |
 | `sonare_decode_channels` | a recognized codec missing from the build returns SONARE_ERROR_NOT_SUPPORTED with reason notCompiledIn. An unrecognized container still returns SONARE_ERROR_INVALID_FORMAT. |
-| `sonare_detect_downbeats` | downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
+| `sonare_detect_downbeats` | downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio; the tempo search defaults to 60–200 BPM instead of 30–300 |
 | `sonare_pitch_tuning` | NaN frequencies still represent unvoiced pitches and are ignored; infinities, which were ignored in 1.x, are refused with SONARE_ERROR_INVALID_PARAMETER and an indexed frequencies diagnostic |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
 | `sonare_polyphonic_set_note_edit(envelope)` | `sonare_polyphonic_set_note_edit(amplitude_envelope)` |
@@ -548,6 +552,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_pitch_correct_to_midi_timevarying` | at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
 | `sonare_split_note` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; with the pitch editor compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
 | `sonare_streaming_retune_prepare` | max_block_size must be in [1, 1048576]; pass the largest block the stream will process. A failed re-prepare leaves the previous prepared stream usable |
+
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareRirSynthConfig.air_absorption_enabled` | initializes to 1 instead of 0; set it to 0 to retain the lossless-air calculation |
+| `SonareRoomMorphConfig.air_absorption_enabled` | initializes to 1 instead of 0; set it to 0 to retain the lossless-air calculation |
+| `SonareRoomMorphConfig.receiver_spacing_m` | an omitted value uses a spacing of up to 0.5 m fitted to the room (1.x used a fixed 0.5 m); set 0.5 explicitly to retain the fixed spacing |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -893,7 +905,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_capability_catalog_json` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 | `sonare_mastering_amp_preset_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
-| `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for; any other rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range') |
+| `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for; any other rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range'); effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement |
 | `sonare_mastering_processor_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 
 #### C counts are size_t and returned through an out parameter
@@ -1015,7 +1027,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `sonare_eq_magnitude_response` | Use a placement in [0, 4] and frequencies_hz values that are finite and in [0, Nyquist]. An invalid placement returns SONARE_ERROR_INVALID_PARAMETER with "placement must be an integer in [0, 4]". An invalid frequency returns SONARE_ERROR_INVALID_PARAMETER naming its index and leaves out_db unchanged. In 1.x the response clamped out-of-band frequencies and infinities and propagated NaN to the output. |
-| `sonare_mastering_analyze_stereo(params)` | stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text |
+| `sonare_mastering_analyze_stereo(params)` | stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused |
 | `sonare_mastering_apply_processor(params)` | final.bitDepth and final.outputChain take no clamp param and refuse it with SONARE_ERROR_INVALID_PARAMETER as an unknown key naming the keys they read, since the code range holds a sample past full scale on its own |
 | `sonare_mastering_audio_profile(params)` | a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain ('params.nFft must be an even integer in [2, 524288]') and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size'); an odd nFft, or nFft 1, is refused on the caller's value before the rescale at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even |
 | `sonare_mastering_audio_profile_stereo(params)` | a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain ('params.nFft must be an even integer in [2, 524288]') and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size'); an odd nFft, or nFft 1, is refused on the caller's value before the rescale at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even |
@@ -1596,7 +1608,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.detect_chords(chroma_method)` | the omitted chroma method is 'cqt' rather than 'stft'; pass chroma_method='stft' to retain that front end |
+| `Audio.detect_chords(use_hmm)` | defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting |
+| `Audio.detect_chords(use_triads_only)` | defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting |
 | `Audio.detect_clipping(min_region_samples)` | omitted or 0 hands the core its default (was the literal 1) |
+| `Audio.detect_key(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
+| `Audio.detect_key_candidates(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
 | `Audio.mastering(true_peak_oversample)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
 | `Audio.pitch_correct_to_midi(current_midi)` | current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 | `Audio.pitch_correct_to_midi(target_midi)` | target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
@@ -1605,7 +1622,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Audio.detect_bpm` | returns float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+| `Audio.detect_bpm` | returns float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -1624,8 +1641,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Audio.detect_beats` | returns a float32 ndarray instead of list[float] |
-| `Audio.detect_downbeats` | returns a float32 ndarray instead of list[float] |
+| `Audio.detect_beats` | returns a float32 ndarray instead of list[float]; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range |
+| `Audio.detect_downbeats` | returns a float32 ndarray instead of list[float]; the tempo search defaults to 60–200 BPM instead of 30–300; this entry does not expose tempo-range overrides |
 | `Audio.detect_onsets` | returns a float32 ndarray instead of list[float] |
 | `Audio.harmonic` | returns a float32 ndarray instead of list[float] |
 | `Audio.momentary_lufs` | returns a float32 ndarray instead of list[float] |
@@ -1958,6 +1975,15 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `analyze(compute_tempo_curve)` | when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in |
+| `analyze(use_chord_hmm)` | Viterbi smoothing of the chord sequence defaults to True instead of False; pass use_chord_hmm=False for the 1.x behavior |
+| `analyze(use_hpss)` | harmonic-percussive separation before chroma defaults to False instead of True; pass use_hpss=True for the 1.x behavior |
+| `chord_functional_analysis(use_hmm)` | defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting |
+| `chord_functional_analysis(use_triads_only)` | defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting |
+| `detect_chords(use_hmm)` | defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting |
+| `detect_chords(use_triads_only)` | defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting |
+| `detect_key(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
+| `detect_key_candidates(n_fft)` | omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings |
 | `estimate_meter(compound_subdivision_threshold)` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `griffin_lim(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
 | `griffin_lim(n_fft)` | omitted is implied by the bin count, (n_bins - 1) * 2 (was 2048); an explicit value that disagrees raises SonareValueError |
@@ -2009,7 +2035,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `TimbreResult.density` | float \| None: None when no frame carries spectral energy, instead of 0 |
 | `TimbreResult.roughness` | float \| None: None when no frame carries spectral energy, instead of 0 |
 | `TimbreResult.warmth` | float \| None: None when no frame carries spectral energy, instead of 0 |
-| `detect_bpm` | returns float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+| `detect_bpm` | returns float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range |
 
 #### Every call scans its input for non-finite values
 
@@ -2052,8 +2078,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `SectionType` | a Literal of lowerCamel tokens ("intro", "preChorus", ...) instead of an IntEnum |
 | `StreamBarChord.quality` | a CHORD_QUALITIES token (was the ordinal) |
 | `StreamChordChange.quality` | a CHORD_QUALITIES token (was the ordinal) |
-| `chord_functional_analysis(chroma_method)` | a ChordChromaMethod token matched exactly; other case spellings are refused |
-| `detect_chords(chroma_method)` | a ChordChromaMethod token matched exactly; other case spellings are refused |
+| `chord_functional_analysis(chroma_method)` | a ChordChromaMethod token matched exactly; other case spellings are refused; the omitted chroma method is 'cqt' rather than 'stft'; pass chroma_method='stft' to retain that front end |
+| `detect_chords(chroma_method)` | a ChordChromaMethod token matched exactly; other case spellings are refused; the omitted chroma method is 'cqt' rather than 'stft'; pass chroma_method='stft' to retain that front end |
 | `detect_key(genre_hint)` | a GenreHint token or None; an unknown, differently cased or empty name is refused instead of falling back to the default profile |
 | `detect_key(modes)` | a list of KeyMode tokens or the group "majorMinor" / "all" / "modal"; "major-minor", "majmin", "diatonic" and ordinals are refused; an empty list raises SonareValueError (omit modes for the default set) |
 | `detect_key(profile)` | takes a KeyProfile token only; ordinals and legacy aliases are refused |
@@ -2082,7 +2108,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `BpmHypothesis.value` | `BpmCandidate.bpm` |
 | `SectionResult` | removed: analyze_sections returns SectionAnalysis, whose .sections is the list[Section] and whose .form is the form label |
 | `TranscribeResult.events` | a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
-| `analyze_sections` | returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only); boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
+| `analyze_sections` | returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only); boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio; the omitted boundary threshold changes from 0.3 to 0.22 as section detection uses beat-grid novelty |
 | `estimate_meter(beat_strengths)` | removed: Pass observations=analysis.beat_observations. |
 | `estimate_meter(beat_times)` | `estimate_meter(observations)` |
 | `estimate_meter` | takes observations: BeatObservations. Pass analysis.beat_observations to score an analysis result. |
@@ -2134,8 +2160,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `db_to_amplitude` | returns a float32 ndarray instead of list[float] |
 | `db_to_power` | returns a float32 ndarray instead of list[float] |
 | `deemphasis` | returns a float32 ndarray instead of list[float] |
-| `detect_beats` | returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
-| `detect_downbeats` | returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
+| `detect_beats` | returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range |
+| `detect_downbeats` | returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio; the tempo search defaults to 60–200 BPM instead of 30–300; this entry does not expose tempo-range overrides |
 | `detect_onsets` | returns a float32 ndarray instead of list[float]; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `fix_frames` | returns an int32 ndarray instead of list[int] |
 | `fix_length` | returns a float32 ndarray instead of list[float] |
@@ -2717,9 +2743,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `pitch_correct_to_midi(current_midi)` | current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 | `pitch_correct_to_midi(target_midi)` | target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 | `pitch_shift(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
+| `realtime_voice_changer_preset_config` | the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); set voice_engine='grain' in the realtime config to keep the 1.x engine |
+| `room_morph(air_absorption_enabled)` | defaults to True instead of False; pass False to retain the lossless-air calculation |
+| `room_morph_stereo(air_absorption_enabled)` | defaults to True instead of False; pass False to retain the lossless-air calculation |
+| `room_morph_stereo(receiver_spacing_m)` | None fits the spacing to the room, up to 0.5 m (1.x used a fixed 0.5 m); pass 0.5 to retain the fixed spacing |
 | `spectral_edit(heal_radius_frames)` | omitted hands the core its default (was the literal 2); an explicit 0 raises SonareValueError instead of selecting the default |
 | `spectral_edit(hop_length)` | omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError instead of selecting the default |
 | `spectral_edit(n_fft)` | omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError instead of selecting the default |
+| `synthesize_rir(air_absorption_enabled)` | defaults to True instead of False; pass False to retain the lossless-air calculation |
 | `time_stretch(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
@@ -2904,7 +2935,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `RealtimeVoiceChanger.constructor(channels)` | `RealtimeVoiceChanger.constructor(num_channels)` |
 | `RealtimeVoiceChanger.process_interleaved(channels)` | `RealtimeVoiceChanger.process_interleaved(num_channels)` |
-| `RealtimeVoiceChanger` | num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError |
+| `RealtimeVoiceChanger` | num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError; the omitted realtime engine changes from the grain engine to PSOLA (latency at 48 kHz changes from 2263 to 717 samples); set voice_engine='grain' in the config to retain the grain engine |
 | `voice_change_realtime(channels)` | `realtime_voice_changer_render(num_channels)` |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
@@ -3486,7 +3517,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `mastering_process(params)` | `mastering_apply_processor(params)`: insert parameter keys are renamed and the old spelling is refused as an unknown key: effects.reverb.room and effects.acoustic.roomMorph maxSeconds -> maxSec; effects.modulation.rotary accelTauS/decelTauS -> accelTauSec/decelTauSec; effects.reverb.velvet reverbTimeS -> reverbTimeSec; dynamics.gate keyHpfHz -> keyHighPassHz; dynamics.deesser bandpassQ -> bandPassQ; voice.changer eqHighpassHz/retuneSemitones/retuneGrainSize -> eqHighPassHz/retunePitchSemitones/retuneGrainSizeSamples; effects.modulation.pitchShifter semitones/semitones2/cents/cents2 -> pitchSemitones/pitchSemitones2/pitchCents/pitchCents2; repair.trimSilence threshold (linear) -> thresholdDb (dBFS, default -60, [-890, 0]); the same keys apply to mastering_insert_timing(params), and dynamics.deesser.bandpassQ -> bandPassQ in master_audio(overrides) and StreamingMasteringChain(config); final.bitDepth and final.outputChain take no clamp key and refuse it as an unknown key, since the code range holds a sample past full scale on its own and quantize_clipped_samples counts it |
+| `mastering_process(params)` | `mastering_apply_processor(params)`: insert parameter keys are renamed and the old spelling is refused as an unknown key: effects.reverb.room and effects.acoustic.roomMorph maxSeconds -> maxSec; effects.modulation.rotary accelTauS/decelTauS -> accelTauSec/decelTauSec; effects.reverb.velvet reverbTimeS -> reverbTimeSec; dynamics.gate keyHpfHz -> keyHighPassHz; dynamics.deesser bandpassQ -> bandPassQ; voice.changer eqHighpassHz/retuneSemitones/retuneGrainSize -> eqHighPassHz/retunePitchSemitones/retuneGrainSizeSamples; effects.modulation.pitchShifter semitones/semitones2/cents/cents2 -> pitchSemitones/pitchSemitones2/pitchCents/pitchCents2; repair.trimSilence threshold (linear) -> thresholdDb (dBFS, default -60, [-890, 0]); the same keys apply to mastering_insert_timing(params), and dynamics.deesser.bandpassQ -> bandPassQ in master_audio(overrides) and StreamingMasteringChain(config); final.bitDepth and final.outputChain take no clamp key and refuse it as an unknown key, since the code range holds a sample past full scale on its own and quantize_clipped_samples counts it; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement |
 
 #### Other individual changes
 
@@ -3505,7 +3536,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_process(processor_name)` | `mastering_apply_processor(processor)` |
 | `mastering_process_stereo(processor_name)` | `mastering_apply_processor_stereo(processor)` |
 | `mastering_stereo_analyze(analysis_name)` | `mastering_analyze_stereo(analysis)`: pass the analysis name with the analysis keyword |
-| `mastering_stereo_analyze(params)` | `mastering_analyze_stereo(params)`: stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text |
+| `mastering_stereo_analyze(params)` | `mastering_analyze_stereo(params)`: stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused |
 | `metering_dynamic_range(high_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `metering_dynamic_range(low_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `mixing_scene_preset_json(preset_name)` | `mixing_scene_preset(name)` |
@@ -4695,7 +4726,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AnalyzeRhythmRequest.sampleRate` | required (was optional with a 22050/44100 default) |
 | `AnalyzeRhythmRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default) |
 | `AnalyzeSectionsRequest.sampleRate` | required (was optional with a 22050/44100 default) |
-| `AnalyzeSectionsRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default) |
+| `AnalyzeSectionsRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default); the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty |
 | `AnalyzeTimbreRequest.sampleRate` | required (was optional with a 22050/44100 default) |
 | `AnalyzeTimbreRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default) |
 | `BassChromaRequest.sampleRate` | required (was optional with a 22050/44100 default) |
@@ -4986,6 +5017,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MusicAnalyzeOptions.computeTempoCurve` | when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in |
+| `MusicAnalyzeOptions.useChordHmm` | Viterbi smoothing of the chord sequence defaults to true instead of false; set useChordHmm explicitly for the 1.x behavior |
+| `MusicAnalyzeOptions.useHpss` | harmonic-percussive separation before chroma defaults to false instead of true; set useHpss explicitly for the 1.x behavior |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -5399,8 +5433,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `detectChords(threshold)` | removed: pass threshold as a field of DetectChordsRequest |
 | `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
-| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
+| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `estimateTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(hopLength)` | removed: pass hopLength as a field of EstimateTuningRequest |
@@ -6001,6 +6035,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `realtimeVoiceChangerPresetJson` | the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); set voiceEngine to 'grain' in the realtime config to keep the 1.x engine |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -6170,7 +6205,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `remixAlignedIntervals(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
 | `remixAlignedIntervals(intervals)` | removed: pass intervals as a field of RemixRequest |
 | `remixAlignedIntervals` | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
-| `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
+| `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array; omitted alignZeros snaps cuts to zero crossings (1.x used the stated sample boundaries); pass alignZeros: false to retain the 1.x cuts |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError. A malformed note element raises TypeError naming notes[i].<field> instead of coded InvalidParameter. |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
 | `roomGeometryFromEstimate(estimate)` | removed: pass estimate as a field of RoomGeometryFromEstimateRequest |
@@ -6335,7 +6370,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeVoiceChangerConfig` | removes `eqHighpassHz`; removes `retuneGrainSize`; removes `retuneSemitones`; adds `characterAmount: number` (required); adds `characterTone: number` (required); adds `characterType: CharacterType` (required); adds `eqHighPassHz: number` (required); adds `harmonyDelayMs: number` (required); adds `harmonyDetuneCents: number` (required); adds `harmonyLeadLevel: number` (required); adds `harmonyLevel: number` (required); adds `harmonySteps: readonly [number, number, number]` (required); adds `harmonyVoices: number` (required); adds `midiRelease: MidiRelease` (required); adds `pitchCorrectionAmount: number` (required); adds `pitchCorrectionKeyRoot: number` (required); adds `pitchCorrectionMode: PitchCorrectionMode` (required); adds `pitchCorrectionRobotOctave: number` (required); adds `pitchCorrectionScale: ScaleKind` (required); adds `pitchCorrectionSpeedMs: number` (required); adds `retuneGrainSizeSamples: number` (required); adds `retunePitchSemitones: number` (required); adds `reverbVariation: ReverbVariation` (required); adds `reverbVariationDelayMs: number` (required); adds `reverbVariationDivision: NoteDivision` (required); adds `reverbVariationFeedback: number` (required); adds `reverbVariationTempoBpm: number` (required); adds `vocoderAttackMs: number` (required); adds `vocoderBands: number` (required); adds `vocoderCarrierSource: VocoderCarrierSource` (required); adds `vocoderCarrierWave: VocoderCarrierWave` (required); adds `vocoderEnabled: boolean` (required); adds `vocoderEnsembleDetuneCents: number` (required); adds `vocoderLevel: number` (required); adds `vocoderReleaseMs: number` (required); adds `vocoderSibilance: number` (required); adds `voiceEngine: VoiceEngine` (required); adds `voiceEngineF0MinHz: number` (required); `formantMode` is now `FormantMode` (was `"relative" \| "absolute"`); `formantMode` is now required |
 | `RealtimeVoiceChangerOptions.preset` | `RealtimeVoiceChangerOptions.config`: preset -> config (RealtimeVoiceChangerConfigInput, default 'neutralMonitor') |
 | `RealtimeVoiceChangerOptions` | removes `channels`; removes `preset`; adds `config?: RealtimeVoiceChangerConfigInput`; adds `numChannels: 1 \| 2` (required) |
-| `RealtimeVoiceChanger` | constructor(options: RealtimeVoiceChangerOptions) (fields preset -> config, channels -> numChannels) |
+| `RealtimeVoiceChanger` | constructor(options: RealtimeVoiceChangerOptions) (fields preset -> config, channels -> numChannels); the omitted realtime engine changes from the grain engine to PSOLA (latency at 48 kHz changes from 2263 to 717 samples); set voiceEngine: 'grain' in the config to retain the grain engine |
 | `RemixRequest.alignZeros` | default false -> true on remix (remixAlignedIntervals already true) |
 | `RirSynthOptions.listenerX` | `RoomGeometry.listener`: listenerX -> listener (RoomPlacement {x, y, z} (metres)) |
 | `RirSynthOptions.listenerY` | `RoomGeometry.listener`: listenerY -> listener (RoomPlacement {x, y, z} (metres)) |
@@ -6669,7 +6704,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masterAudio(presetName)` | removed: pass it as preset in MasterAudioRequest |
 | `masterAudioAsync(overrides)` | removed: pass overrides as a field of MasterAudioAsyncRequest |
 | `masterAudioAsync(presetName)` | removed: pass it as preset in MasterAudioAsyncRequest |
-| `masterAudioAsync` | one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioAsync: ...), where 1.x rejected with the addon's bare text |
+| `masterAudioAsync` | one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioAsync: ...), where 1.x rejected with the addon's bare text; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain |
 | `masterAudioStereo(left)` | removed: pass left as a field of MasterAudioStereoRequest |
 | `masterAudioStereo(onProgress)` | removed: pass onProgress as a field of MasterAudioStereoRequest |
 | `masterAudioStereo(overrides)` | removed: pass overrides as a field of MasterAudioStereoRequest |
@@ -6681,9 +6716,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masterAudioStereoAsync(presetName)` | removed: pass it as preset in MasterAudioStereoAsyncRequest |
 | `masterAudioStereoAsync(right)` | removed: pass right as a field of MasterAudioStereoAsyncRequest |
 | `masterAudioStereoAsync(sampleRate)` | removed: pass sampleRate as a field of MasterAudioStereoAsyncRequest |
-| `masterAudioStereoAsync` | request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text |
-| `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
-| `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
+| `masterAudioStereoAsync` | request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain |
+| `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain |
+| `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain |
 | `masteringAssistantSuggestStereo` | request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult |
 | `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library |
 | `masteringAudioProfileStereo` | request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile |
@@ -6817,8 +6852,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only). An undeclared processor raises an InvalidParameter RangeError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference. An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
-| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
-| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement |
+| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
 | `mixSourceClassNames` | `mixingAssistantSourceClassNames`: renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[] |
@@ -8401,8 +8436,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AnalyzeRhythmRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default) |
 | `AnalyzeSectionsRequest.sampleRate` (`./analysis`) | required (was optional with a 22050/44100 default) |
 | `AnalyzeSectionsRequest.sampleRate` | required (was optional with a 22050/44100 default) |
-| `AnalyzeSectionsRequest` (`./analysis`) | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default) |
-| `AnalyzeSectionsRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default) |
+| `AnalyzeSectionsRequest` (`./analysis`) | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default); the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty |
+| `AnalyzeSectionsRequest` | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default); the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty |
 | `AnalyzeTimbreRequest.sampleRate` (`./analysis`) | required (was optional with a 22050/44100 default) |
 | `AnalyzeTimbreRequest.sampleRate` | required (was optional with a 22050/44100 default) |
 | `AnalyzeTimbreRequest` (`./analysis`) | sampleRate: number required (inherited optional from the shared base; was 22050/44100 default) |
@@ -8920,6 +8955,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MusicAnalyzeOptions.computeTempoCurve` (`./analysis`) | when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in |
+| `MusicAnalyzeOptions.computeTempoCurve` | when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in |
+| `MusicAnalyzeOptions.useChordHmm` (`./analysis`) | Viterbi smoothing of the chord sequence defaults to true instead of false; set useChordHmm explicitly for the 1.x behavior |
+| `MusicAnalyzeOptions.useChordHmm` | Viterbi smoothing of the chord sequence defaults to true instead of false; set useChordHmm explicitly for the 1.x behavior |
+| `MusicAnalyzeOptions.useHpss` (`./analysis`) | harmonic-percussive separation before chroma defaults to false instead of true; set useHpss explicitly for the 1.x behavior |
+| `MusicAnalyzeOptions.useHpss` | harmonic-percussive separation before chroma defaults to false instead of true; set useHpss explicitly for the 1.x behavior |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -9666,10 +9707,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectDownbeats` (`./analysis`) | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
-| `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
-| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
-| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
+| `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
+| `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
+| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings |
 | `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `estimateTuning(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of EstimateTuningRequest |
@@ -10747,6 +10788,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `realtimeVoiceChangerPresetJson` | the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); set voiceEngine to 'grain' in the realtime config to keep the 1.x engine |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -11011,7 +11053,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `remixAlignedIntervals(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
 | `remixAlignedIntervals(intervals)` | removed: pass intervals as a field of RemixRequest |
 | `remixAlignedIntervals` | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
-| `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
+| `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array; omitted alignZeros snaps cuts to zero crossings (1.x used the stated sample boundaries); pass alignZeros: false to retain the 1.x cuts |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
 | `roomGeometryFromEstimate(estimate)` | removed: pass estimate as a field of RoomGeometryFromEstimateRequest |
@@ -11241,7 +11283,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PitchCorrectToMidiRequest.targetMidi` | optional -> required |
 | `RealtimeVoiceChanger.prepare` | removed: the constructor prepares the changer; to change the sample rate, block size or channel count create a new RealtimeVoiceChanger |
 | `RealtimeVoiceChanger.setConfig` | setConfig(config: RealtimeVoiceChangerConfigInput) |
-| `RealtimeVoiceChanger` | constructor(options: RealtimeVoiceChangerOptions), sampleRate and numChannels required; maxBlockSize has no default value of its own: omit it for the library default, an explicit 0 is refused |
+| `RealtimeVoiceChanger` | constructor(options: RealtimeVoiceChangerOptions), sampleRate and numChannels required; maxBlockSize has no default value of its own: omit it for the library default, an explicit 0 is refused; the omitted realtime engine changes from the grain engine to PSOLA (latency at 48 kHz changes from 2263 to 717 samples); set voiceEngine: 'grain' in the config to retain the grain engine |
 | `RemixRequest.alignZeros` (`./analysis`) | default false -> true on remix (remixAlignedIntervals already true) |
 | `RemixRequest.alignZeros` | default false -> true on remix (remixAlignedIntervals already true) |
 | `RirSynthOptions.listenerX` (`./analysis`) | `RoomGeometry.listener`: listenerX -> listener (RoomPlacement {x, y, z} (metres)) |
@@ -11728,8 +11770,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masterAudioStereo(presetName)` | removed: pass it as preset in MasterAudioStereoRequest |
 | `masterAudioStereo(right)` | removed: pass right as a field of MasterAudioStereoRequest |
 | `masterAudioStereo(sampleRate)` | removed: pass sampleRate as a field of MasterAudioStereoRequest |
-| `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
-| `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
+| `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain |
+| `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain |
 | `masteringAssistantSuggestStereo` | request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult |
 | `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library |
 | `masteringAudioProfileStereo` | request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile |
@@ -11914,8 +11956,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only). An undeclared processor raises an InvalidParameter RangeError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference. An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
-| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
-| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement |
+| `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
 | `mixSourceClassNames` | `mixingAssistantSourceClassNames`: renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[] |
@@ -12893,7 +12935,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Mixer.configureMeter` | configureMeter({ enabled, truePeakOversample?, measureLufs?, measureTruePeak? }) replaces (enabled, truePeakOversample = 4); an omitted field takes the library default |
+| `Mixer.configureMeter` | configureMeter({ enabled, truePeakOversample?, measureLufs?, measureTruePeak? }) replaces (enabled, truePeakOversample = 4); an omitted field takes the library default; enabling the meter measures loudness by default; v1.10.0 measured true peak but reported no loudness. Set measureLufs: false to retain that behavior |
 | `Mixer.setMuted` | strip is a StripRef (index or id); the single boolean stays positional |
 | `Mixer.setPolarityInvert` | setPolarityInvert(strip, { left, right }) replaces (strip, invertLeft, invertRight) |
 | `Mixer.setSoloSafe` | strip is a StripRef (index or id); the single boolean stays positional |
@@ -13958,6 +14000,8 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | 1.x | 2.0.0 |
 |---|---|
 | `analyze --meter-candidates` | omitted, the core's candidate set (3,4,6) applies; an explicit empty value and an entry that is not an integer are refused as a usage error (exit 2) before the input is read rather than read as not given |
+| `beats` | the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides |
+| `downbeats` | the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides |
 | `key --modes` | omitted, the library's candidate modes apply; an explicit empty value and an unknown mode are refused as a usage error (exit 2) before the input is read rather than read as not given, and entries are no longer trimmed of spaces on the Python front-end |
 | `key --profile` | omitted, the genre hint chooses the profile; an explicit empty value and an unknown profile name are refused as a usage error (exit 2) before the input is read rather than read as not given |
 | `melody --fmax` (native CLI only) | `melody --f0-max-hz`: renamed --f0-max-hz; omitted, the library default (2093 Hz) applies rather than 1000 Hz; pass the 1.x value to keep 1.x output; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -14012,7 +14056,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | 1.x | 2.0.0 |
 |---|---|
 | `cqt --fmin` (native CLI only) | `cqt --fmin-hz`: renamed --fmin-hz; omitted, the library default (C1, 32.7 Hz) applies (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2) |
-| `cqt` (native CLI only) | the JSON fmin key is fmin_hz, named as the flag is |
+| `cqt` (native CLI only) | the JSON fmin key is fmin_hz, named as the flag is; the omitted lower frequency is the library C1 frequency (about 32.7032 Hz), where 1.x used 32.7 Hz. Pass --fmin-hz 32.7 to retain the earlier frequency |
 | `mel --fmax` | `mel --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3) |
 | `mel --fmin` | `mel --fmin-hz`: renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mel-to-audio --fmax` (native CLI only) | `mel-to-audio --fmax-hz`: renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2), and a value above Nyquist is refused after the input is read (exit 3) |
@@ -14026,7 +14070,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `vocal-notes --fmax-hz` | `vocal-notes --f0-max-hz` |
 | `vocal-notes --fmin-hz` | `vocal-notes --f0-min-hz` |
 | `vqt --fmin` (native CLI only) | `vqt --fmin-hz`: renamed --fmin-hz; omitted, the library default (C1, 32.7 Hz) applies (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2) |
-| `vqt` (native CLI only) | the JSON fmin key is fmin_hz, named as the flag is |
+| `vqt` (native CLI only) | the JSON fmin key is fmin_hz, named as the flag is; the omitted lower frequency is the library C1 frequency (about 32.7032 Hz), where 1.x used 32.7 Hz. Pass --fmin-hz 32.7 to retain the earlier frequency |
 
 #### Historical aliases are removed
 
@@ -14056,7 +14100,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `chords --key-mode` | an invalid mode name is refused as a usage error (exit 2) before the input is read, whether or not --key-context is given |
 | `chords --key-root` | an invalid pitch class is refused as a usage error (exit 2) before the input is read, whether or not --key-context is given |
 | `chords --n-fft` | a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends |
-| `chords --nnls` | `chords --chroma-method`: use --chroma-method nnls; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
+| `chords --nnls` | `chords --chroma-method`: use --chroma-method nnls; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); without --chroma-method the chord chroma is now CQT rather than STFT; pass --chroma-method stft to choose the former front end |
 | `chords --smoothing-window` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `chords --triads-only` | `chords --with-seventh`: triads are the default; --with-seventh adds seventh chords |
 | `chords --use-hmm` | `chords --no-hmm`: HMM decoding is the default; --no-hmm turns it off |
@@ -14068,7 +14112,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `dynamics --window-sec` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `estimate-room` | the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band; drr_db is absent on a silent or empty input and null when the direct sound leaves no energy outside its window |
 | `key --hop-length` | a value below 16 with --hpss is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `key --n-fft` | a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends |
+| `key --n-fft` | a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends; omission uses the library's 2048-point FFT instead of 4096; specify --n-fft 4096 to keep the earlier window |
 | `mel-to-audio --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mel-to-audio` (native CLI only) | an --n-iter below 1 is refused as a usage error (exit 2) before the input is read, rather than exit 3 |
 | `melody --threshold` (native CLI only) | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -14080,8 +14124,8 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `scale-quantize --mode-mask` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `scale-quantize --reference-midi` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `scale-quantize --root` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `sections --threshold` (native CLI only) | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `sections` (python CLI only) | the JSON carries form, the section letters the native command already reported |
+| `sections --threshold` (native CLI only) | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty |
+| `sections` (python CLI only) | the JSON carries form, the section letters the native command already reported; the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty |
 | `split-silence --json` | prints an object whose intervals key holds the list it used to print bare, adding output_gain_db with --write-takes and report with --report |
 | `transcribe --max-polyphony` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `transcribe --min-frame-peak-ratio` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -14096,7 +14140,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `bpm` | In --json output bpm is omitted when tempo is unmeasured, for example on silence. Check for presence before reading the number. |
+| `bpm` | In --json output bpm is omitted when tempo is unmeasured, for example on silence. Check for presence before reading the number; the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides |
 | `chroma` | On both front ends, SONARE_LEGACY_EXIT no longer forces failures to exit 1. Handle the class-specific exit codes, for example 2 for a chroma usage error. |
 | `decompose-stems --hop-length` | An omitted hop is one quarter of the effective FFT size. Pass --hop-length 512 to retain the fixed v1.10.0 hop when changing the FFT size. |
 | `key --high-pass-hz` | Defaults to 80 Hz instead of 0 Hz. Pass --high-pass-hz 0 to retain unfiltered analysis. |
@@ -14143,6 +14187,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 |---|---|
 | `pitch-correct --current-midi` | required: an omitted --current-midi no longer reads as MIDI 69 (A4) and is refused as a usage error (exit 2) before the input is read, as the library assumes no pitch; pass 69 to keep the 1.x result |
 | `pitch-correct --target-midi` | required: an omitted --target-midi no longer reads as MIDI 69 (A4) and is refused as a usage error (exit 2) before the input is read, as the library assumes no pitch; pass 69 to keep the 1.x result |
+| `voice-preset` | the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); for a preset-based voice-change pass --set dsp.voiceEngine.engine=grain to keep the 1.x engine |
 
 #### String values are lowerCamelCase tokens
 
@@ -14215,7 +14260,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `resample --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `room-morph --absorption` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `room-morph --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `room-morph --receiver-spacing` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
+| `room-morph --receiver-spacing` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); when omitted the former fixed 0.5 m spacing is reduced if needed to fit the receivers in the room |
 | `room-morph --seed` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `synthesize-rir --absorption` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `synthesize-rir --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -14235,8 +14280,8 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `room-morph` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override. |
-| `synthesize-rir` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override. |
+| `room-morph` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override; the rendered room includes air absorption by default (1.x left it off). Use the library's air absorption option if you need the earlier air-loss setting |
+| `synthesize-rir` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override; the rendered room includes air absorption by default (1.x left it off). Use the library's air absorption option if you need the earlier air-loss setting |
 | `voice-change` | an absolute formant factor must itself be in [0.55, 1.65] as well as reachable at the selected pitch shift. For example, 1.x accepted a factor of 1.9 at +5 semitones; this now refuses the factor as an invalid parameter (exit 3). |
 
 ### Command line: Mastering, mixing and loudness
@@ -14317,9 +14362,9 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `mastering-chain` (python CLI only) | removed: use mastering --chain-config with a version-2 document, {"version":2,"params":<the old config>} |
 | `mastering-pair-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `mastering-processor --bits` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `mastering-processor --params` | a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY |
+| `mastering-processor --params` | a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement |
 | `mastering-profile --params` | a value that cannot be read as a finite number now exits 2 before input is read instead of exiting 3 after decoding. This also applies to the numeric --params bags of eq, mastering-pair-processor, mastering-pair-analyze and mastering-stereo-analyze. The refusal names the supplied key as --params KEY |
-| `mastering-stereo-analyze --params` | the log-band analysis refuses bandsPerOctave below 1 before opening the input or the reference, naming --params bandsPerOctave and exiting 2 instead of 3 |
+| `mastering-stereo-analyze --params` | the log-band analysis refuses bandsPerOctave below 1 before opening the input or the reference, naming --params bandsPerOctave and exiting 2 instead of 3; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused |
 | `mastering-streaming --platforms-file` | duplicate object keys are refused as InvalidFormat (exit 5), with the duplicate JSON path |
 | `mastering-suggest --params` | unread keys and invalid values are usage errors (exit 2) before any input is read on both front-ends. An invalid preset or targetPlatform value now exits 2 instead of 3 and the refusal lists the accepted tokens. An earlier key spelling such as target_platform is an unknown key and the refusal lists the accepted keys in sorted order. A refusal names the supplied key as --params KEY |
 | `mix-strip --pan` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |

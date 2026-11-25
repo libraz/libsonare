@@ -480,6 +480,19 @@ TEST_CASE("every insert publishes a default for every construction key it automa
   }
 }
 
+#if SONARE_BUILD_ACOUSTIC_SIM && SONARE_BUILD_FX
+TEST_CASE("room inserts publish enabled air absorption by default",
+          "[mastering][catalog][acoustic]") {
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    CAPTURE(name);
+    const json::Array params = param_info(name);
+    const json::Value* enabled = find_param(params, "airAbsorptionEnabled");
+    REQUIRE(enabled != nullptr);
+    CHECK(field(*enabled, "default").as_bool());
+  }
+}
+#endif
+
 TEST_CASE("a published default is a value construction accepts", "[mastering][catalog]") {
   for (const std::string& name : insert_factory_names()) {
     for (const json::Value& parameter : param_info(name)) {

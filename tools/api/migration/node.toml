@@ -5107,18 +5107,18 @@ test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar p
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference."
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/analysis_tuning.test.ts::measures the tuning by default and reads the triads and key from it"
+test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
 
 [[entry]]
 kind = "function"
 old = "detectKeyCandidates"
-changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference."
+changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set nFft and chromaHighPassHz to retain the former settings"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/analysis_tuning.test.ts::measures the tuning by default and reads the triads and key from it"
+test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
 
 [[entry]]
 kind = "function"
@@ -5606,10 +5606,10 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "type"
 old = "AnalyzeSectionsRequest"
-changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default)"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default); the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "tests/api/sonare_c_music_test.cpp::sonare_section_options_init mirrors the core section defaults"
 
 [[entry]]
 kind = "type"
@@ -9302,10 +9302,10 @@ test = "bindings/node/tests/option-extensions.test.ts::runs an omitted phaseVoco
 [[entry]]
 kind = "function"
 old = "remix"
-changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array"
+changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array; omitted alignZeros snaps cuts to zero crossings (1.x used the stated sample boundaries); pass alignZeros: false to retain the 1.x cuts"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+test = "bindings/node/tests/surface/effects-sep.test.ts::remix aligns cuts to zero crossings by default"
 
 [[entry]]
 kind = "function"
@@ -10824,10 +10824,10 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChange requires 
 [[entry]]
 kind = "class"
 old = "RealtimeVoiceChanger"
-changed = "constructor(options: RealtimeVoiceChangerOptions) (fields preset -> config, channels -> numChannels)"
+changed = "constructor(options: RealtimeVoiceChangerOptions) (fields preset -> config, channels -> numChannels); the omitted realtime engine changes from the grain engine to PSOLA (latency at 48 kHz changes from 2263 to 717 samples); set voiceEngine: 'grain' in the config to retain the grain engine"
 domain = "effects"
 rule = "individual"
-test = "bindings/node/tests/surface/effects-voice.test.ts::takes one options object with sampleRate required"
+test = "bindings/node/tests/voice_changer_pod.test.ts::uses PSOLA for the default realtime voice engine"
 
 [[entry]]
 kind = "function"
@@ -13501,34 +13501,34 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::ebur128LoudnessR
 [[entry]]
 kind = "function"
 old = "masterAudio"
-changed = "one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain"
+changed = "one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/core-validation-refusals.test.ts::in every synchronous form"
+test = "bindings/node/tests/request_object_equivalence.test.ts::refuses a missing mastering selector before a fractional rate in mono and stereo"
 
 [[entry]]
 kind = "function"
 old = "masterAudioAsync"
-changed = "one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioAsync: ...), where 1.x rejected with the addon's bare text"
+changed = "one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioAsync: ...), where 1.x rejected with the addon's bare text; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/core-validation-refusals.test.ts::in every asynchronous form"
+test = "bindings/node/tests/request_object_equivalence.test.ts::refuses a missing mastering selector before a fractional rate in mono and stereo"
 
 [[entry]]
 kind = "function"
 old = "masterAudioStereo"
-changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain"
+changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/core-validation-refusals.test.ts::in every synchronous form"
+test = "bindings/node/tests/request_object_equivalence.test.ts::refuses a missing mastering selector before a fractional rate in mono and stereo"
 
 [[entry]]
 kind = "function"
 old = "masterAudioStereoAsync"
-changed = "request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text"
+changed = "request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text; 1.x selected the pop preset when the preset was omitted, including when only overrides were supplied. Use preset: 'pop' to retain that starting chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/core-validation-refusals.test.ts::in every asynchronous form"
+test = "bindings/node/tests/request_object_equivalence.test.ts::refuses a missing mastering selector before a fractional rate in mono and stereo"
 
 [[entry]]
 kind = "function"
@@ -14216,10 +14216,10 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringProcess"
 to = "masteringApplyProcessor"
-changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own"
+changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement"
 domain = "mastering"
 rule = "mastering-names"
-test = "bindings/node/tests/insert-key-spellings.test.ts::reads the repair.trimSilence threshold as thresholdDb in dBFS"
+test = "tests/mastering/insert_param_metadata_test.cpp::room inserts publish enabled air absorption by default"
 
 [[entry]]
 kind = "function"
@@ -14234,7 +14234,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringStereoAnalyze"
 to = "masteringAnalyzeStereo"
-changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
+changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object); stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/mastering-pair-planar-analysis.test.ts::names stereo log-band params from the caller and keeps their defaults"
@@ -20511,3 +20511,35 @@ changed = "keeps the stored time-signature list empty for a file without signatu
 domain = "project"
 rule = "individual"
 test = "tests/api/sonare_c_project_midi_meter_test.cpp::an exported project's meter map imports back unchanged"
+
+[[entry]]
+kind = "function"
+old = "realtimeVoiceChangerPresetJson"
+changed = "the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); set voiceEngine to 'grain' in the realtime config to keep the 1.x engine"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/node/tests/voice_changer_pod.test.ts::uses PSOLA for the default realtime voice engine"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeOptions.useHpss"
+changed = "harmonic-percussive separation before chroma defaults to false instead of true; set useHpss explicitly for the 1.x behavior"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_core_test.cpp::C music analysis defaults skip HPSS and use the chord HMM"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeOptions.useChordHmm"
+changed = "Viterbi smoothing of the chord sequence defaults to true instead of false; set useChordHmm explicitly for the 1.x behavior"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_core_test.cpp::C music analysis defaults skip HPSS and use the chord HMM"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeOptions.computeTempoCurve"
+changed = "when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"

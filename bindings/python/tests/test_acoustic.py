@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import inspect
 import math
 from collections.abc import Callable
 
@@ -12,6 +13,13 @@ import pytest
 import libsonare
 
 from ._helpers import LIB_AVAILABLE
+
+
+@pytest.mark.parametrize(
+    "entry", [libsonare.synthesize_rir, libsonare.room_morph, libsonare.room_morph_stereo]
+)
+def test_room_acoustics_enable_air_absorption_by_default(entry) -> None:
+    assert inspect.signature(entry).parameters["air_absorption_enabled"].default is True
 
 
 class _ForeignEstimateError(Exception):

@@ -304,6 +304,18 @@ describe('RealtimeVoiceChanger config read', () => {
 });
 
 describe('voice changer preset document types', () => {
+  it('uses PSOLA for the default realtime voice engine', () => {
+    const voice = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
+    try {
+      expect(voice.config().voiceEngine).toBe('psola');
+      expect(voice.latencySamples).toBe(717);
+      const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
+      expect(preset.dsp.voiceEngine.engine).toBe('psola');
+    } finally {
+      voice.destroy();
+    }
+  });
+
   it('uses schema version four on preset documents', () => {
     expectTypeOf<RealtimeVoiceChangerPreset['schemaVersion']>().toEqualTypeOf<4>();
     expect(JSON.parse(realtimeVoiceChangerPresetJson('brightIdol')).schemaVersion).toBe(4);

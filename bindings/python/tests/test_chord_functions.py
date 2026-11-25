@@ -105,7 +105,11 @@ def test_empty_input_and_refusals() -> None:
 
 
 def test_chord_detection_defaults_and_cqt_front_end() -> None:
-    for fn in (libsonare.detect_chords, libsonare.chord_functional_analysis):
+    for fn in (
+        libsonare.detect_chords,
+        libsonare.chord_functional_analysis,
+        libsonare.Audio.detect_chords,
+    ):
         params = inspect.signature(fn).parameters
         assert params["use_triads_only"].default is True
         assert params["use_hmm"].default is True
@@ -124,3 +128,15 @@ def test_analyze_defaults_skip_hpss_and_decode_chords_with_the_hmm() -> None:
     params = inspect.signature(libsonare.analyze).parameters
     assert params["use_hpss"].default is False
     assert params["use_chord_hmm"].default is True
+
+
+def test_key_defaults_use_a_short_fft_and_a_chroma_high_pass() -> None:
+    for entry in (
+        libsonare.detect_key,
+        libsonare.detect_key_candidates,
+        libsonare.Audio.detect_key,
+        libsonare.Audio.detect_key_candidates,
+    ):
+        params = inspect.signature(entry).parameters
+        assert params["n_fft"].default == 2048
+        assert params["chroma_high_pass_hz"].default == 80.0

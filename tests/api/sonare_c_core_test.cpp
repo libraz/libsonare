@@ -1696,6 +1696,21 @@ TEST_CASE("sonare_detect_onsets", "[c_api]") {
   }
 }
 
+TEST_CASE("C music analysis defaults skip HPSS and use the chord HMM", "[c_api][analysis]") {
+  SonareMusicAnalyzeOptions options;
+  sonare_music_analyze_options_init(&options);
+  CHECK(options.use_hpss == 0);
+  CHECK(options.use_chord_hmm == 1);
+}
+
+TEST_CASE("C key detection defaults use a 2048-point FFT and an 80 Hz high-pass",
+          "[c_api][analysis]") {
+  SonareDetectKeyOptions options;
+  sonare_detect_key_options_init(&options);
+  CHECK(options.n_fft == 2048);
+  CHECK(options.chroma_high_pass_hz == 80.0f);
+}
+
 TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
   auto samples = generate_clicks(120.0f, 22050, 4.0f);
 

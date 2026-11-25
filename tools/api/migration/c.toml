@@ -372,10 +372,10 @@ test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_amp_preset_catal
 [[entry]]
 kind = "function"
 old = "sonare_mastering_insert_param_info"
-changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for; any other rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range')"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for; any other rate outside [8000, 384000] is SONARE_ERROR_INVALID_PARAMETER 'sample_rate must be an integer in [8000, 384000]' (1.x: 'sample_rate <n> is out of range'); effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement"
 domain = "mastering"
 rule = "c-free"
-test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descriptor query refuses a rate outside the supported range"
+test = "tests/mastering/insert_param_metadata_test.cpp::room inserts publish enabled air absorption by default"
 
 [[entry]]
 kind = "function"
@@ -1846,7 +1846,7 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_retune_cre
 [[entry]]
 kind = "function"
 old = "sonare_analyze_sections"
-changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio"
+changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio; the omitted boundary threshold changes from 0.3 to 0.22 as section detection uses beat-grid novelty"
 domain = "analysis"
 rule = "options-struct"
 test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections reports each section's material group"
@@ -4285,10 +4285,10 @@ test = "tests/api/sonare_c_core_test.cpp::C API reconstructs CQT and VQT magnitu
 [[entry]]
 kind = "function"
 old = "sonare_detect_chords"
-changed = "takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync"
+changed = "takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync; default chord options use CQT and the HMM instead of the plain 1.x entry's STFT and no HMM; with no options they restrict chords to triads"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_music_test.cpp::sonare_detect_chords chroma_method range"
+test = "tests/api/sonare_c_music_test.cpp::C chord detection defaults to triads, CQT and the HMM"
 
 [[entry]]
 kind = "function"
@@ -4349,10 +4349,10 @@ test = "tests/api/c_bare_refusal_compat_test.cpp::sonare_split_silence_common pu
 [[entry]]
 kind = "function"
 old = "sonare_detect_key"
-changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct"
+changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct; the default FFT is 2048 rather than 4096 and the default chroma high-pass is 80 Hz rather than off; set options.n_fft and options.chroma_high_pass_hz to retain the former settings"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_core_test.cpp::sonare_detect_key"
+test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
 
 [[entry]]
 kind = "function"
@@ -7069,7 +7069,7 @@ test = "tests/api/sonare_c_mixing_features_test.cpp::C chirp refuses frequencies
 [[entry]]
 kind = "option"
 old = "sonare_mastering_analyze_stereo(params)"
-changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text"
+changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused"
 domain = "mastering"
 rule = "individual"
 test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering stereo analysis parameter admission"
@@ -7525,7 +7525,63 @@ test = "tests/api/sonare_c_voice_transform_test.cpp::The default config reports 
 [[entry]]
 kind = "function"
 old = "sonare_detect_downbeats"
-changed = "downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio"
+changed = "downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio; the tempo search defaults to 60–200 BPM instead of 30–300"
 domain = "analysis"
 rule = "individual"
 test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar phase for the same beats"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.air_absorption_enabled"
+changed = "initializes to 1 instead of 0; set it to 0 to retain the lossless-air calculation"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_acoustic_test.cpp::config init sets struct_size and the library defaults"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.air_absorption_enabled"
+changed = "initializes to 1 instead of 0; set it to 0 to retain the lossless-air calculation"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_acoustic_test.cpp::config init sets struct_size and the library defaults"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.use_hpss"
+changed = "harmonic-percussive separation before chroma defaults to 0 instead of 1; set use_hpss explicitly for the 1.x behavior"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_core_test.cpp::C music analysis defaults skip HPSS and use the chord HMM"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.use_chord_hmm"
+changed = "Viterbi smoothing of the chord sequence defaults to 1 instead of 0; set use_chord_hmm explicitly for the 1.x behavior"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_core_test.cpp::C music analysis defaults skip HPSS and use the chord HMM"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.compute_tempo_curve"
+changed = "when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_detect_downbeats"
+changed = "the tempo search defaults to 60–200 BPM instead of 30–300"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.receiver_spacing_m"
+changed = "an omitted value uses a spacing of up to 0.5 m fitted to the room (1.x used a fixed 0.5 m); set 0.5 explicitly to retain the fixed spacing"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API fits an omitted receiver spacing to the room"

@@ -872,6 +872,21 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
   }
 }
 
+TEST_CASE("CLI constant-Q commands use the library C1 frequency when omitted",
+          "[cli][defaults]") {
+  const auto path = unique_temp_path("_constant_q_default.wav");
+  create_test_wav(path, 0.28f);
+  const auto cqt = exec_command(CLI + " cqt " + path + " --n-bins 18 --json -q");
+  const auto vqt = exec_command(CLI + " vqt " + path + " --n-bins 18 --json -q");
+  std::remove(path.c_str());
+
+  for (const auto& [code, output] : {cqt, vqt}) {
+    REQUIRE(code == 0);
+    const auto json = sonare::util::json::parse_strict(output);
+    CHECK(json["fmin_hz"].as_number() == Catch::Approx(sonare::constants::kC1Hz).margin(1e-4));
+  }
+}
+
 TEST_CASE("CLI band bounds leave an omitted edge to the library and refuse 0", "[cli]") {
   create_test_wav(TEST_WAV);
   const std::string out = unique_temp_path("_band_bounds.wav");

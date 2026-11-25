@@ -65,11 +65,11 @@ test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_fl
 [[entry]]
 kind = "flag"
 old = "chords --nnls"
-changed = "use --chroma-method nnls; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+changed = "use --chroma-method nnls; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); without --chroma-method the chord chroma is now CQT rather than STFT; pass --chroma-method stft to choose the former front end"
 to = "chords --chroma-method"
 domain = "analysis"
 rule = "cli-front-end-parity"
-test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_flags_override_the_defaults"
+test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_leaves_omitted_chroma_to_the_cqt_default"
 
 [[entry]]
 kind = "flag"
@@ -721,19 +721,19 @@ test = 'tests/cli/cli_analysis_test.cpp::\"fmax_hz\": 1000'
 kind = "command"
 old = "cqt"
 frontend = "native"
-changed = "the JSON fmin key is fmin_hz, named as the flag is"
+changed = "the JSON fmin key is fmin_hz, named as the flag is; the omitted lower frequency is the library C1 frequency (about 32.7032 Hz), where 1.x used 32.7 Hz. Pass --fmin-hz 32.7 to retain the earlier frequency"
 domain = "analysis"
 rule = "frequency-bounds"
-test = 'tests/cli/cli_analysis_test.cpp::\"fmin_hz\": 32.7'
+test = "tests/cli/cli_analysis_test.cpp::CLI constant-Q commands use the library C1 frequency when omitted"
 
 [[entry]]
 kind = "command"
 old = "vqt"
 frontend = "native"
-changed = "the JSON fmin key is fmin_hz, named as the flag is"
+changed = "the JSON fmin key is fmin_hz, named as the flag is; the omitted lower frequency is the library C1 frequency (about 32.7032 Hz), where 1.x used 32.7 Hz. Pass --fmin-hz 32.7 to retain the earlier frequency"
 domain = "analysis"
 rule = "frequency-bounds"
-test = 'tests/cli/cli_analysis_test.cpp::\"fmin_hz\": 32.7'
+test = "tests/cli/cli_analysis_test.cpp::CLI constant-Q commands use the library C1 frequency when omitted"
 
 [[entry]]
 kind = "flag"
@@ -1790,10 +1790,10 @@ test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refu
 [[entry]]
 kind = "flag"
 old = "room-morph --receiver-spacing"
-changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); when omitted the former fixed 0.5 m spacing is reduced if needed to fit the receivers in the room"
 domain = "effects"
 rule = "cli-front-end-parity"
-test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+test = "tests/cli/cli_contract_test.cpp::CLI room-morph receiver spacing left out is fitted to the room"
 
 [[entry]]
 kind = "flag"
@@ -1806,10 +1806,10 @@ test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_do
 [[entry]]
 kind = "command"
 old = "room-morph"
-changed = "An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override."
+changed = "An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override; the rendered room includes air absorption by default (1.x left it off). Use the library's air absorption option if you need the earlier air-loss setting"
 domain = "effects"
 rule = "individual"
-test = "tests/cli/cli_contract_test.cpp::CLI room placement left out is the default placement scaled to the room"
+test = "tests/api/sonare_c_acoustic_test.cpp::config init sets struct_size and the library defaults"
 
 [[entry]]
 kind = "flag"
@@ -1839,10 +1839,10 @@ test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_do
 kind = "flag"
 old = "sections --threshold"
 frontend = "native"
-changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3); the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty"
 domain = "analysis"
 rule = "cli-front-end-parity"
-test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+test = "tests/cli/cli_analysis_test.cpp::CLI sections defaults to the core boundary threshold"
 
 [[entry]]
 kind = "flag"
@@ -2331,10 +2331,10 @@ test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option le
 [[entry]]
 kind = "flag"
 old = "key --n-fft"
-changed = "a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends"
+changed = "a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends; omission uses the library's 2048-point FFT instead of 4096; specify --n-fft 4096 to keep the earlier window"
 domain = "analysis"
 rule = "cli-front-end-parity"
-test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+test = "tests/api/sonare_c_core_test.cpp::C key detection defaults use a 2048-point FFT and an 80 Hz high-pass"
 
 [[entry]]
 kind = "flag"
@@ -2459,10 +2459,10 @@ test = "tests/cli/cli_mastering_test.cpp::CLI numeric mastering parameter bags r
 [[entry]]
 kind = "flag"
 old = "mastering-processor --params"
-changed = "a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY"
+changed = "a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key. A refusal names the supplied key as --params KEY; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement"
 domain = "mastering"
 rule = "cli-front-end-parity"
-test = "tests/cli/cli_mastering_test.cpp::CLI mastering --params keys the processor does not read"
+test = "tests/mastering/insert_param_metadata_test.cpp::room inserts publish enabled air absorption by default"
 
 [[entry]]
 kind = "flag"
@@ -2499,10 +2499,10 @@ test = "tests/conformance/cli_contract_v2.json::explicit_rate_hop_geometry_befor
 [[entry]]
 kind = "flag"
 old = "mastering-stereo-analyze --params"
-changed = "the log-band analysis refuses bandsPerOctave below 1 before opening the input or the reference, naming --params bandsPerOctave and exiting 2 instead of 3"
+changed = "the log-band analysis refuses bandsPerOctave below 1 before opening the input or the reference, naming --params bandsPerOctave and exiting 2 instead of 3; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused"
 domain = "mastering"
 rule = "cli-front-end-parity"
-test = "tests/conformance/cli_contract_v2.json::log_bands_count_before_read"
+test = "tests/mastering/stereo_test.cpp::MonoCompatCheck log bands default the upper edge to Nyquist below 40 kHz"
 
 [[entry]]
 kind = "flag"
@@ -2541,10 +2541,10 @@ test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio
 [[entry]]
 kind = "command"
 old = "synthesize-rir"
-changed = "An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override."
+changed = "An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override; the rendered room includes air absorption by default (1.x left it off). Use the library's air absorption option if you need the earlier air-loss setting"
 domain = "effects"
 rule = "individual"
-test = "tests/cli/cli_contract_test.cpp::CLI room placement left out is the default placement scaled to the room"
+test = "tests/acoustic/rir_synthesizer_test.cpp::synthesize_rir applies air absorption at the ISO reference climate by default"
 
 [[entry]]
 kind = "flag"
@@ -2574,10 +2574,10 @@ test = "bindings/python/tests/test_cli_option_effects_v2.py::test_estimate_room_
 kind = "command"
 old = "sections"
 frontend = "python"
-changed = "the JSON carries form, the section letters the native command already reported"
+changed = "the JSON carries form, the section letters the native command already reported; the omitted boundary threshold changes from 0.3 to 0.22 as section detection now uses beat-grid novelty"
 domain = "analysis"
 rule = "cli-front-end-parity"
-test = "bindings/python/tests/test_cli_sections_stems_transcribe_mix.py::test_sections_reports_the_boundaries_it_found"
+test = "tests/cli/cli_analysis_test.cpp::CLI sections defaults to the core boundary threshold"
 
 [[entry]]
 kind = "command"
@@ -2590,10 +2590,10 @@ test = "bindings/python/tests/test_cli_note_edit.py::test_pitch_frames_cli_lists
 [[entry]]
 kind = "command"
 old = "bpm"
-changed = "In --json output bpm is omitted when tempo is unmeasured, for example on silence. Check for presence before reading the number."
+changed = "In --json output bpm is omitted when tempo is unmeasured, for example on silence. Check for presence before reading the number; the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides"
 domain = "analysis"
 rule = "individual"
-test = "tests/cli/cli_contract_test.cpp::CLI rhythm and bpm report no tempo on silence whatever the start tempo"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
 
 [[entry]]
 kind = "command"
@@ -2690,3 +2690,27 @@ changed = "an absolute formant factor must itself be in [0.55, 1.65] as well as 
 domain = "effects"
 rule = "individual"
 test = "tests/cli/cli_effects_test.cpp::CLI voice-change formant mode"
+
+[[entry]]
+kind = "command"
+old = "voice-preset"
+changed = "the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); for a preset-based voice-change pass --set dsp.voiceEngine.engine=grain to keep the 1.x engine"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_project_test.cpp::voice-preset emits PSOLA as the default realtime engine"
+
+[[entry]]
+kind = "command"
+old = "beats"
+changed = "the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
+
+[[entry]]
+kind = "command"
+old = "downbeats"
+changed = "the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"

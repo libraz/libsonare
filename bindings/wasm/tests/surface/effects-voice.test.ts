@@ -558,6 +558,18 @@ describe('voice changer surface', () => {
       });
     });
 
+    it('uses PSOLA for the default realtime voice engine', () => {
+      const voice = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
+      try {
+        expect(voice.config().voiceEngine).toBe('psola');
+        expect(voice.latencySamples).toBe(717);
+        const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
+        expect(preset.dsp.voiceEngine.engine).toBe('psola');
+      } finally {
+        voice.destroy();
+      }
+    });
+
     it('builds a preset JSON and config for each public id', () => {
       for (const id of publicIds as VoicePresetId[]) {
         const json = realtimeVoiceChangerPresetJson(id);

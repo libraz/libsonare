@@ -89,6 +89,13 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("formant_factor must be finite and in [0.55, 1.65]"));
   }
 
+  SECTION("voice-preset emits PSOLA as the default realtime engine") {
+    auto [code, output] = exec_command(CLI + " voice-preset --json");
+    REQUIRE(code == 0);
+    const auto preset = sonare::util::json::parse_strict(output);
+    REQUIRE(preset["dsp"]["voiceEngine"]["engine"].as_string() == "psola");
+  }
+
   SECTION("voice presets are named by their library ids in any letter case") {
     auto [list_code, list] = exec_command(CLI + " voice-presets --json");
     REQUIRE(list_code == 0);

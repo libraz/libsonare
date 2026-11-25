@@ -283,6 +283,28 @@ def test_chords_option_flags_override_the_defaults(monkeypatch: pytest.MonkeyPat
     assert calls[0]["chroma_method"] == "nnls"
 
 
+def test_chords_leaves_omitted_chroma_to_the_cqt_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    import inspect
+
+    import libsonare
+    from libsonare import _cli_analysis
+
+    params = inspect.signature(libsonare.detect_chords).parameters
+    assert params["chroma_method"].default == "cqt"
+
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+    calls = []
+
+    def fake_detect_chords(samples: object, **kwargs: object) -> SimpleNamespace:
+        calls.append(kwargs)
+        return SimpleNamespace(chords=[])
+
+    monkeypatch.setattr(libsonare, "detect_chords", fake_detect_chords)
+    args = _parser().parse_args(["chords", "input.wav", "--json"])
+    assert _cli_analysis.cmd_chords(args) == 0
+    assert "chroma_method" not in calls[0]
+
+
 @pytest.mark.parametrize(
     ("argv", "use_hpss"),
     [

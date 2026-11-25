@@ -927,6 +927,14 @@ TEST_CASE("sonare_analyze_sections refuses NULL options and a bad threshold", "[
   }
 }
 
+TEST_CASE("C chord detection defaults to triads, CQT and the HMM", "[c_api][chords]") {
+  SonareChordDetectionOptions options;
+  sonare_chord_detection_options_init(&options);
+  CHECK(options.use_triads_only == 1);
+  CHECK(options.chroma_method == SONARE_CHROMA_METHOD_CQT);
+  CHECK(options.use_hmm == 1);
+}
+
 TEST_CASE("sonare_section_options_init mirrors the core section defaults", "[c_api][sections]") {
   SonareSectionOptions options;
   sonare_section_options_init(&options);
@@ -935,6 +943,7 @@ TEST_CASE("sonare_section_options_init mirrors the core section defaults", "[c_a
   CHECK(options.hop_length == static_cast<size_t>(config.hop_length));
   CHECK(options.min_section_sec == config.min_section_sec);
   CHECK(options.threshold == sonare::kSectionBoundaryThreshold);
+  CHECK(options.threshold == 0.22f);
   // Sections snap to downbeats and keep a minimum length, so they take a lower bar.
   SonareBoundaryOptions boundary;
   sonare_boundary_options_init(&boundary);

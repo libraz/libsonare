@@ -2079,7 +2079,7 @@ test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an
 [[entry]]
 kind = "function"
 old = "detect_beats"
-changed = "returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
+changed = "returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range"
 domain = "analysis"
 rule = "array-results"
 test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of silence sit on the clicks"
@@ -2087,7 +2087,7 @@ test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of s
 [[entry]]
 kind = "function"
 old = "detect_downbeats"
-changed = "returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio"
+changed = "returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio; the tempo search defaults to 60–200 BPM instead of 30–300; this entry does not expose tempo-range overrides"
 domain = "analysis"
 rule = "array-results"
 test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar phase for the same beats"
@@ -2961,18 +2961,18 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_types_are_im
 [[entry]]
 kind = "method"
 old = "Audio.detect_beats"
-changed = "returns a float32 ndarray instead of list[float]"
+changed = "returns a float32 ndarray instead of list[float]; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range"
 domain = "core"
 rule = "array-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
 
 [[entry]]
 kind = "method"
 old = "Audio.detect_downbeats"
-changed = "returns a float32 ndarray instead of list[float]"
+changed = "returns a float32 ndarray instead of list[float]; the tempo search defaults to 60–200 BPM instead of 30–300; this entry does not expose tempo-range overrides"
 domain = "core"
 rule = "array-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
 
 [[entry]]
 kind = "method"
@@ -3456,7 +3456,7 @@ rule = "typed-results"
 [[entry]]
 kind = "function"
 old = "analyze_sections"
-changed = "returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only); boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio"
+changed = "returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only); boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio; the omitted boundary threshold changes from 0.3 to 0.22 as section detection uses beat-grid novelty"
 domain = "analysis"
 rule = "typed-results"
 test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections reports each section's material group"
@@ -4627,18 +4627,18 @@ test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknow
 [[entry]]
 kind = "option"
 old = "detect_chords(chroma_method)"
-changed = "a ChordChromaMethod token matched exactly; other case spellings are refused"
+changed = "a ChordChromaMethod token matched exactly; other case spellings are refused; the omitted chroma method is 'cqt' rather than 'stft'; pass chroma_method='stft' to retain that front end"
 domain = "analysis"
 rule = "string-closed-sets"
-test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
 
 [[entry]]
 kind = "option"
 old = "chord_functional_analysis(chroma_method)"
-changed = "a ChordChromaMethod token matched exactly; other case spellings are refused"
+changed = "a ChordChromaMethod token matched exactly; other case spellings are refused; the omitted chroma method is 'cqt' rather than 'stft'; pass chroma_method='stft' to retain that front end"
 domain = "analysis"
 rule = "string-closed-sets"
-test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
 
 [[entry]]
 kind = "option"
@@ -9777,10 +9777,10 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_helper_mapping_refuse
 [[entry]]
 kind = "class"
 old = "RealtimeVoiceChanger"
-changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError"
+changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError; the omitted realtime engine changes from the grain engine to PSOLA (latency at 48 kHz changes from 2263 to 717 samples); set voice_engine='grain' in the config to retain the grain engine"
 domain = "effects"
 rule = "num-channels"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+test = "bindings/python/tests/test_realtime_voice_transform.py::test_neutral_preset_selects_the_psola_engine"
 
 [[entry]]
 kind = "option"
@@ -13482,10 +13482,10 @@ test = "bindings/python/tests/test_public_input_conformance.py::test_project_mar
 kind = "option"
 old = "mastering_process(params)"
 to = "mastering_apply_processor(params)"
-changed = "insert parameter keys are renamed and the old spelling is refused as an unknown key: effects.reverb.room and effects.acoustic.roomMorph maxSeconds -> maxSec; effects.modulation.rotary accelTauS/decelTauS -> accelTauSec/decelTauSec; effects.reverb.velvet reverbTimeS -> reverbTimeSec; dynamics.gate keyHpfHz -> keyHighPassHz; dynamics.deesser bandpassQ -> bandPassQ; voice.changer eqHighpassHz/retuneSemitones/retuneGrainSize -> eqHighPassHz/retunePitchSemitones/retuneGrainSizeSamples; effects.modulation.pitchShifter semitones/semitones2/cents/cents2 -> pitchSemitones/pitchSemitones2/pitchCents/pitchCents2; repair.trimSilence threshold (linear) -> thresholdDb (dBFS, default -60, [-890, 0]); the same keys apply to mastering_insert_timing(params), and dynamics.deesser.bandpassQ -> bandPassQ in master_audio(overrides) and StreamingMasteringChain(config); final.bitDepth and final.outputChain take no clamp key and refuse it as an unknown key, since the code range holds a sample past full scale on its own and quantize_clipped_samples counts it"
+changed = "insert parameter keys are renamed and the old spelling is refused as an unknown key: effects.reverb.room and effects.acoustic.roomMorph maxSeconds -> maxSec; effects.modulation.rotary accelTauS/decelTauS -> accelTauSec/decelTauSec; effects.reverb.velvet reverbTimeS -> reverbTimeSec; dynamics.gate keyHpfHz -> keyHighPassHz; dynamics.deesser bandpassQ -> bandPassQ; voice.changer eqHighpassHz/retuneSemitones/retuneGrainSize -> eqHighPassHz/retunePitchSemitones/retuneGrainSizeSamples; effects.modulation.pitchShifter semitones/semitones2/cents/cents2 -> pitchSemitones/pitchSemitones2/pitchCents/pitchCents2; repair.trimSilence threshold (linear) -> thresholdDb (dBFS, default -60, [-890, 0]); the same keys apply to mastering_insert_timing(params), and dynamics.deesser.bandpassQ -> bandPassQ in master_audio(overrides) and StreamingMasteringChain(config); final.bitDepth and final.outputChain take no clamp key and refuse it as an unknown key, since the code range holds a sample past full scale on its own and quantize_clipped_samples counts it; effects.reverb.room and effects.acoustic.roomMorph enable air absorption by default (1.x defaulted it off); pass airAbsorptionEnabled=false to retain the old air-loss setting, and provide coordinates and spacing explicitly to retain fixed placement"
 domain = "mastering"
 rule = "old-documents-refused"
-test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_renamed_insert_key_is_refused_with_the_keys_the_insert_reads"
+test = "tests/mastering/insert_param_metadata_test.cpp::room inserts publish enabled air absorption by default"
 
 [[entry]]
 kind = "function"
@@ -14642,18 +14642,18 @@ test = "bindings/python/tests/test_stereo_and_spectrum.py::test_phase_scope_over
 [[entry]]
 kind = "function"
 old = "detect_bpm"
-changed = "returns float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+changed = "returns float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range"
 domain = "analysis"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_analyzer_core.py::test_detect_bpm_with_silence"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
 
 [[entry]]
 kind = "method"
 old = "Audio.detect_bpm"
-changed = "returns float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+changed = "returns float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range"
 domain = "core"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_analyzer_core.py::test_audio_detect_bpm"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
 
 [[entry]]
 kind = "field"
@@ -15349,7 +15349,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_both_audio
 kind = "option"
 old = "mastering_stereo_analyze(params)"
 to = "mastering_analyze_stereo(params)"
-changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text"
+changed = "stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text; when highHz is omitted the upper edge is the lesser of 20 kHz and Nyquist; at rates below 40 kHz the analysis succeeds where the former fixed 20 kHz default was refused"
 domain = "mastering"
 rule = "individual"
 test = "bindings/python/tests/test_mastering_stereo_surface.py::test_stereo_log_band_params_name_the_caller_keys_and_keep_their_defaults"
@@ -15489,3 +15489,155 @@ changed = "writes no signature message for an empty stored list (1.x wrote a 4/4
 domain = "project"
 rule = "individual"
 test = "tests/midi/smf2_roundtrip_test.cpp::SMF2 export writes a late first time signature at tick 0 too"
+
+[[entry]]
+kind = "function"
+old = "realtime_voice_changer_preset_config"
+changed = "the former grain engine is replaced by PSOLA when the engine is omitted (latency at 48 kHz changes from 2263 to 717 samples); set voice_engine='grain' in the realtime config to keep the 1.x engine"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_realtime_voice_transform.py::test_neutral_preset_selects_the_psola_engine"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(air_absorption_enabled)"
+changed = "defaults to True instead of False; pass False to retain the lossless-air calculation"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_acoustic.py::test_room_acoustics_enable_air_absorption_by_default"
+
+[[entry]]
+kind = "option"
+old = "room_morph(air_absorption_enabled)"
+changed = "defaults to True instead of False; pass False to retain the lossless-air calculation"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_acoustic.py::test_room_acoustics_enable_air_absorption_by_default"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(air_absorption_enabled)"
+changed = "defaults to True instead of False; pass False to retain the lossless-air calculation"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_acoustic.py::test_room_acoustics_enable_air_absorption_by_default"
+
+[[entry]]
+kind = "option"
+old = "analyze(use_hpss)"
+changed = "harmonic-percussive separation before chroma defaults to False instead of True; pass use_hpss=True for the 1.x behavior"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_analyze_defaults_skip_hpss_and_decode_chords_with_the_hmm"
+
+[[entry]]
+kind = "option"
+old = "analyze(use_chord_hmm)"
+changed = "Viterbi smoothing of the chord sequence defaults to True instead of False; pass use_chord_hmm=False for the 1.x behavior"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_analyze_defaults_skip_hpss_and_decode_chords_with_the_hmm"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(use_triads_only)"
+changed = "defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(use_hmm)"
+changed = "defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_chords(use_triads_only)"
+changed = "defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_chords(use_hmm)"
+changed = "defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_chords(chroma_method)"
+changed = "the omitted chroma method is 'cqt' rather than 'stft'; pass chroma_method='stft' to retain that front end"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(use_triads_only)"
+changed = "defaults to True rather than False and restricts chords to triads; pass use_triads_only=False to retain the earlier setting"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(use_hmm)"
+changed = "defaults to True rather than False and uses Viterbi to smooth chord candidates; pass use_hmm=False to retain the earlier setting"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_chord_detection_defaults_and_cqt_front_end"
+
+[[entry]]
+kind = "option"
+old = "detect_key(n_fft)"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
+
+[[entry]]
+kind = "option"
+old = "detect_key_candidates(n_fft)"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_key(n_fft)"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_key_candidates(n_fft)"
+changed = "omission uses 2048 rather than 4096 and the omitted chroma_high_pass_hz is 80 rather than 0; set n_fft=4096 and chroma_high_pass_hz=0 for the former window and filter settings"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_chord_functions.py::test_key_defaults_use_a_short_fft_and_a_chroma_high_pass"
+
+[[entry]]
+kind = "option"
+old = "analyze(compute_tempo_curve)"
+changed = "when requested, the decoded local tempo is bounded to 60–200 BPM instead of 40–240 BPM; computing it is still opt-in"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(receiver_spacing_m)"
+changed = "None fits the spacing to the room, up to 0.5 m (1.x used a fixed 0.5 m); pass 0.5 to retain the fixed spacing"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_acoustic.py::test_room_morph_stereo_fits_an_omitted_spacing_beside_a_wall"
