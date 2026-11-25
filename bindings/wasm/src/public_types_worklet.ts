@@ -84,11 +84,12 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    *
    * @example
    * ```ts
-   * import { SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
+   * import { init, SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
    * declare const context: AudioContext;
    * declare const processorUrl: string;
    * declare const wasmUrl: string;
    * const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
+   * await init({ wasmBinary });
    * const engine = await SonareRealtimeEngineNode.create(context, {
    *   moduleUrl: processorUrl,
    *   wasmBinary,

@@ -147,9 +147,12 @@ def align_take_to_reference(
             arrangement subsystem.
 
     Example:
+        The project and both buffers are at 44100 Hz.
+
         >>> result = libsonare.align_take_to_reference(guide, take, 44100)
         >>> project.set_warp_map(1, result.anchors)
         >>> project.set_clip_warp_ref(take_clip, 1)
+        >>> project.set_clip_warp_mode(take_clip, "timeStretch")
     """
     lib = _get_lib()
     if take_sample_rate is None:

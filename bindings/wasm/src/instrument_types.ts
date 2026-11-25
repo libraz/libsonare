@@ -621,6 +621,7 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
  *
  * @example
  * ```ts
+ * engine.setSynthInstrument(0, { preset: 'clarinet' });
  * engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' });
  * ```
  */

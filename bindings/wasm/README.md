@@ -70,11 +70,13 @@ registerSonareRealtimeEngineWorkletProcessor();
 
 ```typescript
 // main thread; the `?url` suffix is how Vite imports an asset URL — use your bundler's equivalent
-import { SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
+import moduleFactory from '@libraz/libsonare/module';
+import { init, SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
 import wasmUrl from '@libraz/libsonare/wasm?url';
 import processorUrl from './processor.ts?worker&url';
 
 const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
+await init({ moduleFactory, wasmBinary });
 const engine = await SonareRealtimeEngineNode.create(audioContext, { moduleUrl: processorUrl, wasmBinary, numChannels: 2 });
 ```
 

@@ -37,6 +37,8 @@ print(mastered.output_lufs, mastered.applied_gain_db)
 Render a MIDI arrangement through a built-in instrument with the headless `Project` (a context manager):
 
 ```python
+import libsonare
+
 with libsonare.Project() as project:
     project.set_sample_rate(48000)
     clip_id = project.add_midi_clip(0.0, 4.0).clip_id

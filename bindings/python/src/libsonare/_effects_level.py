@@ -231,9 +231,9 @@ def normalize_stereo(
         >>> quiet = [0.05, -0.05] * 512
         >>> loud = [0.2, -0.2] * 512
         >>> result = libsonare.normalize_stereo(quiet, loud, 22050, target_db=-3.0)
-        >>> round(max(abs(v) for v in result.right), 3)  # 0.2 -> -3 dBFS
+        >>> round(float(max(abs(v) for v in result.right)), 3)  # 0.2 -> -3 dBFS
         0.708
-        >>> round(max(abs(v) for v in result.left), 3)  # the quiet side keeps its distance
+        >>> round(float(max(abs(v) for v in result.left)), 3)  # the quiet side keeps its distance
         0.177
     """
     resolved = _normalize_mode(mode)

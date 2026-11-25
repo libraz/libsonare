@@ -404,8 +404,18 @@ export function isWebMidiAvailable(): boolean {
  *
  * @example
  * ```ts
+ * import { bindWebMidi } from '@libraz/libsonare';
+ * import { init, SonareEngine } from '@libraz/libsonare/worklet';
  * // Events keep their device timing to the sample through the AudioWorklet engine.
- * const engine = await SonareEngine.create(context, { numChannels: 2 });
+ * const processorUrl = '/assets/engine-worklet.js'; // the app's registered engine processor
+ * const wasmUrl = '/assets/sonare.wasm'; // where the app serves @libraz/libsonare/wasm
+ * const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
+ * await init({ wasmBinary });
+ * const engine = await SonareEngine.create(context, {
+ *   numChannels: 2,
+ *   moduleUrl: processorUrl,
+ *   wasmBinary,
+ * });
  * const midi = await bindWebMidi(engine, { context });
  * // ...
  * console.log('late events', await engine.lateMidiEventCount());

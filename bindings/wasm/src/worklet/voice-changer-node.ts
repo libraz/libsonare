@@ -27,11 +27,14 @@ import { isRecord } from './protocol.js';
  * @example
  * ```ts
  * const voiceWorkletUrl = '/assets/voice-worklet.js'; // calls registerSonareRealtimeVoiceChangerWorkletProcessor()
+ * const wasmUrl = '/assets/sonare.wasm'; // where the app serves @libraz/libsonare/wasm
+ * const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
  * const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
  * const voice = await SonareRealtimeVoiceChangerNode.create(context, {
  *   numChannels: 1,
  *   config: 'hardTune',
  *   moduleUrl: voiceWorkletUrl,
+ *   wasmBinary,
  * });
  * await voice.ready;
  * context.createMediaStreamSource(microphone).connect(voice.node).connect(context.destination);

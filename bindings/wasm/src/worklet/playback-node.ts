@@ -44,11 +44,15 @@ function configObject(config: PlaybackRendererConfig | undefined): PlaybackRende
  * const hrtfUrl = '/assets/hrtf/default.shrf'; // where the app serves the packaged asset
  * const video = document.querySelector('video') as HTMLVideoElement;
  * const hrtf = await (await fetch(hrtfUrl)).arrayBuffer();
+ * const wasmUrl = '/assets/sonare.wasm'; // where the app serves @libraz/libsonare/wasm
+ * const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
  * const playback = await SonarePlaybackNode.create(context, {
  *   config: {},
  *   hrtf,
  *   moduleUrl: playbackWorkletUrl, // calls registerSonarePlaybackWorkletProcessor()
+ *   wasmBinary,
  * });
+ * await playback.ready;
  * context.createMediaElementSource(video).connect(playback.node).connect(context.destination);
  * video.addEventListener('seeking', () => playback.reset());
  * ```

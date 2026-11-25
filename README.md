@@ -82,12 +82,16 @@ target_link_libraries(app PRIVATE sonare::sonare)
 ```
 
 ```cpp
+#include <iostream>
+
 #include "sonare.h"
 
-auto audio = sonare::Audio::from_file("music.mp3");
-auto result = sonare::MusicAnalyzer(audio).analyze();
-std::cout << "BPM: " << result.bpm
-          << ", Key: " << result.key.to_string() << std::endl;
+int main() {
+  auto audio = sonare::Audio::from_file("music.mp3");
+  auto result = sonare::MusicAnalyzer(audio).analyze();
+  std::cout << "BPM: " << result.bpm
+            << ", Key: " << result.key.to_string() << '\n';
+}
 ```
 
 → [C++ API](https://libsonare.libraz.net/docs/cpp-api)

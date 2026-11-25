@@ -482,7 +482,7 @@ export class StreamAnalyzer {
    * A wrong-typed value is a TypeError. The library checks the float32 value
    * against [220, 880] Hz at creation and here.
    *
-   * @param referenceHz - Reference frequency for A4 in Hz (default 440)
+   * @param referenceHz - Required A4 reference frequency in Hz. Pass 440 to restore standard tuning.
    * @example
    * ```ts
    * declare const analyzer: StreamAnalyzer;
