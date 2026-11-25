@@ -14952,7 +14952,7 @@ const result = masteringAnalyzePair(request);
 
 ### Python arrays are numpy arrays
 
-Python audio is a `float32` ndarray of shape `(n,)` or `(channels, n)` and a matrix is `(rows, cols)`; `list[float]` returns, flat row-major lists and redundant length fields are gone. Inputs accept `npt.ArrayLike` of float dtype, and an integer dtype raises `TypeError`.
+Python audio is a `float32` ndarray of shape `(n,)` or `(channels, n)` and a matrix is `(rows, cols)`; `list[float]` returns, flat row-major lists and redundant length fields are gone. Inputs accept `npt.ArrayLike` of float dtype, and an integer dtype raises `TypeError`. A value that is not array-like at all (`None`, a scalar, a string, a mapping, a generator) raises `TypeError`; an array-like whose shape or elements cannot form the buffer raises `SonareValueError`.
 
 WASM, 1.x:
 

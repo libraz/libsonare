@@ -657,12 +657,11 @@ _PLANAR_ENTRY_POINTS = [
         pytest.param(np.array(0.5, dtype=np.float32), id="rank-0"),
         pytest.param(np.float32(0.5), id="numpy-scalar"),
         pytest.param(np.zeros((2, 2, 2), dtype=np.float32), id="rank-3"),
-        pytest.param(0.5, id="python-scalar"),
-        pytest.param(None, id="none"),
+        pytest.param([0.5, 0.25], id="flat-sample-list"),
     ],
 )
 def test_non_planar_channels_name_the_caller_subject(drive, subject, channels) -> None:
-    """Anything that is not a planar buffer is refused by this library, naming the argument.
+    """An array of the wrong rank is refused by this library, naming the argument.
 
     These escaped as NumPy's ambiguous-truth ``ValueError``, a bare ``TypeError``
     from ``len()`` on a scalar, or a bare ``IndexError`` from indexing one --
@@ -670,6 +669,27 @@ def test_non_planar_channels_name_the_caller_subject(drive, subject, channels) -
     """
     with pytest.raises(SonareValueError) as excinfo:
         drive(channels)
+    assert str(excinfo.value) == (
+        f"{subject} must be a sequence of 1-D channel buffers or a 2-D (channels, frames) array"
+    )
+
+
+# RED WHEN: a value that is not array-like at all is refused as a wrong value rather than a
+# wrong type.
+@pytest.mark.parametrize(("drive", "subject"), _PLANAR_ENTRY_POINTS)
+@pytest.mark.parametrize(
+    "channels",
+    [
+        pytest.param(0.5, id="python-scalar"),
+        pytest.param(None, id="none"),
+        pytest.param("ab", id="string"),
+        pytest.param({0: [0.5]}, id="mapping"),
+    ],
+)
+def test_channels_that_are_not_array_like_are_a_wrong_type(drive, subject, channels) -> None:
+    with pytest.raises(TypeError) as excinfo:
+        drive(channels)
+    assert not isinstance(excinfo.value, SonareValueError)
     assert str(excinfo.value) == (
         f"{subject} must be a sequence of 1-D channel buffers or a 2-D (channels, frames) array"
     )

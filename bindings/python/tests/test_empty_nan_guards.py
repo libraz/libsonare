@@ -533,11 +533,14 @@ class TestDocumentedBufferInputForms:
 
     def test_generator_is_rejected_by_the_guard_not_by_numpy(self):
         # Not a documented form, but it must still fail the way the binding
-        # promises rather than leaking NumPy's own TypeError.
-        with pytest.raises(SonareValueError) as exc_info:
+        # promises rather than leaking NumPy's own TypeError: a generator is not
+        # array-like, so it is a wrong type named by the binding.
+        with pytest.raises(TypeError) as exc_info:
             metering_rms_db((float(i) for i in range(1024)), sample_rate=22050)
-        assert "metering_rms_db: samples" in str(exc_info.value)
-        assert exc_info.value.code == 4
+        assert not isinstance(exc_info.value, SonareValueError)
+        assert str(exc_info.value) == (
+            "metering_rms_db: samples must be a sequence of numbers or a numpy array"
+        )
 
     def test_uncoercible_object_is_rejected_by_the_guard(self):
         with pytest.raises(SonareValueError) as exc_info:
@@ -645,15 +648,16 @@ class TestNoneIsRefusedAsNotABufferNotAsANanSample:
     """
 
     def test_none_is_refused_as_not_a_buffer(self):
-        with pytest.raises(SonareValueError) as exc_info:
+        with pytest.raises(TypeError) as exc_info:
             lufs(None, SR)
         message = str(exc_info.value)
         assert message == ("lufs: samples must be a sequence of numbers or a numpy array")
         assert "NaN" not in message
+        assert not isinstance(exc_info.value, SonareValueError)
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_every_guarded_wrapper_refuses_none_as_not_a_buffer(self, name):
-        with pytest.raises(SonareValueError) as exc_info:
+        with pytest.raises(TypeError) as exc_info:
             _SAMPLE_WRAPPERS[name](None)
         assert str(exc_info.value) == (
             f"{name}: samples must be a sequence of numbers or a numpy array"
@@ -661,7 +665,7 @@ class TestNoneIsRefusedAsNotABufferNotAsANanSample:
 
     def test_a_bare_scalar_is_refused_as_not_a_buffer_too(self):
         with pytest.raises(
-            SonareValueError,
+            TypeError,
             match=r"^metering_rms_db: samples must be a sequence of numbers or a numpy array$",
         ):
             metering_rms_db(0.5, sample_rate=22050)

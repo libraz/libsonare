@@ -330,13 +330,17 @@ def test_a_negative_note_index_is_refused_before_it_wraps(
 
 
 # RED WHEN: an envelope NumPy cannot convert escapes as a bare ValueError, or an edit of the wrong
-# type escapes as an AttributeError, instead of a refusal naming the field.
-@pytest.mark.parametrize("envelope", ["nope", 0])
+# type escapes as an AttributeError, instead of a refusal naming the field. A value that is not
+# array-like is a wrong type; an array-like whose elements are not numbers is a wrong value.
+@pytest.mark.parametrize(
+    ("envelope", "error"),
+    [("nope", TypeError), (0, TypeError), (["nope"], SonareValueError)],
+)
 def test_an_envelope_that_is_not_a_buffer_is_refused_by_name(
-    analysis: libsonare.PolyphonicAnalysis, envelope: object
+    analysis: libsonare.PolyphonicAnalysis, envelope: object, error: type[Exception]
 ) -> None:
     with pytest.raises(
-        SonareValueError,
+        error,
         match=r"^PolyphonicAnalysis\.set_note_edit: edit\.amplitude_envelope must be a sequence "
         r"of numbers or a numpy array$",
     ):

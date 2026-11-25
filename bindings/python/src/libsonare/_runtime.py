@@ -10,6 +10,7 @@ import functools
 import inspect
 import json
 import math
+import numbers
 import operator
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -595,9 +596,25 @@ def _element_is_none(samples: object, index: int) -> bool:
         return False
 
 
-def _not_a_buffer(samples: object, arg_name: str) -> SonareValueError:
-    """Build the rejection for an input that is not a numeric buffer at all."""
-    return _refuse(f"{arg_name} must be a sequence of numbers or a numpy array")
+def _is_array_like(value: object) -> bool:
+    """Whether ``value`` is a container NumPy reads as an array, as opposed to a scalar or text."""
+    if isinstance(value, (str, bytes, bytearray)):
+        return False
+    return (
+        isinstance(value, (np.ndarray, Sequence, array.array, memoryview, range))
+        or hasattr(value, "__array__")
+        or hasattr(value, "__array_interface__")
+    )
+
+
+def _not_a_buffer(samples: object, arg_name: str) -> TypeError | SonareValueError:
+    """Build the rejection for an input that does not read as a numeric buffer.
+
+    A value that is not array-like at all (``None``, a scalar, text, a mapping, a generator) is a
+    wrong type; an array-like whose shape or elements cannot make a numeric buffer is a wrong value.
+    """
+    message = f"{arg_name} must be a sequence of numbers or a numpy array"
+    return _refuse(message) if _is_array_like(samples) else _refuse_type(message)
 
 
 def _integer_samples(arg_name: str) -> TypeError:
@@ -653,9 +670,10 @@ def _as_float32_buffer(samples: object, *, arg_name: str = "samples") -> np.ndar
     float32 input, ``np.asarray`` for a sized sequence — list, tuple,
     ``array.array``, ``range``, ``memoryview``).
 
-    An input NumPy cannot turn into a numeric buffer is rejected here with
-    :class:`SonareValueError`, so no caller sees a bare NumPy ``TypeError``
-    from inside the binding. A generator is the case worth naming: it is not a
+    An input NumPy cannot turn into a numeric buffer is rejected here -- a
+    ``TypeError`` when it is not array-like at all, :class:`SonareValueError`
+    when an array-like's shape or elements are wrong -- so no caller sees a bare
+    NumPy error from inside the binding. A generator is the case worth naming: it is not a
     sequence, ``np.asarray`` wraps it in a 0-d object array, and the float cast
     then fails — it has never been convertible, whatever a reader might assume
     from the iterable-sounding parameter name.
@@ -747,11 +765,16 @@ def _require_instance(value: object, expected: type[_T], name: str) -> _T:
     return value
 
 
-def _not_planar_channels(subject: str) -> SonareValueError:
-    """Build the rejection for a channels argument that is not a planar buffer."""
-    return _refuse(
+def _not_planar_channels(subject: str, *, wrong_type: bool = False) -> TypeError | SonareValueError:
+    """Build the rejection for a channels argument that is not a planar buffer.
+
+    ``wrong_type`` marks a value that is not array-like at all; an array-like of
+    the wrong rank (a flat sample list, a 1-D or 3-D array) is a wrong shape.
+    """
+    message = (
         f"{subject} must be a sequence of 1-D channel buffers or a 2-D (channels, frames) array"
     )
+    return _refuse_type(message) if wrong_type else _refuse(message)
 
 
 def _planar_channel_arrays(
@@ -787,16 +810,22 @@ def _planar_channel_arrays(
         if channels.ndim != 2:
             raise _not_planar_channels(subject)
         channel_count = int(channels.shape[0])
+    elif not _is_array_like(channels):
+        raise _not_planar_channels(subject, wrong_type=True)
     else:
         try:
             channel_count = len(channels)
         except TypeError as exc:
+            # An array-like with no length (a NumPy scalar) is a rank-0 array.
             raise _not_planar_channels(subject) from exc
     if channel_count == 0:
         raise _refuse(f"{subject} must not be empty")
     arrays: list[ctypes.Array[ctypes.c_float]] = []
     frame_count = -1
     for channel in channels:
+        if isinstance(channel, (numbers.Real, np.number)):
+            # A flat sample list is an array of the wrong rank, not a wrong type.
+            raise _not_planar_channels(subject)
         buf = _as_float32_buffer(channel, arg_name=subject)
         # A list/tuple is already converted into a fresh array, as is an ndarray cast from
         # another dtype; anything else may still alias the caller's memory.

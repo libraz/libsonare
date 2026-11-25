@@ -530,7 +530,11 @@ def test_a_malformed_band_array_is_rejected_naming_the_parameter() -> None:
     with pytest.raises(libsonare.SonareValueError, match="band_absorption"):
         libsonare.synthesize_rir(band_absorption=np.zeros((2, 3), dtype=np.float32), **_BAND_ROOM)
     with pytest.raises(libsonare.SonareValueError, match="band_scattering"):
+        libsonare.synthesize_rir(band_scattering=["not a number"], **_BAND_ROOM)
+    # A value that is not array-like at all is a wrong type, not a wrong value.
+    with pytest.raises(TypeError, match="band_scattering") as excinfo:
         libsonare.synthesize_rir(band_scattering="not a buffer", **_BAND_ROOM)
+    assert not isinstance(excinfo.value, libsonare.SonareValueError)
 
 
 @acoustic
