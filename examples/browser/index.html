@@ -31,7 +31,7 @@
         const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await file.arrayBuffer()));
         const task = offline.analyze(
           {
-            samples: audio.data,
+            samples: audio.data.slice(),
             sampleRate: audio.sampleRate,
             onProgress: (progress, stage) => {
               result.textContent = `Analyzing ${Math.round(progress * 100)}% (${stage})…`;

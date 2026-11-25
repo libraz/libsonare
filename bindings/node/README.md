@@ -76,15 +76,15 @@ project.destroy();
 
 The whole surface is listed in the [Node.js API reference](https://libsonare.libraz.net/docs/node-api).
 
-## Supported audio formats
+## Audio decoding and encoding
 
-| Format                                     | Without FFmpeg support | With FFmpeg support |
-| ------------------------------------------ | ---------------------- | ------------------- |
-| WAV (PCM 16/24/32, float32)                | yes                    | yes                 |
-| MP3                                        | yes                    | yes                 |
-| M4A / AAC / FLAC / OGG / Opus / WMA / ...  | no                     | yes                 |
+| Decode format | Without optional codecs | With optional codecs |
+| --- | --- | --- |
+| WAV (including PCM 8/16/24/32 and float32) | yes | yes |
+| MP3 | yes | yes |
+| M4A / AAC / FLAC / OGG / Opus / WMA | no | yes |
 
-`capabilities().features.ffmpeg` reports whether the loaded binding was built with FFmpeg.
+`encodeAudio` always supports WAV output. Check `capabilities().encode.ffmpeg` for the additional formats the loaded build can encode.
 
 ## Documentation
 

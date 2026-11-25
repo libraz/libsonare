@@ -38,7 +38,7 @@
 
 ```bash
 npm install @libraz/libsonare   # JavaScript / TypeScript（WASM、Float32Array を渡す）
-pip install libsonare            # Python（WAV/MP3。ほかの形式は FFmpeg 付きビルドが必要）
+pip install libsonare            # Python（WAV・MP3 のデコードと WAV のエンコードに標準対応）
 ```
 
 [`@libraz/libsonare-native`](bindings/node/) は npm に公開していません。リポジトリを clone してローカル依存として使ってください。対応フォーマット、FFmpeg、ランタイムの選び方は[インストール](https://libsonare.libraz.net/ja/docs/installation)を参照してください。各バインディングは読み込み時にネイティブモジュールの ABI バージョンを確認し、不一致なら `AbiMismatch` で拒否します。

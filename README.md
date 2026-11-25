@@ -38,7 +38,7 @@
 
 ```bash
 npm install @libraz/libsonare   # JavaScript / TypeScript (WASM, takes Float32Array)
-pip install libsonare            # Python (WAV/MP3; other formats need an FFmpeg build)
+pip install libsonare            # Python (built-in WAV and MP3 decoding, and WAV encoding)
 ```
 
 [`@libraz/libsonare-native`](bindings/node/) is not published to npm; clone this repository and use it as a local dependency. See [Installation](https://libsonare.libraz.net/docs/installation) for formats, FFmpeg, and the runtime choice. Each binding checks the native module's ABI version on load and refuses a mismatch (`AbiMismatch`).

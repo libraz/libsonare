@@ -24,7 +24,7 @@ export interface ResampleRequest {
 }
 
 /**
- * Resample audio to a different sample rate.
+ * Resample audio to a different sample rate. An empty input returns an empty array.
  *
  * @param request - Mono `samples`, `sampleRate` of `samples` in Hz and `targetSampleRate` to
  *   resample to, in Hz; or pass `(samples, sampleRate, targetSampleRate)`.

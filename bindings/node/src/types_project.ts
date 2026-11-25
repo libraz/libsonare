@@ -428,11 +428,20 @@ export interface ProjectMidiCcBinding {
   channel?: number;
   /** Controller shape. Default `'controlChange7'`. */
   kind?: ProjectMidiCcBindingKind;
-  /** LSB controller number of a 14-bit CC (`ccNumber` + 32). Default `0`. */
+  /**
+   * LSB controller number for `controlChange14`. Supply `ccNumber` + 32 for
+   * that kind. Otherwise the field must be zero if supplied.
+   */
   ccLsbNumber?: number;
-  /** Selector MSB of an RPN/NRPN binding. Default `0`. */
+  /**
+   * Selector MSB of an RPN or NRPN binding. Must be zero for other kinds.
+   * Default `0`.
+   */
   selectorMsb?: number;
-  /** Selector LSB of an RPN/NRPN binding. Default `0`. */
+  /**
+   * Selector LSB of an RPN or NRPN binding. Must be zero for other kinds.
+   * Default `0`.
+   */
   selectorLsb?: number;
   /** Automation parameter id the controller drives. */
   paramId: number;

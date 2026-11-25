@@ -344,9 +344,9 @@ export class StreamingMasteringChain {
    *
    * Both {@link processMono}/{@link processStereo} and
    * {@link flushMono}/{@link flushStereo} count, since a flush drives the
-   * same stages. Both counters on one handle share an epoch (construction);
-   * {@link reset} clears neither, because it drops processor state without
-   * rebuilding.
+   * same stages. Both counters
+   * count from construction. {@link reset} clears processing state and preserves
+   * both counters.
    */
   get nonFiniteDiscardCount(): number {
     return this.chain.nonFiniteDiscardCount();
@@ -576,9 +576,8 @@ export class StreamingEqualizer {
    * Unlike a mixer strip's meters, nothing here lags: this EQ has no meter of
    * its own, so a discard is always attributed to the block that carried it.
    *
-   * Cumulative since this handle was created and never cleared, so two
-   * readings bracket a span of audio. The unit is one processed block, never
-   * a channel or a plane.
+   * Cumulative since the handle was created. The count rises once per affected
+   * block, even if multiple channels or planes are affected.
    */
   get nonFiniteDiscardCount(): number {
     return this.eq.nonFiniteDiscardCount();
@@ -619,7 +618,8 @@ export class StreamingEqualizer {
    * `placement` selects which signal path the curve is for. A band placed on
    * `'stereo'` is on every path; one placed elsewhere appears only on its own,
    * a mid band having no per-channel magnitude to fold into a left or right
-   * curve. Each frequency must be finite and in [0 Hz, Nyquist].
+   * curve. Each frequency must be finite and in [0 Hz, Nyquist]. An invalid
+   * frequency is reported by index.
    *
    * @example
    * ```ts

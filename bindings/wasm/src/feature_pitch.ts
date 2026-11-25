@@ -355,8 +355,9 @@ export interface EstimateTuningRequest {
 }
 
 /**
- * Estimate the global tuning offset from a set of frequencies
- * (librosa.pitch_tuning).
+ * Estimate the global tuning offset from detected pitch frequencies.
+ * NaN or nonpositive values mark unvoiced frames. Infinity is refused by index.
+ * The offset is zero when there are no voiced frames.
  *
  * @returns The offset in cents of a semitone, in `[-50, 50)` at 12 bins per octave.
  */

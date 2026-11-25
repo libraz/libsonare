@@ -231,19 +231,18 @@ export class RealtimeVoiceChanger {
    * Advisory telemetry, and the only thing that separates a degraded stream
    * from a clean one. Every stage of this chain leaves an in-domain finite
    * value where a non-finite one was, so the output stays finite, in range
-   * and free of any error while carrying samples unrelated to the input. A
-   * non-zero count is what says the samples in between were not computed from
-   * what you supplied.
-   *
-   * Monotonic for the lifetime of the instance. The unit is one processed
-   * block, never a channel.
+   * and free of any error while carrying samples unrelated to the input.
+   * Comparing consecutive readings shows whether the block substituted a
+   * non-finite input or discarded non-finite stage state. The counter rises
+   * once per affected block, even if both channels are affected.
    *
    * @example
    * ```ts
    * const before = changer.nonFiniteDiscardCount;
    * changer.processPlanar([left, right]);
-   * if (changer.nonFiniteDiscardCount > before) {
-   *   // The chain discarded state while processing this block.
+   * const after = changer.nonFiniteDiscardCount;
+   * if (after !== before) {
+   *   // This block substituted input or discarded stage state.
    * }
    * ```
    */

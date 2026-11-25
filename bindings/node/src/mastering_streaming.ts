@@ -310,7 +310,7 @@ export class StreamingMasteringChain {
    *
    * Both {@link processMono}/{@link processStereo} and
    * {@link flushMono}/{@link flushStereo} count, since a flush drives the
-   * same stages. Cumulative since construction -- the same epoch
+   * same stages. Cumulative since construction, the same epoch
    * {@link nonFiniteSubstitutionCount} shares, so reading both on one handle
    * gives two numbers measured from the same point. Throws after {@link destroy}.
    *
@@ -319,7 +319,8 @@ export class StreamingMasteringChain {
    * declare const chain: StreamingMasteringChain;
    * const before = chain.nonFiniteDiscardCount;
    * const out = chain.processMono(block);
-   * if (chain.nonFiniteDiscardCount > before) {
+   * const after = chain.nonFiniteDiscardCount;
+   * if (after !== before) {
    *   // A stage discarded its state during this call.
    * }
    * ```
@@ -1049,7 +1050,7 @@ export class StreamingEqualizer {
    * included and have nothing to include: an FIR keeps no recursive state,
    * so a non-finite sample leaves its history on its own.
    *
-   * Monotonic for the lifetime of the instance. The unit is one processed
+   * The count is cumulative. The unit is one processed
    * block, never a channel or a plane, so a stereo block that discards on
    * both channels adds one and the number does not depend on a dimension
    * you did not choose.
@@ -1059,7 +1060,8 @@ export class StreamingEqualizer {
    * declare const eq: StreamingEqualizer;
    * const before = eq.nonFiniteDiscardCount;
    * eq.processStereo(left, right);
-   * if (eq.nonFiniteDiscardCount > before) {
+   * const after = eq.nonFiniteDiscardCount;
+   * if (after !== before) {
    *   // The equalizer discarded state while processing this block.
    * }
    * ```
@@ -1092,7 +1094,8 @@ export class StreamingEqualizer {
    * `placement` selects which signal path the curve is for. A band placed on
    * `'stereo'` is on every path; one placed elsewhere appears only on its own,
    * a mid band having no per-channel magnitude to fold into a left or right
-   * curve. Every frequency must be finite and in [0 Hz, Nyquist]; an out-of-band value is refused.
+   * curve. Each frequency must be finite and in [0 Hz, Nyquist]. An invalid
+   * frequency is reported by index.
    *
    * @example
    * ```ts

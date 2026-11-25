@@ -748,8 +748,8 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
 /**
  * Compute the Fourier tempogram from an onset envelope.
  *
- * @returns {@link Matrix2D} whose rows are the `winLength / 2 + 1` tempo bins and cols are
- *   frames; an empty envelope keeps the rows and has no cols
+ * @returns {@link Matrix2D} with `Math.floor(winLength / 2) + 1` tempo bins and one column per
+ *   frame. An empty envelope has zero columns.
  * @throws {TypeError} when the request is not an object or `onsetEnvelope` is not a `Float32Array`
  */
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
@@ -796,7 +796,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
  *
  * @returns Tempogram ratio features (one value per factor)
  * @throws {TypeError} when `tempogram` is not a {@link Matrix2D}
- * @throws {RangeError} when the matrix data length is not `rows * cols`
+ * @throws {RangeError} when the matrix is empty or its data length is not `rows * cols`.
  */
 export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
   return withEntry('tempogramRatio', () => {

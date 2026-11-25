@@ -154,7 +154,7 @@ export interface ZeroCrossingsRequest {
   threshold?: number;
   /** Scale `threshold` by the maximum absolute sample. Default `false`. */
   refMagnitude?: boolean;
-  /** Count a crossing at index 0. Default `true`. */
+  /** Report index 0 as a crossing when the input has samples. Default `true`. */
   pad?: boolean;
   /** Treat the sign of zero as positive. Default `true`. */
   zeroPos?: boolean;

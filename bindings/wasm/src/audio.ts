@@ -470,8 +470,9 @@ export class Audio {
    * Decode audio bytes with the native WASM decoder first, then fall back to the
    * browser codec stack (`AudioContext.decodeAudioData`) for formats such as
    * AAC, OGG, and FLAC when available. Browser-decoded multi-channel audio is
-   * folded to mono with {@link downmix}, the rule the native decoder applies, so
-   * a file folds to the same samples whichever decoder ran.
+   * folded to mono with {@link downmix}, using the native decoder's channel
+   * folding coefficients. The browser may resample to the context rate, so the
+   * output samples can differ.
    */
   static async fromMemoryWithBrowserFallback(
     data: Uint8Array,

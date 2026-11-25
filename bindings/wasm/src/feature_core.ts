@@ -1134,6 +1134,7 @@ const TEMPOGRAM_MODES = ['autocorrelation', 'cosine'] as const;
  * Tempogram of an onset-strength envelope.
  *
  * @returns {@link Matrix2D} whose rows are the `winLength` lags and cols are frames.
+ *   An empty envelope has zero columns.
  * @throws TypeError for a non-string `mode`, RangeError for one other than `'autocorrelation'` or `'cosine'`.
  */
 export function tempogram(request: TempogramRequest): Matrix2D;
@@ -1175,6 +1176,7 @@ export function tempogram(...args: unknown[]): Matrix2D {
  * Tempogram folded onto one octave of tempo.
  *
  * @returns {@link Matrix2D} whose rows are the `nBins` tempo bins and cols are frames.
+ *   An empty envelope has zero columns.
  */
 export function cyclicTempogram(request: CyclicTempogramRequest): Matrix2D;
 export function cyclicTempogram(...args: unknown[]): Matrix2D {

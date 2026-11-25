@@ -13,7 +13,7 @@ export interface ResampleRequest {
 }
 
 /**
- * Resample mono audio to another sample rate.
+ * Resample mono audio to another sample rate. An empty input returns an empty array.
  *
  * @throws TypeError for a wrong-typed argument, an omitted rate, or an argument
  *   after a request object; RangeError for a rate that is not an integer or lies outside the

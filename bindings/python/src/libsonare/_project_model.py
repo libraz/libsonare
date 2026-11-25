@@ -524,6 +524,8 @@ class MidiCcBinding:
     ``kind`` is a :data:`ProjectMidiCcBindingKind` token. For a 14-bit
     binding ``cc_lsb_number`` carries the LSB controller; for RPN/NRPN
     ``selector_msb`` / ``selector_lsb`` carry the parameter selector.
+    Fields not used by the selected kind must be zero. A nonzero inactive
+    field is refused.
     ``param_id`` is the bound automation parameter; the unit-interval
     automation range maps onto ``[min_value, max_value]``.
     ``channel`` is 0..15, or ``None`` for a binding that answers any channel.
@@ -538,11 +540,11 @@ class MidiCcBinding:
     kind: ProjectMidiCcBindingKind = "controlChange7"
     """Controller shape, a ``ProjectMidiCcBindingKind`` token."""
     cc_lsb_number: int = 0
-    """LSB controller number 0..127 of a 14-bit CC."""
+    """LSB controller number (0..127) for a 14-bit CC. Zero for other kinds."""
     selector_msb: int = 0
-    """Selector MSB 0..127 of an RPN/NRPN binding."""
+    """Selector MSB (0..127) for an RPN or NRPN binding. Zero for other kinds."""
     selector_lsb: int = 0
-    """Selector LSB 0..127 of an RPN/NRPN binding."""
+    """Selector LSB (0..127) for an RPN or NRPN binding. Zero for other kinds."""
     consume: bool = False
     """Whether the live engine consumes matching MIDI CC events."""
     param_id: int

@@ -664,6 +664,7 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
 
 /**
  * Mel-frequency cepstral coefficients.
+ * The sample scan follows validation of the Mel frequency bounds and FFT geometry.
  *
  * @returns MFCC result; `coefficients` rows are coefficients and cols are frames.
  */

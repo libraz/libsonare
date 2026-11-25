@@ -618,10 +618,11 @@ def _capabilities_document() -> dict[str, Any]:
 
 @_entry("capabilities")
 def capabilities() -> Capabilities:
-    """Return the native library's build, platform, and decoder capabilities.
+    """Return the native library's build, platform, decoder and encoder capabilities.
 
     The descriptor describes the loaded native library, rather than the Python
-    package that happens to call it.
+    package that happens to call it. Audio format capabilities are available
+    separately for ``decode`` and ``encode``.
     """
     document = _capabilities_document()
     features = document.get("features")

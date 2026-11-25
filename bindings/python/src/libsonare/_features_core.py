@@ -331,6 +331,8 @@ def mfcc(
 ) -> MfccResult:
     """Compute Mel-frequency cepstral coefficients.
 
+    The sample scan follows validation of the Mel frequency bounds and FFT geometry.
+
     Args:
         samples: Audio samples.
         sr: Sample rate in Hz (default 22050).
@@ -961,7 +963,7 @@ def zero_crossings(
         samples: Input signal.
         threshold: Magnitudes <= threshold are treated as zero (default 1e-10).
         ref_magnitude: Scale ``threshold`` by ``max(|y|)`` (default False).
-        pad: Always report index 0 as a zero-crossing (default True).
+        pad: Report index 0 as a crossing when the input has samples (default True).
         zero_pos: Treat the sign of zero as positive (default True).
 
     Returns:

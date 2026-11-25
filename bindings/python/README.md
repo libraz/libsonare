@@ -82,9 +82,11 @@ sonare project bounce project.json -o out.wav --synth sawLead
 
 Run `sonare --help`, or see the [CLI reference](https://libsonare.libraz.net/docs/cli).
 
-## Supported audio formats
+## Audio decoding and encoding
 
 WAV and MP3 decode out of the box. M4A / AAC / FLAC / OGG / Opus need FFmpeg, which the PyPI wheels are built without; build from source with `SONARE_FFMPEG=1` to enable it (see the [installation guide](https://libsonare.libraz.net/docs/installation)).
+
+`encode_audio` always supports WAV output. Check `capabilities().encode.ffmpeg` for the additional formats the loaded build can encode.
 
 ## Documentation
 

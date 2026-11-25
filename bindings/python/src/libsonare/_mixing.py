@@ -825,8 +825,7 @@ class Mixer:
         is what a genuinely silent strip reports, so nothing else
         distinguishes the two. The unit is one processed block, never a
         channel and never an insert, so a stereo block that discards on both
-        channels adds one. Cumulative since the strip was created and never
-        cleared, so two readings bracket a span of audio.
+        channels adds one. The count is cumulative from strip creation.
         """
         handle = self._strip_handle(strip)
         lib = _get_lib()

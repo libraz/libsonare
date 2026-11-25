@@ -19,7 +19,7 @@ def write_wav(path: str, samples: Sequence[float], sample_rate: int) -> None:
 
 
 def json_safe(value: object) -> object:
-    """Map unavailable short-window metrics (±inf/NaN) to JSON null."""
+    """Replace non-finite numbers with null for this printed JSON report."""
     if isinstance(value, float):
         return value if math.isfinite(value) else None
     if isinstance(value, dict):

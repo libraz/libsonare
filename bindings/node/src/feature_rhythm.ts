@@ -216,7 +216,7 @@ export function peakPick(...args: unknown[]): Int32Array {
   });
 }
 
-/** Autocorrelation or cosine tempogram. Returns rows = `winLength` lags, cols = frames. */
+/** Autocorrelation or cosine tempogram with `winLength` rows and one column per frame. An empty envelope has zero columns. */
 export function tempogram(request: TempogramRequest): Matrix2D;
 export function tempogram(...args: unknown[]): Matrix2D {
   return withEntry('tempogram', () => {
@@ -236,7 +236,7 @@ export function tempogram(...args: unknown[]): Matrix2D {
   });
 }
 
-/** Tempogram folded onto one tempo octave. Returns rows = `nBins`, cols = frames. */
+/** Tempogram folded onto one tempo octave with `nBins` rows and one column per frame. An empty envelope has zero columns. */
 export function cyclicTempogram(request: CyclicTempogramRequest): Matrix2D;
 export function cyclicTempogram(...args: unknown[]): Matrix2D {
   return withEntry('cyclicTempogram', () => {
@@ -319,7 +319,7 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
   });
 }
 
-/** Fourier tempogram. Returns rows = `winLength / 2 + 1` tempo bins (kept for an empty envelope), cols = frames. */
+/** Fourier tempogram. Returns rows = `Math.floor(winLength / 2) + 1` tempo bins (kept for an empty envelope), cols = frames. */
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D;
 export function fourierTempogram(...args: unknown[]): Matrix2D {
   return withEntry('fourierTempogram', () => {
@@ -343,7 +343,7 @@ export function fourierTempogram(...args: unknown[]): Matrix2D {
   });
 }
 
-/** Tempo-ratio features of an autocorrelation tempogram. Returns one value per frame. */
+/** Tempo-ratio features of a nonempty autocorrelation tempogram. Returns one value per factor. */
 export function tempogramRatio(request: TempogramRatioRequest): Float32Array;
 export function tempogramRatio(...args: unknown[]): Float32Array {
   return withEntry('tempogramRatio', () => {

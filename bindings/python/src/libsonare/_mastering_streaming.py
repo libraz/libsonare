@@ -529,8 +529,7 @@ class StreamingMasteringChain:
         no stage discarded rather than that none could.
 
         Both process and flush calls count, since a flush drives the same
-        stages. Cumulative over every call since construction, so the two
-        counters on one handle share an epoch.
+        stages. Preparing the chain resets the counter.
         """
         self._ensure_open()
         out = ctypes.c_size_t()
@@ -866,7 +865,8 @@ class StreamingEqualizer:
         ``placement`` names the signal path the curve is for: ``"stereo"``,
         ``"left"``, ``"right"``, ``"mid"`` or ``"side"``. A band placed on
         stereo is on every path; one placed elsewhere appears only on its own.
-        Each frequency must be finite and in [0 Hz, Nyquist].
+        Each frequency must be finite and in [0 Hz, Nyquist]. An invalid
+        frequency is reported by index.
 
         An empty array is a defined request and comes back as an empty curve:
         the mapping is per frequency, so there is nothing to ask about.
@@ -931,9 +931,8 @@ class StreamingEqualizer:
         state, so a non-finite sample leaves its history on its own.
 
         The unit is one processed block, never a channel and never a plane,
-        so a stereo block that discards on both adds one. Cumulative since
-        the handle was created and never cleared, so two readings bracket a
-        span of audio.
+        so a stereo block that discards on both adds one. The count is
+        cumulative.
         """
         self._ensure_open()
         out = ctypes.c_size_t()

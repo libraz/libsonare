@@ -482,7 +482,11 @@ export function vqt(...args: unknown[]): CqtResult {
   });
 }
 
-/** Global tuning offset, in cents, from a set of frequencies (librosa.pitch_tuning). */
+/**
+ * Global tuning offset in cents from detected pitch frequencies.
+ * NaN or nonpositive values mark unvoiced frames. Infinity is refused by index.
+ * The offset is zero when there are no voiced frames.
+ */
 export function pitchTuning(request: PitchTuningRequest): number;
 export function pitchTuning(...args: unknown[]): number {
   return withEntry('pitchTuning', () => {

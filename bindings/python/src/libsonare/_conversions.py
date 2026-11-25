@@ -837,7 +837,10 @@ def tempogram(
     norm: bool = True,
     mode: TempogramMode = "autocorrelation",
 ) -> np.ndarray:
-    """Compute a tempogram as a float32 array of shape ``(win_length, n_frames)``."""
+    """Compute a tempogram as a float32 array of shape ``(win_length, n_frames)``.
+
+    An empty envelope has zero columns.
+    """
     mode_id = _token_ordinal(mode, _TEMPOGRAM_MODES, "mode")
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
@@ -870,7 +873,10 @@ def cyclic_tempogram(
     bpm_min: float = 60.0,
     n_bins: int = 60,
 ) -> np.ndarray:
-    """Compute a cyclic tempogram as a float32 array of shape ``(n_bins, n_frames)``."""
+    """Compute a cyclic tempogram as a float32 array of shape ``(n_bins, n_frames)``.
+
+    An empty envelope has zero columns.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()
@@ -983,7 +989,8 @@ def fourier_tempogram(
 ) -> np.ndarray:
     """Compute the Fourier (FFT-based) tempogram magnitude.
 
-    Returns a float32 array of shape ``(n_bins, n_frames)``.
+    Returns a float32 array of shape ``(win_length // 2 + 1, n_frames)``. An empty
+    envelope has zero columns.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
@@ -1016,7 +1023,7 @@ def tempogram_ratio(
 ) -> np.ndarray:
     """Aggregate tempogram magnitudes at integer ratios of a reference tempo.
 
-    ``tempogram`` is a 2-D array of shape ``(win_length, n_frames)``. When
+    ``tempogram`` is a 2-D array of shape ``(win_length, n_frames)`` with at least one frame. When
     ``factors`` is None the library default factors are used. Returns a float32
     array with one value per factor.
     """
@@ -1126,6 +1133,8 @@ def resample(
     target_sample_rate: int,
 ) -> np.ndarray:
     """Resample audio to a different sample rate.
+
+    An empty input returns an empty array.
 
     Args:
         samples: Audio samples.

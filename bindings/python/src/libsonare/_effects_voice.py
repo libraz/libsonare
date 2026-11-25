@@ -329,10 +329,8 @@ class RealtimeVoiceChanger:
         input. A non-zero count is what says the samples in between were not
         computed from what was supplied.
 
-        Monotonic for the lifetime of the handle. The unit is one processed
-        block, never a channel, so a stereo block that discards on both channels
-        adds one and the number does not depend on a dimension you did not
-        choose.
+        Preparing the changer resets the counter. The count rises once per
+        affected block, even if both channels are affected.
         """
         out = ctypes.c_size_t()
         rc = self._lib.sonare_realtime_voice_changer_non_finite_discard_count(

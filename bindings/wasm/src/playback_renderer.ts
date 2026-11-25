@@ -300,7 +300,12 @@ export class PlaybackLoudnessMeter {
     );
   }
 
-  /** Feeds interleaved frames of any length. */
+  /**
+   * Feeds one or more complete interleaved frames.
+   *
+   * @throws RangeError when the input is empty, has a partial frame or contains
+   * a non-finite sample.
+   */
   pushInterleaved(samples: Float32Array): void {
     this.native.pushInterleaved(samples);
   }

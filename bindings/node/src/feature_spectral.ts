@@ -193,7 +193,7 @@ export interface ZeroCrossingsRequest {
   threshold?: number;
   /** Scale `threshold` by the maximum absolute sample. Default `false`. */
   refMagnitude?: boolean;
-  /** Always report index 0 as a crossing. Default `true`. */
+  /** Report index 0 as a crossing when the input has samples. Default `true`. */
   pad?: boolean;
   /** Treat the sign of zero as positive. Default `true`. */
   zeroPos?: boolean;
@@ -351,7 +351,10 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
   });
 }
 
-/** MFCCs. `coefficients` is rows = coefficients, cols = frames. */
+/**
+ * MFCCs. `coefficients` is rows = coefficients, cols = frames.
+ * The sample scan follows validation of the Mel frequency bounds and FFT geometry.
+ */
 export function mfcc(request: MfccRequest): MfccResult;
 export function mfcc(
   samples: Float32Array,
