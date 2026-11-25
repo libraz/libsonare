@@ -19,6 +19,11 @@ NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   return cfg;
 }
 
+[[gnu::noinline]]
+NativeSynthConfig from_clamped_patch(const NativeSynthPatch& patch) noexcept {
+  return from_patch(clamp_synth_patch(patch));
+}
+
 /// Most catalog entries are the voiced GM fallback patches under their
 /// instrument name (one data table, two address spaces); the pure-synth
 /// entries are voiced here.
@@ -44,7 +49,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   sine.amp_env.decay_ms = 60.0f;
   sine.amp_env.sustain = 0.8f;
   sine.amp_env.release_ms = 150.0f;
-  t[i++] = {"sine", from_patch(clamp_synth_patch(sine))};
+  t[i++] = {"sine", from_clamped_patch(sine)};
 
   // Bare single-oscillator waveforms, the simplest "make MIDI audible" choices
   // the CLI documents ([saw|square|triangle|sine]). They share sine's envelope
@@ -56,7 +61,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
         {"triangle", VaWaveform::kTriangle}}) {
     NativeSynthPatch bare = sine;
     bare.waveform = wave;
-    t[i++] = {preset_name, from_patch(clamp_synth_patch(bare))};
+    t[i++] = {preset_name, from_clamped_patch(bare)};
   }
 
   // The lead and pad programs are voiced apart now, so these two name the one
@@ -69,14 +74,14 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   square.detune_cents = 8.0f;
   square.drift_cents = 4.0f;  // PWM-ish movement from the seeded drift
   square.cutoff_hz = 3000.0f;
-  t[i++] = {"squareLead", from_patch(clamp_synth_patch(square))};
+  t[i++] = {"squareLead", from_clamped_patch(square)};
 
   // Synth Bass 1 (GM 38) stays subtractive; the plucked GM 32-35 members are
   // Karplus-Strong now, so the synth sub is voiced off the synth-bass family.
   NativeSynthPatch sub = gm_fallback_patch(0, 38);
   sub.unison = 1;
   sub.cutoff_hz = 600.0f;
-  t[i++] = {"subBass", from_patch(clamp_synth_patch(sub))};
+  t[i++] = {"subBass", from_clamped_patch(sub)};
 
   {
     SynthPreset& pad = t[i++];
@@ -135,7 +140,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.percussion.gm_kit = true;
     patch.cutoff_hz = 20000.0f;
     patch.gain = 0.8f;
-    kit.config = from_patch(clamp_synth_patch(patch));
+    kit.config = from_clamped_patch(patch);
     kit.config.polyphony = 24;  // a kit stacks pieces, not melodic lines
   }
 
@@ -151,7 +156,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.tremulant_rate_hz = 5.2f;
     patch.pipe_organ.tremulant_depth = 0.5f;
     patch.pipe_organ.swell = 0.8f;  // behind a swell shutter (expression = CC11)
-    organ.config = from_patch(clamp_synth_patch(patch));
+    organ.config = from_clamped_patch(patch);
   }
   {
     // Open flute: softer and darker than the principal (a wide, breathy stop).
@@ -170,7 +175,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.chiff = 0.3f;
     patch.pipe_organ.radiation = 0.4f;  // an open flute speaks brightly into the room
     patch.gain = 0.7f;
-    flute.config = from_patch(clamp_synth_patch(patch));
+    flute.config = from_clamped_patch(patch);
   }
   {
     // Bourdon / gedackt: a stopped pipe — closed at one end, so it speaks an
@@ -191,7 +196,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.chiff = 0.25f;
     patch.pipe_organ.radiation = 0.15f;  // a stopped flute stays soft and hollow
     patch.gain = 0.7f;
-    bourdon.config = from_patch(clamp_synth_patch(patch));
+    bourdon.config = from_clamped_patch(patch);
   }
   {
     // Trompette / reed chorus: lingual reed pipes — the saturating reed valve
@@ -218,7 +223,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.swell = 0.7f;  // Voiced under a swell shutter.
     patch.stereo_spread = 0.18f;
     patch.gain = 0.42f;
-    reed.config = from_patch(clamp_synth_patch(patch));
+    reed.config = from_clamped_patch(patch);
   }
 
   // --- bowed string (friction-excited waveguide) ---
@@ -252,7 +257,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.body = BodyType::kViolin;
       patch.body_mix = body_mix;
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //     name          bow_pos force bright  damp  atk    rel   body  gain
     bowed("violin", 0.12f, 0.55f, 0.62f, 0.30f, 45.0f, 110.0f, 0.28f, 0.70f);
@@ -292,7 +297,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.body = BodyType::kWoodTube;
       patch.body_mix = body_mix;
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //    name             cone  stiff  open  bright damp  atk    rel    breath body  gain
     reed("clarinet", false, 0.40f, 0.50f, 0.45f, 0.30f, 25.0f, 90.0f, 0.60f, 0.25f, 0.70f);
@@ -380,7 +385,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
         patch.body_mix = bell_mix;
       }
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //     name             cone  tens   damp   bright damp   atk    rel     breath bell  gain
     brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 1.188f,
@@ -436,7 +441,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.flute.breath_pressure = breath;
       patch.flute.vel_to_breath = 0.5f;
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //     name             jetr   bright damp   bnoise chiff  vib    breath gain
     flute("concertFlute", 0.50f, 0.55f, 0.30f, 0.18f, 0.35f, 0.15f, 0.60f, 0.85f);
@@ -469,7 +474,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.plucked_string.decay_s = decay_s;
       patch.plucked_string.pick_position = pick_position;
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //       name        buzz   bright decay  pickpos gain
     // Keep the established GM-fallback `harp` name above. This separate
@@ -500,7 +505,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.vocal.vibrato_depth = vibrato_depth;
       patch.vocal.breath_noise = breath_noise;
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //     name          vowel bright vib    breath gain
     vocal("choirAah", 0, 0.55f, 0.30f, 0.12f, 0.80f);
@@ -526,7 +531,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.free_reed.reed_stiffness = reed_stiffness;
       patch.free_reed.detune = detune;
       patch.gain = gain;
-      v.config = from_patch(clamp_synth_patch(patch));
+      v.config = from_clamped_patch(patch);
     };
     //         name          bright stiff  detune gain
     free_reed("accordion", 0.60f, 0.50f, 0.35f, 0.80f);
@@ -548,7 +553,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.amp_env.release_ms = 400.0f;
     patch.cutoff_hz = 20000.0f;
     patch.gain = 0.8f;
-    v.config = from_patch(clamp_synth_patch(patch));
+    v.config = from_clamped_patch(patch);
   }
 
   return t;
