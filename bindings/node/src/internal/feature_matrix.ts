@@ -38,9 +38,6 @@ export function assertMatrix2D(
   if (dimensionsInNative) {
     return;
   }
-  if (typeof rows !== 'number' || typeof cols !== 'number') {
-    throw refuseType(`${argName}.rows and ${argName}.cols must be numbers`);
-  }
   assertPositiveInteger(rows, `${argName}.rows`);
   assertPositiveInteger(cols, `${argName}.cols`);
   if (data.length !== rows * cols) {

@@ -18,4 +18,20 @@ describe('inverse request forms name an unknown key before a missing field', () 
     expect(() => call(undefined)).toThrow(`${name}: request must be an object`);
     expect(() => call(null)).toThrow(TypeError);
   });
+
+  // RED WHEN: a dimension of the wrong type is refused under a joint `rows and cols` subject
+  // instead of the field the caller wrote.
+  it.each([
+    ['melToStft', melToStft],
+    ['melToAudio', melToAudio],
+  ] as const)('%s names a non-number dimension by its own path', (name, fn) => {
+    const call = fn as unknown as (request: unknown) => unknown;
+    const data = new Float32Array(4);
+    expect(() => call({ power: { data, rows: 'nope', cols: 2 } })).toThrow(
+      new TypeError(`${name}: power.rows must be an integer`),
+    );
+    expect(() => call({ power: { data, rows: 2, cols: 'nope' } })).toThrow(
+      new TypeError(`${name}: power.cols must be an integer`),
+    );
+  });
 });
