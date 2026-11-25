@@ -168,6 +168,21 @@ def test_pair_analysis_eq_curve_is_float32_arrays(monkeypatch: pytest.MonkeyPatc
     np.testing.assert_allclose(result.gain_db, wire["gainDb"], rtol=1e-6, atol=1e-6)
 
 
+@pytest.mark.parametrize("silent_role", ["source", "reference"])
+def test_match_eq_refuses_a_silent_take_naming_it(silent_role: str) -> None:
+    takes = {"source": SOURCE, "reference": REFERENCE}
+    takes[silent_role] = np.zeros(SR, dtype=np.float32)
+    expected = f"{silent_role} has no measurable level$"
+    with pytest.raises(libsonare.SonareValueError, match=expected):
+        libsonare.mastering_analyze_pair(
+            "match.matchEqCurve", takes["source"], takes["reference"], SR
+        )
+    with pytest.raises(libsonare.SonareValueError, match=expected):
+        libsonare.mastering_apply_pair_processor(
+            "match.applyMatchEq", takes["source"], takes["reference"], SR
+        )
+
+
 def test_pair_analysis_keyword_reports_delay_in_source_samples() -> None:
     reference_rate = 32000
     source_rate = 48000

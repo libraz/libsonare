@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -99,6 +100,36 @@ TEST_CASE("C mastering pair entries name the reference sample rate",
                                                 nullptr));
   check_rate(sonare_mastering_ab_match_loudness_stereo(samples, samples, 2, samples, samples, 2, 0,
                                                        48000, &left, &right, &length, nullptr));
+}
+
+TEST_CASE("C match EQ pair entries refuse a silent source or reference, naming it",
+          "[c_api][mastering][pair_stereo]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> silent(static_cast<size_t>(kSampleRate), 0.0f);
+  auto sounding = generate_sine(440.0f, kSampleRate, 1.0f);
+  for (float& sample : sounding) sample *= 0.5f;
+  const auto check_refusal = [](SonareError status, const std::string& role) {
+    CHECK(status == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == role + " has no measurable level");
+  };
+
+  const std::array<std::pair<const std::vector<float>*, const std::vector<float>*>, 2> takes{
+      {{&silent, &sounding}, {&sounding, &silent}}};
+  const std::array<const char*, 2> roles{"source", "reference"};
+  for (size_t i = 0; i < takes.size(); ++i) {
+    const auto& [source, reference] = takes[i];
+    char* analysis = nullptr;
+    check_refusal(sonare_mastering_analyze_pair(
+                      "match.matchEqCurve", source->data(), source->size(), reference->data(),
+                      reference->size(), kSampleRate, kSampleRate, nullptr, 0, &analysis),
+                  roles[i]);
+    CHECK(analysis == nullptr);
+    SonareMasteringResult result{};
+    check_refusal(sonare_mastering_apply_pair_processor(
+                      "match.applyMatchEq", source->data(), source->size(), reference->data(),
+                      reference->size(), kSampleRate, kSampleRate, nullptr, 0, &result),
+                  roles[i]);
+  }
 }
 
 TEST_CASE("C API pair analysis accepts planar stereo inputs", "[c_api][mastering][pair_stereo]") {

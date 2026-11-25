@@ -5294,7 +5294,7 @@ test = "tests/mastering/param_wiring_test.cpp::the final quantizing processors t
 [[entry]]
 kind = "function"
 old = "sonare_mastering_apply_pair_processor"
-changed = "takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate. A refused reference rate is named reference_sample_rate."
+changed = "takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate. A refused reference rate is named reference_sample_rate. match.applyMatchEq refuses a source or reference with no measurable level with SONARE_ERROR_INVALID_PARAMETER naming that side ('source has no measurable level'), where v1.10.0 returned processed audio."
 domain = "mastering"
 rule = "one-entry-per-operation"
 test = "tests/api/mastering_pair_stereo_test.cpp::C mastering pair entries name the reference sample rate"
@@ -5324,7 +5324,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_mastering_analyze_pair"
-changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor. A refused reference rate is named reference_sample_rate."
+changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor. A refused reference rate is named reference_sample_rate. match.matchEqCurve refuses a source or reference with no measurable level with SONARE_ERROR_INVALID_PARAMETER naming that side ('source has no measurable level'), where v1.10.0 returned a curve."
 domain = "mastering"
 rule = "one-entry-per-operation"
 test = "tests/api/mastering_pair_stereo_test.cpp::C mastering pair entries name the reference sample rate"

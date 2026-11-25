@@ -9113,7 +9113,7 @@ rule = "type-names"
 kind = "function"
 old = "mastering_pair_analyze"
 to = "mastering_analyze_pair"
-changed = "renamed to the C/JS name and returns the analysis's record (MatchReferenceLoudnessResult, MatchTonalBalanceResult, MatchEqCurveResult or MatchEstimateReferenceDelaySamplesResult) instead of a JSON string"
+changed = "renamed to the C/JS name and returns the analysis's record (MatchReferenceLoudnessResult, MatchTonalBalanceResult, MatchEqCurveResult or MatchEstimateReferenceDelaySamplesResult) instead of a JSON string. match.matchEqCurve raises SonareValueError naming a source or reference with no measurable level ('source has no measurable level'), where v1.10.0 returned a curve."
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"
@@ -9386,9 +9386,11 @@ test = "bindings/python/tests/test_mastering_stereo_surface.py::test_stereo_pair
 [[entry]]
 kind = "function"
 old = "mastering_pair_process"
-new = "mastering_apply_pair_processor"
+to = "mastering_apply_pair_processor"
+changed = "renamed to mastering_apply_pair_processor. match.applyMatchEq raises SonareValueError naming a source or reference with no measurable level ('source has no measurable level'), where v1.10.0 returned processed audio."
 domain = "mastering"
 rule = "mastering-names"
+test = "bindings/python/tests/test_mastering_result_types.py::test_match_eq_refuses_a_silent_take_naming_it"
 
 [[entry]]
 kind = "function"

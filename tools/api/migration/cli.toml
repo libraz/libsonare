@@ -769,10 +769,18 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mastering needs a chain and leaves
 [[entry]]
 kind = "command"
 old = "mastering-pair-analyze"
-changed = "analyzes two stereo files as stereo, preserving both channels; analyzes two mono files as mono; refuses unequal channel counts or either input above two channels with exit 3"
+changed = "analyzes two stereo files as stereo, preserving both channels; analyzes two mono files as mono; refuses unequal channel counts or either input above two channels with exit 3. --analysis match.matchEqCurve refuses a source or reference with no measurable level with exit 3 naming that side ('source has no measurable level'), where v1.10.0 printed a curve"
 domain = "mastering"
 rule = "stereo-pair"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering pair analysis dispatches by channel count"
+
+[[entry]]
+kind = "command"
+old = "mastering-pair-processor"
+changed = "--processor match.applyMatchEq refuses a source or reference with no measurable level with exit 3 naming that side ('source has no measurable level'), where v1.10.0 wrote processed audio"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/cli/cli_mastering_test.cpp::CLI match EQ refuses a silent source or reference, naming it"
 
 [[entry]]
 kind = "flag"

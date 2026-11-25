@@ -890,6 +890,31 @@ describe('results: unit-named fields and objects', () => {
     expectTypeOf(preview).toEqualTypeOf<MasteringStreamingPreviewResult>();
   });
 
+  it.each([
+    ['source', 'reference'],
+    ['reference', 'source'],
+  ] as const)('match EQ refuses a silent %s, naming it', (silentRole, otherRole) => {
+    const takes = { [silentRole]: new Float32Array(sampleRate), [otherRole]: left } as {
+      source: Float32Array;
+      reference: Float32Array;
+    };
+    expectRefused(
+      () => sonare.masteringAnalyzePair({ analysis: 'match.matchEqCurve', ...takes, sampleRate }),
+      RangeError,
+      `masteringAnalyzePair: ${silentRole} has no measurable level`,
+    );
+    expectRefused(
+      () =>
+        sonare.masteringApplyPairProcessor({
+          processor: 'match.applyMatchEq',
+          ...takes,
+          sampleRate,
+        }),
+      RangeError,
+      `masteringApplyPairProcessor: ${silentRole} has no measurable level`,
+    );
+  });
+
   it('pair and stereo analyses return objects, and the log-band tonal balance shares the result', () => {
     const loudness = sonare.masteringAnalyzePair({
       analysis: 'match.referenceLoudness',

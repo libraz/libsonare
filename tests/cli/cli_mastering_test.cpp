@@ -3,6 +3,7 @@
 
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <iterator>
+#include <tuple>
 
 #include "cli/cli_test_helpers.h"
 
@@ -958,6 +959,34 @@ TEST_CASE("CLI mastering pair analysis dispatches by channel count", "[cli][mast
   std::remove(mono_source.c_str());
   std::remove(mono_reference.c_str());
   std::remove(stereo_short.c_str());
+}
+
+TEST_CASE("CLI match EQ refuses a silent source or reference, naming it", "[cli][mastering]") {
+  constexpr int kRate = 48000;
+  const std::string silent = unique_temp_path("_match_eq_silent.wav");
+  const std::string sounding = unique_temp_path("_match_eq_sounding.wav");
+  const std::string out = unique_temp_path("_match_eq_out.wav");
+  save_wav(silent, std::vector<float>(kRate, 0.0f), kRate);
+  create_test_wav(sounding, 1.0f, 440.0f, kRate);
+  for (const auto& [source, reference, role] :
+       {std::tuple{silent, sounding, "source"}, std::tuple{sounding, silent, "reference"}}) {
+    const std::string expected = std::string(role) + " has no measurable level";
+    auto [analysis_code, analysis_output] =
+        exec_command(CLI + " mastering-pair-analyze " + source + " --reference " + reference +
+                     " --analysis match.matchEqCurve -q 2>&1");
+    INFO(analysis_output);
+    CHECK(analysis_code == 3);
+    CHECK_THAT(analysis_output, ContainsSubstring(expected));
+    auto [processor_code, processor_output] =
+        exec_command(CLI + " mastering-pair-processor " + source + " --reference " + reference +
+                     " --processor match.applyMatchEq -o " + out + " -q 2>&1");
+    INFO(processor_output);
+    CHECK(processor_code == 3);
+    CHECK_THAT(processor_output, ContainsSubstring(expected));
+  }
+  std::remove(silent.c_str());
+  std::remove(sounding.c_str());
+  std::remove(out.c_str());
 }
 
 TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][mastering]") {
