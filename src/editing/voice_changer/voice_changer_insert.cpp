@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -81,9 +82,10 @@ constexpr int kMaxChannels = 2;
   X("reverbVariationDivision", reverb_variation.division)        \
   X("midiRelease", midi.release)
 
-#define SONARE_COUNT_PARAM(key, member) +1
-constexpr unsigned int kParamCount = 0 SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_COUNT_PARAM);
-#undef SONARE_COUNT_PARAM
+#define SONARE_PARAM_NAME(key, member) key,
+constexpr const char* kParamNames[] = {SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_PARAM_NAME)};
+#undef SONARE_PARAM_NAME
+constexpr unsigned int kParamCount = std::size(kParamNames);
 
 // The insert carries no carrier input, so an external vocoder carrier has nothing to read.
 bool insert_accepts(const RealtimeVoiceChangerConfig& config) {
@@ -202,9 +204,9 @@ bool VoiceChangerInsert::parameter_is_realtime_safe(unsigned int param_id) const
 std::vector<rt::ParamDescriptor> VoiceChangerInsert::parameter_descriptors() const {
   std::vector<rt::ParamDescriptor> descriptors;
   unsigned int id = 0;
-#define SONARE_DESCRIBE_PARAM(key, member) descriptors.push_back({key, id++});
-  SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_DESCRIBE_PARAM)
-#undef SONARE_DESCRIBE_PARAM
+  for (const char* key : kParamNames) {
+    descriptors.push_back({key, id++});
+  }
   return descriptors;
 }
 
