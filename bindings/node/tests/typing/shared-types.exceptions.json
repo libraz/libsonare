@@ -1,0 +1,14 @@
+{
+  "ChordSymbolFields@index.ts": "Published WASM exposes a mutable extensions array. Node exposes a readonly array.",
+  "EngineClip@index.ts": "Node requires a clip ID and uses a native page provider. The WASM worklet can allocate the ID and uses its own provider.",
+  "ExternalMidiEvent@index.ts": "Native emits a plain number array and WASM emits a Uint8Array.",
+  "PlaybackRendererOptions@analysis.ts": "The HrtfSet is a backend-owned handle.",
+  "PlaybackRendererOptions@index.ts": "The HrtfSet is a backend-owned handle.",
+  "ProjectBounceOptions@index.ts": "Synth bindings contain backend-owned SampleBank handles.",
+  "ProjectCompileResult@index.ts": "The optional ProjectTimeline is a backend-owned handle.",
+  "ProjectInstrument@index.ts": "The synth variant contains a backend-owned SampleBank handle.",
+  "ProjectNotePairValidation@index.ts": "Published WASM exposes mutable fields. Node exposes readonly fields.",
+  "RenderPlaybackRequest@analysis.ts": "The HrtfSet is a backend-owned handle.",
+  "RenderPlaybackRequest@index.ts": "The HrtfSet is a backend-owned handle.",
+  "SynthPatch@index.ts": "The optional SampleBank is a backend-owned handle."
+}

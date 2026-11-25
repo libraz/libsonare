@@ -124,7 +124,7 @@ Before merging, the maintainer brings a change here to the following:
 - A WASM build overwrites `bindings/wasm/dist/` wherever its build directory lives, and every surface's tests import it. Emscripten compiles its system libraries through a path relative to the build directory, so a worktree under `/tmp` fails to link for a reason unrelated to your change.
 - The drift gates need only `python3`. `make ci-local` and `make format` need Node and uv, because they reach the layout snapshot through uv and the binding linters through yarn.
 - `make lint-static` holds the static and drift gates that read committed sources alone: the generated tables' drift checks, the GS EFX coverage equation and its include-scope and skeleton pins, the coefficient-name and enum-cast greps, and the numeric-domain rows. `make lint` and the CI `lint` job both run it, so a push is gated on the list a local lint runs.
-- `make lint` type-checks the typed surfaces: `tsc` over the Node and WASM bindings and their tests (`make check-js-types`, against the declarations already in `dist/`), and `mypy --strict` for Python. A Python stub is invisible to every other gate: ruff does not read it, no test imports it, and the module answers at runtime whatever the stub says.
+- `make lint` type-checks Node and WASM with `tsc` and Python with `mypy --strict`. Both TypeScript test scripts require mutual assignability and matching readonly fields for shared declarations. Shipped Python stubs match the built runtime under `stubtest`.
 - `Installed package` is the only CI job that sees the library the way an external C++ consumer does. Every in-tree target links the whole set, so an archive missing a declared dependency still links in tree.
 
 ### Across the surfaces

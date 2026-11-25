@@ -429,6 +429,7 @@ lint:
 	$(CHECK) sh -c 'cd bindings/wasm && yarn lint'
 	$(CHECK) sh -c 'cd bindings/node && yarn lint'
 	$(CHECK) $(MAKE) check-js-types
+	$(CHECK) node bindings/node/tests/typing/generate-shared-types.cjs --check
 	$(CHECK) sh -c 'cd tools/audition/web && yarn lint'
 	$(CHECK) sh -c 'cd tools/audition/web && yarn typecheck'
 	$(CHECK) env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check .
@@ -444,6 +445,7 @@ lint:
 	$(CHECK) sh -c 'cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
 		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; fi'
+	$(CHECK) env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) pytest -q -rs -s bindings/python/tests/check_shipped_stubs.py
 	$(CHECK) $(MAKE) lint-static
 # The standalone parity target also runs the full conformance suite.
 	$(CHECK) python3 tools/parity/check_parity.py
