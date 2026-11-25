@@ -564,6 +564,16 @@ describe('PolyphonicAnalysis disposal', () => {
 // RED WHEN: a non-array envelope is refused as "a Float32Array" alone on one surface, though a
 // number array is accepted on both.
 describe('setNoteEdit envelope type', () => {
+  // RED WHEN: a null envelope is refused instead of read as the omitted envelope.
+  it('reads a null amplitude envelope as absent', () => {
+    try {
+      analysis.setNoteEdit(0, { gainDb: -6, amplitudeEnvelope: null } as never);
+      expect(analysis.notes()[0].edit.gainDb).toBe(-6);
+      expect(analysis.notes()[0].edit.amplitudeEnvelope).toHaveLength(0);
+    } finally {
+      analysis.setNoteEdit(0);
+    }
+  });
   it('refuses an amplitude envelope that is neither a Float32Array nor a number array', () => {
     for (const amplitudeEnvelope of ['nope', 0, Number.NaN]) {
       expect(() => analysis.setNoteEdit(0, { amplitudeEnvelope } as never)).toThrow(

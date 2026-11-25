@@ -360,6 +360,15 @@ describe('a polyphonic note edit', () => {
     });
   });
 
+  // RED WHEN: a null envelope is refused instead of read as the omitted envelope.
+  it('reads a null amplitude envelope as absent', () => {
+    withAnalysis((analysis) => {
+      analysis.setNoteEdit(0, { gainDb: -6, amplitudeEnvelope: null } as never);
+      expect(analysis.notes()[0].edit.gainDb).toBe(-6);
+      expect(analysis.notes()[0].edit.amplitudeEnvelope).toHaveLength(0);
+    });
+  });
+
   it('refuses a zero stretch ratio rather than reading it as one', () => {
     withAnalysis((analysis) => {
       for (const timeStretchRatio of [0, -1]) {

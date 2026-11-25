@@ -30,11 +30,10 @@ namespace sonare_wasm_editing {
 inline std::vector<float> noteEnvelopeFromVal(const val& edit, const std::string& at,
                                               std::size_t* cumulative_count) {
   const val envelope = objectProperty(edit, "amplitudeEnvelope");
-  if (envelope.isUndefined()) return {};
+  if (envelope.isUndefined() || envelope.isNull()) return {};
   const std::string name = elementField(at, "amplitudeEnvelope");
   // The envelope alone widens to a number array, so its refusal says so.
-  if (envelope.isNull() ||
-      !(envelope.instanceof
+  if (!(envelope.instanceof
         (val::global("Float32Array")) || val::global("Array").call<bool>("isArray", envelope))) {
     throw WasmTypeError(name + " must be a Float32Array or a number array");
   }
