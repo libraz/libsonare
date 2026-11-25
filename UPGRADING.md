@@ -719,7 +719,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_mastering_repair_apply` | a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_mastering_repair_apply` | a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Both the caller's audio planes and the owned report are written only on success. An allocation failure leaves the planes untouched and the report pointer null. |
 | `sonare_realtime_voice_changer_validate_preset_json(json)` | `sonare_realtime_voice_changer_validate_preset_json(document)` |
 
 #### An argument that would size a result past the library's limit is refused by name
@@ -830,6 +830,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_audio_dynamic_range` | Pass exactly -1 for a library-default low_percentile or high_percentile. Other finite negative values no longer select the default and return SONARE_ERROR_INVALID_PARAMETER naming the refused percentile. A specified percentile must be in [0, 1]. |
 | `sonare_metering_dynamic_range` | Pass exactly -1 for a library-default low_percentile or high_percentile. Other finite negative values no longer select the default and return SONARE_ERROR_INVALID_PARAMETER naming the refused percentile. A specified percentile must be in [0, 1]. |
+| `sonare_strip_set_pan` | Only SONARE_PAN_MODE_KEEP (-1) preserves the current mode. Values below -1 previously preserved the mode. They return SONARE_ERROR_INVALID_PARAMETER with “pan_mode must be an integer in [0, 2]” and leave the strip unchanged. |
 
 #### String values are lowerCamelCase tokens
 
@@ -849,8 +850,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_master_audio_stereo` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
 | `sonare_master_audio` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
+| `sonare_mastering_dynamics_compressor` | The output pointer, length and optional latency are cleared on failure, including failure to allocate the finished audio. |
+| `sonare_mastering_dynamics_gate` | The output pointer, length and optional latency are cleared on failure, including failure to allocate the finished audio. |
+| `sonare_mastering_dynamics_transient_shaper` | The output pointer, length and optional latency are cleared on failure, including failure to allocate the finished audio. |
 | `sonare_streaming_loudness_gain_stereo` | takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root "config", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
 | `sonare_streaming_loudness_gain` | takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root "config", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
+| `sonare_streaming_mastering_chain_prepare` | A failed re-prepare preserves the previous stages, pending drain and counts. The call validates sample_rate, max_block_size and num_channels in that order. |
 
 #### C extends an operation through an Options struct
 
@@ -874,7 +879,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_eq_create` | SonareError sonare_eq_create(sample_rate, max_block_size, &eq); read the error from the return value, the handle from eq (NULL on failure) |
 | `sonare_mixer_create` | SonareError sonare_mixer_create(sample_rate, max_block_size, &mixer); read the error from the return value, the handle from mixer (NULL on failure) |
-| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, options, &chain); read the error from the return value, the handle from chain (NULL on failure); options is a const SonareStreamingMasteringChainOptions* (NULL = defaults; sonare_streaming_mastering_chain_options_init); the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is |
+| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, options, &chain); read the error from the return value, the handle from chain (NULL on failure); options is a const SonareStreamingMasteringChainOptions* (NULL = defaults; sonare_streaming_mastering_chain_options_init); the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is. The chain checks config_json before options and the output pointer. A refused static gain is named options.loudness_static_gain_db. A well-formed config requesting an unsupported stage or estimator returns SONARE_ERROR_NOT_SUPPORTED. |
 
 #### C results are released by a function named after the result
 
@@ -899,13 +904,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_audio_silence_ratio(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_audio_silence_ratio(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_eq_create(sample_rate)` | the sample rate is an int instead of a double |
-| `sonare_eq_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. |
+| `sonare_eq_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. A nonnull out_count is zero on refusal. |
 | `sonare_metering_silence_ratio(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_metering_silence_ratio(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_mixer_bus_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. A compiled bus can report more than UINT32_MAX discarded blocks on targets with a wider size_t, including after recompiling the graph. |
-| `sonare_streaming_mastering_chain_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. |
+| `sonare_mixer_bus_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. A compiled bus can report more than UINT32_MAX discarded blocks on targets with a wider size_t, including after recompiling the graph. A nonnull out_count is zero on refusal. |
+| `sonare_streaming_mastering_chain_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. A nonnull out_count is zero on refusal. |
 | `sonare_streaming_mastering_chain_non_finite_substitution_count(out_count)` | the count is a size_t instead of a uint32_t |
-| `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. |
+| `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. A nonnull out_count is zero on refusal. |
 
 #### Every C failure sets the error message
 
@@ -918,26 +923,40 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_mastering_ab_match_loudness_stereo` | returns float** out_left, float** out_right and size_t* out_length plus SonareLoudnessMatch* out_match, as sonare_mastering_ab_match_loudness does. If either take has no measurable loudness, the call refuses that side with SONARE_ERROR_INVALID_PARAMETER instead of applying zero gain. A refused reference rate is named reference_sample_rate. |
+| `sonare_mastering_ab_match_loudness` | If either take has no measurable loudness, the call refuses that side with SONARE_ERROR_INVALID_PARAMETER instead of applying zero gain. A refused reference rate is named reference_sample_rate. |
+| `sonare_mastering_apply_pair_processor_stereo` | takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor. The processor name is checked before the audio is read. An unknown name returns SONARE_ERROR_INVALID_PARAMETER. A declared processor without a stereo pair form returns SONARE_ERROR_NOT_SUPPORTED instead of SONARE_ERROR_INVALID_PARAMETER. A refused reference rate is named reference_sample_rate. |
 | `sonare_mastering_enum_value` | a retired flat chain key returns SONARE_ERROR_INVALID_PARAMETER as an unknown key under the key argument (1.x returned SONARE_OK with out_is_enum 0) |
 | `sonare_mixing_assistant_source_class_from_name` | with the mixing assistant compiled out, returns -1 with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: -1 with no error) |
 | `sonare_mixing_assistant_source_class_names` | with the mixing assistant compiled out, returns the empty string with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: empty string with no error) |
-| `sonare_mixing_assistant_suggest` | with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
-| `sonare_project_assist_apply_json` | with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
-| `sonare_project_assist_preview_json` | with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
+| `sonare_mixing_assistant_suggest` | with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); For a nonempty input list, the analysis and track rates must be in [8000, 384000]. Only exact zero selects automatic tempo. Every other tempo must be finite and in [20, 400] BPM before float conversion. |
+| `sonare_project_assist_apply_json` | with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); A refused module leaves out_json null. Read its diagnostic from sonare_last_error_message instead of a rejection document. Apply leaves the project and undo history untouched if publishing the result fails. |
+| `sonare_project_assist_preview_json` | with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); A refused module leaves out_json null. Read its diagnostic from sonare_last_error_message instead of a rejection document. |
+| `sonare_streaming_mastering_chain_process_mono` | For nonempty buffers, the prepared channel mode is checked before scanning samples for non-finite values. |
+| `sonare_streaming_mastering_chain_process_stereo` | For nonempty buffers, the prepared channel mode is checked before scanning samples for non-finite values. |
+
+#### A refusal names the public entry the caller invoked
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_eq_set_gain_scale` | A refused gain multiplier is named scale. |
+| `sonare_eq_set_output_gain_db` | A refused output gain is named gain_db. |
+| `sonare_eq_set_output_pan` | A refused output pan is named pan. |
+| `sonare_eq_set_phase_mode` | An unknown phase mode is refused as mode must be an integer in [1, 3]. |
+| `sonare_strip_add_send` | A refused send timing is named timing. |
+| `sonare_strip_set_pan_law` | A refused pan law is named pan_law. |
 
 #### Each operation has exactly one entry point
 
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_eq_match_ex` | removed: call sonare_eq_match, which takes the independent lengths and reference rate |
-| `sonare_eq_match` | takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate |
-| `sonare_mastering_ab_match_loudness_stereo` | returns float** out_left, float** out_right and size_t* out_length plus SonareLoudnessMatch* out_match, as sonare_mastering_ab_match_loudness does |
+| `sonare_eq_match` | takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate. A refused reference rate is named reference_sample_rate. |
 | `sonare_mastering_analyze_pair_ex` | removed: call sonare_mastering_analyze_pair, which takes the independent lengths and reference rate |
-| `sonare_mastering_analyze_pair` | takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor |
+| `sonare_mastering_analyze_pair` | takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor. A refused reference rate is named reference_sample_rate. |
 | `sonare_mastering_apply_pair_processor_ex` | removed: call sonare_mastering_apply_pair_processor, which takes the independent lengths and reference rate |
 | `sonare_mastering_apply_pair_processor_stereo_ex` | removed: call sonare_mastering_apply_pair_processor_stereo, which takes the independent lengths and reference rate |
-| `sonare_mastering_apply_pair_processor_stereo` | takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor |
-| `sonare_mastering_apply_pair_processor` | takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate |
+| `sonare_mastering_apply_pair_processor` | takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate. A refused reference rate is named reference_sample_rate. |
 | `sonare_mastering_assistant_suggest_chain_json_stereo` | removed: read the chainConfig block of sonare_mastering_assistant_suggest_stereo's document |
 | `sonare_mastering_assistant_suggest_chain_json` | removed: read the chainConfig block of sonare_mastering_assistant_suggest's document |
 | `sonare_mastering_chain_stereo_with_progress_ex` | removed: call sonare_master_audio_stereo with preset NULL and the old params as overrides_json, and set the callbacks in SonareMasterAudioOptions |
@@ -974,7 +993,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_eq_set_band` | a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys |
+| `sonare_eq_set_band` | a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys. Refusals from band design also use the band document's published member names. |
 | `sonare_mastering_insert_timing(params)` | `sonare_mastering_insert_timing(params_json)` |
 | `sonare_mixer_from_scene_json(json)` | `sonare_mixer_from_scene_json(document)` |
 | `sonare_mixer_from_scene_json` | An unread insert parameter refuses the scene with SONARE_ERROR_INVALID_FORMAT under strips or buses, listing the insert's accepted keys. The earlier mixing.ignored_insert_param warning is no longer emitted. |
@@ -989,7 +1008,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMasteringStereoResult` | Appends declip_unreconstructed_runs, has_declip_unreconstructed_runs, quantize_clipped_samples and has_quantize_clipped_samples. Recompile allocation and layout mirrors, and read the counters only when their matching presence flags are set. |
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
-| `sonare_eq_magnitude_response` | every frequencies_hz[i] must be finite and in [0, Nyquist]; an invalid value returns SONARE_ERROR_INVALID_PARAMETER naming its index and leaves out_db unchanged, where 1.x clamped values outside the range (including infinities) and let NaN through to the output |
+| `sonare_eq_magnitude_response` | Use a placement in [0, 4] and frequencies_hz values that are finite and in [0, Nyquist]. An invalid placement returns SONARE_ERROR_INVALID_PARAMETER with "placement must be an integer in [0, 4]". An invalid frequency returns SONARE_ERROR_INVALID_PARAMETER naming its index and leaves out_db unchanged. In 1.x the response clamped out-of-band frequencies and infinities and propagated NaN to the output. |
 | `sonare_mastering_analyze_stereo(params)` | stereo.monoCompatCheckLogBands refusals now name the caller's params.bandsPerOctave, params.lowHz or params.highHz and state that field's domain; v1.10.0 used the generic invalid mono compatibility band configuration text |
 | `sonare_mastering_apply_processor(params)` | final.bitDepth and final.outputChain take no clamp param and refuse it with SONARE_ERROR_INVALID_PARAMETER as an unknown key naming the keys they read, since the code range holds a sample past full scale on its own |
 | `sonare_mastering_audio_profile(params)` | a refused nFft or hopLength is named params.nFft / params.hopLength, both for its integer domain ('params.nFft must be an even integer in [2, 524288]') and for the relation its rescale to sample_rate must satisfy ('params.nFft rescaled to sample_rate must fit the largest FFT size'); an odd nFft, or nFft 1, is refused on the caller's value before the rescale at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even |
@@ -1071,6 +1090,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_engine_drain_external_midi` | A supplied out_count is cleared before validating the engine and buffer. max_events = 0 is accepted with a NULL out buffer and drains nothing, writing zero to out_count. |
 | `sonare_engine_resolve_instrument_automation_id(out_id)` | A supplied id is zero on refusal, including a NULL engine or a NULL or empty param_name. |
+| `sonare_playback_render_interleaved` | A failed render leaves the output pointer null and both output dimensions zero, including on allocation failure. |
+| `sonare_playback_renderer_render_offline` | A failed offline render leaves all output slots cleared and preserves the renderer's prior processing state. |
 
 #### C extends an operation through an Options struct
 
@@ -1130,6 +1151,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_set_midi_fx` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name an insert processor'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'), and so is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)'); the project document's partRigs refuse a wrong type and a chain no player can build with SONARE_ERROR_INVALID_FORMAT instead of dropping the entry |
 | `sonare_engine_set_track_lanes` | A declared non-stereo source_channel_layout returns SONARE_ERROR_NOT_SUPPORTED instead of SONARE_ERROR_INVALID_PARAMETER. An undeclared layout value still returns SONARE_ERROR_INVALID_PARAMETER. |
+| `sonare_hrtf_set_create_from_memory` | Malformed SHRF bytes return SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER. Null arguments remain argument refusals. |
 | `sonare_midi_cc_name` | a controller outside [0, 127] returns NULL with SONARE_ERROR_INVALID_PARAMETER naming controller (1.x: NULL with no error); an unnamed controller in range stays NULL with SONARE_OK |
 | `sonare_midi_cc_to_breakpoint` | a SysEx event returns SONARE_ERROR_NOT_SUPPORTED with the message 'MIDI CC conversion does not support SysEx events' (1.x refused it with SONARE_ERROR_INVALID_PARAMETER before the binding lookup); an unmatched channel-voice event still returns SONARE_ERROR_INVALID_STATE; a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind (1.x ignored it) |
 
@@ -1146,6 +1168,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_push_midi_input_ump` | A malformed message is refused as 'words do not form a pushable UMP message', without a function-name prefix. |
 | `sonare_engine_set_track_output_bus` | An unknown track is refused as 'track_id must be the id of a track in this engine'; the diagnostic does not include the given id. |
 | `sonare_engine_set_track_sends` | An unknown track is refused as 'track_id must be the id of a track in this engine'; the diagnostic does not include the given id. |
+| `sonare_playback_loudness_meter_create` | An invalid channel count is refused as channels. sample_rate must be an integer in [8000, 384000] Hz; out-of-range positive rates were previously accepted. |
+| `sonare_playback_loudness_meter_push_interleaved` | An empty block is refused as frames and a non-finite input sample as in. |
 
 #### Each operation has exactly one entry point
 
@@ -3542,6 +3566,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MeterTelemetryRecord.mono_compat_width` | float -> float \| None: None on a zero channel or silence, inf for a silent mid under a nonzero side |
 | `MeterTelemetryRecord.short_term_lufs` | float -> float \| None: -inf for silence, None until the window fills |
 | `ScopeTelemetryRecord.bands` | -inf for a band of zero power, NaN for a band no bin reaches and before the first transform |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `PlaybackLoudnessMeter.constructor(sample_rate)` | sample_rate must be an integer in [8000, 384000] Hz. The constructor raises SonareValueError naming sample_rate outside that domain; 1.x refused only a non-positive rate. |
 
 #### String values are lowerCamelCase tokens
 
@@ -7032,6 +7062,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent is -14 LUFS; any finite value, 0 included, is a literal target; a non-finite value is a RangeError |
+| `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
 | `RealtimeEngine.pushMidiInputUmp` | a fractional word in words is refused with a RangeError instead of truncated |
 | `RealtimeEngine.pushMidiUmp` | a fractional word in words is refused with a RangeError instead of truncated |
 | `RealtimeEngine.setMidiClips` | a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core |
@@ -12346,6 +12377,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
 | `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
 | `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted |
+| `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
 | `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
 | `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |

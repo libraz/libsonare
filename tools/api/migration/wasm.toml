@@ -37905,3 +37905,11 @@ changed = "required: an absent startPpq is refused with TypeError naming startPp
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/project-edit-ops.test.ts::addLoopRecordingTakes requires startPpq and accepts explicit zero"
+
+[[entry]]
+kind = "class"
+old = "PlaybackLoudnessMeter"
+changed = "sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/playback.test.ts::refuses a playback loudness meter sample rate outside the audio domain"

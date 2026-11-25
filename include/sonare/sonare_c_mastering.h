@@ -491,12 +491,12 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   and `rtSafe` says whether the param can be changed live from the audio
 ///   thread. The second lists, sorted by name, the keys construction reads that
 ///   are not automation targets: their `id` is null and `rtSafe` false, so they
-///   take effect only when the insert is built. The names are the same set @ref
-///   sonare_mastering_insert_param_names returns, plus any automation target
-///   construction does not read. An offline repair stage with no insert form
+///   take effect only when the insert is built. For insert processors these descriptors
+///   include construction keys and automation targets. An offline repair stage with no insert form
 ///   (`repair.declick`, `repair.declip`, `repair.trimSilence`) is served too: every
 ///   id of @ref sonare_mastering_processor_catalog answers with that entry's `params`,
 ///   and every row of a repair stage has a null `id` and a false `rtSafe`.
+///   @ref sonare_mastering_insert_param_names accepts only insert factory IDs.
 ///
 ///   `type` is `"number"`, `"boolean"`, `"enum"`, `"string"` or `"array"`, taken
 ///   from the C++ type the processor's config builder reads the key as. An
@@ -593,7 +593,7 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   releases it with @ref sonare_free_string. Set to NULL on failure.
 SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,
                                                char** out_json);
-/// @brief Latency and tail of one insert built from @p params and prepared at
+/// @brief Latency and tail of one insert built from @p params_json and prepared at
 ///        @p sample_rate.
 /// @details What a host needs for delay compensation of a slot whose
 ///   configuration changes the processor's delay — an oversampled saturation
@@ -667,10 +667,14 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor, const f
                                                   size_t param_count, SonareMasteringResult* out);
 
 /// @brief Stereo counterpart of @ref sonare_mastering_apply_pair_processor.
-/// @details Supports match.abCrossfade; other pair processor names are refused. The same
-/// linear mix is applied to both channels. Each stereo input must have equally sized left and
-/// right planes, and a reference at another rate is resampled onto @p sample_rate first.
-/// Free the result with sonare_free_mastering_stereo_result.
+/// @details Supports @c match.abCrossfade. An unknown name is refused with
+///   @c SONARE_ERROR_INVALID_PARAMETER. A registered pair processor with no
+///   stereo implementation is refused with @c SONARE_ERROR_NOT_SUPPORTED. The same
+///   linear mix is applied to both channels. Each stereo input must have equally sized
+///   left and right planes. A reference at another rate is resampled onto
+///   @p sample_rate first. Checks run in a fixed order: the processor name, then the
+///   source and reference audio, then the parameter values.
+/// @note Free @p out with @ref sonare_free_mastering_stereo_result.
 SonareError sonare_mastering_apply_pair_processor_stereo(
     const char* processor, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,
@@ -726,11 +730,11 @@ typedef struct {
 ///          reports where that left the peak, rather than the call capping it:
 ///          a headroom clamp would return @p source at its own loudness whenever
 ///          it started near full scale, which is the one thing a match must not
-///          do. Both loudness values are non-finite for a silent or below-gate
-///          take, and @c applied_gain_db is then 0. A @p reference at another
-///          rate is resampled onto @p sample_rate and measured there.
-/// @param reference_sample_rate Rate of @p reference; must be > 0.
-/// @param sample_rate Rate of @p source and of @p out; must be > 0.
+///          do. If either take has no measurable integrated loudness, the call
+///          returns @c SONARE_ERROR_INVALID_PARAMETER naming that input.
+///          A @p reference at another rate is resampled onto @p sample_rate and measured there.
+/// @param reference_sample_rate Rate of @p reference in Hz, in [8000, 384000].
+/// @param sample_rate Rate of @p source and of @p out in Hz, in [8000, 384000].
 /// @param out Receives @p source at @p reference's loudness. Heap-allocated;
 ///            release with @ref sonare_free_floats.
 /// @param out_match Pass NULL to take only the audio.
@@ -744,9 +748,9 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
 /// @details BS.1770 stereo channel summing preserves phase-cancelling material.
 /// The output keeps the source length and stereo image. Gain is not capped;
 /// out_match reports the maximum true peak across both matched channels.
-/// Silence follows the mono API's zero-gain fallback. A reference at
-/// reference_sample_rate other than sample_rate is resampled onto sample_rate and
-/// measured there; both must be > 0. Both channels are heap-allocated and
+/// A source or reference pair with no measurable integrated loudness is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER. A reference at another sample rate is
+/// resampled onto @p sample_rate and measured there. Both channels are heap-allocated and
 /// released with sonare_free_floats. out_match may be NULL.
 SonareError sonare_mastering_ab_match_loudness_stereo(
     const float* source_left, const float* source_right, size_t source_length,
@@ -934,11 +938,11 @@ SonareError sonare_eq_create(int sample_rate, int max_block_size, SonareEq** out
 void sonare_eq_destroy(SonareEq* eq);
 /// @brief Sets one of the @c SONARE_EQ_MAX_BANDS equalizer bands from JSON.
 /// @details @p index is in [0, SONARE_EQ_MAX_BANDS). Accepted fields are
-/// @c type (Peak, LowShelf, HighShelf, LowPass, HighPass, BandPass, Notch,
-/// TiltShelf, FlatTilt, or AllPass), @c frequencyHz, @c gainDb, @c q, @c enabled,
-/// @c coeffMode (Rbj or Vicanek), @c slopeDbOct, @c placement (Stereo, Left,
-/// Right, Mid, or Side), @c phase (Inherit, ZeroLatency, NaturalPhase, or
-/// LinearPhase), @c soloed, @c bypassed, @c proportionalQ, and
+/// @c type (peak, lowShelf, highShelf, lowPass, highPass, bandPass, notch,
+/// tiltShelf, flatTilt, or allPass), @c frequencyHz, @c gainDb, @c q, @c enabled,
+/// @c coeffMode (rbj or vicanek), @c slopeDbOct, @c placement (stereo, left,
+/// right, mid, or side), @c phase (inherit, zeroLatency, naturalPhase, or
+/// linearPhase), @c soloed, @c bypassed, @c proportionalQ, and
 /// @c proportionalQStrength. Dynamic-band fields are @c dynamic,
 /// @c thresholdDb, @c autoThreshold, @c ratio, @c rangeDb, @c attackMs,
 /// @c releaseMs, @c detectorDelayMs, @c sidechainFreqHz, @c sidechainQ, and
@@ -952,9 +956,9 @@ void sonare_eq_destroy(SonareEq* eq);
 /// @c detectorDelayMs delays the detector's view of the signal, so a larger
 /// value makes the band react later; it is not look-ahead and adds no latency
 /// to the audio path.
-/// @c phase == NaturalPhase forces @c coeffMode = Vicanek for the band. Vicanek
-/// has no Q/S parameter, so @c q is ignored on LowShelf and HighShelf, though it
-/// is still stored and read back verbatim; Peak, pass and notch bands honour
+/// @c phase == naturalPhase forces @c coeffMode = vicanek for the band. Vicanek
+/// has no Q/S parameter, so @c q is ignored on lowShelf and highShelf, though it
+/// is still stored and read back verbatim; peak, pass and notch bands honour
 /// @c q in both coefficient modes.
 SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json);
 /// @brief Removes all configured bands and restores zero-latency processing.
@@ -975,7 +979,7 @@ SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_len
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled);
 /// @brief Returns the automatic gain applied by the latest process call, or zero for NULL.
 float sonare_eq_last_auto_gain_db(const SonareEq* eq);
-/// @brief Sets a non-negative multiplier for all configured band gains.
+/// @brief Sets the finite multiplier for all configured band gains, in [0, 2].
 SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale);
 /// @brief Sets the final output gain in dB.
 SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db);
@@ -1004,7 +1008,7 @@ SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size
 ///   on a dimension the caller did not choose. Cumulative since the handle was
 ///   created and never cleared, so two readings bracket a span of audio.
 ///   Returns @c SONARE_ERROR_INVALID_PARAMETER if eq or out_count is NULL.
-///   Realtime-safe.
+///   A supplied count is set to zero on failure. Realtime-safe.
 SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, size_t* out_count);
 /// @brief Sets an external detector sidechain for dynamic bands.
 /// @details @p num_samples must not exceed the next @ref sonare_eq_process
@@ -1096,10 +1100,10 @@ void sonare_streaming_mastering_chain_options_init(SonareStreamingMasteringChain
 
 /// @brief Create a streaming chain from a configuration object.
 /// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
-///   the keys @ref sonare_master_audio takes as overrides; a refusal names the key under the
-///   root `config` and returns @c SONARE_ERROR_INVALID_PARAMETER.
-/// @details Fails on an unknown key or a non-streaming stage. A config enabling the loudness
-///   stage applies the static gain @p options gives, and none when it is NaN.
+///   the keys @ref sonare_master_audio takes as overrides. Invalid configuration returns
+///   @c SONARE_ERROR_INVALID_PARAMETER with the refused path under @c config.
+/// @details A stage or estimator unavailable for streaming returns @c SONARE_ERROR_NOT_SUPPORTED.
+///   A config enabling loudness applies the static gain in @p options, or no gain when it is NaN.
 /// @param options NULL for the defaults (@ref sonare_streaming_mastering_chain_options_init).
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_mastering_chain_destroy, which must be called exactly once.
@@ -1110,7 +1114,8 @@ SonareError sonare_streaming_mastering_chain_create(
 
 /// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
 /// @details @p max_block_size 0 selects the library default (128 frames); a negative value
-///          is refused with SONARE_ERROR_INVALID_PARAMETER.
+///          is refused with SONARE_ERROR_INVALID_PARAMETER. A failed prepare preserves any
+///          previously prepared chain.
 SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
                                                      int sample_rate, int max_block_size,
                                                      int num_channels);
@@ -1139,8 +1144,8 @@ SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMaste
 /// @details The first emitted samples include @ref
 /// sonare_streaming_mastering_chain_latency_samples leading delayed samples.
 /// Concatenate process and flush output, then discard that many leading samples
-/// when a time-aligned result is required. A zero-capacity call succeeds with
-/// @p samples_written set to zero. A nonempty call with an unbounded processor
+/// when a time-aligned result is required. A zero-capacity call on a prepared mono chain
+/// succeeds with @p samples_written set to zero. A nonempty call with an unbounded processor
 /// tail returns @c SONARE_ERROR_NOT_SUPPORTED, sets @p samples_written to zero,
 /// and leaves the output buffer unchanged. To generate a chosen finite duration
 /// in that case, pass a bounded number of silent blocks to
@@ -1150,7 +1155,8 @@ SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMastering
                                                         size_t* samples_written);
 
 /// @brief Stereo counterpart of @ref sonare_streaming_mastering_chain_flush_mono.
-/// @details Has the same finite-tail and zero-capacity behavior. To generate a
+/// @details Requires a prepared stereo chain, including for zero capacity.
+/// Has the same finite-tail and zero-capacity behavior as the mono entry. To generate a
 ///          chosen finite duration for an unbounded tail, pass silent blocks to
 ///          @ref sonare_streaming_mastering_chain_process_stereo.
 SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteringChain* handle,
@@ -1231,7 +1237,7 @@ SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
 ///   @ref sonare_streaming_mastering_chain_reset returns the stages' audio state
 ///   but neither count: the numbers describe what has happened, which resetting
 ///   does not undo. Realtime-safe.
-/// @param out_count Receives the count; must not be NULL.
+/// @param out_count Receives the count, or zero on failure; must not be NULL.
 SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
     const SonareStreamingMasteringChain* handle, size_t* out_count);
 
@@ -1428,17 +1434,14 @@ SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, siz
 /// @details Band @c k covers the one-sided STFT bins @c [out_bins[k], out_bins[k+1]),
 ///   and bin @c b sits at @c b * sample_rate / n_fft Hz. The geometric edges are
 ///   rounded to bins, so a band narrower than the bin spacing comes out empty --
-///   @c out_bins[k] equals @c out_bins[k+1] -- and its level is the floor sentinel
-///   because no bin landed in it rather than because that region was quiet. That
-///   rounding is why the grid is worth asking for instead of recomputing from the
-///   band count. Nothing but the analysis geometry decides it, so no config is taken.
+///   @c out_bins[k] equals @c out_bins[k+1]. The detector omits an empty band.
+///   A measured band with zero energy has a level of negative infinity.
 ///
 ///   @c SonareMasteringReport::band_energy_delta_db shares these 32 cells but not
 ///   these bins: it samples each cell's centre out of a long-term spectrum rather
 ///   than aggregating STFT bins, so it has no bin-narrower-than-a-band case.
-/// @param n_fft FFT size the bins belong to; a positive power of two, the rule
-///   @ref sonare_mastering_repair_detect_noise_floor applies to its config, so every
-///   grid returned here is one that entry can report on.
+/// @param n_fft FFT size the bins belong to; any positive power of two.
+///   The grid calculation has no dependency on the detector configuration.
 /// @param sample_rate Sample rate the bins belong to; positive.
 /// @param out_bins Receives @c SONARE_REPAIR_NOISE_BAND_EDGE_COUNT indices, low to
 ///   high. Zeroed before a rejected call returns.
@@ -2390,7 +2393,7 @@ typedef struct {
   float release_ms;      ///< Release time constant, ms; default 80.
   float range_db;        ///< Attenuation while closed, dB; default -80.
   float hold_ms;         ///< Minimum time the gate stays open, ms; default 0.
-  /// Level below which the gate closes, dB; clamped to at most threshold_db; default -50.
+  /// Level below which the gate closes, dB; must be finite and at most threshold_db. Default -50.
   float close_threshold_db;
   float key_high_pass_hz;  ///< Detector high-pass corner, Hz; 0 disables it (default).
 } SonareGateConfig;
@@ -2416,7 +2419,7 @@ typedef struct {
   float fast_release_ms;    ///< Fast envelope release, ms; default 20.
   float slow_attack_ms;     ///< Slow envelope attack, ms; default 15.
   float slow_release_ms;    ///< Slow envelope release, ms; default 200.
-  float sensitivity;        ///< Scales the envelope difference; default 1.0, clamped to >= 0.
+  float sensitivity;        ///< Scales the envelope difference; finite and at least 0. Default 1.
   float max_gain_db;        ///< Largest gain change either way, dB; default 12.
   float gain_smoothing_ms;  ///< Gain smoothing time, ms; 0 disables it (default).
   float lookahead_ms;       ///< Lookahead delay, ms; 0 disables it (default).

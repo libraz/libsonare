@@ -62,7 +62,8 @@ SonareError sonare_hrtf_set_create_default(SonareHrtfSet** out);
 
 /// @brief Creates an HRTF set from SHRF v1 bytes.
 /// @details The bytes are copied; @p data may be released after the call.
-///          Malformed data returns SONARE_ERROR_INVALID_PARAMETER.
+///          Malformed SHRF bytes return @c SONARE_ERROR_INVALID_FORMAT.
+///          A NULL @p data or @p out returns @c SONARE_ERROR_INVALID_PARAMETER.
 /// @note Release @p out with @ref sonare_hrtf_set_destroy; it is a handle, not
 ///       a sonare_free_* buffer.
 SonareError sonare_hrtf_set_create_from_memory(const uint8_t* data, size_t size,
@@ -89,8 +90,9 @@ void sonare_playback_renderer_destroy(SonarePlaybackRenderer* renderer);
 /// @brief Clears all DSP state (filters, FIFOs, dynamics, convolution history,
 ///        pending input-layout drains). Configuration and head pose are kept.
 SonareError sonare_playback_renderer_reset(SonarePlaybackRenderer* renderer);
-/// @brief Applies a complete configuration document.
-/// @details @p document is refused as @ref sonare_playback_renderer_create_json refuses it.
+/// @brief Applies a renderer configuration document.
+/// @details Omitted keys use the schema defaults, as in
+///          @ref sonare_playback_renderer_create_json, with the same refusal rules.
 ///          A prepare key that differs from the current value returns
 ///          SONARE_ERROR_INVALID_PARAMETER ("requires a new renderer: <key>").
 SonareError sonare_playback_renderer_set_config_json(SonarePlaybackRenderer* renderer,
@@ -170,8 +172,9 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
 
 /// @brief Renders a whole interleaved buffer offline.
 /// @details @p document is refused as @ref sonare_playback_renderer_create_json refuses it.
-///          The output is aligned with the input (the renderer latency is
-///          removed) and has @p frames frames of @p out_channels channels.
+///          Processing latency is removed and speaker-distance compensation is retained.
+///          The output has @p frames frames of @p out_channels channels.
+///          A render whose output would exceed 500000000 samples is refused naming @p frames.
 /// @note Release @p out with @ref sonare_free_floats.
 /// @note SONARE_ERROR_INVALID_PARAMETER when @p in_channels is outside [1, 2147483647],
 ///       @p frames is 0, @p in is null, or @p in contains a non-finite sample.
@@ -185,7 +188,8 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
 /// @details The renderer is reset first; the output matches
 ///          @ref sonare_playback_render_interleaved for the same configuration,
 ///          and @ref sonare_playback_renderer_diagnostics_json afterwards
-///          describes this render.
+///          describes this render. Processing latency is removed and speaker-distance
+///          compensation is retained. A failed call leaves the renderer unchanged.
 /// @note Release @p out with @ref sonare_free_floats.
 /// @note SONARE_ERROR_INVALID_PARAMETER when @p renderer is null, @p in_channels is outside
 ///       [1, 2147483647] or does not match the input layout, @p frames is 0, @p in is null, or
@@ -199,6 +203,7 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
 
 /// @brief Creates an integrated-loudness meter (BS.1770 channel weights by
 ///        channel count: 1, 2, 6 or 8).
+/// @param sample_rate Audio sample rate in [8000, 384000] Hz.
 /// @note Release @p out with @ref sonare_playback_loudness_meter_destroy; it is
 ///       a handle, not a sonare_free_* buffer.
 SonareError sonare_playback_loudness_meter_create(int channels, int sample_rate,

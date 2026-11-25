@@ -9,6 +9,7 @@
 #include <limits>
 
 #include "sonare_c_internal.h"
+#include "sonare_c_mastering_init_defaults.h"
 #include "util/constants.h"
 
 using namespace sonare_c_detail;
@@ -22,9 +23,7 @@ const SonareStreamingLoudnessGain kUndefinedLoudnessGain = {
 }  // namespace
 
 void sonare_mastering_config_init(SonareMasteringConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
@@ -283,9 +282,7 @@ void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult*
 }
 
 void sonare_compressor_config_init(SonareCompressorConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t length,
@@ -298,9 +295,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
 }
 
 void sonare_gate_config_init(SonareGateConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, int sample_rate,
@@ -312,9 +307,7 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
 }
 
 void sonare_transient_shaper_config_init(SonareTransientShaperConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, size_t length,
@@ -608,15 +601,11 @@ void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* han
 }
 
 void sonare_declick_config_init(SonareDeclickConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
@@ -699,9 +688,7 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
 void sonare_free_denoise_linked_result(SonareDenoiseLinkedResult* result) { (void)result; }
 
 void sonare_declip_config_init(SonareDeclipConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
@@ -735,9 +722,7 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
 void sonare_free_declip_result(SonareDeclipResult* result) { (void)result; }
 
 void sonare_decrackle_config_init(SonareDecrackleConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
@@ -771,9 +756,7 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
 void sonare_free_decrackle_result(SonareDecrackleResult* result) { (void)result; }
 
 void sonare_dehum_config_init(SonareDehumConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
@@ -805,9 +788,7 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
 void sonare_free_dehum_result(SonareDehumResult* result) { (void)result; }
 
 void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t length,
@@ -858,9 +839,7 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
 }
 
 void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size_t length,

@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "support/alloc_guard.h"
 #include "util/json.h"
 
 namespace {
@@ -327,6 +328,65 @@ TEST_CASE("preview leaves the project byte-identical", "[c_api][assist]") {
   CHECK(serialize_project(fixture.project) == before);
 }
 
+TEST_CASE("assist allocation failures preserve the project and its undo history",
+          "[c_api][assist]") {
+  ProjectFixture control;
+  make_project(&control);
+  const auto before = serialize_project(control.project);
+  const auto control_request = request_for(control.clip_id);
+  {
+    Document warmup;
+    REQUIRE(sonare_project_assist_preview_json(control.project, control_request.c_str(),
+                                               warmup.out()) == SONARE_OK);
+  }
+
+  // Preview shares the apply path up to the report copy, then returns without an edit.
+  size_t report_allocation = 0;
+  SonareError status;
+  {
+    Document preview;
+    sonare::test::AllocationGuard guard;
+    status =
+        sonare_project_assist_preview_json(control.project, control_request.c_str(), preview.out());
+    report_allocation = guard.count();
+  }
+  REQUIRE(status == SONARE_OK);
+  REQUIRE(report_allocation > 0);
+
+  size_t apply_allocations = 0;
+  {
+    Document applied;
+    sonare::test::AllocationGuard guard;
+    status =
+        sonare_project_assist_apply_json(control.project, control_request.c_str(), applied.out());
+    apply_allocations = guard.count();
+  }
+  REQUIRE(status == SONARE_OK);
+  REQUIRE(apply_allocations > report_allocation);
+  REQUIRE(sonare_project_undo(control.project) == SONARE_OK);
+  REQUIRE(serialize_project(control.project) == before);
+  REQUIRE(sonare_project_undo(control.project) == SONARE_OK);
+  const auto after_undo = serialize_project(control.project);
+
+  for (size_t failure = report_allocation; failure <= apply_allocations; ++failure) {
+    CAPTURE(failure);
+    ProjectFixture fixture;
+    make_project(&fixture);
+    const auto request = request_for(fixture.clip_id);
+    REQUIRE(serialize_project(fixture.project) == before);
+    Document report;
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure);
+      status = sonare_project_assist_apply_json(fixture.project, request.c_str(), report.out());
+    }
+    CHECK(status == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(report.c_str() == nullptr);
+    CHECK(serialize_project(fixture.project) == before);
+    REQUIRE(sonare_project_undo(fixture.project) == SONARE_OK);
+    CHECK(serialize_project(fixture.project) == after_undo);
+  }
+}
+
 TEST_CASE("apply reports what it commits and one undo takes all of it back", "[c_api][assist]") {
   ProjectFixture fixture;
   make_project(&fixture);
@@ -555,6 +615,9 @@ TEST_CASE("the assist entry points reject a malformed call", "[c_api][assist]") 
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_assist_apply_json(nullptr, request.c_str(), document.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_assist_apply_json(fixture.project, "{", nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("request must be valid JSON") == 0);
   CHECK(sonare_project_assist_preview_json(fixture.project, request.c_str(), nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_assist_apply_json(fixture.project, request.c_str(), nullptr) ==
@@ -626,20 +689,7 @@ TEST_CASE("a params document naming no target clip is REFUSED with an error retu
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(text_contains(std::string(sonare_last_error_message()), declined));
 
-  // The document is still written on this path -- and it is empty throughout,
-  // because the modules refuse before doing any work.
-  REQUIRE(document.c_str() != nullptr);
-  const json::Value root = document.parsed();
-  CHECK(root["status"].as_string() == "rejected");
-  CHECK(root["patches"].as_array().empty());
-  CHECK(root["payloads"].as_array().empty());
-  CHECK(root["unrenderedCommands"].as_array().empty());
-  CHECK(root["iterationsConsumed"].as_number() == 0.0);
-  // Both modules read the same params blob and refuse it identically, and the
-  // reason is reported ONCE rather than once per registered module: two copies
-  // of one sentence reads to a caller like a library bug, not their own typo.
-  CHECK(text_contains(root["reason"].as_string(), declined));
-  CHECK(root["reason"].as_string() == declined);
+  CHECK(document.c_str() == nullptr);
   CHECK(std::string(sonare_last_error_message()) == declined);
 
   // With one module selected the reason is that module's words and nothing else.
@@ -648,17 +698,19 @@ TEST_CASE("a params document naming no target clip is REFUSED with an error retu
       "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"params\": {}}";
   CHECK(sonare_project_assist_preview_json(fixture.project, one_module.c_str(), single.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(single.parsed()["reason"].as_string() == declined);
+  CHECK(single.c_str() == nullptr);
+  CHECK(std::string(sonare_last_error_message()) == declined);
 
   // Applying a refused request commits nothing.
   Document applied;
   CHECK(sonare_project_assist_apply_json(fixture.project, "{\"params\": {}}", applied.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(applied.parsed()["status"].as_string() == "rejected");
+  CHECK(applied.c_str() == nullptr);
   CHECK(serialize_project(fixture.project) == before);
 }
 
-TEST_CASE("a refusal and an empty outcome differ in status AND in return code", "[c_api][assist]") {
+TEST_CASE("assist returns a document for an empty result and clears it on refusal",
+          "[c_api][assist]") {
   ProjectFixture fixture;
   make_project(&fixture);
 
@@ -670,9 +722,7 @@ TEST_CASE("a refusal and an empty outcome differ in status AND in return code", 
   const SonareError refused_rc =
       sonare_project_assist_preview_json(fixture.project, bad_params.c_str(), refused.out());
 
-  // A musical nothing: a well-formed request over a project with nothing to act
-  // on. Same empty patches, same non-empty reason -- and that is exactly why the
-  // status and the return code have to separate them.
+  // A well-formed request on a project with no matching content.
   ProjectFixture bare;
   make_bare_project(&bare);
   Document empty;
@@ -681,19 +731,14 @@ TEST_CASE("a refusal and an empty outcome differ in status AND in return code", 
       sonare_project_assist_preview_json(bare.project, good_params.c_str(), empty.out());
 
   CHECK(refused_rc == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refused.c_str() == nullptr);
   CHECK(empty_rc == SONARE_OK);
   CHECK(refused_rc != empty_rc);
 
-  const json::Value refused_root = refused.parsed();
   const json::Value empty_root = empty.parsed();
-  CHECK(refused_root["status"].as_string() == "rejected");
   CHECK(empty_root["status"].as_string() == "empty");
-  CHECK(refused_root["status"].as_string() != empty_root["status"].as_string());
 
-  // The two are indistinguishable on every other axis, which is the point.
-  CHECK(refused_root["patches"].as_array().empty());
   CHECK(empty_root["patches"].as_array().empty());
-  CHECK_FALSE(refused_root["reason"].as_string().empty());
   CHECK_FALSE(empty_root["reason"].as_string().empty());
 }
 
@@ -860,10 +905,7 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
       std::to_string(fixture.clip_id) + ", \"velocity_scale\": 0}}";
   CHECK(sonare_project_assist_preview_json(fixture.project, bad.c_str(), refused.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  const json::Value bad_root = refused.parsed();
-  CHECK(bad_root["status"].as_string() == "rejected");
-  CHECK(bad_root["patches"].as_array().empty());
-  CHECK(bad_root["reason"].as_string() == "velocity_scale must be finite and in (0, 2]");
+  CHECK(refused.c_str() == nullptr);
   CHECK(std::string(sonare_last_error_message()) == "velocity_scale must be finite and in (0, 2]");
 
   // A field of the wrong type is reported by name too, rather than defaulted.
@@ -873,8 +915,8 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
       std::to_string(fixture.clip_id) + ", \"low_note\": \"48\"}}";
   CHECK(sonare_project_assist_preview_json(fixture.project, broken.c_str(), mistyped.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(mistyped.parsed()["status"].as_string() == "rejected");
-  CHECK(mistyped.parsed()["reason"].as_string() == "low_note must be a number");
+  CHECK(mistyped.c_str() == nullptr);
+  CHECK(std::string(sonare_last_error_message()) == "low_note must be a number");
 
   // A module that declines because the project says nothing it can use is a
   // different thing entirely: it succeeds, and reports in its own words.

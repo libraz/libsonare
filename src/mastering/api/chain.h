@@ -392,6 +392,13 @@ struct StreamingMasteringChainOptions {
 inline constexpr util::check::NumericDomain kStreamingChainChannelCountDomain =
     util::check::integer_domain(1, 2);
 
+/// Validates the streaming stages before a chain object is allocated.
+void validate_streaming_chain_config(const MasteringChainConfig& config);
+
+/// Resolves the linear gain for a streaming chain and validates its gain options.
+float streaming_chain_static_gain(const MasteringChainConfig& config,
+                                  const StreamingMasteringChainOptions& options);
+
 class StreamingMasteringChain {
  public:
   /// @brief Construct with a configuration and streaming options. When the

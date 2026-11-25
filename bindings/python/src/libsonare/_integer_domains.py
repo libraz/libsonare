@@ -18,6 +18,7 @@ DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {
     ("Mixer", "sample_rate"): (8000, 384000, None),
     ("Mixer.schedule_insert_automation", "param_id"): (0, 65535, None),
     ("Mixer.set_channel_delay_samples", "delay_samples"): (0, 192000, None),
+    ("PlaybackLoudnessMeter", "sample_rate"): (8000, 384000, None),
     ("PlaybackRenderer.render_offline", "num_input_channels"): (1, 2147483647, None),
     ("PolyphonicAnalysis", "win_length"): (1, 2147483647, None),
     ("Project.add_automation_lane", "target_param_id"): (1, 4294967295, None),

@@ -1267,47 +1267,55 @@ TEST_CASE("MasteringChain stereo denoise builds one mask from both channels",
 // StreamingMasteringChain
 // ---------------------------------------------------------------------------
 
-// prepare() clears the chain before rebuilding it, and a stage's own prepare()
-// can fail for a reason only it can see: a multiband crossover cutoff that sat
-// below Nyquist at the old rate can be at or above it at the new one. A device
-// switch that fails this way used to leave the object holding whatever stages
-// had been built before the throw - typically everything except the
-// ceiling-enforcing tail - while still accepting blocks, so the live preview
-// kept playing, unlimited, with no error.
-TEST_CASE("StreamingMasteringChain prepare leaves no partial chain when a stage throws",
+// A stage's own prepare() can fail for a reason only it can see: a multiband
+// crossover cutoff that is below Nyquist at the old rate can be at or above it
+// at the new rate. A failed replacement must leave the old chain, counters, and
+// preparation usable as a unit.
+TEST_CASE("StreamingMasteringChain failed prepare preserves the previous chain",
           "[mastering][chain][streaming]") {
   MasteringChainConfig config;
-  config.eq.tilt.enabled = true;                  // stage 1: prepares at any rate
-  config.dynamics.multiband_comp.enabled = true;  // stage 5: split at 6 kHz below
+  config.eq.tilt.enabled = true;
+  config.dynamics.multiband_comp.enabled = true;
   config.dynamics.multiband_comp.config.crossover.cutoffs_hz = {120.0f, 6000.0f};
-  config.maximizer.true_peak_limiter.enabled = true;  // the tail that must never go missing
+  config.maximizer.true_peak_limiter.enabled = true;
   StreamingMasteringChain chain(config);
+  StreamingMasteringChain reference(config);
 
   chain.prepare(48000.0, 512, 2);
+  reference.prepare(48000.0, 512, 2);
   REQUIRE(chain.stage_names().size() == 3);
-  std::vector<float> left(512, 0.05f);
-  std::vector<float> right(512, 0.05f);
-  float* channels[] = {left.data(), right.data()};
-  REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
+  REQUIRE(chain.stage_names() == reference.stage_names());
 
-  // 8 kHz is a rate prepare() accepts, but its 4 kHz Nyquist sits below the 6 kHz
-  // split, so the multiband stage throws after eq.tilt has already been built.
+  std::vector<float> left(512, 0.05f);
+  std::vector<float> right(512, 0.03f);
+  std::vector<float> expected_left = left;
+  std::vector<float> expected_right = right;
+  float* channels[] = {left.data(), right.data()};
+  float* expected_channels[] = {expected_left.data(), expected_right.data()};
+  REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
+  REQUIRE_NOTHROW(reference.process_block(expected_channels, 2, 512));
+  REQUIRE(left == expected_left);
+  REQUIRE(right == expected_right);
+  const auto discard_count = chain.non_finite_discard_count();
+  REQUIRE(discard_count == reference.non_finite_discard_count());
+
+  // The new 8 kHz rate is valid, but its 4 kHz Nyquist is below the 6 kHz split.
   REQUIRE_THROWS_AS(chain.prepare(8000.0, 512, 2), sonare::SonareException);
 
-  // Not "prepared with the stages that happened to succeed": unprepared.
-  CHECK(chain.stage_names().empty());
-  REQUIRE_THROWS_AS(chain.process_block(channels, 2, 512), sonare::SonareException);
-  try {
-    chain.process_block(channels, 2, 512);
-    FAIL("process_block must reject after a failed prepare");
-  } catch (const sonare::SonareException& error) {
-    CHECK(error.code() == sonare::ErrorCode::InvalidState);
-  }
+  CHECK(chain.stage_names() == reference.stage_names());
+  CHECK(chain.max_block_size() == reference.max_block_size());
+  CHECK(chain.latency_samples() == reference.latency_samples());
+  CHECK(chain.non_finite_discard_count() == discard_count);
 
-  // A working chain can still be re-established.
-  REQUIRE_NOTHROW(chain.prepare(48000.0, 512, 2));
-  CHECK(chain.stage_names().size() == 3);
+  std::fill(left.begin(), left.end(), 0.04f);
+  std::fill(right.begin(), right.end(), 0.02f);
+  std::fill(expected_left.begin(), expected_left.end(), 0.04f);
+  std::fill(expected_right.begin(), expected_right.end(), 0.02f);
   REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
+  REQUIRE_NOTHROW(reference.process_block(expected_channels, 2, 512));
+  CHECK(left == expected_left);
+  CHECK(right == expected_right);
+  CHECK(chain.non_finite_discard_count() == reference.non_finite_discard_count());
 }
 
 // An argument the entry point itself rejects is not a failed re-prepare: it

@@ -2630,6 +2630,17 @@
       "sentinel": null
     },
     {
+      "entry": "eq_set_output_gain_db",
+      "param": "gain_db",
+      "kind": "real",
+      "lo": null,
+      "hi": 770,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "estimate_meter_json",
       "param": "options.denominator",
       "kind": "integer",
@@ -5963,6 +5974,17 @@
       "sentinel": null
     },
     {
+      "entry": "playback_loudness_meter_create",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "playback_render_interleaved",
       "param": "in_channels",
       "kind": "integer",
@@ -8729,6 +8751,28 @@
       "kind": "integer",
       "lo": 0,
       "hi": 192000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "strip_set_pan",
+      "param": "pan_mode",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 2,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
+    },
+    {
+      "entry": "strip_set_pan_law",
+      "param": "pan_law",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 3,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

@@ -362,9 +362,10 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
   int channels = 0;
   const std::vector<float> result = playback::render_interleaved(
       in, frames, in_channels, sample_rate, config, hrtf_ptr, &channels);
+  auto samples = std::unique_ptr<float[]>(copy_vector(result));
   *out_channels = channels;
   *out_frames = frames;
-  *out = copy_vector(result);
+  *out = samples.release();
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -387,11 +388,10 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
   SONARE_C_TRY
   util::check::integer_within(in_channels, kPlaybackRenderInChannelsDomain, "in_channels");
   if (frames == 0) return refuse_no_frames();
-  const std::vector<float> result =
-      playback::render_interleaved(*renderer->renderer, in, frames, in_channels);
+  auto result = playback::render_interleaved_owned(*renderer->renderer, in, frames, in_channels);
   *out_channels = renderer->renderer->output_channel_count();
   *out_frames = frames;
-  *out = copy_vector(result);
+  *out = result.release();
   return SONARE_OK;
   SONARE_C_CATCH
 #else

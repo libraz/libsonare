@@ -8,7 +8,7 @@ import {
   renderPlayback,
 } from '../src/index.js';
 import type { PlaybackRendererConfig } from '../src/types_playback.js';
-import { present, sine, unknownKeyError } from './_helpers.js';
+import { expectRefusal, present, sine, unknownKeyError } from './_helpers.js';
 
 function stereoBlock(frames: number): [Float32Array, Float32Array] {
   const tone = sine(440, frames / 48000, { sampleRate: 48000, amp: 0.2 });
@@ -403,6 +403,32 @@ describe('PlaybackLoudnessMeter', () => {
   it('refuses an interleaved array that is not a whole number of frames', () => {
     using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     expect(() => meter.pushInterleaved(new Float32Array(3))).toThrow(RangeError);
+  });
+
+  it.each([4000, 400000])(
+    'refuses a playback loudness meter sample rate outside the audio domain: %i',
+    (sampleRate) => {
+      expectRefusal(
+        () => {
+          new PlaybackLoudnessMeter({ numChannels: 2, sampleRate }).destroy();
+        },
+        RangeError,
+        /^PlaybackLoudnessMeter: sampleRate must be an integer in \[8000, 384000\]$/,
+      );
+    },
+  );
+
+  it('keeps the playback loudness meter sample rate shape refusals', () => {
+    expectRefusal(
+      () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000.5 }),
+      RangeError,
+      /sampleRate/,
+    );
+    expectRefusal(
+      () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: '48000' as never }),
+      TypeError,
+      /sampleRate/,
+    );
   });
 
   it('rejects a non-number numChannels or sampleRate argument', () => {

@@ -543,7 +543,7 @@ void EqualizerProcessor::set_gain_scale(float scale) {
 }
 
 void EqualizerProcessor::set_output_gain_db(float gain_db) {
-  check::at_most(gain_db, kMaxFiniteGainDb, "output_gain_db");
+  check::within(gain_db, kEqOutputGainDbDomain, "output_gain_db");
   output_gain_db_ = gain_db;
 }
 

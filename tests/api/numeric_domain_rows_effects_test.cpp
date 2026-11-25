@@ -773,6 +773,18 @@ SonareError probe_strip_set_channel_delay_samples(const std::string&, double val
   return err;
 }
 
+SonareError probe_strip_pan(double value, bool is_mode) {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "s", nullptr);
+  REQUIRE(strip != nullptr);
+  const int ordinal = static_cast<int>(value);
+  const SonareError err = is_mode ? sonare_strip_set_pan(strip, 0.0f, ordinal)
+                                  : sonare_strip_set_pan_law(strip, ordinal);
+  sonare_mixer_destroy(mixer);
+  return err;
+}
+
 #endif  // SONARE_WITH_MIXING
 
 // ---------------------------------------------------------------------------------------------
@@ -1241,6 +1253,10 @@ const std::map<std::string, Probe>& probes() {
       {"engine_set_track_lanes", probe_engine_set_track_lanes},
       {"engine_set_track_strip_eq_band_json", probe_engine_set_track_strip_eq_band_json},
       {"strip_set_channel_delay_samples", probe_strip_set_channel_delay_samples},
+      {"strip_set_pan",
+       [](const std::string&, double value) { return probe_strip_pan(value, true); }},
+      {"strip_set_pan_law",
+       [](const std::string&, double value) { return probe_strip_pan(value, false); }},
 #endif
 #if defined(SONARE_WITH_PLAYBACK)
       {"playback_render_interleaved", probe_playback_render_interleaved},

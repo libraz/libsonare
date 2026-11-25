@@ -20342,3 +20342,11 @@ changed = "Inverse MFCC already refused nonfinite and representable negative lif
 domain = "analysis"
 rule = "finite-or-refused"
 test = "bindings/node/tests/mfcc-lifter.test.ts::$name names the rejected lifter $lifter"
+
+[[entry]]
+kind = "class"
+old = "PlaybackLoudnessMeter"
+changed = "sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/node/tests/playback.test.ts::refuses a playback loudness meter sample rate outside the audio domain"

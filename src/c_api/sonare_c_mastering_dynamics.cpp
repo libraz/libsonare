@@ -9,6 +9,7 @@
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/transient_shaper.h"
 #include "sonare_c_internal.h"
+#include "sonare_c_mastering_init_defaults.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -37,18 +38,6 @@ sonare::mastering::dynamics::DetectorMode to_cpp_detector_mode(int mode) {
   }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                 "unknown compressor detector mode");
-}
-
-int to_c_detector_mode(sonare::mastering::dynamics::DetectorMode mode) {
-  switch (mode) {
-    case sonare::mastering::dynamics::DetectorMode::Peak:
-      return SONARE_COMPRESSOR_DETECTOR_PEAK;
-    case sonare::mastering::dynamics::DetectorMode::Rms:
-      return SONARE_COMPRESSOR_DETECTOR_RMS;
-    case sonare::mastering::dynamics::DetectorMode::LogRms:
-      return SONARE_COMPRESSOR_DETECTOR_LOG_RMS;
-  }
-  return SONARE_COMPRESSOR_DETECTOR_RMS;
 }
 
 sonare::mastering::dynamics::CompressorConfig to_cpp_compressor_config(
@@ -119,52 +108,15 @@ void run_processor_offline(Processor& processor, std::vector<float>& samples, in
 }  // namespace
 
 void sonare_compressor_config_init(SonareCompressorConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::dynamics::CompressorConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->threshold_db = cpp.threshold_db;
-  config->ratio = cpp.ratio;
-  config->attack_ms = cpp.attack_ms;
-  config->release_ms = cpp.release_ms;
-  config->knee_db = cpp.knee_db;
-  config->makeup_gain_db = cpp.makeup_gain_db;
-  config->auto_makeup = cpp.auto_makeup ? 1 : 0;
-  config->detector = to_c_detector_mode(cpp.detector);
-  config->sidechain_high_pass_hz = cpp.sidechain_high_pass_hz;
-  config->pdr_time_ms = cpp.pdr_time_ms;
-  config->pdr_release_scale = cpp.pdr_release_scale;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_gate_config_init(SonareGateConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::dynamics::GateConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->threshold_db = cpp.threshold_db;
-  config->attack_ms = cpp.attack_ms;
-  config->release_ms = cpp.release_ms;
-  config->range_db = cpp.range_db;
-  config->hold_ms = cpp.hold_ms;
-  config->close_threshold_db = cpp.close_threshold_db;
-  config->key_high_pass_hz = cpp.key_high_pass_hz;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_transient_shaper_config_init(SonareTransientShaperConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::dynamics::TransientShaperConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->attack_gain_db = cpp.attack_gain_db;
-  config->sustain_gain_db = cpp.sustain_gain_db;
-  config->fast_attack_ms = cpp.fast_attack_ms;
-  config->fast_release_ms = cpp.fast_release_ms;
-  config->slow_attack_ms = cpp.slow_attack_ms;
-  config->slow_release_ms = cpp.slow_release_ms;
-  config->sensitivity = cpp.sensitivity;
-  config->max_gain_db = cpp.max_gain_db;
-  config->gain_smoothing_ms = cpp.gain_smoothing_ms;
-  config->lookahead_ms = cpp.lookahead_ms;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t length,
@@ -181,8 +133,12 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::Compressor processor(to_cpp_compressor_config(config));
-  run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
-  return copy_vector(buffer, out, out_length);
+  int latency_samples = 0;
+  run_processor_offline(processor, buffer, sample_rate,
+                        out_latency_samples ? &latency_samples : nullptr);
+  const SonareError copy_error = copy_vector(buffer, out, out_length);
+  if (copy_error == SONARE_OK && out_latency_samples) *out_latency_samples = latency_samples;
+  return copy_error;
   SONARE_C_CATCH
 }
 
@@ -198,11 +154,15 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
 
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
+  int latency_samples = 0;
   with_c_names(kGateNames, [&] {
     sonare::mastering::dynamics::Gate processor(to_cpp_gate_config(config));
-    run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
+    run_processor_offline(processor, buffer, sample_rate,
+                          out_latency_samples ? &latency_samples : nullptr);
   });
-  return copy_vector(buffer, out, out_length);
+  const SonareError copy_error = copy_vector(buffer, out, out_length);
+  if (copy_error == SONARE_OK && out_latency_samples) *out_latency_samples = latency_samples;
+  return copy_error;
   SONARE_C_CATCH
 }
 
@@ -221,7 +181,11 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::TransientShaper processor(to_cpp_transient_shaper_config(config));
-  run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
-  return copy_vector(buffer, out, out_length);
+  int latency_samples = 0;
+  run_processor_offline(processor, buffer, sample_rate,
+                        out_latency_samples ? &latency_samples : nullptr);
+  const SonareError copy_error = copy_vector(buffer, out, out_length);
+  if (copy_error == SONARE_OK && out_latency_samples) *out_latency_samples = latency_samples;
+  return copy_error;
   SONARE_C_CATCH
 }

@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
@@ -231,34 +232,35 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
   }
 }
 
+void validate_streaming_chain_config(const MasteringChainConfig& config) {
+  validate_mastering_chain_config(config);
+  reject_non_streaming_repair(config);
+}
+
+float streaming_chain_static_gain(const MasteringChainConfig& config,
+                                  const StreamingMasteringChainOptions& options) {
+  if (!config.loudness.enabled || std::isnan(options.loudness_static_gain_db)) return 1.0f;
+  if (std::isinf(options.loudness_static_gain_db)) {
+    util::check::refuse("loudness_static_gain_db",
+                        "must be finite, or NaN when the loudness stage has no measurable input");
+  }
+  // Bound the static gain by the ceiling headroom when the stage-input peak is known.
+  const float gain_db = detail::bound_loudness_gain_db(
+      options.loudness_static_gain_db, config.loudness.ceiling_dbtp,
+      options.loudness_static_gain_peak_dbtp, config.loudness.max_limiter_gain_reduction_db);
+  const float gain = ::sonare::db_to_linear(gain_db);
+  if (!numeric::finite(gain)) {
+    util::check::refuse("loudness_static_gain_db", "must produce a finite linear gain");
+  }
+  return gain;
+}
+
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
                                                  StreamingMasteringChainOptions options)
-    : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
-  validate_mastering_chain_config(config_);
-  reject_non_streaming_repair(config_);
-  if (config_.loudness.enabled) {
-    if (std::isinf(options.loudness_static_gain_db)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "loudness_static_gain_db must be finite, or NaN when the "
-                            "loudness stage's input has no measurable loudness");
-    }
-    // Bound the caller-supplied static gain by the ceiling headroom plus the
-    // configured limiter depth when the stage-input peak is provided, mirroring
-    // the offline chain's loudness stage (bound_loudness_gain_db).
-    // A stage input with no measurable loudness: no gain, the limiter still runs.
-    const float gain_db = std::isnan(options.loudness_static_gain_db)
-                              ? 0.0f
-                              : detail::bound_loudness_gain_db(
-                                    options.loudness_static_gain_db, config_.loudness.ceiling_dbtp,
-                                    options.loudness_static_gain_peak_dbtp,
-                                    config_.loudness.max_limiter_gain_reduction_db);
-    loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
-    if (!numeric::finite(loudness_static_gain_linear_)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "loudness_static_gain_db must produce a "
-                            "finite linear gain");
-    }
-  }
+    : config_(std::move(config)) {
+  validate_streaming_chain_config(config_);
+  loudness_static_gain_linear_ = streaming_chain_static_gain(config_, options);
+  impl_ = std::make_unique<Impl>();
 }
 
 StreamingMasteringChain::~StreamingMasteringChain() = default;
@@ -267,44 +269,21 @@ StreamingMasteringChain& StreamingMasteringChain::operator=(StreamingMasteringCh
     default;
 
 void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, int num_channels) {
-  util::check::integer_within(num_channels, kStreamingChainChannelCountDomain, "num_channels");
-  if (!is_valid_realtime_block_size(max_block_size)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
-  }
   if (!is_valid_realtime_sample_rate(sample_rate)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "sample_rate must be finite and within [" +
                               std::to_string(kMinAudioSampleRate) + ", " +
                               std::to_string(kMaxAudioSampleRate) + "]");
   }
+  if (!is_valid_realtime_block_size(max_block_size)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
+  }
+  util::check::integer_within(num_channels, kStreamingChainChannelCountDomain, "num_channels");
 
-  // A stage's own prepare() can throw for a reason only it can see — a
-  // crossover whose cutoff sits at or above the NEW rate's Nyquist is the
-  // reachable case — and that leaves two states this object must never be in:
-  // holding a chain that stops short of the ceiling-enforcing stages, and
-  // reporting a truncated stage_names(). So drop the prepared marker before
-  // building anything, and assemble into locals that are only committed once
-  // every stage has been prepared. Either the object comes back fully prepared
-  // for these arguments, or process_block() rejects with InvalidState; there is
-  // no partial chain in between.
-  //
-  // The argument checks above run before this point deliberately: a rejected
-  // argument is not a failed re-prepare and must leave a working chain alone.
-  prepared_channels_ = 0;
-  max_block_size_ = 0;
-  impl_->processors.clear();
-  impl_->parameter_targets.clear();
-  impl_->prepared_sample_rate = 0.0;
-  impl_->loudness_limiter.reset();
-  impl_->substitution_sources.clear();
-  // Cleared with the stages it describes, so it shares an epoch with
-  // non_finite_substitution_count: a caller reading both on one handle would
-  // otherwise get two numbers measured from different points.
-  impl_->non_finite_discards.reset();
-  stage_names_.clear();
-
+  // Build replacement stages in locals. Keep the current stages, counters,
+  // readiness, and drain state intact until every new stage has prepared.
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
   std::vector<StreamingParameterTarget> parameter_targets;
   std::vector<std::string> stage_names;
@@ -426,6 +405,8 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   impl_->prepared_sample_rate = sample_rate;
   impl_->loudness_limiter = std::move(loudness_limiter);
   impl_->substitution_sources = std::move(substitution_sources);
+  // Reset the chain-level discard epoch only when its replacement stages commit.
+  impl_->non_finite_discards.reset();
   stage_names_ = std::move(stage_names);
   prepared_channels_ = num_channels;
   max_block_size_ = max_block_size;
@@ -452,20 +433,11 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
     return;
   }
   rt::ProcessorBase::validate_channel_buffers(channels, num_channels);
-  // Reject non-finite input before touching any processor so a stray NaN/Inf
-  // cannot permanently pollute the filter state (recoverable only via reset()).
-  // The C ABI performs this guard too; lifting it into the core keeps the
-  // surfaces that bypass the C-ABI translation unit (Node N-API, WASM embind)
-  // from silently accepting input every other surface rejects.
-  for (int ch = 0; ch < num_channels; ++ch) {
-    const float* buffer = channels[ch];
-    for (int i = 0; i < num_samples; ++i) {
-      if (!std::isfinite(buffer[i])) {
-        throw SonareException(
-            ErrorCode::InvalidParameter,
-            "StreamingMasteringChain::process_block requires finite input samples");
-      }
-    }
+  if (num_channels == 1) {
+    validate_offline_audio_samples("samples", channels[0], static_cast<size_t>(num_samples), 0);
+  } else {
+    validate_offline_audio_samples("left", channels[0], static_cast<size_t>(num_samples), 0);
+    validate_offline_audio_samples("right", channels[1], static_cast<size_t>(num_samples), 0);
   }
   // A rejected block must preserve an in-progress drain as well as DSP state.
   flush_samples_remaining_ = 0;

@@ -433,6 +433,22 @@ def test_loudness_meter_rejects_an_unsupported_channel_count() -> None:
         PlaybackLoudnessMeter(num_channels=3, sample_rate=SR)
 
 
+@pytest.mark.parametrize("sample_rate", [4000, 400000])
+def test_loudness_meter_refuses_sample_rate_outside_audio_domain(sample_rate: int) -> None:
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER,
+        match=r"^PlaybackLoudnessMeter: sample_rate must be an integer in \[8000, 384000\]$",
+    ):
+        PlaybackLoudnessMeter(num_channels=2, sample_rate=sample_rate).close()
+
+
+def test_loudness_meter_keeps_sample_rate_shape_refusals() -> None:
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match="sample_rate"):
+        PlaybackLoudnessMeter(num_channels=2, sample_rate=48000.5)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="sample_rate"):
+        PlaybackLoudnessMeter(num_channels=2, sample_rate="48000")  # type: ignore[arg-type]
+
+
 def test_loudness_meter_takes_its_shape_by_keyword() -> None:
     with pytest.raises(TypeError):
         PlaybackLoudnessMeter(2, SR)  # type: ignore[misc]

@@ -944,6 +944,21 @@ SonareError probe_eq_set_band(const std::string& param, double value) {
   return err;
 }
 
+SonareError probe_eq_set_output_gain_db(const std::string&, double value) {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
+  const SonareError err = sonare_eq_set_output_gain_db(eq, static_cast<float>(value));
+  sonare_eq_destroy(eq);
+  return err;
+}
+
+SonareError probe_playback_loudness_meter_create(const std::string&, double value) {
+  SonarePlaybackLoudnessMeter* meter = nullptr;
+  const SonareError err = sonare_playback_loudness_meter_create(2, as_int(value), &meter);
+  if (err == SONARE_OK) sonare_playback_loudness_meter_destroy(meter);
+  return err;
+}
+
 SonareError probe_eq_match(const std::string& param, double value) {
   SonareEq* eq = nullptr;
   REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
@@ -988,6 +1003,8 @@ const std::map<std::string, Probe>& probes() {
       {"mfcc_to_audio", probe_mfcc_to_audio},
       {"mfcc_to_mel", probe_mfcc_to_mel},
       {"pcen", probe_pcen},
+      {"eq_set_output_gain_db", probe_eq_set_output_gain_db},
+      {"playback_loudness_meter_create", probe_playback_loudness_meter_create},
       {"segment_agglomerative", probe_segment_agglomerative},
       {"segment_cross_similarity", probe_segment_cross_similarity},
       {"segment_lag_to_recurrence", probe_segment_lag_to_recurrence},
@@ -1050,6 +1067,9 @@ const std::map<std::string, Probe>& probes() {
 /// Whether this build leaves the entry out: the mastering, equalizer and streaming-chain entries
 /// need mastering, the room entries need the acoustic simulation.
 bool compiled_out([[maybe_unused]] const std::string& entry) {
+#if !defined(SONARE_WITH_PLAYBACK)
+  if (entry == "playback_loudness_meter_create") return true;
+#endif
 #if !defined(SONARE_WITH_MASTERING)
   if (starts_with(entry, "mastering_") || starts_with(entry, "eq_") ||
       starts_with(entry, "streaming_mastering_")) {
@@ -1089,6 +1109,7 @@ double mastering_inside_value(const NumericDomainRow& row) {
       param == "high_percentile") {
     return 0.95;
   }
+  if (entry == "eq_set_output_gain_db") return -1000.0;
   const bool integer_from_one = row.domain.kind == NumberKind::Integer && *row.domain.lo == 1.0;
   if (starts_with(entry, "segment_")) return integer_from_one ? 4.0 : lowest_inside_value(row);
   if (starts_with(entry, "mel_to_") || starts_with(entry, "mfcc_to_")) {

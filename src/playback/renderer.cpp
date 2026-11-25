@@ -651,8 +651,11 @@ std::size_t PlaybackRenderer::non_finite_discard_count() const noexcept {
   return impl_->non_finite.load();
 }
 
-std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* in, size_t frames,
-                                      int in_channels) {
+namespace {
+
+template <typename Allocate>
+void render_offline(PlaybackRenderer& renderer, const float* in, size_t frames, int in_channels,
+                    Allocate allocate) {
   // Offline entry point: unlike process_interleaved above, the caller does
   // not own the finite check here.
   SONARE_CHECK_MSG(frames != 0, ErrorCode::InvalidParameter, "input samples must not be empty");
@@ -661,8 +664,6 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
   const size_t in_count = util::check::element_count(
       frames, static_cast<std::uint64_t>(in_channels), resource::kMaxOfflineAudioSamples,
       "in_channels", "the input samples");
-  SONARE_CHECK_MSG(numeric::all_finite(in, in_count), ErrorCode::InvalidParameter,
-                   "input samples contains a non-finite sample");
   const InputLayout input_layout = renderer.config().prepare.input_layout;
   ChannelLayout layout = ChannelLayout::Stereo;
   const bool valid = input_layout == InputLayout::Auto
@@ -672,8 +673,12 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
       valid, ErrorCode::InvalidParameter,
       "in_channels " + std::to_string(in_channels) + " does not match the input layout");
 
-  renderer.reset();
   const int channels = renderer.output_channel_count();
+  const size_t out_count = util::check::element_count(frames, static_cast<std::uint64_t>(channels),
+                                                      resource::kMaxOfflineAudioSamples, "frames",
+                                                      "the rendered output");
+  SONARE_CHECK_MSG(numeric::all_finite(in, in_count), ErrorCode::InvalidParameter,
+                   "input samples contains a non-finite sample");
   // Distance compensation delays the nearer speakers' planes; that delay is signal, not padding.
   const int calibration_q8 =
       renderer.diagnostics().stage_latency_q8[static_cast<size_t>(Stage::SpeakerCalibration)];
@@ -685,12 +690,10 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
       static_cast<size_t>(std::min(kOfflineRenderBlockFrames, renderer.max_block_size()));
   const auto in_ch = static_cast<size_t>(in_channels);
   const auto out_ch = static_cast<size_t>(channels);
-  std::vector<float> result(
-      util::check::element_count(frames, out_ch, resource::kMaxOfflineAudioSamples, "frames",
-                                 "the rendered output"),
-      0.0f);
+  float* result = allocate(out_count);
   std::vector<float> in_block(block * in_ch, 0.0f);
   std::vector<float> out_block(block * out_ch, 0.0f);
+  renderer.reset();
 
   for (size_t start = 0; start < total; start += block) {
     const size_t count = std::min(block, total - start);
@@ -708,9 +711,30 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
       if (t < latency) continue;
       std::copy(out_block.begin() + static_cast<std::ptrdiff_t>(i * out_ch),
                 out_block.begin() + static_cast<std::ptrdiff_t>((i + 1) * out_ch),
-                result.begin() + static_cast<std::ptrdiff_t>((t - latency) * out_ch));
+                result + (t - latency) * out_ch);
     }
   }
+}
+
+}  // namespace
+
+std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* in, size_t frames,
+                                      int in_channels) {
+  std::vector<float> result;
+  render_offline(renderer, in, frames, in_channels, [&](size_t count) {
+    result.resize(count);
+    return result.data();
+  });
+  return result;
+}
+
+std::unique_ptr<float[]> render_interleaved_owned(PlaybackRenderer& renderer, const float* in,
+                                                  size_t frames, int in_channels) {
+  std::unique_ptr<float[]> result;
+  render_offline(renderer, in, frames, in_channels, [&](size_t count) {
+    result = std::make_unique<float[]>(count);
+    return result.get();
+  });
   return result;
 }
 

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "c_api/mixing_meter_defaults.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare_c_detail;
@@ -18,9 +19,7 @@ SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer
 }
 
 void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options) {
-  if (options == nullptr) return;
-  *options = {};
-  options->struct_size = sizeof(*options);
+  sonare_c_mixing_detail::initialize_strip_meter_options(options);
 }
 
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
@@ -306,9 +305,7 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 }
 
 void sonare_mixer_master_meter_config_init(SonareMixerMasterMeterConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
+  sonare_c_mixing_detail::initialize_master_meter_config(config);
 }
 
 SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,

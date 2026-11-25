@@ -12,6 +12,7 @@
 
 #include "c_api/mixing_internal.h"
 #include "mixing_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "support/processor_discard_test_access.h"
 #include "util/constants.h"
 
@@ -401,8 +402,9 @@ TEST_CASE("Mixing C API reports the state a strip discarded after a non-finite s
   REQUIRE(count == 1u);
   REQUIRE(count == strip->strip.non_finite_discard_count());
 
+  count = 0xDEADu;
   REQUIRE(sonare_strip_non_finite_discard_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(count == 1u);
+  REQUIRE(count == 0u);
   REQUIRE(sonare_strip_non_finite_discard_count(strip, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_mixer_destroy(mixer);
@@ -468,14 +470,27 @@ TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sam
   // reported as unknown rather than as a zero that would read as "clean".
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 0u);
   REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
   REQUIRE(count == 0u);
 
+  count = 0xDEADu;
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "nosuchbus", &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 0u);
+  count = 0xDEADu;
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(nullptr, "verb", &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 0u);
+  count = 0xDEADu;
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 0u);
+  count = 0xDEADu;
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, nullptr, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 0u);
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
@@ -503,6 +518,11 @@ TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sam
   fx->process(channels, 2, kBlock);
   // The bus meter counts the non-finite sample (as silence) in the block it arrives. An aux bus a
   // send destination names carries no inserts, so this count is the meter's alone.
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
+  REQUIRE(count == 1u);
+  // The bus DSP record persists across graph edits, so its tally is readable
+  // while the graph is dirty and does not wait for another compile.
+  REQUIRE(sonare_mixer_add_strip(mixer, "unrelated", nullptr) != nullptr);
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
   REQUIRE(count == 1u);
   left[4] = 0.25f;
@@ -782,8 +802,25 @@ TEST_CASE("The master meter is read only once enabled and refuses a config it ca
           "[mixing][capi]") {
   MasterMeterRig rig;
   SonareMixMeterSnapshot snap{};
+  std::memset(&snap, 0x7f, sizeof(snap));
   CHECK(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_ERROR_INVALID_STATE);
+  CHECK(snap.num_channels == 0);
+  CHECK(snap.seq == 0u);
+  CHECK(snap.peak_db_l == 0.0f);
+  CHECK(snap.correlation == 0.0f);
+
+  std::memset(&snap, 0x7f, sizeof(snap));
   CHECK(sonare_mixer_master_meter(nullptr, &snap) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(snap.num_channels == 0);
+  CHECK(snap.seq == 0u);
+  CHECK(snap.peak_db_l == 0.0f);
+
+  SonareMixer* invalid = nullptr;
+  CHECK(sonare_mixer_create(0, 8, &invalid) == SONARE_ERROR_INVALID_PARAMETER);
+  const std::string prior_error = sonare_last_error_message();
+  std::memset(&snap, 0x7f, sizeof(snap));
+  CHECK(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_ERROR_INVALID_STATE);
+  CHECK(std::string(sonare_last_error_message()) == prior_error);
   CHECK(sonare_mixer_master_meter(rig.mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_mixer_configure_master_meter(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -803,10 +840,37 @@ TEST_CASE("The master meter is read only once enabled and refuses a config it ca
     config.true_peak_oversample = factor;
     CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) ==
           SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.true_peak_oversample must be one of 4, 8");
   }
   // Nothing was enabled by the refused calls.
   rig.process(0.5f);
   CHECK(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_ERROR_INVALID_STATE);
+}
+
+TEST_CASE("Master meter reconfiguration preserves its reading when allocation fails",
+          "[mixing][capi][allocation]") {
+  MasterMeterRig rig;
+  REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, nullptr) == SONARE_OK);
+  rig.process(0.25f);
+  SonareMixMeterSnapshot before{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &before) == SONARE_OK);
+
+  SonareMixerMasterMeterConfig replacement{};
+  sonare_mixer_master_meter_config_init(&replacement);
+  replacement.true_peak_oversample = 8;
+  SonareError error = SONARE_OK;
+  {
+    sonare::test::AllocationFailureAtGuard fail_first(1);
+    error = sonare_mixer_configure_master_meter(rig.mixer, &replacement);
+  }
+  CHECK(error == SONARE_ERROR_OUT_OF_MEMORY);
+
+  SonareMixMeterSnapshot after{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &after) == SONARE_OK);
+  CHECK(after.seq == before.seq);
+  CHECK(after.peak_db_l == before.peak_db_l);
+  CHECK(after.true_peak_dbtp_l == before.true_peak_dbtp_l);
 }
 
 TEST_CASE("The master meter reads what a meter over the master output reads", "[mixing][capi]") {
@@ -867,6 +931,24 @@ TEST_CASE("Disabling the master meter freezes its reading and enabling resets it
   REQUIRE(sonare_mixer_master_meter(rig.mixer, &again) == SONARE_OK);
   CHECK_THAT(again.peak_db_l, WithinAbs(quiet.peak_db_l, 0.5f));
   CHECK(again.max_true_peak_dbtp < -6.0f);
+}
+
+TEST_CASE("Master meter follows its documented definitions for silence and unmeasured fields",
+          "[mixing][capi]") {
+  MasterMeterRig rig;
+  REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, nullptr) == SONARE_OK);
+  rig.process(0.0f);
+  SonareMixMeterSnapshot snap{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_OK);
+  CHECK(std::isinf(snap.peak_db_l));
+  CHECK(std::signbit(snap.peak_db_l));
+  CHECK(std::isinf(snap.rms_db_l));
+  CHECK(std::signbit(snap.rms_db_l));
+  CHECK(std::isnan(snap.correlation));
+  CHECK(std::isnan(snap.mono_compat_width));
+  CHECK(std::isnan(snap.momentary_lufs));
+  CHECK(std::isinf(snap.true_peak_dbtp_l));
+  CHECK(std::signbit(snap.true_peak_dbtp_l));
 }
 
 TEST_CASE("Master meter switches leave their measurements unmeasured", "[mixing][capi]") {
@@ -1164,8 +1246,9 @@ TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mix
   sonare_free_string(restored_json);
   sonare_mixer_destroy(restored);
 
-  // Invalid pan modes are rejected without mutating state.
+  // Invalid pan modes are rejected without mutating state and name pan_mode.
   REQUIRE(sonare_strip_set_pan(strip, 0.0f, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "pan_mode must be an integer in [0, 2]");
   sonare_mixer_destroy(mixer);
 }
 
@@ -1179,9 +1262,11 @@ TEST_CASE("Mixing C API set_pan keep-mode sentinel preserves current pan mode", 
   // Establish a non-default (StereoPan) mode.
   REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_STEREO_PAN) == SONARE_OK);
 
-  // Nudging the pan with SONARE_PAN_MODE_KEEP (< 0) must NOT reset the mode back
-  // to Balance — only the pan position moves.
+  // Only SONARE_PAN_MODE_KEEP preserves the mode; other negative values refuse
+  // before either the mode or pan position changes.
   REQUIRE(sonare_strip_set_pan(strip, -0.5f, SONARE_PAN_MODE_KEEP) == SONARE_OK);
+  CHECK(sonare_strip_set_pan(strip, 0.75f, -2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "pan_mode must be an integer in [0, 2]");
 
   char* json = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
@@ -1189,7 +1274,39 @@ TEST_CASE("Mixing C API set_pan keep-mode sentinel preserves current pan mode", 
   const std::string scene_json(json);
   // Mode stays stereoPan, not reset to balance.
   REQUIRE(scene_json.find("\"panMode\":\"stereoPan\"") != std::string::npos);
+  REQUIRE(scene_json.find("\"pan\":-0.5") != std::string::npos);
   sonare_free_string(json);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixing C API enum refusals name their argument", "[mixing][capi]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned", nullptr);
+  REQUIRE(strip != nullptr);
+
+  const auto check_subject = [](const char* subject) {
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    const char* recorded = sonare_last_refusal_subject(0);
+    REQUIRE(recorded != nullptr);
+    CHECK(std::string(recorded) == subject);
+  };
+
+  CHECK(sonare_strip_set_pan(strip, 0.0f, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "pan_mode must be an integer in [0, 2]");
+  check_subject("pan_mode");
+
+  CHECK(sonare_strip_set_pan_law(strip, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "pan_law must be an integer in [0, 3]");
+  check_subject("pan_law");
+
+  CHECK(sonare_strip_add_send(strip, nullptr, "aux", -6.0f, 99, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "timing must be an integer in [0, 1]");
+  check_subject("timing");
+  CHECK(strip->scene_strip.sends.empty());
 
   sonare_mixer_destroy(mixer);
 }
@@ -1356,13 +1473,18 @@ TEST_CASE("Mixing assistant suggest refusals name the refused argument", "[mixin
                                         48000, nullptr, 0,
                                         &json) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(refusal() == "track_ids[0] must not be NULL");
-  const int bad_rates[] = {0};
-  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, bad_rates, 1, 48000,
-                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(refusal() == "track_sample_rates[0] must be an integer in [8000, 384000]");
-  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
-                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(refusal() == "sample_rate must be an integer in [8000, 384000]");
+  for (int bad_rate : {0, 7999, 384001}) {
+    const int bad_rates[] = {bad_rate};
+    CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, bad_rates, 1, 48000,
+                                          nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(refusal() == "track_sample_rates[0] must be an integer in [8000, 384000]");
+  }
+  for (int bad_rate : {0, 7999, 384001}) {
+    CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1,
+                                          bad_rate, nullptr, 0,
+                                          &json) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(refusal() == "sample_rate must be an integer in [8000, 384000]");
+  }
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 48000,
                                         nullptr, 1, &json) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(refusal() == "params must not be NULL when param_count is not 0");
@@ -1373,6 +1495,46 @@ TEST_CASE("Mixing assistant suggest refusals name the refused argument", "[mixin
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
                                         nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(refusal() == "sample_rate must be an integer in [8000, 384000]");
+}
+
+TEST_CASE("Mixing assistant enforces the documented sample rate and tempo domains",
+          "[mixing][capi][domain]") {
+  std::array<float, 64> samples{};
+  const float* left[] = {samples.data()};
+  const char* ids[] = {"edge"};
+  const size_t lengths[] = {samples.size()};
+  const SonareMasteringParam geometry[] = {{"nFft", 64.0}, {"hopLength", 16.0}};
+  char* json = nullptr;
+
+  // Empty input does not consume sample_rate; all exact tempo endpoints and the
+  // zero auto sentinel still pass through parameter validation.
+  for (double tempo : {0.0, 20.0, 400.0}) {
+    SonareMasteringParam params[] = {geometry[0], geometry[1], {"tempoBpm", tempo}};
+    REQUIRE(sonare_mixing_assistant_suggest(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0,
+                                            0, params, 3, &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    sonare_free_string(json);
+    json = nullptr;
+  }
+
+  for (double tempo : {1.0e-100, -1.0e-100, 19.999, 400.001}) {
+    SonareMasteringParam params[] = {geometry[0], geometry[1], {"tempoBpm", tempo}};
+    CHECK(sonare_mixing_assistant_suggest(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0,
+                                          0, params, 3, &json) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "params.tempoBpm must be 0 or a tempo between 20 and 400 BPM");
+    CHECK(json == nullptr);
+  }
+
+  // Nonempty input admits both sample-rate endpoints with a same-rate track.
+  for (int sample_rate : {8000, 384000}) {
+    const int track_rates[] = {sample_rate};
+    REQUIRE(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, track_rates, 1,
+                                            sample_rate, geometry, 2, &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    sonare_free_string(json);
+    json = nullptr;
+  }
 }
 
 TEST_CASE("Mixing C API refuses a strip options struct_size of zero", "[mixing][capi]") {

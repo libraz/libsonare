@@ -1823,10 +1823,10 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_sample_bank_create r
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create"
-changed = "SonareError sonare_streaming_mastering_chain_create(config_json, options, &chain); read the error from the return value, the handle from chain (NULL on failure); options is a const SonareStreamingMasteringChainOptions* (NULL = defaults; sonare_streaming_mastering_chain_options_init); the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is"
+changed = "SonareError sonare_streaming_mastering_chain_create(config_json, options, &chain); read the error from the return value, the handle from chain (NULL on failure); options is a const SonareStreamingMasteringChainOptions* (NULL = defaults; sonare_streaming_mastering_chain_options_init); the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is. The chain checks config_json before options and the output pointer. A refused static gain is named options.loudness_static_gain_db. A well-formed config requesting an unsupported stage or estimator returns SONARE_ERROR_NOT_SUPPORTED."
 domain = "mastering"
 rule = "c-create"
-test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming chain create validates config and options before its output"
 
 [[entry]]
 kind = "function"
@@ -2804,7 +2804,7 @@ test = "tests/api/sonare_c_mastering_test.cpp::a C mastering result carries each
 [[entry]]
 kind = "option"
 old = "sonare_eq_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t."
+changed = "the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. A nonnull out_count is zero on refusal."
 domain = "mastering"
 rule = "c-count-types"
 test = "tests/api/sonare_c_mastering_test.cpp::C EQ discard reader retains counts beyond UINT32_MAX"
@@ -2812,7 +2812,7 @@ test = "tests/api/sonare_c_mastering_test.cpp::C EQ discard reader retains count
 [[entry]]
 kind = "option"
 old = "sonare_streaming_mastering_chain_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t."
+changed = "the count is a size_t instead of a uint32_t. The count since preparation can exceed UINT32_MAX on targets with a wider size_t. A nonnull out_count is zero on refusal."
 domain = "mastering"
 rule = "c-count-types"
 test = "tests/api/sonare_c_mastering_test.cpp::C streaming chain discard reader retains counts beyond UINT32_MAX"
@@ -2916,7 +2916,7 @@ test = "tests/api/c_bare_refusal_editing_test.cpp::the silence ratio entries nam
 [[entry]]
 kind = "option"
 old = "sonare_mixer_bus_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t. A compiled bus can report more than UINT32_MAX discarded blocks on targets with a wider size_t, including after recompiling the graph."
+changed = "the count is a size_t instead of a uint32_t. A compiled bus can report more than UINT32_MAX discarded blocks on targets with a wider size_t, including after recompiling the graph. A nonnull out_count is zero on refusal."
 domain = "mastering"
 rule = "c-count-types"
 test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing discard readers retain counts beyond UINT32_MAX"
@@ -2924,7 +2924,7 @@ test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing discard readers r
 [[entry]]
 kind = "option"
 old = "sonare_strip_non_finite_discard_count(out_count)"
-changed = "the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t."
+changed = "the count is a size_t instead of a uint32_t. The lifetime block count can exceed UINT32_MAX on targets with a wider size_t. A nonnull out_count is zero on refusal."
 domain = "mastering"
 rule = "c-count-types"
 test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing discard readers retain counts beyond UINT32_MAX"
@@ -5294,10 +5294,10 @@ test = "tests/mastering/param_wiring_test.cpp::the final quantizing processors t
 [[entry]]
 kind = "function"
 old = "sonare_mastering_apply_pair_processor"
-changed = "takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate"
+changed = "takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate. A refused reference rate is named reference_sample_rate."
 domain = "mastering"
 rule = "one-entry-per-operation"
-test = "tests/api/sonare_c_mastering_test.cpp::pair"
+test = "tests/api/mastering_pair_stereo_test.cpp::C mastering pair entries name the reference sample rate"
 
 [[entry]]
 kind = "function"
@@ -5309,10 +5309,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_mastering_apply_pair_processor_stereo"
-changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor"
+changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor. The processor name is checked before the audio is read. An unknown name returns SONARE_ERROR_INVALID_PARAMETER. A declared processor without a stereo pair form returns SONARE_ERROR_NOT_SUPPORTED instead of SONARE_ERROR_INVALID_PARAMETER. A refused reference rate is named reference_sample_rate."
 domain = "mastering"
-rule = "one-entry-per-operation"
-test = "tests/api/sonare_c_mastering_test.cpp::pair"
+rule = "error-class-by-cause"
+test = "tests/api/mastering_pair_stereo_test.cpp::stereo pair processor admits the name before reading audio"
 
 [[entry]]
 kind = "function"
@@ -5324,10 +5324,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_mastering_analyze_pair"
-changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor"
+changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor. A refused reference rate is named reference_sample_rate."
 domain = "mastering"
 rule = "one-entry-per-operation"
-test = "tests/api/sonare_c_mastering_test.cpp::pair"
+test = "tests/api/mastering_pair_stereo_test.cpp::C mastering pair entries name the reference sample rate"
 
 [[entry]]
 kind = "function"
@@ -5347,10 +5347,10 @@ test = "tests/mastering/insert_param_metadata_test.cpp::mastering enum query rec
 [[entry]]
 kind = "function"
 old = "sonare_eq_match"
-changed = "takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate"
+changed = "takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate. A refused reference rate is named reference_sample_rate."
 domain = "mastering"
 rule = "one-entry-per-operation"
-test = "tests/api/sonare_c_mastering_test.cpp::eq_match"
+test = "tests/api/sonare_c_mastering_test.cpp::EQ match resamples a reference at another rate"
 
 [[entry]]
 kind = "function"
@@ -5469,10 +5469,10 @@ test = "tests/api/sonare_c_effects_extra_test.cpp::decompose_stems_linked"
 [[entry]]
 kind = "function"
 old = "sonare_mastering_ab_match_loudness_stereo"
-changed = "returns float** out_left, float** out_right and size_t* out_length plus SonareLoudnessMatch* out_match, as sonare_mastering_ab_match_loudness does"
+changed = "returns float** out_left, float** out_right and size_t* out_length plus SonareLoudnessMatch* out_match, as sonare_mastering_ab_match_loudness does. If either take has no measurable loudness, the call refuses that side with SONARE_ERROR_INVALID_PARAMETER instead of applying zero gain. A refused reference rate is named reference_sample_rate."
 domain = "mastering"
-rule = "one-entry-per-operation"
-test = "tests/api/sonare_c_mastering_test.cpp::ab_match"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_mastering_test.cpp::A/B loudness matching follows the documented silence refusal"
 
 [[entry]]
 kind = "function"
@@ -6540,15 +6540,15 @@ test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_engine_set_bus_strip_js
 [[entry]]
 kind = "function"
 old = "sonare_eq_set_band"
-changed = "a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys"
+changed = "a refused band_json (malformed JSON, an unknown key or a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Earlier spellings are unknown keys; the message lists the accepted keys. Refusals from band design also use the band document's published member names."
 domain = "mastering"
 rule = "json-input-kinds"
-test = "tests/api/sonare_c_mastering_test.cpp::sonare_eq_set_band reads detectorDelayMs and refuses its earlier lookaheadMs spelling"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_eq_set_band names a refused field after reading the band"
 
 [[entry]]
 kind = "function"
 old = "sonare_eq_magnitude_response"
-changed = "every frequencies_hz[i] must be finite and in [0, Nyquist]; an invalid value returns SONARE_ERROR_INVALID_PARAMETER naming its index and leaves out_db unchanged, where 1.x clamped values outside the range (including infinities) and let NaN through to the output"
+changed = "Use a placement in [0, 4] and frequencies_hz values that are finite and in [0, Nyquist]. An invalid placement returns SONARE_ERROR_INVALID_PARAMETER with \"placement must be an integer in [0, 4]\". An invalid frequency returns SONARE_ERROR_INVALID_PARAMETER naming its index and leaves out_db unchanged. In 1.x the response clamped out-of-band frequencies and infinities and propagated NaN to the output."
 domain = "mastering"
 rule = "individual"
 test = "tests/api/c_bare_refusal_mastering_repair_test.cpp::sonare_eq_magnitude_response refuses indexed frequencies without writing output"
@@ -6556,10 +6556,10 @@ test = "tests/api/c_bare_refusal_mastering_repair_test.cpp::sonare_eq_magnitude_
 [[entry]]
 kind = "function"
 old = "sonare_mastering_repair_apply"
-changed = "a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT"
+changed = "a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Both the caller's audio planes and the owned report are written only on success. An allocation failure leaves the planes untouched and the report pointer null."
 domain = "effects"
 rule = "json-input-kinds"
-test = "tests/mastering/repair_session_test.cpp::repair analysis and apply refuse their request and stages"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::sonare_mastering_repair_analyze and sonare_mastering_repair_apply"
 
 [[entry]]
 kind = "function"
@@ -7261,7 +7261,7 @@ test = "tests/api/feature_off_errors_test.cpp::An unavailable engine graph is re
 [[entry]]
 kind = "function"
 old = "sonare_mixing_assistant_suggest"
-changed = "with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+changed = "with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); For a nonempty input list, the analysis and track rates must be in [8000, 384000]. Only exact zero selects automatic tempo. Every other tempo must be finite and in [20, 400] BPM before float conversion."
 domain = "mastering"
 rule = "error-class-by-cause"
 test = "tests/api/feature_off_errors_test.cpp::The unavailable mixing assistant refuses NULL inputs and outputs"
@@ -7277,7 +7277,7 @@ test = "tests/api/feature_off_errors_test.cpp::The unavailable project vocal edi
 [[entry]]
 kind = "function"
 old = "sonare_project_assist_apply_json"
-changed = "with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+changed = "with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); A refused module leaves out_json null. Read its diagnostic from sonare_last_error_message instead of a rejection document. Apply leaves the project and undo history untouched if publishing the result fails."
 domain = "mastering"
 rule = "error-class-by-cause"
 test = "tests/api/feature_off_errors_test.cpp::The unavailable composition assistant refuses NULL inputs and outputs"
@@ -7285,7 +7285,7 @@ test = "tests/api/feature_off_errors_test.cpp::The unavailable composition assis
 [[entry]]
 kind = "function"
 old = "sonare_project_assist_preview_json"
-changed = "with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+changed = "with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); A refused module leaves out_json null. Read its diagnostic from sonare_last_error_message instead of a rejection document."
 domain = "mastering"
 rule = "error-class-by-cause"
 test = "tests/api/feature_off_errors_test.cpp::The unavailable composition assistant refuses NULL inputs and outputs"
@@ -7297,3 +7297,155 @@ changed = "with the acoustic simulation compiled out, a NULL required pointer re
 domain = "effects"
 rule = "error-class-by-cause"
 test = "tests/api/feature_off_errors_test.cpp::The unavailable acoustic simulation refuses NULL inputs and outputs"
+
+[[entry]]
+kind = "function"
+old = "sonare_hrtf_set_create_from_memory"
+changed = "Malformed SHRF bytes return SONARE_ERROR_INVALID_FORMAT instead of SONARE_ERROR_INVALID_PARAMETER. Null arguments remain argument refusals."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_playback_test.cpp::sonare_hrtf_set_create_from_memory validates SHRF bytes"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_ab_match_loudness"
+changed = "If either take has no measurable loudness, the call refuses that side with SONARE_ERROR_INVALID_PARAMETER instead of applying zero gain. A refused reference rate is named reference_sample_rate."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_mastering_test.cpp::A/B loudness matching follows the documented silence refusal"
+
+[[entry]]
+kind = "function"
+old = "sonare_playback_render_interleaved"
+changed = "A failed render leaves the output pointer null and both output dimensions zero, including on allocation failure."
+domain = "engine"
+rule = "typed-results"
+test = "tests/api/sonare_c_playback_test.cpp::sonare_playback_render_interleaved renders offline and validates its input"
+
+[[entry]]
+kind = "function"
+old = "sonare_playback_renderer_render_offline"
+changed = "A failed offline render leaves all output slots cleared and preserves the renderer's prior processing state."
+domain = "engine"
+rule = "typed-results"
+test = "tests/api/sonare_c_playback_test.cpp::playback renderer render_offline matches the one-shot render through a used handle"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_prepare"
+changed = "A failed re-prepare preserves the previous stages, pending drain and counts. The call validates sample_rate, max_block_size and num_channels in that order."
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming chain failed re-prepare preserves the current C handle state"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_process_mono"
+changed = "For nonempty buffers, the prepared channel mode is checked before scanning samples for non-finite values."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming chain process checks readiness and prepared channels before samples"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_process_stereo"
+changed = "For nonempty buffers, the prepared channel mode is checked before scanning samples for non-finite values."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming chain process checks readiness and prepared channels before samples"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_dynamics_compressor"
+changed = "The output pointer, length and optional latency are cleared on failure, including failure to allocate the finished audio."
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::dynamics output stays cleared when its final allocation fails"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_dynamics_gate"
+changed = "The output pointer, length and optional latency are cleared on failure, including failure to allocate the finished audio."
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::dynamics output stays cleared when its final allocation fails"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_dynamics_transient_shaper"
+changed = "The output pointer, length and optional latency are cleared on failure, including failure to allocate the finished audio."
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::dynamics output stays cleared when its final allocation fails"
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_set_phase_mode"
+changed = "An unknown phase mode is refused as mode must be an integer in [1, 3]."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_process"
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_set_gain_scale"
+changed = "A refused gain multiplier is named scale."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_process"
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_set_output_gain_db"
+changed = "A refused output gain is named gain_db."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_process"
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_set_output_pan"
+changed = "A refused output pan is named pan."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_process"
+
+[[entry]]
+kind = "function"
+old = "sonare_playback_loudness_meter_create"
+changed = "An invalid channel count is refused as channels. sample_rate must be an integer in [8000, 384000] Hz; out-of-range positive rates were previously accepted."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_playback_test.cpp::playback loudness meter integrates pushed frames"
+
+[[entry]]
+kind = "function"
+old = "sonare_playback_loudness_meter_push_interleaved"
+changed = "An empty block is refused as frames and a non-finite input sample as in."
+domain = "engine"
+rule = "entry-named-refusals"
+test = "tests/api/sonare_c_playback_test.cpp::playback loudness meter integrates pushed frames"
+
+[[entry]]
+kind = "function"
+old = "sonare_strip_set_pan"
+changed = "Only SONARE_PAN_MODE_KEEP (-1) preserves the current mode. Values below -1 previously preserved the mode. They return SONARE_ERROR_INVALID_PARAMETER with “pan_mode must be an integer in [0, 2]” and leave the strip unchanged."
+domain = "mastering"
+rule = "finite-or-refused"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API set_pan keep-mode sentinel preserves current pan mode"
+
+[[entry]]
+kind = "function"
+old = "sonare_strip_set_pan_law"
+changed = "A refused pan law is named pan_law."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API enum refusals name their argument"
+
+[[entry]]
+kind = "function"
+old = "sonare_strip_add_send"
+changed = "A refused send timing is named timing."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API enum refusals name their argument"

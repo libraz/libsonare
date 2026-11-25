@@ -131,4 +131,8 @@ std::vector<float> render_interleaved(const float* in, size_t frames, int in_cha
 std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* in, size_t frames,
                                       int in_channels);
 
+/// Renders through an existing renderer into an owned array, allocated before resetting it.
+std::unique_ptr<float[]> render_interleaved_owned(PlaybackRenderer& renderer, const float* in,
+                                                  size_t frames, int in_channels);
+
 }  // namespace sonare::playback

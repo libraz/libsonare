@@ -4,6 +4,7 @@
 #include "c_api/engine_config_domains.h"
 #include "c_api/mixing_input_domains.h"
 #include "c_api/mixing_internal.h"
+#include "c_api/mixing_meter_defaults.h"
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
 #include "mixing/meter.h"
@@ -84,13 +85,7 @@ SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer
 }
 
 void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options) {
-  if (options == nullptr) return;
-  *options = {};
-  options->struct_size = sizeof(*options);
-  options->enable_metering = 1;
-  options->measure_lufs = sonare::mixing::kPublishedMeterConfig.measure_lufs ? 1 : 0;
-  options->measure_true_peak = sonare::mixing::kPublishedMeterConfig.measure_true_peak ? 1 : 0;
-  options->true_peak_oversample = sonare::mixing::kPublishedMeterConfig.true_peak_oversample;
+  sonare_c_mixing_detail::initialize_strip_meter_options(options);
 }
 
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
@@ -183,16 +178,13 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode) {
     return err;
   }
   SONARE_C_TRY
-  // pan_mode < 0 (SONARE_PAN_MODE_KEEP) means "keep the strip's current pan
-  // mode" — only the pan position moves. This avoids resetting a StereoPan /
-  // DualPan strip back to Balance when a caller merely nudges the pan position.
-  // Otherwise to_pan_mode throws SONARE_ERROR_INVALID_PARAMETER for unknown
-  // modes, so by the time we mirror it into the scene strip it is validated.
-  if (pan_mode < 0) {
+  // Only SONARE_PAN_MODE_KEEP preserves the strip's current mode.
+  if (pan_mode == SONARE_PAN_MODE_KEEP) {
     // Mirror the strip's live mode into the scene cache so save/reload stays
     // faithful (it is unchanged by this call but may have been set elsewhere).
     strip->scene_strip.pan_mode = from_pan_mode(strip->strip.pan_mode());
   } else {
+    check::integer_within(pan_mode, sonare_c_detail::kStripPanModeDomain, "pan_mode");
     strip->strip.set_pan_mode(to_pan_mode(pan_mode));
     strip->scene_strip.pan_mode = pan_mode;
   }
@@ -322,7 +314,8 @@ SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(strip);
   SONARE_C_TRY
-  strip->strip.set_pan_law(to_pan_law(pan_law));  // validates pan_law (throws on unknown)
+  check::integer_within(pan_law, sonare_c_detail::kStripPanLawDomain, "pan_law");
+  strip->strip.set_pan_law(to_pan_law(pan_law));
   strip->scene_strip.pan_law = pan_law;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -381,6 +374,8 @@ SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
   SONARE_C_REQUIRE_NONNULL(destination_bus_id);
   if (const SonareError err = require_finite(send_db, "send_db"); err != SONARE_OK) return err;
   SONARE_C_TRY
+  check::integer_in_range(timing, SONARE_SEND_TIMING_POST_FADER, SONARE_SEND_TIMING_PRE_FADER,
+                          "timing");
   sonare::mixing::SendConfig config;
   config.send_db = send_db;
   config.timing = to_send_timing(timing);
@@ -479,9 +474,10 @@ SonareError sonare_strip_meter(const SonareStrip* strip, int tap, SonareMixMeter
 }
 
 SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, size_t* out_count) {
+  SONARE_C_RT_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   // A single relaxed atomic load, so it is safe to poll from the audio
   // thread alongside the meters; it touches no diagnostic string.
-  SONARE_C_RT_API_ENTRY;
   if (!strip || !out_count) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }

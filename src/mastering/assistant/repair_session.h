@@ -28,6 +28,9 @@ using RepairProgressCallback = std::function<void(float progress, const char* st
 /// @brief Polled after each progress report; returning true stops the application.
 using RepairCancelCallback = std::function<bool()>;
 
+/// @brief Stages a report before the operation writes to caller-owned planes.
+using RepairReportCallback = std::function<void(const std::string&)>;
+
 /// @brief Measures every channel's repair defects and recommends stages.
 /// @param channels @p channel_count planes of @p length samples each; read only.
 /// @param request_json An object, or empty for `{}`. Key: `preferStreamingSafe` (boolean,
@@ -58,7 +61,8 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
 bool repair_apply_json(const float* const* channels, std::size_t channel_count, std::size_t length,
                        int sample_rate, const std::string& stages_json, float* const* out_channels,
                        std::string* reports_json, const RepairProgressCallback& progress = {},
-                       const RepairCancelCallback& cancel = {});
+                       const RepairCancelCallback& cancel = {},
+                       const RepairReportCallback& stage_report = {});
 
 /// @brief Every dotted field path @ref repair_analyze_json emits, `recommended` left opaque
 ///        below its `stage` key because the settings depend on the stage.

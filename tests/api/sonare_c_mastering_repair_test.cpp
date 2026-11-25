@@ -7,6 +7,7 @@
 
 #include "c_api/sonare_c_last_refusal.h"
 #include "sonare_c_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "util/parameter_checks.h"
 
 #ifdef SONARE_WITH_MASTERING
@@ -349,6 +350,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
     SonareDenoiseClassicalConfig defaults;
     sonare_denoise_classical_config_init(&defaults);
     int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(1, 1, bins) == SONARE_OK);
     REQUIRE(sonare_mastering_repair_noise_band_bins(defaults.n_fft, sr, bins) == SONARE_OK);
     const SonareNoiseDetection& detected = out.report.detected;
     size_t entry = 0;
@@ -2564,6 +2566,83 @@ float max_abs_sample(const float* buf, size_t length) {
 }
 }  // namespace
 
+TEST_CASE("Gate close threshold and transient sensitivity follow their documented domains",
+          "[c_api][mastering][dynamics]") {
+  const float samples[128] = {};
+  float* out = nullptr;
+  size_t length = 0;
+  int latency = 0;
+  SonareGateConfig gate;
+  sonare_gate_config_init(&gate);
+  gate.close_threshold_db = gate.threshold_db + 1.0f;
+  CHECK(sonare_mastering_dynamics_gate(samples, 128, 48000, &gate, &out, &length, &latency) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("close_threshold_db") != std::string::npos);
+  CHECK(out == nullptr);
+  SonareTransientShaperConfig transient;
+  sonare_transient_shaper_config_init(&transient);
+  for (float sensitivity : {-1.0f, std::numeric_limits<float>::quiet_NaN()}) {
+    transient.sensitivity = sensitivity;
+    CHECK(sonare_mastering_dynamics_transient_shaper(samples, 128, 48000, &transient, &out, &length,
+                                                     &latency) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("sensitivity") != std::string::npos);
+    CHECK(out == nullptr);
+  }
+}
+
+TEST_CASE("dynamics output stays cleared when its final allocation fails",
+          "[c_api][mastering][dynamics]") {
+  constexpr int sample_rate = 48000;
+  const auto samples = generate_sine(440.0f, sample_rate, 0.01f);
+  const auto check_allocation_failure = [&](auto process, const auto& config,
+                                            bool has_latency = false) {
+    float* out = nullptr;
+    size_t length = 1;
+    int latency = -1;
+    const auto run = [&] {
+      return process(samples.data(), samples.size(), sample_rate, &config, &out, &length, &latency);
+    };
+
+    size_t allocations = 0;
+    SonareError status;
+    {
+      sonare::test::AllocationGuard guard;
+      status = run();
+      allocations = guard.count();
+    }
+    REQUIRE(status == SONARE_OK);
+    REQUIRE(allocations > 0);
+    REQUIRE((latency > 0) == has_latency);
+    sonare_free_floats(out);
+
+    {
+      sonare::test::AllocationFailureAtGuard guard(allocations);
+      status = run();
+    }
+    CHECK(status == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(out == nullptr);
+    CHECK(length == 0);
+    CHECK(latency == 0);
+  };
+
+  SECTION("compressor") {
+    SonareCompressorConfig config;
+    sonare_compressor_config_init(&config);
+    check_allocation_failure(sonare_mastering_dynamics_compressor, config);
+  }
+  SECTION("gate") {
+    SonareGateConfig config;
+    sonare_gate_config_init(&config);
+    check_allocation_failure(sonare_mastering_dynamics_gate, config);
+  }
+  SECTION("transient shaper") {
+    SonareTransientShaperConfig config;
+    sonare_transient_shaper_config_init(&config);
+    config.lookahead_ms = 1.0f;
+    check_allocation_failure(sonare_mastering_dynamics_transient_shaper, config, true);
+  }
+}
+
 TEST_CASE("sonare_mastering_dynamics_compressor", "[c_api][mastering]") {
   const int sr = 48000;
   auto samples = generate_sine(440.0f, sr, 0.5f);
@@ -2739,6 +2818,42 @@ TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
     CHECK(std::string(reports).find(R"("scope":"channel")") != std::string::npos);
     sonare_free_string(reports);
     CHECK(std::abs(a[1000]) < 0.5f);
+  }
+
+  SECTION("allocation of the report precedes publication into aliased planes") {
+    auto a = left;
+    auto b = right;
+    const float* input[] = {a.data(), b.data()};
+    float* output[] = {a.data(), b.data()};
+    char* reports = nullptr;
+    const auto apply = [&] {
+      return sonare_mastering_repair_apply(input, 2, length, sr, R"([{"stage":"declick"}])",
+                                           nullptr, nullptr, output, &reports, nullptr, nullptr);
+    };
+
+    size_t allocations = 0;
+    SonareError status;
+    {
+      sonare::test::AllocationGuard guard;
+      status = apply();
+      allocations = guard.count();
+    }
+    REQUIRE(status == SONARE_OK);
+    REQUIRE(allocations > 0);
+    sonare_free_string(reports);
+    std::copy(left.begin(), left.end(), a.begin());
+    std::copy(right.begin(), right.end(), b.begin());
+
+    for (size_t failure : {allocations - 1, allocations}) {
+      {
+        sonare::test::AllocationFailureAtGuard guard(failure);
+        status = apply();
+      }
+      CHECK(status == SONARE_ERROR_OUT_OF_MEMORY);
+      CHECK(reports == nullptr);
+      CHECK(a == left);
+      CHECK(b == right);
+    }
   }
 
   SECTION("apply refuses a repeated stage and leaves the planes alone") {

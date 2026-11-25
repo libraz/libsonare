@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <limits>
 #include <random>
@@ -229,7 +230,7 @@ TEST_CASE("playback loudness meter measures the frames after the last internal b
   CHECK(std::abs(meter.integrated_lufs() - reference) <= 0.1f);
 }
 
-TEST_CASE("loudness stays finite at a rate whose Nyquist is below the K-weighting shelf",
+TEST_CASE("offline loudness handles rates below the playback meter domain",
           "[playback][loudness]") {
   // 1681 Hz is above 2 kHz audio's Nyquist, the rate the shelf used to diverge at.
   for (const int rate : {1000, 2000, 3000}) {
@@ -250,9 +251,8 @@ TEST_CASE("loudness stays finite at a rate whose Nyquist is below the K-weightin
     REQUIRE(std::isfinite(offline.short_term_lufs));
     REQUIRE(std::isfinite(offline.max_momentary_lufs));
     REQUIRE(std::isfinite(offline.max_short_term_lufs));
-    PlaybackLoudnessMeter meter(kChannels, rate);
-    meter.push_interleaved(interleaved.data(), frames);
-    REQUIRE(std::isfinite(meter.integrated_lufs()));
+    REQUIRE_THROWS_WITH(PlaybackLoudnessMeter(kChannels, rate),
+                        "sample_rate must be an integer in [8000, 384000]");
   }
 }
 

@@ -3,12 +3,14 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/master_audio_selector.h"
 #include "mastering/api/named_processor.h"
@@ -165,6 +167,18 @@ inline void zero_chain_metrics(ChainResultT* out) {
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
   std::memset(&out->report, 0, sizeof(out->report));
+}
+
+inline SonareError validate_reference_audio(const float* reference, size_t reference_length,
+                                            int reference_sample_rate, const char* subject) {
+  return sonare_c_detail::run_validation([&] {
+    constexpr std::array<sonare_c_detail::CName, 1> kNames{
+        {{"sample_rate", "reference_sample_rate"}}};
+    sonare_c_detail::with_c_names(kNames, [&] {
+      sonare::validate_offline_audio_input(subject, reference, reference_length,
+                                           reference_sample_rate);
+    });
+  });
 }
 
 // Validate both channels of a stereo pair, left first.

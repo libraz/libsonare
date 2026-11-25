@@ -7,11 +7,161 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "sonare_c_test_helpers.h"
 
 #ifdef SONARE_WITH_MASTERING
+
+namespace {
+
+std::string last_message() {
+  const char* message = sonare_last_error_message();
+  return message != nullptr ? message : "";
+}
+
+}  // namespace
+
+TEST_CASE("streaming chain zero-capacity flush follows its preparation contract",
+          "[c_api][mastering][streaming]") {
+  SonareStreamingMasteringChain* chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
+  size_t written = 9;
+  CHECK(sonare_streaming_mastering_chain_flush_mono(chain, nullptr, 0, &written) ==
+        SONARE_ERROR_INVALID_STATE);
+  CHECK(written == 0);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(chain, 48000, 128, 2) == SONARE_OK);
+  written = 9;
+  CHECK(sonare_streaming_mastering_chain_flush_mono(chain, nullptr, 0, &written) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(written == 0);
+  written = 9;
+  CHECK(sonare_streaming_mastering_chain_flush_stereo(chain, nullptr, nullptr, 0, &written) ==
+        SONARE_OK);
+  CHECK(written == 0);
+  sonare_streaming_mastering_chain_destroy(chain);
+}
+
+TEST_CASE("streaming chain create validates config and options before its output",
+          "[c_api][mastering][streaming]") {
+  CHECK(sonare_streaming_mastering_chain_create("{", nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("config") != std::string::npos);
+
+  CHECK(sonare_streaming_mastering_chain_create(R"({"missing.key":1})", nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("config.missing.key") != std::string::npos);
+
+  CHECK(sonare_streaming_mastering_chain_create(R"({"repair.declick.enabled":1})", nullptr,
+                                                nullptr) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(last_message().find("config.repair.declick") != std::string::npos);
+
+  SonareStreamingMasteringChainOptions options;
+  sonare_streaming_mastering_chain_options_init(&options);
+  options.struct_size = 0;
+  CHECK(sonare_streaming_mastering_chain_create(nullptr, &options, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("options.struct_size") != std::string::npos);
+
+  sonare_streaming_mastering_chain_options_init(&options);
+  options.loudness_static_gain_db = std::numeric_limits<float>::infinity();
+  CHECK(sonare_streaming_mastering_chain_create(R"({"loudness.enabled":1})", &options, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("options.loudness_static_gain_db ") == 0);
+
+  CHECK(sonare_streaming_mastering_chain_create(nullptr, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+}
+
+TEST_CASE("streaming chain process checks readiness and prepared channels before samples",
+          "[c_api][mastering][streaming]") {
+  SonareStreamingMasteringChain* chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
+  float sample = std::numeric_limits<float>::quiet_NaN();
+
+  REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, &sample, 1) ==
+          SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() == "the chain has not been prepared");
+
+  REQUIRE(sonare_streaming_mastering_chain_prepare(chain, 48000, 128, 2) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, &sample, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "samples must match the prepared channel count");
+
+  sonare_streaming_mastering_chain_destroy(chain);
+}
+
+TEST_CASE("streaming chain failed re-prepare preserves the current C handle state",
+          "[c_api][mastering][streaming]") {
+  const char* config =
+      R"({"eq.tilt.enabled":1,"dynamics.multibandComp.enabled":1,"dynamics.multibandComp.crossover.cutoffsHz.0":120,"dynamics.multibandComp.crossover.cutoffsHz.1":6000,"maximizer.truePeakLimiter.enabled":1})";
+  SonareStreamingMasteringChain* actual = nullptr;
+  SonareStreamingMasteringChain* expected = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(config, nullptr, &actual) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(config, nullptr, &expected) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(actual, 48000, 512, 2) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(expected, 48000, 512, 2) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(actual, 0, -1, 3) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("sample_rate ") == 0);
+
+  std::vector<float> actual_left(512, 0.05f);
+  std::vector<float> actual_right(512, 0.03f);
+  std::vector<float> expected_left = actual_left;
+  std::vector<float> expected_right = actual_right;
+  REQUIRE(sonare_streaming_mastering_chain_process_stereo(actual, actual_left.data(),
+                                                          actual_right.data(), 512) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_process_stereo(expected, expected_left.data(),
+                                                          expected_right.data(), 512) == SONARE_OK);
+
+  size_t actual_count_before = 0;
+  size_t expected_count_before = 0;
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(actual, &actual_count_before) ==
+          SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(
+              expected, &expected_count_before) == SONARE_OK);
+  CHECK(actual_count_before == expected_count_before);
+
+  CHECK(sonare_streaming_mastering_chain_prepare(actual, 8000, 512, 2) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().find("cutoff") != std::string::npos);
+
+  int max_block_size = 0;
+  REQUIRE(sonare_streaming_mastering_chain_max_block_size(actual, &max_block_size) == SONARE_OK);
+  CHECK(max_block_size == 512);
+
+  std::fill(actual_left.begin(), actual_left.end(), 0.04f);
+  std::fill(actual_right.begin(), actual_right.end(), 0.02f);
+  std::fill(expected_left.begin(), expected_left.end(), 0.04f);
+  std::fill(expected_right.begin(), expected_right.end(), 0.02f);
+  REQUIRE(sonare_streaming_mastering_chain_process_stereo(actual, actual_left.data(),
+                                                          actual_right.data(), 512) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_process_stereo(expected, expected_left.data(),
+                                                          expected_right.data(), 512) == SONARE_OK);
+  CHECK(actual_left == expected_left);
+  CHECK(actual_right == expected_right);
+
+  size_t actual_count_after = 0;
+  size_t expected_count_after = 0;
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(actual, &actual_count_after) ==
+          SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(
+              expected, &expected_count_after) == SONARE_OK);
+  CHECK(actual_count_after == expected_count_after);
+
+  sonare_streaming_mastering_chain_destroy(actual);
+  sonare_streaming_mastering_chain_destroy(expected);
+}
+
+TEST_CASE("streaming realtime discard count clears its output on refusal",
+          "[c_api][mastering][streaming]") {
+  size_t count = 17;
+  CHECK(sonare_streaming_mastering_chain_non_finite_discard_count(nullptr, &count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
+}
 
 TEST_CASE("streaming mastering C API sets prepared realtime parameters",
           "[c_api][mastering][streaming]") {

@@ -1,11 +1,14 @@
 #include "playback/loudness_meter.h"
 
 #include <algorithm>
+#include <array>
 #include <vector>
 
+#include "core/audio.h"
 #include "mixing/meter.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::playback {
 
@@ -20,12 +23,9 @@ struct PlaybackLoudnessMeter::Impl {
 };
 
 PlaybackLoudnessMeter::PlaybackLoudnessMeter(int channels, int sample_rate) {
-  if (channels != 1 && channels != 2 && channels != 6 && channels != 8) {
-    throw SonareException(ErrorCode::InvalidParameter, "channel count must be 1, 2, 6, or 8");
-  }
-  if (sample_rate <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample rate must be positive");
-  }
+  constexpr std::array<int, 4> kChannelCounts{{1, 2, 6, 8}};
+  util::check::one_of(channels, kChannelCounts, "channels");
+  util::check::integer_within(sample_rate, kAudioSampleRateDomain, "sample_rate");
 
   // LUFS only: the MeterConfig defaults.
   const mixing::MeterConfig config;
@@ -49,16 +49,16 @@ PlaybackLoudnessMeter::~PlaybackLoudnessMeter() = default;
 void PlaybackLoudnessMeter::push_interleaved(const float* samples, size_t frames) {
   // Offline entry point: the caller does not own the finite check here.
   if (frames == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "samples must not be empty");
+    util::check::refuse("frames", util::refusal::integer_at_least_predicate(1));
   }
   if (samples == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "samples must not be null");
+    util::check::refuse("in", util::refusal::kNonNullPredicate);
   }
 
   Impl& im = *impl_;
   const size_t ch = static_cast<size_t>(im.channels);
   if (!numeric::all_finite(samples, frames * ch)) {
-    throw SonareException(ErrorCode::InvalidParameter, "samples contains a non-finite sample");
+    util::check::refuse("in", "must contain only finite samples");
   }
   // Every frame reaches the meter in this call; the meter keeps its own gating state.
   for (size_t offset = 0; offset < frames; offset += kPlaybackLoudnessBlockFrames) {

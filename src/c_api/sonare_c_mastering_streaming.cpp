@@ -294,7 +294,10 @@ SonareError sonare_streaming_mastering_chain_create(
     SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  auto config = streaming_chain_config(config_json);
+  sonare::util::check::under_member(
+      "config", [&] { sonare::mastering::api::validate_streaming_chain_config(config); });
   SonareStreamingMasteringChainOptions resolved;
   if (const SonareError err = sonare_c_detail::resolve_options(
           options, sonare_streaming_mastering_chain_options_init,
@@ -302,22 +305,17 @@ SonareError sonare_streaming_mastering_chain_create(
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_TRY
-  auto config = streaming_chain_config(config_json);
-  std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
-  // The constructor refuses the stages a stream cannot run by their config paths, which the
-  // config document reader above already roots under `config`. A NaN static gain is no gain,
-  // which is what sonare_streaming_loudness_gain returns for a silent stage input.
   sonare::mastering::api::StreamingMasteringChainOptions chain_options;
   chain_options.loudness_static_gain_db = resolved.loudness_static_gain_db;
   chain_options.loudness_static_gain_peak_dbtp = resolved.loudness_static_gain_peak_dbtp;
-  chain = sonare::util::check::under_member("config", [&] {
-    return std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
-                                                                             chain_options);
+  sonare::util::check::under_member("options", [&] {
+    (void)sonare::mastering::api::streaming_chain_static_gain(config, chain_options);
   });
-  auto* handle = new SonareStreamingMasteringChain;
-  handle->chain = std::move(chain);
-  *out = handle;
+  SONARE_C_REQUIRE_NONNULL(out);
+  auto handle = std::make_unique<SonareStreamingMasteringChain>();
+  handle->chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(
+      std::move(config), chain_options);
+  *out = handle.release();
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -346,11 +344,6 @@ SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteri
       bounds != SONARE_OK) {
     return bounds;
   }
-  if (const SonareError finite = run_validation(
-          [&] { sonare::validate_offline_audio_samples("samples", samples, num_samples, 0); });
-      finite != SONARE_OK) {
-    return finite;
-  }
   SONARE_C_TRY
   streaming_mastering_chain_process_mono(*handle->chain, samples, static_cast<int>(num_samples));
   return SONARE_OK;
@@ -368,13 +361,6 @@ SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMaste
   if (const SonareError bounds = check_block(handle->max_block_size, num_samples);
       bounds != SONARE_OK) {
     return bounds;
-  }
-  if (const SonareError finite = run_validation([&] {
-        sonare::validate_offline_audio_samples("left", left, num_samples, 0);
-        sonare::validate_offline_audio_samples("right", right, num_samples, 0);
-      });
-      finite != SONARE_OK) {
-    return finite;
   }
   SONARE_C_TRY
   streaming_mastering_chain_process_stereo(*handle->chain, left, right,
@@ -494,6 +480,7 @@ SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
   // A single relaxed atomic load, so it is safe to poll from the audio thread
   // alongside the process entries; it touches no diagnostic string.
   SONARE_C_RT_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = handle->chain->non_finite_discard_count();
   return SONARE_OK;

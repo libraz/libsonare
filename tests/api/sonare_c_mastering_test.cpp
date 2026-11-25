@@ -182,10 +182,18 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(sonare_eq_latency_samples(eq) == 0);
     sonare_eq_set_auto_gain(eq, 1);
     REQUIRE(sonare_eq_set_gain_scale(eq, 0.5f) == SONARE_OK);
-    REQUIRE(sonare_eq_set_gain_scale(eq, -0.1f) != SONARE_OK);
+    for (const float scale : {-0.1f, 2.1f}) {
+      REQUIRE(sonare_eq_set_gain_scale(eq, scale) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "scale must be finite and in [0, 2]");
+    }
     REQUIRE(sonare_eq_set_output_gain_db(eq, 3.0f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_output_gain_db(eq, 771.0f) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "gain_db must be finite and at most 770");
     REQUIRE(sonare_eq_set_output_pan(eq, 0.25f) == SONARE_OK);
-    REQUIRE(sonare_eq_set_output_pan(eq, 1.5f) != SONARE_OK);
+    for (const float pan : {-1.5f, 1.5f}) {
+      REQUIRE(sonare_eq_set_output_pan(eq, pan) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "pan must be finite and in [-1, 1]");
+    }
 
     std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
     std::vector<float> right = left;
@@ -205,9 +213,25 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(snapshot.band_gain_db[0] < 5.0f);
     REQUIRE(snapshot.last_auto_gain_db < 0.0f);
 
+    REQUIRE(sonare_eq_set_phase_mode(eq, SONARE_EQ_PHASE_ZERO_LATENCY) == SONARE_OK);
     REQUIRE(sonare_eq_set_phase_mode(eq, SONARE_EQ_PHASE_LINEAR) == SONARE_OK);
     REQUIRE(sonare_eq_latency_samples(eq) > 0);
-    REQUIRE(sonare_eq_set_phase_mode(eq, 99) == SONARE_ERROR_INVALID_PARAMETER);
+    for (const int mode : {SONARE_EQ_PHASE_ZERO_LATENCY - 1, SONARE_EQ_PHASE_LINEAR + 1}) {
+      REQUIRE(sonare_eq_set_phase_mode(eq, mode) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "mode must be an integer in [1, 3]");
+    }
+
+    const float frequency_hz = 1000.0f;
+    float response_db = 0.0f;
+    for (const int placement : {0, 4}) {
+      CHECK(sonare_eq_magnitude_response(eq, placement, &frequency_hz, 1, &response_db) ==
+            SONARE_OK);
+    }
+    for (const int placement : {-1, 5}) {
+      REQUIRE(sonare_eq_magnitude_response(eq, placement, &frequency_hz, 1, &response_db) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "placement must be an integer in [0, 4]");
+    }
 
     sonare_eq_clear(eq);
     REQUIRE(sonare_eq_latency_samples(eq) == 0);
@@ -2011,6 +2035,8 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
                              "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":20000,\"q\":1,"
                              "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
 
+  CHECK_THAT(std::string(sonare_last_error_message()), Catch::Matchers::StartsWith("band.gainDb "));
+
   // The refused bands left no infinite tap behind: the still-installed band
   // must produce finite audio.
   std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
@@ -2023,6 +2049,40 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
   }
 
   sonare_eq_destroy(eq);
+}
+
+TEST_CASE("sonare_eq_set_band names a refused field after reading the band",
+          "[c_api][mastering][eq]") {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
+  const std::unique_ptr<SonareEq, decltype(&sonare_eq_destroy)> owned(eq, sonare_eq_destroy);
+
+  struct RefusedBand {
+    const char* key;
+    const char* band;
+  };
+  constexpr RefusedBand bands[] = {
+      {"frequencyHz", R"({"enabled":true,"frequencyHz":0})"},
+      {"gainDb", R"({"enabled":true,"gainDb":770.25})"},
+      {"slopeDbOct", R"({"enabled":true,"type":"lowPass","slopeDbOct":5})"},
+      {"ratio", R"({"enabled":true,"dynamic":true,"ratio":0.5})"},
+      {"thresholdDb", R"({"enabled":true,"dynamic":true,"thresholdDb":770.25})"},
+      {"rangeDb", R"({"enabled":true,"dynamic":true,"rangeDb":770.25})"},
+      {"sidechainQ", R"({"enabled":true,"dynamic":true,"sidechainQ":0})"},
+      {"attackMs", R"({"enabled":true,"dynamic":true,"attackMs":-1})"},
+      {"releaseMs", R"({"enabled":true,"dynamic":true,"releaseMs":-1})"},
+      {"detectorDelayMs", R"({"enabled":true,"dynamic":true,"detectorDelayMs":-1})"},
+      {"sidechainFreqHz", R"({"enabled":true,"dynamic":true,"sidechainFreqHz":0})"},
+      {"q", R"({"enabled":true,"q":0})"},
+  };
+  for (const auto& [key, band] : bands) {
+    INFO(band);
+    REQUIRE(sonare_eq_set_band(eq, 0, band) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(std::string(sonare_last_error_message()),
+               Catch::Matchers::StartsWith(std::string("band.") + key + " "));
+    REQUIRE(sonare_c_detail::last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_c_detail::last_refusal_subject(0)) == std::string("band.") + key);
+  }
 }
 
 TEST_CASE("mastering name getters keep independent stable storage", "[c_api][mastering]") {
@@ -2310,6 +2370,41 @@ TEST_CASE("sonare_mastering_ab_match_loudness_stereo preserves the pair",
   sonare_free_floats(out_right);
 }
 
+TEST_CASE("A/B loudness matching follows the documented silence refusal",
+          "[c_api][mastering][ab-match]") {
+  constexpr int kSampleRate = 48000;
+  const auto tone = generate_sine(440.0f, kSampleRate, 1.0f);
+  const std::vector<float> silence(tone.size(), 0.0f);
+  for (const auto& sides :
+       {std::pair{true, false}, std::pair{false, true}, std::pair{true, true}}) {
+    const auto& source = sides.first ? silence : tone;
+    const auto& reference = sides.second ? silence : tone;
+    float* left = nullptr;
+    float* right = nullptr;
+    size_t length = 9;
+    SonareLoudnessMatch match{1.0f, 2.0f, 3.0f, 4.0f};
+    CHECK(sonare_mastering_ab_match_loudness(source.data(), source.size(), reference.data(),
+                                             reference.size(), kSampleRate, kSampleRate, &left,
+                                             &length, &match) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == (sides.second
+                                                           ? "reference has no measurable loudness"
+                                                           : "source has no measurable loudness"));
+    CHECK(left == nullptr);
+    CHECK(length == 0);
+    CHECK(match.applied_gain_db == 0.0f);
+    length = 9;
+    match.applied_gain_db = 3.0f;
+    CHECK(sonare_mastering_ab_match_loudness_stereo(
+              source.data(), source.data(), source.size(), reference.data(), reference.data(),
+              reference.size(), kSampleRate, kSampleRate, &left, &right, &length,
+              &match) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(left == nullptr);
+    CHECK(right == nullptr);
+    CHECK(length == 0);
+    CHECK(match.applied_gain_db == 0.0f);
+  }
+}
+
 TEST_CASE("sonare_mastering_apply_pair_processor_stereo crossfades both planes",
           "[c_api][mastering][stereo][ab-match]") {
   constexpr int kSampleRate = 48000;
@@ -2493,7 +2588,7 @@ TEST_CASE("sonare_eq_non_finite_discard_count reports the state the EQ discarded
   REQUIRE(count == 1u);
 
   REQUIRE(sonare_eq_non_finite_discard_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(count == 1u);
+  REQUIRE(count == 0u);
   REQUIRE(sonare_eq_non_finite_discard_count(eq, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_eq_destroy(eq);
@@ -2581,7 +2676,7 @@ TEST_CASE("sonare_streaming_mastering_chain_non_finite_discard_count reports a l
 
   REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(nullptr, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(count == 1u);
+  REQUIRE(count == 0u);
   REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(chain, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
@@ -3014,8 +3109,10 @@ TEST_CASE("EQ match resamples a reference at another rate", "[c_api][mastering][
     REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
     for (const int bad_rate : {0, -1}) {
-      CHECK(sonare_eq_match(eq, source.data(), source.size(), kSourceRate, reference.data(),
-                            reference.size(), bad_rate, 6) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_eq_match(eq, source.data(), source.size(), kSourceRate, reference.data(),
+                              reference.size(), bad_rate, 6) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "reference_sample_rate must be an integer in [8000, 384000]");
     }
     sonare_eq_destroy(eq);
   }

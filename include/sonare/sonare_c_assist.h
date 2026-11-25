@@ -20,8 +20,8 @@
 ///
 /// **The modules write into a clip that already exists.** They never add a
 /// track, a source or a clip: where a generated part should live is a structural
-/// decision, and the request has to name the clip. A request naming none is
-/// REFUSED (see @c "rejected" below) rather than answered with a quiet nothing.
+/// decision, and the request has to name the clip. A request without a target
+/// clip returns @c SONARE_ERROR_INVALID_PARAMETER and leaves @c out_json NULL.
 ///
 /// **This seam is `@libraz/libcantus`'s plug-in point, and note-level generation
 /// is libcantus's layer rather than this one's.** The modules shipped behind it
@@ -85,34 +85,11 @@ const char* sonare_assist_module_ids(void);
 ///     @c source_clip_id, @c low_note, @c high_note, @c base_velocity and
 ///     @c velocity_scale are optional.
 ///
-/// @param out_json Receives the result document:
-///   - @c status: @c "ok", @c "empty", @c "budgetTruncated", @c "discarded" or
-///     @c "rejected".
-///
-///     @c "rejected" is the only one that is ALSO an error return: a module that
-///     refused the request -- a parameter outside its domain, a @c params blob
-///     it could not read -- makes the call answer
-///     @c SONARE_ERROR_INVALID_PARAMETER with the field named in
-///     @ref sonare_last_error_message, and commits nothing. It is kept apart
-///     from @c "empty" because a caller's typo and a module that genuinely had
-///     nothing to add would otherwise arrive in the same shape, leaving
-///     string-matching the reason as the only way to find one's own mistake.
-///
-///     The document is still written on this path, but do not read more into
-///     that than it holds: measured, a rejected run comes back with empty
-///     @c patches, empty @c payloads and @c iterationsConsumed 0, because the
-///     built-in modules refuse a request BEFORE doing any work, and all of them
-///     refuse the same request identically. A binding that drops the document
-///     and raises on the error return loses nothing by it.
-///   - @c reason: what the contributing modules said for themselves, newline
-///     joined and never repeated -- two modules reporting the SAME fault say it
-///     once, which is what a request-level mistake every module refuses alike
-///     would otherwise turn into N copies of. Or the driver's own account when
-///     IT ended the run (a budget it enforced between slots, a module it
-///     discarded). Present on an @c "ok" run too, and deliberately so: a run
-///     where one module contributed and another declined is a success that
-///     still owes an account of the module that did nothing. Read it as "what
-///     happened", not as "what went wrong".
+/// @param out_json Receives the result document on success, or NULL on failure:
+///   - @c status: @c "ok", @c "empty", @c "budgetTruncated" or @c "discarded".
+///   - @c reason: distinct reports from the modules, joined with newlines, or
+///     the driver's explanation when it ends the run. It can describe a
+///     module that declined to contribute even when the run's status is @c "ok".
 ///   - @c iterationsConsumed, @c slotsDiscarded: the driver's own counters.
 ///     When no time cap is present, or a run finishes before its monotonic
 ///     deadline, the same seed, request and project produce the same document.
@@ -134,6 +111,9 @@ const char* sonare_assist_module_ids(void);
 ///     contributing module, naming every note it accepted or refused and why.
 ///   Release with @ref sonare_free_string.
 ///
+/// @return @c SONARE_OK on success. A refused request returns
+///         @c SONARE_ERROR_INVALID_PARAMETER and reports the reason through
+///         @ref sonare_last_error_message.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the
 ///       assist seam or without the arrangement subsystem.
 SonareError sonare_project_assist_preview_json(const SonareProject* project,
@@ -145,9 +125,9 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
 ///          @ref sonare_project_assist_preview_json, which is the call to make
 ///          first: this one is undoable but it is not a dry run. A run whose
 ///          status is not @c "ok" commits nothing.
-/// @param out_json Receives the document
-///        @ref sonare_project_assist_preview_json describes, on the refusal path
-///        as well. Release with @ref sonare_free_string.
+/// @param out_json Receives the document described by
+///                 @ref sonare_project_assist_preview_json on success, or NULL
+///                 on failure. Release with @ref sonare_free_string.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the
 ///       assist seam or without the arrangement subsystem.
 SonareError sonare_project_assist_apply_json(SonareProject* project, const char* request_json,

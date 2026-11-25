@@ -36,6 +36,11 @@ interface ReleasableCase {
 const block = (n: number): Float32Array =>
   new Float32Array(n).map((_, i) => 0.25 * Math.sin((2 * Math.PI * 440 * i) / 48000));
 
+// Prepare still allocates the full chain. Exercise it with reused short planes
+// so temporary JS audio buffers do not dominate the RSS measurement.
+const chainProbeLeft = block(128);
+const chainProbeRight = chainProbeLeft.slice();
+
 const CASES: readonly ReleasableCase[] = [
   {
     name: 'StreamAnalyzer',
@@ -60,7 +65,7 @@ const CASES: readonly ReleasableCase[] = [
         stereo: { imager: { width: 1.1 } },
         maximizer: { truePeakLimiter: { ceilingDbtp: -1 } },
       });
-      chain.processStereo(block(1024), block(1024));
+      chain.processStereo(chainProbeLeft, chainProbeRight);
       return chain;
     },
     useAfterDestroy: (instance) =>
@@ -70,8 +75,10 @@ const CASES: readonly ReleasableCase[] = [
   {
     name: 'StreamingEqualizer',
     make: () => {
-      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-      eq.processMono(block(512));
+      // Touch a full prepared block so the live-state control commits its pages.
+      const maxBlockSize = 4096;
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize });
+      eq.processMono(block(maxBlockSize));
       return eq;
     },
     useAfterDestroy: (instance) => (instance as StreamingEqualizer).processMono(block(512)),

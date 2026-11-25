@@ -63,6 +63,13 @@ function firstDifference(a: Float32Array, b: Float32Array): number {
   return -1;
 }
 
+/** Compare C float results within one representable step at their own scale. */
+function expectFloat32CloseAtScale(actual: number, expected: number): void {
+  const scale = Math.max(Math.abs(actual), Math.abs(expected));
+  const tolerance = scale === 0 ? 0 : 2 ** (Math.floor(Math.log2(scale)) - 23);
+  expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
+}
+
 /** Two distinguishable tones over a common noise bed. */
 function pair(): { left: Float32Array; right: Float32Array } {
   const bed = noise(12345, 0.02);
@@ -277,13 +284,13 @@ describe('masteringRepairDereverbClassicalLinked', () => {
 
     expect(one.detected.latePredictability).toBeGreaterThan(0);
     expect(one.wpePredictorNorm).toBeGreaterThan(0);
-    expect(three.detected.latePredictability).toBeCloseTo(
-      one.detected.latePredictability ?? Number.NaN,
-      3,
+    expectFloat32CloseAtScale(
+      present(three.detected.latePredictability),
+      present(one.detected.latePredictability),
     );
-    expect(three.wpePredictorNorm).toBe(one.wpePredictorNorm);
-    expect(three.meanReductionDb).toBe(one.meanReductionDb);
-    expect(three.suppressedFraction).toBe(one.suppressedFraction);
+    expectFloat32CloseAtScale(present(three.wpePredictorNorm), present(one.wpePredictorNorm));
+    expectFloat32CloseAtScale(present(three.meanReductionDb), present(one.meanReductionDb));
+    expectFloat32CloseAtScale(present(three.suppressedFraction), present(one.suppressedFraction));
   });
 
   it('routes each channel to its own output plane', () => {

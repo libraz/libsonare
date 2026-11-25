@@ -100,7 +100,7 @@ struct SonareMixer {
   int64_t timeline_sample_pos = 0;
   // Master-output meter. Absent until first enabled, then kept prepared so
   // toggling it costs no allocation.
-  std::optional<sonare::mixing::MeterProcessor> master_meter;
+  std::unique_ptr<sonare::mixing::MeterProcessor> master_meter;
   sonare::mixing::MeterConfig master_meter_config{};
   bool master_meter_active = false;
 };

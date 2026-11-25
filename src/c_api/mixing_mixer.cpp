@@ -4,6 +4,7 @@
 
 #include "c_api/checked_insert.h"
 #include "c_api/mixing_internal.h"
+#include "c_api/mixing_meter_defaults.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/retired_names.h"
@@ -860,18 +861,12 @@ SonareError sonare_mixer_flush_meters(SonareMixer* mixer) {
   SONARE_C_REQUIRE_NONNULL(mixer);
   for (auto& strip : mixer->strips) strip->strip.flush_meters();
   for (auto& bus : mixer->bus_dsp) bus->fx.flush_meters();
-  if (mixer->master_meter.has_value()) mixer->master_meter->flush_true_peak();
+  if (mixer->master_meter) mixer->master_meter->flush_true_peak();
   return SONARE_OK;
 }
 
 void sonare_mixer_master_meter_config_init(SonareMixerMasterMeterConfig* config) {
-  if (config == nullptr) return;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->enabled = 1;
-  config->measure_lufs = sonare::mixing::kPublishedMeterConfig.measure_lufs ? 1 : 0;
-  config->measure_true_peak = sonare::mixing::kPublishedMeterConfig.measure_true_peak ? 1 : 0;
-  config->true_peak_oversample = sonare::mixing::kPublishedMeterConfig.true_peak_oversample;
+  sonare_c_mixing_detail::initialize_master_meter_config(config);
 }
 
 SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
@@ -895,23 +890,24 @@ SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
   meter.measure_lufs = resolved.measure_lufs != 0;
   meter.measure_true_peak = resolved.measure_true_peak != 0;
   meter.true_peak_oversample = resolved.true_peak_oversample;
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        check::one_of(resolved.true_peak_oversample, std::array<int, 2>{4, 8},
+                      "config.true_peak_oversample");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   sonare::mixing::validate_realtime_meter_config(meter);
   const sonare::mixing::MeterConfig& held = mixer->master_meter_config;
-  const bool same = mixer->master_meter.has_value() && held.measure_lufs == meter.measure_lufs &&
+  const bool same = mixer->master_meter && held.measure_lufs == meter.measure_lufs &&
                     held.measure_true_peak == meter.measure_true_peak &&
                     held.true_peak_oversample == meter.true_peak_oversample;
   if (same) {
     mixer->master_meter->reset();
   } else {
-    mixer->master_meter_active = false;
-    mixer->master_meter.reset();
-    try {
-      mixer->master_meter.emplace(meter);
-      mixer->master_meter->prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
-    } catch (...) {
-      mixer->master_meter.reset();
-      throw;
-    }
+    auto replacement = std::make_unique<sonare::mixing::MeterProcessor>(meter);
+    replacement->prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+    mixer->master_meter.swap(replacement);
     mixer->master_meter_config = meter;
   }
   mixer->master_meter_active = true;
@@ -921,8 +917,9 @@ SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
 
 SonareError sonare_mixer_master_meter(SonareMixer* mixer, SonareMixMeterSnapshot* out) {
   SONARE_C_RT_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   if (!mixer || !out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!mixer->master_meter.has_value()) return SONARE_ERROR_INVALID_STATE;
+  if (!mixer->master_meter) return SONARE_ERROR_INVALID_STATE;
   copy_meter_snapshot(mixer->master_meter->snapshot(), out);
   return SONARE_OK;
 }

@@ -20,6 +20,7 @@
 #endif
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
+#include "sonare_c_mastering_init_defaults.h"
 #include "util/json.h"
 #include "util/parameter_checks.h"
 
@@ -84,15 +85,7 @@ const std::array<CName, 4> kMasteringConfigNames{
 }  // namespace
 
 void sonare_mastering_config_init(SonareMasteringConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::maximizer::LoudnessOptimizeConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->target_lufs = cpp.target_lufs;
-  config->ceiling_dbtp = cpp.ceiling_dbtp;
-  config->true_peak_oversample = cpp.true_peak_oversample;
-  config->release_ms = cpp.release_ms;
-  config->apply_gain_at_input_rate = cpp.apply_gain_at_input_rate ? 1 : 0;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
@@ -574,7 +567,7 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor, const f
   }
   SonareError err = validate_audio_params("source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("reference", reference, reference_length, reference_sample_rate);
+  err = validate_reference_audio(reference, reference_length, reference_sample_rate, "reference");
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -597,8 +590,10 @@ SonareError sonare_mastering_apply_pair_processor_stereo(
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(processor);
-  if (const SonareError empty_err =
-          run_validation([&] { util::check::non_empty(processor, "processor"); });
+  if (const SonareError empty_err = run_validation([&] {
+        util::check::non_empty(processor, "processor");
+        sonare::mastering::api::require_stereo_pair_processor(processor);
+      });
       empty_err != SONARE_OK) {
     return empty_err;
   }
@@ -606,8 +601,11 @@ SonareError sonare_mastering_apply_pair_processor_stereo(
   SonareError err = validate_stereo_audio_params("source_left", "source_right", source_left,
                                                  source_right, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_stereo_audio_params("reference_left", "reference_right", reference_left,
-                                     reference_right, reference_length, reference_sample_rate);
+  err = validate_reference_audio(reference_left, reference_length, reference_sample_rate,
+                                 "reference_left");
+  if (err != SONARE_OK) return err;
+  err = validate_reference_audio(reference_right, reference_length, reference_sample_rate,
+                                 "reference_right");
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -631,7 +629,7 @@ SonareError sonare_mastering_analyze_pair(const char* analysis, const float* sou
   SONARE_C_REQUIRE_NONNULL(analysis);
   SonareError err = validate_audio_params("source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("reference", reference, reference_length, reference_sample_rate);
+  err = validate_reference_audio(reference, reference_length, reference_sample_rate, "reference");
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
@@ -655,14 +653,13 @@ SonareError sonare_mastering_analyze_pair_stereo(
   SonareError err = validate_stereo_audio_params("source_left", "source_right", source_left,
                                                  source_right, source_length, sample_rate);
   if (err != SONARE_OK) return err;
+  err = validate_reference_audio(reference_left, reference_length, reference_sample_rate,
+                                 "reference_left");
+  if (err != SONARE_OK) return err;
+  err = validate_reference_audio(reference_right, reference_length, reference_sample_rate,
+                                 "reference_right");
+  if (err != SONARE_OK) return err;
   SONARE_C_TRY
-  constexpr std::array<CName, 1> kReferenceRateNames{{{"sample_rate", "reference_sample_rate"}}};
-  with_c_names(kReferenceRateNames, [&] {
-    validate_offline_audio_input("reference_left", reference_left, reference_length,
-                                 reference_sample_rate);
-    validate_offline_audio_input("reference_right", reference_right, reference_length,
-                                 reference_sample_rate);
-  });
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
   auto json = sonare::mastering::api::analyze_named_pair(
@@ -718,7 +715,7 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
   SONARE_C_ZERO_OUTS(out, out_length, out_match);
   SonareError err = validate_audio_params("source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("reference", reference, reference_length, reference_sample_rate);
+  err = validate_reference_audio(reference, reference_length, reference_sample_rate, "reference");
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
@@ -751,8 +748,11 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
   SonareError err = validate_stereo_audio_params("source_left", "source_right", source_left,
                                                  source_right, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_stereo_audio_params("reference_left", "reference_right", reference_left,
-                                     reference_right, reference_length, reference_sample_rate);
+  err = validate_reference_audio(reference_left, reference_length, reference_sample_rate,
+                                 "reference_left");
+  if (err != SONARE_OK) return err;
+  err = validate_reference_audio(reference_right, reference_length, reference_sample_rate,
+                                 "reference_right");
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_left);
   SONARE_C_REQUIRE_NONNULL(out_right);

@@ -597,7 +597,8 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
 bool repair_apply_json(const float* const* channels, std::size_t channel_count, std::size_t length,
                        int sample_rate, const std::string& stages_json, float* const* out_channels,
                        std::string* reports_json, const RepairProgressCallback& progress,
-                       const RepairCancelCallback& cancel) {
+                       const RepairCancelCallback& cancel,
+                       const RepairReportCallback& stage_report) {
   validate_channel_set("channels", channels, channel_count, length, sample_rate);
   if (out_channels == nullptr) refuse("output channels must not be null");
   for (std::size_t c = 0; c < channel_count; ++c) {
@@ -625,10 +626,12 @@ bool repair_apply_json(const float* const* channels, std::size_t channel_count, 
     if (cancel && cancel()) return false;
   }
 
+  std::string report = json::dump(json::Value(std::move(reports)));
+  if (stage_report) stage_report(report);
   for (std::size_t c = 0; c < channel_count; ++c) {
     std::copy(working[c].data(), working[c].data() + length, out_channels[c]);
   }
-  *reports_json = json::dump(json::Value(std::move(reports)));
+  *reports_json = std::move(report);
   return true;
 }
 

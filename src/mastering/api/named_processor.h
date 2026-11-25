@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -54,6 +55,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
 std::vector<std::string> stereo_processor_names();
 
 std::vector<std::string> pair_processor_names();
+/// Checks that the named pair processor exists and can process a planar stereo pair.
+void require_stereo_pair_processor(std::string_view name);
 std::vector<std::string> pair_analysis_names();
 std::vector<std::string> stereo_analysis_names();
 
@@ -154,7 +157,8 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
 /// Apply the stereo pair processor subset. Source and reference may have
 /// different frame counts and rates; pair members must have equal lengths within
 /// each pair. A reference at another rate is resampled onto @p sample_rate first.
-/// The output follows the shorter pair for the supported crossfade.
+/// The output follows the shorter pair for the supported crossfade. The processor
+/// name is checked first, then the source and reference audio, then the parameters.
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
                                                const float* source_right, std::size_t source_length,
                                                const float* reference_left,

@@ -257,6 +257,27 @@ inline void note_crossover_band_slot(const ParamMap& params, size_t index) {
                    SlotDeclaration{std::string(), false, static_cast<int>(index)});
 }
 
+/// @brief Runs a setter, placing a refusal of one of its arguments under the key it was read from.
+/// @details A setter refuses its argument by name; @p keys pairs each name with the caller's key.
+template <typename Setter>
+void with_setter_keys(std::initializer_list<std::pair<const char*, const char*>> keys,
+                      Setter setter) {
+  try {
+    setter();
+  } catch (const SonareParameterRefusal& e) {
+    if (e.caller_spelled()) throw;
+    throw e.respelled(
+        e.code(),
+        [&keys](const std::string& subject) {
+          for (const auto& [argument, key] : keys) {
+            if (subject == argument) return std::string(key);
+          }
+          return subject;
+        },
+        true);
+  }
+}
+
 /// @brief Reads `<prefix><i>.<field>` for each of @p Processor's bands; a band exists once any
 ///        of its keys is supplied.
 template <typename Processor>
@@ -274,9 +295,13 @@ inline void configure_eq_bands(Processor& processor, const ParamMap& params,
 
 inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params) {
   processor.set_auto_gain_enabled(b(params, "autoGain", processor.auto_gain_enabled()));
-  processor.set_gain_scale(f(params, "gainScale", processor.gain_scale(), kNone));
+  with_setter_keys({{"scale", "gainScale"}}, [&] {
+    processor.set_gain_scale(f(params, "gainScale", processor.gain_scale(), kNone));
+  });
   processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db(), kDb));
-  processor.set_output_pan(f(params, "outputPan", processor.output_pan(), kNone));
+  with_setter_keys({{"pan", "outputPan"}}, [&] {
+    processor.set_output_pan(f(params, "outputPan", processor.output_pan(), kNone));
+  });
   processor.set_phase_mode(read_enum(params, "phaseMode", processor.phase_mode()));
   configure_eq_bands(processor, params, "band");
 }
@@ -614,27 +639,6 @@ inline void configure_cut_filter(eq::CutFilter& p, const ParamMap& params) {
                  f(params, "lowPassQ", constants::kButterworthQ, kNone),
                  read_enum(params, "lowPassSlope", eq::CutFilterSlope::Db12PerOct),
                  b(params, "lowPassEnabled", false));
-}
-
-/// @brief Runs a setter, placing a refusal of one of its arguments under the key it was read from.
-/// @details A setter refuses its argument by name; @p keys pairs each name with the caller's key.
-template <typename Setter>
-void with_setter_keys(std::initializer_list<std::pair<const char*, const char*>> keys,
-                      Setter setter) {
-  try {
-    setter();
-  } catch (const SonareParameterRefusal& e) {
-    if (e.caller_spelled()) throw;
-    throw e.respelled(
-        e.code(),
-        [&keys](const std::string& subject) {
-          for (const auto& [argument, key] : keys) {
-            if (subject == argument) return std::string(key);
-          }
-          return subject;
-        },
-        true);
-  }
 }
 
 inline void configure_band_pass(eq::BandPassEq& p, const ParamMap& params) {

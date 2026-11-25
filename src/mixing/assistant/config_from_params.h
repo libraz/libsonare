@@ -7,6 +7,7 @@
 ///          Used by both the C-ABI helper layer and the WASM binding so the JS
 ///          and C/Python paths stay in lock-step.
 
+#include <cmath>
 #include <cstddef>
 #include <string>
 
@@ -72,10 +73,10 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
     } else if (key == "mixBusHeadroomDbtp") {
       config.mix_bus_headroom_dbtp = static_cast<float>(value);
     } else if (key == "tempoBpm") {
-      const auto tempo = static_cast<float>(value);
-      // Zero is the only sentinel for the transport fallback; anything else is
-      // taken as a real tempo and is refused unless it reads as one.
-      if (!(tempo == 0.0f || (tempo >= kMinAssistantTempoBpm && tempo <= kMaxAssistantTempoBpm))) {
+      // Only exact zero is the transport fallback sentinel; test the source double before
+      // narrowing so a small nonzero value cannot underflow into that sentinel.
+      if (!(value == 0.0 || (std::isfinite(value) && value >= kMinAssistantTempoBpm &&
+                             value <= kMaxAssistantTempoBpm))) {
         throw SonareParameterRefusal::predicate(
             ErrorCode::InvalidParameter, key,
             "must be 0 or a tempo between " +
@@ -83,7 +84,7 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
                 std::to_string(static_cast<int>(kMaxAssistantTempoBpm)) + " BPM")
             .as_caller_spelled();
       }
-      config.tempo_bpm = tempo;
+      config.tempo_bpm = static_cast<float>(value);
     } else if (key == "enableStructure") {
       config.enable_structure = value != 0.0;
     } else if (key == "enableGain") {

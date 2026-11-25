@@ -108,11 +108,13 @@ TEST_CASE("the streaming chain process entries state their buffer refusals",
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "num_samples must be an integer in [0, 128]");
 
+  REQUIRE(sonare_streaming_mastering_chain_prepare(prepared.chain, 48000, 128, 1) == SONARE_OK);
   std::vector<float> right = block;
   block[5] = std::numeric_limits<float>::quiet_NaN();
   REQUIRE(sonare_streaming_mastering_chain_process_mono(
               prepared.chain, block.data(), block.size()) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "samples contains a non-finite sample at index 5");
+  REQUIRE(sonare_streaming_mastering_chain_prepare(prepared.chain, 48000, 128, 2) == SONARE_OK);
   REQUIRE(sonare_streaming_mastering_chain_process_stereo(prepared.chain, block.data(),
                                                           right.data(), block.size()) ==
           SONARE_ERROR_INVALID_PARAMETER);

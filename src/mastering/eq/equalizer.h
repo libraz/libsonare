@@ -17,8 +17,14 @@
 #include "mastering/eq/spectrum_engine.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
+#include "util/db.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+/// @brief Finite output gain that does not overflow the gain conversion.
+inline constexpr util::check::NumericDomain kEqOutputGainDbDomain =
+    util::check::real_domain_below(kMaxFiniteGainDb, true);
 
 struct EqualizerProcessorConfig {
   uint64_t spectrum_instance_id = 0;

@@ -21,6 +21,7 @@
 #include "feature/tonnetz.h"
 #include "mastering/api/chain.h"
 #include "mastering/assistant/audio_profile.h"
+#include "mastering/eq/equalizer.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
 #include "mastering/repair/decrackle.h"
@@ -68,6 +69,7 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"cqt_to_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"eq_match", "max_bands", kEqMatchMaxBandsDomain, nullptr},
     {"eq_set_band", "index", kEqBandIndexDomain, nullptr},
+    {"eq_set_output_gain_db", "gain_db", sonare::mastering::eq::kEqOutputGainDbDomain, nullptr},
     {"estimate_room", "config.n_octave_bands", sonare::kRoomEstimateOctaveBandsDomain, nullptr},
     {"frame_signal", "frame_length", sonare::kFrameLengthDomain, nullptr},
     {"frame_signal", "hop_length", sonare::kFrameHopLengthDomain, "within_work_size_limit"},
@@ -228,6 +230,7 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"mfcc_to_mel", "options.lifter", sonare::kMfccLifterDomain, nullptr},
     {"pcen", "n_bins", sonare::kPcenMatrixDimensionDomain, nullptr},
     {"pcen", "n_frames", sonare::kPcenMatrixDimensionDomain, nullptr},
+    {"playback_loudness_meter_create", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"room_morph", "config.absorption", sonare::acoustic::kWallMaterialCoefficientDomain, nullptr},
     {"room_morph", "config.air_humidity_percent",
      sonare::effects::common::kAirHumidityPercentDomain, nullptr},

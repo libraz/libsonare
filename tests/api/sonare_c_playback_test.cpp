@@ -10,9 +10,12 @@
 #include <utility>
 #include <vector>
 
+#include "support/alloc_guard.h"
+
 #if defined(SONARE_WITH_PLAYBACK)
 
 #include "c_api/playback_internal.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -533,15 +536,63 @@ TEST_CASE("playback renderer render_offline matches the one-shot render through 
   float* expected = nullptr;
   size_t expected_frames = 0;
   int expected_channels = 0;
-  REQUIRE(sonare_playback_render_interleaved(in.data(), kFrames, 2, 48000, config.c_str(), nullptr,
-                                             &expected, &expected_frames,
-                                             &expected_channels) == SONARE_OK);
+  const auto render_once = [&](float** out, size_t* frames, int* channels) {
+    return sonare_playback_render_interleaved(in.data(), kFrames, 2, 48000, config.c_str(), nullptr,
+                                              out, frames, channels);
+  };
+  size_t allocations = 0;
+  SonareError first_status;
+  {
+    sonare::test::AllocationGuard guard;
+    first_status = render_once(&expected, &expected_frames, &expected_channels);
+    allocations = guard.count();
+  }
+  REQUIRE(first_status == SONARE_OK);
+  REQUIRE(allocations > 0);
+  float* failed_once = nullptr;
+  size_t failed_once_frames = 99;
+  int failed_once_channels = 99;
+  {
+    sonare::test::AllocationFailureAtGuard guard(allocations);
+    first_status = render_once(&failed_once, &failed_once_frames, &failed_once_channels);
+  }
+  CHECK(first_status == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(failed_once == nullptr);
+  CHECK(failed_once_frames == 0);
+  CHECK(failed_once_channels == 0);
 
   SonarePlaybackRenderer* renderer = create_renderer(config, 48000, 4096);
   // Leave state behind first: the offline render resets the handle before it starts.
   std::vector<float> scratch_out(512 * 2, 0.0f);
   REQUIRE(sonare_playback_renderer_process_interleaved(renderer, in.data(), 2, scratch_out.data(),
                                                        2, 512) == SONARE_OK);
+
+  SonarePlaybackRenderer* control = create_renderer(config, 48000, 4096);
+  std::vector<float> reference(512 * 2);
+  REQUIRE(sonare_playback_renderer_process_interleaved(control, in.data(), 2, reference.data(), 2,
+                                                       512) == SONARE_OK);
+
+  float* failed = nullptr;
+  size_t failed_frames = 99;
+  int failed_channels = 99;
+  SonareError status;
+  {
+    sonare::test::AllocationFailureGuard guard(kFrames * 2 * sizeof(float));
+    status = sonare_playback_renderer_render_offline(renderer, in.data(), kFrames, 2, &failed,
+                                                     &failed_frames, &failed_channels);
+  }
+  CHECK(status == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(failed == nullptr);
+  CHECK(failed_frames == 0);
+  CHECK(failed_channels == 0);
+  const std::vector<float> silence(512 * 2, 0.0f);
+  REQUIRE(sonare_playback_renderer_process_interleaved(control, silence.data(), 2, reference.data(),
+                                                       2, 512) == SONARE_OK);
+  REQUIRE(std::any_of(reference.begin(), reference.end(), [](float v) { return v != 0.0f; }));
+  REQUIRE(sonare_playback_renderer_process_interleaved(renderer, silence.data(), 2,
+                                                       scratch_out.data(), 2, 512) == SONARE_OK);
+  CHECK(scratch_out == reference);
+  sonare_playback_renderer_destroy(control);
 
   float* out = nullptr;
   size_t out_frames = 0;
@@ -576,6 +627,23 @@ TEST_CASE("playback renderer render_offline matches the one-shot render through 
   sonare_playback_renderer_destroy(renderer);
 }
 
+TEST_CASE("playback render_offline names frames when the output would exceed the cap",
+          "[playback][capi]") {
+  SonarePlaybackRenderer* renderer = create_renderer(speakers_5_1_config());
+  const float input = 0.0f;
+  const size_t frames = sonare::resource::kMaxOfflineAudioSamples / 6 + 1;
+  float* output = nullptr;
+  size_t written = 1;
+  int channels = 1;
+  CHECK(sonare_playback_renderer_render_offline(renderer, &input, frames, 2, &output, &written,
+                                                &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("frames ") == 0);
+  CHECK(output == nullptr);
+  CHECK(written == 0);
+  CHECK(channels == 0);
+  sonare_playback_renderer_destroy(renderer);
+}
+
 TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]") {
   SonarePlaybackLoudnessMeter* meter = nullptr;
   REQUIRE(sonare_playback_loudness_meter_create(2, 48000, &meter) == SONARE_OK);
@@ -607,7 +675,16 @@ TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]"
       reinterpret_cast<SonarePlaybackLoudnessMeter*>(uintptr_t{1});
   CHECK(sonare_playback_loudness_meter_create(3, 48000, &invalid) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "channels must be one of 1, 2, 6, 8");
   CHECK(invalid == nullptr);
+  for (const int sample_rate : {0, 7999, 384001}) {
+    invalid = reinterpret_cast<SonarePlaybackLoudnessMeter*>(uintptr_t{1});
+    CHECK(sonare_playback_loudness_meter_create(2, sample_rate, &invalid) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "sample_rate must be an integer in [8000, 384000]");
+    CHECK(invalid == nullptr);
+  }
   CHECK(sonare_playback_loudness_meter_create(2, 48000, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   CHECK(sonare_playback_loudness_meter_push_interleaved(nullptr, block.data(), 8) ==
@@ -619,10 +696,12 @@ TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]"
   REQUIRE(sonare_playback_loudness_meter_create(2, 48000, &live) == SONARE_OK);
   CHECK(sonare_playback_loudness_meter_push_interleaved(live, block.data(), 0) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "frames must be an integer of at least 1");
   std::vector<float> non_finite_block = block;
   non_finite_block[9] = std::numeric_limits<float>::quiet_NaN();
   CHECK(sonare_playback_loudness_meter_push_interleaved(live, non_finite_block.data(), 4096) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "in must contain only finite samples");
   sonare_playback_loudness_meter_destroy(live);
 
   lufs = 1.0f;
@@ -652,7 +731,7 @@ TEST_CASE("a NULL argument is refused by its parameter name", "[playback][capi]"
   CHECK(std::string(sonare_last_error_message()) == "in must not be NULL when frames is not 0");
   CHECK(sonare_playback_loudness_meter_push_interleaved(meter, nullptr, 0) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()) == "samples must not be empty");
+  CHECK(std::string(sonare_last_error_message()) == "frames must be an integer of at least 1");
   const float frame[2] = {};
   CHECK(sonare_playback_loudness_meter_push_interleaved(meter, frame, 1) == SONARE_OK);
   CHECK(sonare_last_error_code() == SONARE_OK);

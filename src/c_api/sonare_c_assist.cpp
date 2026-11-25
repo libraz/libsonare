@@ -1,5 +1,7 @@
 #include <sonare/sonare_c_assist.h>
 
+#include <memory>
+
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
@@ -255,8 +257,6 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
   SONARE_C_ZERO_OUTS(out_json);
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(request_json);
-  SONARE_C_REQUIRE_NONNULL(out_json);
-
   assist::AssistRequest request;
   bool want_generator = false;
   bool want_harmonizer = false;
@@ -265,6 +265,8 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+
+  SONARE_C_REQUIRE_NONNULL(out_json);
 
   BuiltinModules modules;
   assist::AssistRegistry registry;
@@ -278,22 +280,14 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
                                               project->history.midi_content(), "sonare.builtin");
   assist::AssistResult result = assist::CompositionAssist(registry).run(view, request);
 
-  // Described BEFORE applying. Applying moves the commands out of the result, so
-  // building the document afterwards reported an empty `patches` on every
-  // successful apply -- the caller could see that something committed but not
-  // what, which is the one thing the document is for.
-  const std::string document = build_document(result);
-
-  // A refused request is an ERROR return, not a document reporting a quiet
-  // nothing. The reason goes to the detailed-error channel so a caller that only
-  // checks the code still learns which field it got wrong.
   if (result.diagnostics.status == assist::AssistStatus::kRejected) {
-    *out_json = copy_string(document);
-    const SonareError code =
-        *out_json == nullptr ? SONARE_ERROR_OUT_OF_MEMORY : SONARE_ERROR_INVALID_PARAMETER;
-    sonare_c_detail::set_last_error(code, result.diagnostics.reason.c_str());
-    return code;
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    result.diagnostics.reason.c_str());
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+
+  // Allocate the success report before moving the commands into history.
+  std::unique_ptr<char[]> document(copy_string(build_document(result)));
 
   // Applied as ONE transaction, so an assist run is one undo step rather than a
   // pile of per-module ones a user has to walk back individually.
@@ -306,8 +300,8 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
     }
   }
 
-  *out_json = copy_string(document);
-  return *out_json == nullptr ? SONARE_ERROR_OUT_OF_MEMORY : SONARE_OK;
+  *out_json = document.release();
+  return SONARE_OK;
 }
 
 }  // namespace
@@ -330,9 +324,6 @@ const char* sonare_assist_module_ids(void) {
 SonareError sonare_project_assist_preview_json(const SonareProject* project,
                                                const char* request_json, char** out_json) {
   SONARE_C_API_ENTRY;
-  // Defined before any other exit, and in both configurations: the document is
-  // written on the refusal path too, so a caller that reads it after an error
-  // must not be handed an untouched slot.
   SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   SONARE_C_TRY
@@ -352,7 +343,6 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
 SonareError sonare_project_assist_apply_json(SonareProject* project, const char* request_json,
                                              char** out_json) {
   SONARE_C_API_ENTRY;
-  // See the preview entry point: defined before any other exit, both configurations.
   SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   SONARE_C_TRY

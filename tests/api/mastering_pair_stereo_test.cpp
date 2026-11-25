@@ -3,12 +3,85 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <vector>
 
+#include "mastering/api/named_processor.h"
 #include "metering/lufs.h"
 #include "sonare_c_test_helpers.h"
 #include "util/json.h"
+
+TEST_CASE("stereo pair processor admits the name before reading audio",
+          "[c_api][mastering][stereo]") {
+  SonareMasteringStereoResult out{};
+  CHECK(sonare_mastering_apply_pair_processor_stereo("unknown", nullptr, nullptr, 0, nullptr,
+                                                     nullptr, 0, 0, 0, nullptr, 0,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("processor must be one of") == 0);
+  CHECK(sonare_mastering_apply_pair_processor_stereo("match.abSwitch", nullptr, nullptr, 0, nullptr,
+                                                     nullptr, 0, 0, 0, nullptr, 0,
+                                                     &out) == SONARE_ERROR_NOT_SUPPORTED);
+  float samples[] = {0.0f, 0.1f};
+  out.left = samples;
+  out.right = samples;
+  out.length = 2;
+  CHECK(sonare_mastering_apply_pair_processor_stereo("match.abCrossfade", samples, samples, 2,
+                                                     samples, samples, 2, 0, 48000, nullptr, 0,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("reference_sample_rate ") == 0);
+  CHECK(out.left == nullptr);
+  CHECK(out.right == nullptr);
+  CHECK(out.length == 0);
+}
+
+TEST_CASE("stereo pair processor checks the audio before the parameter values",
+          "[c_api][mastering][stereo]") {
+  const float good[] = {0.0f, 0.1f};
+  const float bad[] = {std::numeric_limits<float>::quiet_NaN(), 0.1f};
+  const SonareMasteringParam params[] = {{"mix", std::numeric_limits<double>::quiet_NaN()}};
+  SonareMasteringStereoResult out{};
+  CHECK(sonare_mastering_apply_pair_processor_stereo("match.abCrossfade", bad, good, 2, good, good,
+                                                     2, 48000, 48000, params, 1,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("source_left") == 0);
+  CHECK_THROWS_WITH(sonare::mastering::api::apply_named_pair_processor_stereo(
+                        "match.abCrossfade", good, good, 2, good, bad, 2, 48000, 48000,
+                        {{"mix", std::numeric_limits<double>::quiet_NaN()}}),
+                    Catch::Matchers::StartsWith("reference_right"));
+  CHECK(sonare_mastering_apply_pair_processor_stereo("match.abCrossfade", good, good, 2, good, good,
+                                                     2, 48000, 48000, params, 1,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("mix") != std::string::npos);
+}
+
+TEST_CASE("C mastering pair entries name the reference sample rate",
+          "[c_api][mastering][pair_stereo]") {
+  const float samples[] = {0.0f, 0.1f};
+  const auto check_rate = [](SonareError status) {
+    CHECK(status == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(std::string(sonare_last_error_message()),
+               Catch::Matchers::StartsWith("reference_sample_rate "));
+  };
+
+  SonareMasteringResult result{};
+  check_rate(sonare_mastering_apply_pair_processor("match.abCrossfade", samples, 2, samples, 2, 0,
+                                                   48000, nullptr, 0, &result));
+  char* analysis = nullptr;
+  check_rate(sonare_mastering_analyze_pair("match.referenceLoudness", samples, 2, samples, 2, 0,
+                                           48000, nullptr, 0, &analysis));
+  check_rate(sonare_mastering_analyze_pair_stereo("match.referenceLoudness", samples, samples, 2,
+                                                  samples, samples, 2, 0, 48000, nullptr, 0,
+                                                  &analysis));
+
+  float* left = nullptr;
+  float* right = nullptr;
+  size_t length = 0;
+  check_rate(sonare_mastering_ab_match_loudness(samples, 2, samples, 2, 0, 48000, &left, &length,
+                                                nullptr));
+  check_rate(sonare_mastering_ab_match_loudness_stereo(samples, samples, 2, samples, samples, 2, 0,
+                                                       48000, &left, &right, &length, nullptr));
+}
 
 TEST_CASE("C API pair analysis accepts planar stereo inputs", "[c_api][mastering][pair_stereo]") {
   constexpr int kSampleRate = 44100;

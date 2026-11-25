@@ -1028,6 +1028,16 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                     sample_rate, params);
 }
 
+void require_stereo_pair_processor(std::string_view name) {
+  if (name == "match.abCrossfade") return;
+  const auto names = pair_processor_names();
+  if (std::find(names.begin(), names.end(), name) == names.end()) {
+    util::check::refuse("processor", "must be one of " + util::json::schema::expected_keys(names));
+  }
+  throw SonareParameterRefusal::predicate(ErrorCode::NotSupported, "processor",
+                                          "does not support planar stereo pairs");
+}
+
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
                                                const float* source_right, std::size_t source_length,
                                                const float* reference_left,
@@ -1035,17 +1045,14 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
                                                std::size_t reference_length, int sample_rate,
                                                int reference_sample_rate,
                                                const std::vector<Param>& params) {
-  validate_params(params.data(), params.size());
-  // Only the crossfade is defined for planar pairs; reject the rest before copying.
-  if (name != "match.abCrossfade") {
-    throw SonareException(ErrorCode::NotSupported, "unsupported stereo pair processor: " + name);
-  }
+  require_stereo_pair_processor(name);
   validate_offline_audio_input("source_left", source_left, source_length, sample_rate);
   validate_offline_audio_input("source_right", source_right, source_length, sample_rate);
   validate_offline_audio_input("reference_left", reference_left, reference_length,
                                reference_sample_rate);
   validate_offline_audio_input("reference_right", reference_right, reference_length,
                                reference_sample_rate);
+  validate_params(params.data(), params.size());
   const auto map = make_map(params);
   const float mix = f(map, "mix", 0.5f);
 

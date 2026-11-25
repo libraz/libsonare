@@ -12,7 +12,7 @@ import {
   renderPlayback,
   SonareError,
 } from '../dist/index.js';
-import { unknownKeyError } from './_helpers';
+import { expectRefusalOf, unknownKeyError } from './_helpers';
 
 const SR = 48000;
 const packageRoot = new URL('../', import.meta.url);
@@ -618,6 +618,33 @@ describe('playback renderer (WASM)', () => {
     } finally {
       hrtf.destroy();
     }
+  });
+
+  it.each([4000, 400000])(
+    'refuses a playback loudness meter sample rate outside the audio domain: %i',
+    (sampleRate) => {
+      const refusal = expectRefusalOf(() => {
+        new PlaybackLoudnessMeter({ numChannels: 2, sampleRate }).destroy();
+      }, RangeError);
+      expect(refusal.message).toBe(
+        'PlaybackLoudnessMeter: sampleRate must be an integer in [8000, 384000]',
+      );
+    },
+  );
+
+  it('keeps the playback loudness meter sample rate shape refusals', () => {
+    expect(
+      expectRefusalOf(
+        () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000.5 }),
+        RangeError,
+      ).message,
+    ).toContain('sampleRate');
+    expect(
+      expectRefusalOf(
+        () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: '48000' as never }),
+        TypeError,
+      ).message,
+    ).toContain('sampleRate');
   });
 
   it('measures integrated program loudness', () => {

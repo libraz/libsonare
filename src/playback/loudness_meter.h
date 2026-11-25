@@ -18,8 +18,8 @@ inline constexpr int kPlaybackLoudnessBlockFrames = 4096;
 class PlaybackLoudnessMeter {
  public:
   /// @p channels is 1, 2, 6 or 8.
-  /// @throws SonareException(InvalidParameter) on another channel count or a
-  ///         non-positive sample rate.
+  /// @throws SonareException(InvalidParameter) on another channel count or an audio sample rate
+  ///         outside [8000, 384000].
   PlaybackLoudnessMeter(int channels, int sample_rate);
   ~PlaybackLoudnessMeter();
   PlaybackLoudnessMeter(const PlaybackLoudnessMeter&) = delete;

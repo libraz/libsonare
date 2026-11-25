@@ -104,6 +104,34 @@ TEST_CASE("sonare_mixer_process_stereo leaves the caller's output untouched when
 }
 #endif  // defined(SONARE_WITH_MIXING)
 
+TEST_CASE("mixer meter initializers share their published defaults", "[c_api][mixing][defaults]") {
+  SonareMixerAddStripOptions strip{};
+  strip.struct_size = 0x7f7f7f7f;
+  strip.enable_metering = 127;
+  strip.measure_lufs = 127;
+  strip.measure_true_peak = 127;
+  strip.true_peak_oversample = 127;
+  sonare_mixer_add_strip_options_init(&strip);
+  CHECK(strip.struct_size == sizeof(SonareMixerAddStripOptions));
+  CHECK(strip.enable_metering == 1);
+  CHECK(strip.measure_lufs == 1);
+  CHECK(strip.measure_true_peak == 1);
+  CHECK(strip.true_peak_oversample == 4);
+
+  SonareMixerMasterMeterConfig master{};
+  master.struct_size = 0x7f7f7f7f;
+  master.enabled = 127;
+  master.measure_lufs = 127;
+  master.measure_true_peak = 127;
+  master.true_peak_oversample = 127;
+  sonare_mixer_master_meter_config_init(&master);
+  CHECK(master.struct_size == sizeof(SonareMixerMasterMeterConfig));
+  CHECK(master.enabled == 1);
+  CHECK(master.measure_lufs == strip.measure_lufs);
+  CHECK(master.measure_true_peak == strip.measure_true_peak);
+  CHECK(master.true_peak_oversample == strip.true_peak_oversample);
+}
+
 TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing]") {
   const int sr = 48000;
   auto left = generate_sine(440.0f, sr, 0.25f);

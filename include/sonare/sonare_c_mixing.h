@@ -61,15 +61,17 @@ typedef enum SONARE_ENUM_BASE {
 /// Maximum number of surround planes a meter snapshot can report (7.1).
 #define SONARE_MAX_METER_CHANNELS 8
 
-/// One reading of a strip, bus or master meter, describing the most recently metered block. Level
-/// fields sit at -120 dB when nothing has been measured or the measurement is switched off.
+/// One reading of a strip, bus or master meter, describing the most recently metered block. dB
+/// level fields are finite when measured, negative infinity for zero energy, and NaN when not
+/// measured. Correlation and mono-compatible width are NaN when undefined.
 typedef struct {
-  float peak_db_l;    ///< Left sample peak in dBFS
-  float peak_db_r;    ///< Right sample peak in dBFS
-  float rms_db_l;     ///< Left RMS in dBFS
-  float rms_db_r;     ///< Right RMS in dBFS
-  float correlation;  ///< Left/right correlation, -1 (anti-phase) to 1 (identical); 0 if silent
-  float mono_compat_width;     ///< RMS ratio of side to mid; 0 is mono, about 1 decorrelated
+  float peak_db_l;  ///< Left sample peak in dBFS
+  float peak_db_r;  ///< Right sample peak in dBFS
+  float rms_db_l;   ///< Left RMS in dBFS
+  float rms_db_r;   ///< Right RMS in dBFS
+  float
+      correlation;  ///< Left/right correlation, -1 (anti-phase) to 1 (identical); NaN if undefined
+  float mono_compat_width;     ///< RMS ratio of side to mid; NaN if undefined
   float mono_compat_peak;      ///< Peak of the mono sum 0.5 * (L + R), linear
   float mono_compat_side_rms;  ///< RMS of the side signal 0.5 * (L - R), linear
   int likely_mono_compatible;  ///< Non-zero when the correlation is not below the meter's threshold
@@ -159,10 +161,11 @@ SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
 /// @brief Sets the strip's fader gain in dB. Refused with SONARE_ERROR_INVALID_PARAMETER for a
 ///        NULL strip or a non-finite value.
 SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
-/// Sets the strip's pan position. pan_mode < 0 (SONARE_PAN_MODE_KEEP) keeps the
-/// strip's current pan mode (only the pan position changes); otherwise it selects
-/// the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan. A pan outside [-1, 1] is refused
-/// with SONARE_ERROR_INVALID_PARAMETER and leaves the strip unchanged.
+/// Sets the strip's pan position. SONARE_PAN_MODE_KEEP preserves the current
+/// pan mode; otherwise pan_mode must be SONARE_PAN_MODE_BALANCE,
+/// SONARE_PAN_MODE_STEREO_PAN or SONARE_PAN_MODE_DUAL_PAN. Values outside that
+/// set and a pan outside [-1, 1] are refused with SONARE_ERROR_INVALID_PARAMETER
+/// and leave the strip unchanged.
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 /// Both pans must lie in [-1, 1]; otherwise SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
@@ -195,7 +198,8 @@ SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left
 /// at center under every law through this API: the mixer always feeds two
 /// planes, and the law changes a mono strip's center gain only for a C++
 /// ChannelStrip built without mono_pan_centre_unity. Returns
-/// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
+/// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is not a
+/// @ref SonarePanLaw value.
 SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
 /// Sets a per-strip channel delay in samples, moving the strip later relative to the
 /// others. It is not latency: latency compensation does not undo it and the mixer's
@@ -220,7 +224,8 @@ SonareError sonare_strip_settle(SonareStrip* strip);
 /// @param id Optional send identifier; NULL is stored as the empty string.
 /// @param destination_bus_id Id of the bus the send feeds; must not be NULL.
 /// @param send_db Send level in dB; must be finite.
-/// @param timing A @ref SonareSendTiming; any other value is refused.
+/// @param timing A @ref SonareSendTiming; any other value is refused as
+///        @c SONARE_ERROR_INVALID_PARAMETER, naming @p timing.
 /// @param index_out Receives the send's index in add order; may be NULL. Written 0 on failure.
 SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   const char* destination_bus_id, float send_db, int timing,
@@ -252,7 +257,9 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
 ///   compile, so a bus that has been declared but never compiled is reported as
 ///   unknown rather than as zero.
 ///   Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer, bus_id or out_count is
-///   NULL, or if no compiled bus has that id. Realtime-safe.
+///   NULL, or if the bus has never been compiled. A bus that has been compiled
+///   remains readable while the graph is dirty. @p out_count is zero on failure.
+///   Realtime-safe.
 SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,
                                                       size_t* out_count);
 /// @brief Copies the most recent goniometer points of the strip into @p out.
@@ -279,7 +286,7 @@ size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGo
 ///   not depend on a dimension the caller did not choose. Cumulative since the
 ///   strip was created and never cleared, so two readings bracket a span of
 ///   audio. Returns @c SONARE_ERROR_INVALID_PARAMETER if strip or out_count is
-///   NULL. Realtime-safe.
+///   NULL. @p out_count is zero on failure. Realtime-safe.
 SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, size_t* out_count);
 
 /// Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
@@ -507,10 +514,11 @@ SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
                                                 const SonareMixerMasterMeterConfig* config);
 
 /// @brief Reads the master-output meter, describing the most recently metered block.
-/// @details Same snapshot as sonare_mixer_bus_meter; a measurement switched off stays at the dB
-///   floor. Realtime-safe: a lock-free read that records no error message.
+/// @details Same field semantics as sonare_mixer_bus_meter. Disabling the meter leaves the last
+///   snapshot readable; an unmeasured level or undefined correlation is NaN, and measured zero
+///   energy is negative infinity. Realtime-safe: a lock-free read that records no error message.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL argument, SONARE_ERROR_INVALID_STATE when
-///   the master meter has never been enabled.
+///   the master meter has never been enabled. @p out is zeroed on either error.
 SonareError sonare_mixer_master_meter(SonareMixer* mixer, SonareMixMeterSnapshot* out);
 
 /// Marks the end of the signal for every strip, bus and master-output meter: the
@@ -575,11 +583,13 @@ SonareError sonare_validate_mixing_assistant_config(int sample_rate,
 ///                     classification hint, or NULL. Individual entries may be NULL.
 /// @param track_lengths Per-track frame counts; @c input_count entries.
 /// @param track_sample_rates Per-track sample rates, or NULL when every track is
-///                     at @c sample_rate. A track at another rate is resampled
-///                     onto @c sample_rate before analysis; an entry <= 0 returns
-///                     @c SONARE_ERROR_INVALID_PARAMETER.
+///                     at @c sample_rate. Each rate must be in [8000, 384000]. A
+///                     track at another rate is resampled onto @c sample_rate
+///                     before analysis.
 /// @param input_count  Number of tracks. Zero yields an empty suggestion.
-/// @param sample_rate  Analysis rate every track is brought to; must be > 0.
+/// @param sample_rate  Analysis rate every track is brought to; for nonempty
+///                     input, must be in [8000, 384000]. Empty input yields an
+///                     empty suggestion without using this rate.
 /// @param params       Flat configuration; accepts targetTrackLufs,
 ///                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
 ///                     tempoBpm, enableStructure,
@@ -587,8 +597,8 @@ SonareError sonare_validate_mixing_assistant_config(int sample_rate,
 ///                     enableImage, enableHighPass, nFft and hopLength.
 ///                     tempoBpm is the tempo the suggested delay times are voiced
 ///                     against; 0 (the default) selects the transport's own
-///                     fallback tempo, and a positive value outside 20..400 BPM
-///                     is refused rather than clamped.
+///                     fallback tempo. Any nonzero value must be in [20, 400]
+///                     BPM; other values are refused rather than clamped.
 /// @param param_count  Number of entries in @c params.
 /// @param json_out     Receives the result JSON. Release with sonare_free_string().
 ///

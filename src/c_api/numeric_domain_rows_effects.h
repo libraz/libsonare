@@ -8,6 +8,7 @@
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/midi_input_domains.h"
+#include "c_api/mixing_input_domains.h"
 #include "c_api/numeric_domain_row.h"
 #include "c_api/playback_domains.h"
 #include "c_api/ppq_domains.h"
@@ -228,6 +229,8 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"split_silence_common", "frame_length", sonare::kSilenceFrameLengthDomain, nullptr},
     {"split_silence_common", "hop_length", sonare::kSilenceHopLengthDomain, nullptr},
     {"strip_set_channel_delay_samples", "delay_samples", kEngineAlignmentDelayDomain, nullptr},
+    {"strip_set_pan", "pan_mode", kStripPanModeDomain, nullptr},
+    {"strip_set_pan_law", "pan_law", kStripPanLawDomain, nullptr},
     {"time_stretch", "options.n_fft", sonare::kColaNFftDomain, "even"},
     {"trim", "options.frame_length", sonare::kSilenceFrameLengthDomain, nullptr},
     {"trim", "options.hop_length", sonare::kSilenceHopLengthDomain, nullptr},

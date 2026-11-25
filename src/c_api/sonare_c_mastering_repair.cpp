@@ -23,6 +23,7 @@
 #include "mastering/repair/trim_silence.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
+#include "sonare_c_mastering_init_defaults.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -222,49 +223,6 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
   cpp.gate_lufs = config->gate_lufs;
   cpp.window_ms = config->window_ms;
   return cpp;
-}
-
-int to_c_denoise_mode(sonare::mastering::repair::DenoiseMode mode) {
-  switch (mode) {
-    case sonare::mastering::repair::DenoiseMode::MmseStsa:
-      return SONARE_DENOISE_MODE_MMSE_STSA;
-    case sonare::mastering::repair::DenoiseMode::SpectralSubtraction:
-      return SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION;
-    case sonare::mastering::repair::DenoiseMode::LogMmse:
-      return SONARE_DENOISE_MODE_LOG_MMSE;
-  }
-  return SONARE_DENOISE_MODE_LOG_MMSE;
-}
-
-int to_c_denoise_noise_estimator(sonare::mastering::repair::DenoiseNoiseEstimator estimator) {
-  switch (estimator) {
-    case sonare::mastering::repair::DenoiseNoiseEstimator::Mcra:
-      return SONARE_DENOISE_NOISE_ESTIMATOR_MCRA;
-    case sonare::mastering::repair::DenoiseNoiseEstimator::Imcra:
-      return SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA;
-    case sonare::mastering::repair::DenoiseNoiseEstimator::Quantile:
-      return SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
-    case sonare::mastering::repair::DenoiseNoiseEstimator::Spp:
-      return SONARE_DENOISE_NOISE_ESTIMATOR_SPP;
-  }
-  return SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
-}
-
-int to_c_decrackle_mode(sonare::mastering::repair::DecrackleMode mode) {
-  return mode == sonare::mastering::repair::DecrackleMode::WaveletShrinkage
-             ? SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE
-             : SONARE_DECRACKLE_MODE_MEDIAN;
-}
-
-int to_c_dehum_mode(sonare::mastering::repair::DehumMode mode) {
-  return mode == sonare::mastering::repair::DehumMode::Notch ? SONARE_DEHUM_MODE_NOTCH
-                                                             : SONARE_DEHUM_MODE_SUBTRACT;
-}
-
-int to_c_trim_silence_mode(sonare::mastering::repair::TrimSilenceMode mode) {
-  return mode == sonare::mastering::repair::TrimSilenceMode::LufsGated
-             ? SONARE_TRIM_SILENCE_MODE_LUFS_GATED
-             : SONARE_TRIM_SILENCE_MODE_PEAK;
 }
 
 SonareClickDetection to_c_click_detection(const sonare::mastering::repair::ClickDetection& cpp) {
@@ -614,100 +572,31 @@ void fill_stereo_channels(const StereoResult& result, CResult* out) {
 }  // namespace
 
 void sonare_declick_config_init(SonareDeclickConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::DeclickConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->threshold = cpp.threshold;
-  config->neighbor_ratio = cpp.neighbor_ratio;
-  config->max_click_samples = cpp.max_click_samples;
-  config->lpc_order = cpp.lpc_order;
-  config->residual_ratio = cpp.residual_ratio;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::DenoiseClassicalConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->mode = to_c_denoise_mode(cpp.mode);
-  config->noise_estimator = to_c_denoise_noise_estimator(cpp.noise_estimator);
-  config->n_fft = cpp.n_fft;
-  config->hop_length = static_cast<size_t>(cpp.hop_length);
-  config->dd_alpha = cpp.dd_alpha;
-  config->reduction_db = cpp.reduction_db;
-  config->over_subtraction = cpp.over_subtraction;
-  config->spectral_floor = cpp.spectral_floor;
-  config->noise_estimation_quantile = cpp.noise_estimation_quantile;
-  config->speech_presence_gain = cpp.speech_presence_gain ? 1 : 0;
-  config->gain_smoothing = cpp.gain_smoothing ? 1 : 0;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_declip_config_init(SonareDeclipConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::DeclipConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->clip_threshold_db = sonare::linear_to_db(cpp.clip_threshold);
-  config->lpc_order = cpp.lpc_order;
-  config->iterations = cpp.iterations;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_decrackle_config_init(SonareDecrackleConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::DecrackleConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->threshold = cpp.threshold;
-  config->mode = to_c_decrackle_mode(cpp.mode);
-  config->levels = cpp.levels;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_dehum_config_init(SonareDehumConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::DehumConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->fundamental_hz = cpp.fundamental_hz;
-  config->harmonics = cpp.harmonics;
-  config->q = cpp.q;
-  config->adaptive = cpp.adaptive ? 1 : 0;
-  config->search_range_hz = cpp.search_range_hz;
-  config->adaptation = cpp.adaptation;
-  config->frame_size = cpp.frame_size;
-  config->pll_bandwidth = cpp.pll_bandwidth;
-  config->mode = to_c_dehum_mode(cpp.mode);
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::DereverbClassicalConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->threshold = cpp.threshold;
-  config->attenuation = cpp.attenuation;
-  config->n_fft = cpp.n_fft;
-  config->hop_length = static_cast<size_t>(cpp.hop_length);
-  config->t60_sec = cpp.t60_sec;
-  config->late_delay_ms = cpp.late_delay_ms;
-  config->over_subtraction = cpp.over_subtraction;
-  config->spectral_floor = cpp.spectral_floor;
-  config->wpe_enabled = cpp.wpe_enabled ? 1 : 0;
-  config->wpe_iterations = cpp.wpe_iterations;
-  config->wpe_taps = cpp.wpe_taps;
-  config->wpe_strength = cpp.wpe_strength;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config) {
-  if (config == nullptr) return;
-  const sonare::mastering::repair::TrimSilenceConfig cpp;
-  *config = {};
-  config->struct_size = sizeof(*config);
-  config->threshold_db = sonare::linear_to_db(cpp.threshold);
-  config->padding_samples = cpp.padding_samples;
-  config->mode = to_c_trim_silence_mode(cpp.mode);
-  config->gate_lufs = cpp.gate_lufs;
-  config->window_ms = cpp.window_ms;
+  sonare_c_mastering_defaults::initialize(config);
 }
 
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
@@ -832,8 +721,6 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
   if (out_bins != nullptr) {
     std::memset(out_bins, 0, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT * sizeof(int));
   }
-  // The same power-of-two rule the denoise config validator applies, so a grid
-  // this hands back is always one the detector can report on.
   if (const SonareError err = run_validation([&] {
         util::check::power_of_two_within(n_fft, sonare_c_detail::kNoiseBandFftSizeDomain, "n_fft");
         util::check::integer_within(sample_rate, sonare_c_detail::kNoiseBandSampleRateDomain,
@@ -1206,13 +1093,15 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
     cancel = [cancel_cb, cancel_user_data] { return cancel_cb(cancel_user_data) != 0; };
   }
   std::string reports;
-  if (!sonare::mastering::assistant::repair_apply_json(channels, num_channels, length, sample_rate,
-                                                       stages_json ? stages_json : "", out_channels,
-                                                       &reports, progress, cancel)) {
+  std::unique_ptr<char[]> staged_report;
+  if (!sonare::mastering::assistant::repair_apply_json(
+          channels, num_channels, length, sample_rate, stages_json ? stages_json : "", out_channels,
+          &reports, progress, cancel,
+          [&](const std::string& report) { staged_report.reset(copy_string(report)); })) {
     sonare_c_detail::set_last_error_static(SONARE_ERROR_CANCELLED, "repair was cancelled");
     return SONARE_ERROR_CANCELLED;
   }
-  *reports_json_out = copy_string(reports);
+  *reports_json_out = staged_report.release();
   return SONARE_OK;
   SONARE_C_CATCH
 }

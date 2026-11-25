@@ -15331,3 +15331,11 @@ changed = "Inverse MFCC already refused nonfinite and representable negative lif
 domain = "analysis"
 rule = "finite-or-refused"
 test = "bindings/python/tests/test_mfcc_lifter.py::test_mfcc_routes_name_the_rejected_lifter"
+
+[[entry]]
+kind = "option"
+old = "PlaybackLoudnessMeter.constructor(sample_rate)"
+changed = "sample_rate must be an integer in [8000, 384000] Hz. The constructor raises SonareValueError naming sample_rate outside that domain; 1.x refused only a non-positive rate."
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_playback.py::test_loudness_meter_refuses_sample_rate_outside_audio_domain"

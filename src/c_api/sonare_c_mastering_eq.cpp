@@ -1,10 +1,12 @@
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <memory>
 
 #include "c_api/eq_band_json.h"
 #include "c_api/mastering_eq_internal.h"
 #include "c_api/mastering_input_domains.h"
+#include "c_api/sonare_c_mastering_helpers.h"
 #include "mastering/eq/band_strings.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
@@ -23,16 +25,31 @@ static_assert(SONARE_EQ_MAX_BANDS == sonare::mastering::eq::EqualizerProcessor::
 namespace {
 
 sonare::mastering::eq::PhaseMode parse_phase(int mode) {
-  const auto parsed = sonare::mastering::eq::phase_mode_from_int(mode);
-  if (!parsed) throw SonareException(ErrorCode::InvalidParameter, "unknown EQ phase mode");
-  return *parsed;
+  util::check::integer_in_range(mode, SONARE_EQ_PHASE_ZERO_LATENCY, SONARE_EQ_PHASE_LINEAR, "mode");
+  return *sonare::mastering::eq::phase_mode_from_int(mode);
 }
 
 sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
-  const auto parsed = sonare::mastering::eq::placement_from_int(placement);
-  if (!parsed) throw SonareException(ErrorCode::InvalidParameter, "unknown EQ band placement");
-  return *parsed;
+  using sonare::mastering::eq::StereoPlacement;
+  util::check::integer_in_range(placement, static_cast<int>(StereoPlacement::Stereo),
+                                static_cast<int>(StereoPlacement::Side), "placement");
+  return *sonare::mastering::eq::placement_from_int(placement);
 }
+
+constexpr std::array<CName, 12> kBandNames{{
+    {"frequency_hz", "band.frequencyHz"},
+    {"gain_db", "band.gainDb"},
+    {"slope_db_oct", "band.slopeDbOct"},
+    {"dyn.ratio", "band.ratio"},
+    {"dyn.threshold_db", "band.thresholdDb"},
+    {"dyn.range_db", "band.rangeDb"},
+    {"dyn.sidechain_q", "band.sidechainQ"},
+    {"dyn.attack_ms", "band.attackMs"},
+    {"dyn.release_ms", "band.releaseMs"},
+    {"dyn.detector_delay_ms", "band.detectorDelayMs"},
+    {"dyn.sidechain_freq_hz", "band.sidechainFreqHz"},
+    {"q", "band.q"},
+}};
 
 }  // namespace
 
@@ -66,7 +83,8 @@ SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
   }
   SONARE_C_REQUIRE_NONNULL(band_json);
   SONARE_C_TRY
-  eq->processor.set_band(static_cast<size_t>(index), sonare::c_api::parse_eq_band_json(band_json));
+  const auto band = sonare::c_api::parse_eq_band_json(band_json);
+  with_c_names(kBandNames, [&] { eq->processor.set_band(static_cast<size_t>(index), band); });
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -96,7 +114,8 @@ SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_len
   SONARE_C_REQUIRE_NONNULL(eq);
   SonareError err = validate_audio_params("source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("reference", reference, reference_length, reference_sample_rate);
+  err = sonare_c_mastering_detail::validate_reference_audio(reference, reference_length,
+                                                            reference_sample_rate, "reference");
   if (err != SONARE_OK) return err;
   err = run_validation([&] {
     util::check::integer_within(max_bands, sonare_c_detail::kEqMatchMaxBandsDomain, "max_bands");
@@ -127,7 +146,8 @@ SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
-  eq->processor.set_gain_scale(scale);
+  constexpr std::array<CName, 1> kNames{{{"gain_scale", "scale"}}};
+  with_c_names(kNames, [&] { eq->processor.set_gain_scale(scale); });
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -136,7 +156,8 @@ SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
-  eq->processor.set_output_gain_db(gain_db);
+  constexpr std::array<CName, 1> kNames{{{"output_gain_db", "gain_db"}}};
+  with_c_names(kNames, [&] { eq->processor.set_output_gain_db(gain_db); });
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -145,7 +166,8 @@ SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
-  eq->processor.set_output_pan(pan);
+  constexpr std::array<CName, 1> kNames{{{"output_pan", "pan"}}};
+  with_c_names(kNames, [&] { eq->processor.set_output_pan(pan); });
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -170,6 +192,7 @@ SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, size_t* out_c
   // A single relaxed atomic load, so it is safe to poll from the audio thread
   // alongside process(); it touches no diagnostic string.
   SONARE_C_RT_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   if (!eq || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = eq->processor.non_finite_discard_count();
   return SONARE_OK;
