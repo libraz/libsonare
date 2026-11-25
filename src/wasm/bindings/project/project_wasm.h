@@ -103,7 +103,7 @@ inline void checkCodedCErrorFlattening(SonareError err, const char* c_root,
     if (reason_mode == CErrorReasonMode::kCurrentEntry) {
       if (const char* reason = sonare_last_error_reason()) reason_override = reason;
     }
-    throwCEntryRefusal(*shown, std::move(reason_override));
+    throwCEntryRefusal(*shown, std::move(reason_override), c_root);
   }
   throwCodedCError(err, reason_mode);
 }

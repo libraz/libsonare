@@ -47,7 +47,8 @@ std::string LastRefusalEntry();
 ///        argument can re-render it under the name and unit its caller wrote. @p c_entry names the
 ///        C-ABI entry that refused (`cEntry`, null when empty: a direct core call refused).
 void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown,
-                   const std::string& c_entry);
+                   const std::string& c_entry, const sonare::SonareParameterRefusal* raw = nullptr,
+                   bool from_c = false, const char* flattened = nullptr);
 
 /// @brief `renderRefusal(refusal, subjects, scales)`: the attached refusal with its subjects
 ///        replaced and its domain divided by `scales[0]`, as `{ message, refusal }`.

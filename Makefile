@@ -616,7 +616,7 @@ build-wasm-binding:
 test-python: build-shared
 	$(UV) sync --locked --project bindings/python
 # The refusal-subject plugin fails the run when a refusal names no parameter of its entry.
-	PYTHONPATH=tests/conformance $(PY_RUN) python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
+	SONARE_EMITTED_PAIRS=1 PYTHONPATH=tests/conformance $(PY_RUN) python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
 
 # Tests marked @pytest.mark.slow are excluded by the default addopts
 # (-m "not slow"); the explicit -m here overrides that and runs just them.
@@ -654,6 +654,7 @@ refusal-spelling-check:
 	@dir=$$(mktemp -d) && for surface in $(REFUSAL_SPELLING_SURFACES); do \
 	  (cd bindings/$$surface && SONARE_REFUSAL_CAPTURE=$$dir/$$surface.jsonl yarn vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/$$surface.log 2>&1; true) && \
 	  touch $$dir/$$surface.jsonl && \
+	  python3 tests/conformance/refusal_subject_plugin.py $$surface $$dir/$$surface.jsonl && \
 	  python3 tools/api/refusal_spelling.py --surface $$surface $$dir/$$surface.jsonl || exit 1; \
 	done && \
 	if [ -s $$dir/node.jsonl ] && [ -s $$dir/wasm.jsonl ]; then \

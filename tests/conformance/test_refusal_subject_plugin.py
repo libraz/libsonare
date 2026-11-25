@@ -63,5 +63,44 @@ class MisnamedTest(unittest.TestCase):
         self.assertIn("overrides", params["master_audio"])
 
 
+class EmittedPairsTest(unittest.TestCase):
+    def test_an_unbound_reason_cannot_excuse_an_observed_alias(self):
+        key = "engine_set_track_strip_insert_param_by_name"
+        facts = (
+            {key: {"track_id", "value", "param_name"}},
+            {(key, "param_name")},
+            {(key, "track_id"): "ref", (key, "value"): "param.value"},
+            {},
+            set(),
+        )
+        rows = [
+            {
+                "entry": "RealtimeEngine.setStripInsertParam",
+                "refusal": {
+                    "cEntry": key,
+                    "code": 4,
+                    "subjects": ["trackId", "value"],
+                    "raw": {
+                        "subjects": ["track_id", "value"],
+                        "code": 4,
+                        "callerSpelled": False,
+                        "fromC": True,
+                    },
+                },
+            }
+        ]
+        compared, missing, failures = plugin.emitted_pairs("node", rows, facts)
+        self.assertEqual(compared, {(key, "track_id"), (key, "value")})
+        self.assertEqual(missing, {(key, "param_name")})
+        self.assertEqual(len(failures), 2)
+
+    def test_a_required_record_missing_from_a_bridge_refusal_is_a_failure(self):
+        rows = [{"entry": "RealtimeEngine.resolveStripAutomationId", "requireNative": True}]
+        compared, missing, failures = plugin.emitted_pairs("wasm", rows, ({}, set(), {}, {}, set()))
+        self.assertEqual(compared, set())
+        self.assertEqual(missing, set())
+        self.assertEqual(len(failures), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

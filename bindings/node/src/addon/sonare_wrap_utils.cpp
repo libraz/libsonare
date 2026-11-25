@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <optional>
@@ -75,7 +76,28 @@ std::string LastRefusalEntry() {
 
 namespace {
 
-Napi::Object RefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& refusal) {
+bool CaptureRefusalMetadataEnabled() {
+  const char* path = std::getenv("SONARE_REFUSAL_CAPTURE");
+  return path != nullptr && path[0] != '\0';
+}
+
+Napi::Object RawRefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& refusal,
+                              bool from_c, const char* flattened) {
+  const sonare_c_detail::RefusalParts parts = sonare_c_detail::refusal_parts(refusal);
+  Napi::Object raw = Napi::Object::New(env);
+  raw.Set("code", static_cast<double>(static_cast<int>(parts.code)));
+  Napi::Array subjects = Napi::Array::New(env, parts.subjects.size());
+  for (uint32_t i = 0; i < parts.subjects.size(); ++i) subjects.Set(i, parts.subjects[i]);
+  raw.Set("subjects", subjects);
+  raw.Set("callerSpelled", parts.caller_spelled);
+  raw.Set("fromC", from_c);
+  if (flattened != nullptr) raw.Set("flattened", flattened);
+  return raw;
+}
+
+Napi::Object RefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& refusal,
+                           const sonare::SonareParameterRefusal* raw = nullptr, bool from_c = false,
+                           const char* flattened = nullptr) {
   const sonare_c_detail::RefusalParts parts = sonare_c_detail::refusal_parts(refusal);
   Napi::Object out = Napi::Object::New(env);
   out.Set("code", static_cast<double>(static_cast<int>(parts.code)));
@@ -94,6 +116,10 @@ Napi::Object RefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& 
     domain.Set("loIncluded", parts.domain->lo_included);
     domain.Set("hiIncluded", parts.domain->hi_included);
     out.Set("domain", domain);
+  }
+  if (CaptureRefusalMetadataEnabled() && raw != nullptr) {
+    out.DefineProperty(
+        Napi::PropertyDescriptor::Value("raw", RawRefusalObject(env, *raw, from_c, flattened)));
   }
   return out;
 }
@@ -140,8 +166,9 @@ bool RefusalFromObject(Napi::Env env, const Napi::Object& object,
 }  // namespace
 
 void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown,
-                   const std::string& c_entry) {
-  Napi::Object record = RefusalObject(env, shown);
+                   const std::string& c_entry, const sonare::SonareParameterRefusal* raw,
+                   bool from_c, const char* flattened) {
+  Napi::Object record = RefusalObject(env, shown, raw, from_c, flattened);
   record.Set("cEntry", c_entry.empty() ? env.Null() : Napi::String::New(env, c_entry));
   error.DefineProperty(Napi::PropertyDescriptor::Value(Napi::Symbol::For(env, "libsonare.refusal"),
                                                        record, napi_configurable));
@@ -295,7 +322,8 @@ void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& mes
                                       reclassified ? RefusalText(*shown) : message,
                                       shown && shown->shape_error(), reason);
   if (shown && IsKnownErrorReason(reason)) {
-    AttachRefusal(env, error.Value().As<Napi::Object>(), *shown, LastRefusalEntry());
+    AttachRefusal(env, error.Value().As<Napi::Object>(), *shown, LastRefusalEntry(),
+                  sonare_c_detail::last_parameter_refusal(), true);
   }
   error.ThrowAsJavaScriptException();
 }
@@ -326,7 +354,7 @@ void ThrowSonareErrorPreservingRefusal(Napi::Env env, SonareError err, const std
   Napi::Error error =
       MakeSonareError(env, err, prefix + RefusalText(shown), shown.shape_error(), reason);
   const Napi::Object value = error.Value().As<Napi::Object>();
-  AttachRefusal(env, value, shown, LastRefusalEntry());
+  AttachRefusal(env, value, shown, LastRefusalEntry(), refusal, true);
   error.ThrowAsJavaScriptException();
 }
 
@@ -341,7 +369,10 @@ void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_ro
   const char* reason = sonare_last_error_reason();
   Napi::Error error = MakeSonareError(env, err, RefusalText(*shown), shown->shape_error(), reason);
   const Napi::Object value = error.Value().As<Napi::Object>();
-  if (IsKnownErrorReason(reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
+  if (IsKnownErrorReason(reason)) {
+    AttachRefusal(env, value, *shown, LastRefusalEntry(), sonare_c_detail::last_parameter_refusal(),
+                  true, c_root);
+  }
   error.ThrowAsJavaScriptException();
 }
 
@@ -426,7 +457,8 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
     Napi::Error error = MakeSonareError(env, CErrorFromException(*coded), ExceptionMessage(e),
                                         IsShapeRefusal(e), reason);
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e)) {
-      AttachRefusal(env, error.Value(), sonare::util::check::camel_spelled(*refusal), "");
+      AttachRefusal(env, error.Value(), sonare::util::check::camel_spelled(*refusal), "", refusal,
+                    false);
     }
     error.ThrowAsJavaScriptException();
     return;

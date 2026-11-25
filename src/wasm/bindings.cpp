@@ -32,6 +32,19 @@
 using namespace emscripten;
 using namespace sonare;
 
+// clang-format off
+EM_JS(int, js_capture_refusal_metadata_enabled, (), {
+  try {
+    const key = Symbol.for("libsonare.captureRefusal");
+    return Object.getOwnPropertyDescriptor(globalThis, key)?.value === true;
+  } catch {
+    return false;
+  }
+});
+// clang-format on
+
+bool captureRefusalMetadataEnabled() noexcept { return js_capture_refusal_metadata_enabled() != 0; }
+
 // ============================================================================
 // Version
 // ============================================================================
@@ -365,6 +378,20 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
       const auto* from_c = dynamic_cast<const CEntryRefusal*>(refusal);
       record.set("cEntry", from_c != nullptr && !from_c->c_entry().empty() ? val(from_c->c_entry())
                                                                            : val::null());
+      const sonare::SonareParameterRefusal* raw = refusal;
+      bool raw_from_c = false;
+      if (from_c != nullptr) {
+        raw = from_c->raw_refusal() ? &*from_c->raw_refusal() : nullptr;
+        raw_from_c = from_c->from_c();
+      }
+      if (captureRefusalMetadataEnabled() && raw != nullptr) {
+        val raw_record = refusal_object(*raw);
+        raw_record.set("fromC", raw_from_c);
+        if (from_c != nullptr && !from_c->flattened().empty()) {
+          raw_record.set("flattened", from_c->flattened());
+        }
+        record.set("raw", raw_record);
+      }
       info.set("refusal", record);
       // An unknown key or a wrong type refuses the request's shape: a TypeError, not a RangeError.
       if (refusal->shape_error() && refusal->code() == sonare::ErrorCode::InvalidParameter) {

@@ -5,6 +5,12 @@ import { types } from 'node:util';
 import { vi } from 'vitest';
 
 const OUT = process.env.SONARE_REFUSAL_CAPTURE;
+if (OUT) {
+  Object.defineProperty(globalThis, Symbol.for('libsonare.captureRefusal'), {
+    value: true,
+    configurable: true,
+  });
+}
 
 function argFacts(args) {
   const keys = new Set();
@@ -94,7 +100,22 @@ const REFUSAL = Symbol.for('libsonare.refusal');
 function refusalFacts(error) {
   const r = error[REFUSAL];
   if (r === undefined) return undefined;
-  return { code: r.code, form: r.form, subjects: [...r.subjects], cEntry: r.cEntry ?? null };
+  return {
+    code: r.code,
+    form: r.form,
+    subjects: [...r.subjects],
+    cEntry: r.cEntry ?? null,
+    raw:
+      r.raw === undefined
+        ? undefined
+        : {
+            code: r.raw.code,
+            subjects: [...r.raw.subjects],
+            callerSpelled: r.raw.callerSpelled,
+            fromC: r.raw.fromC,
+            flattened: r.raw.flattened,
+          },
+  };
 }
 
 // A coded error is classed by its brand: the Node addon raises it as a plain Error named SonareError.
@@ -105,8 +126,10 @@ function isBranded(error) {
 function record(entry, error, args) {
   if (!(error instanceof Error)) return;
   const file = globalThis.__vitest_worker__?.filepath ?? '';
+  const requireNative = globalThis[Symbol.for('libsonare.requireNativeRefusal')] === true;
   const row = {
     entry,
+    requireNative,
     errorClass: isBranded(error) ? 'SonareError' : error.constructor?.name,
     message: error.message,
     refusal: refusalFacts(error),

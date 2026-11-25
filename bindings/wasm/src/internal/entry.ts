@@ -90,6 +90,14 @@ export interface RefusalRecord {
   readonly text: string;
   /** The entry key of the C-ABI call that refused; null or absent when a direct core call did. */
   readonly cEntry?: string | null;
+  /** Original native subjects, present only in an opt-in refusal capture. */
+  readonly raw?: {
+    readonly code: number;
+    readonly subjects: readonly string[];
+    readonly callerSpelled: boolean;
+    readonly fromC: boolean;
+    readonly flattened?: string;
+  };
   readonly domain?: {
     readonly lo?: number;
     readonly hi?: number;
@@ -145,7 +153,13 @@ export function retextRefusal(error: Error, refusal: RefusalRecord, text: string
   if (unprefixed !== undefined) {
     mark(named, swap(unprefixed));
   }
-  attachRefusal(error, { ...refusal, cEntry: refusalOf(error)?.cEntry ?? null });
+  const previous = refusalOf(error);
+  const raw = previous?.raw ?? refusal.raw;
+  attachRefusal(error, {
+    ...refusal,
+    ...(raw === undefined ? {} : { raw }),
+    cEntry: previous?.cEntry ?? null,
+  });
 }
 
 export function refuse(text: string): RangeError {

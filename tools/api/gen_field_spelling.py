@@ -865,7 +865,7 @@ def load_c_params(root: Path) -> dict[str, set[str]]:
     return params
 
 
-def load_request_fields() -> dict[str, list[dict]]:
+def load_request_fields(surfaces=("node", "wasm")) -> dict[str, list[dict]]:
     script = ROOT / "tools/api/ts_request_fields.cjs"
     return {
         surface: json.loads(
@@ -876,7 +876,7 @@ def load_request_fields() -> dict[str, list[dict]]:
                 text=True,
             ).stdout
         )
-        for surface in ("node", "wasm")
+        for surface in surfaces
     }
 
 

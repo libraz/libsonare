@@ -39,8 +39,11 @@ decltype(auto) withCEntryRefusal(const char* entry, Body&& body, const char* roo
   try {
     return body();
   } catch (const sonare::SonareParameterRefusal& refusal) {
+    std::optional<sonare::SonareParameterRefusal> raw_refusal;
+    if (captureRefusalMetadataEnabled()) raw_refusal = refusal;
+    std::string flattened = raw_refusal ? root : "";
     throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry, root), entry,
-                        std::nullopt);
+                        std::nullopt, std::move(raw_refusal), false, std::move(flattened));
   }
 }
 

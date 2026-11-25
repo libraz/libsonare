@@ -223,7 +223,15 @@ describe('insert automation ids (Node)', () => {
       engine.setBusStrip(1, sceneBus(insertScene('buses', '1', ['utility.gain'])));
       engine.setSynthInstrument(5, {});
 
-      const error = caught(() => run(engine));
+      const error = caught(() => {
+        const key = Symbol.for('libsonare.requireNativeRefusal');
+        Object.defineProperty(globalThis, key, { value: true, configurable: true });
+        try {
+          run(engine);
+        } finally {
+          Reflect.deleteProperty(globalThis, key);
+        }
+      });
       expect(error).toBeInstanceOf(RangeError);
       expect(error.message).toBe(text);
       const refusal = (
@@ -237,6 +245,30 @@ describe('insert automation ids (Node)', () => {
       )[Symbol.for('libsonare.refusal')];
       expect(refusal?.subjects).toEqual(subjects);
       expect(refusal?.cEntry).toBe(cEntry);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('names the track reference and nested value on insert restore refusals', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(10, sceneStrip(insertScene('strips', 'track-10', ['utility.gain'])));
+      const missingTrack = caught(() =>
+        engine.restoreStripInsertParam(99, 0, { name: 'levelDb', value: 0 }),
+      );
+      const badValue = caught(() =>
+        engine.restoreStripInsertParam(10, 0, { name: 'levelDb', value: 1000 }),
+      );
+      expect(missingTrack).toBeInstanceOf(RangeError);
+      expect(missingTrack.message).toBe(
+        'RealtimeEngine.restoreStripInsertParam: ref must be the id of a track in this engine',
+      );
+      expect(badValue).toBeInstanceOf(RangeError);
+      expect(badValue.message).toBe(
+        'RealtimeEngine.restoreStripInsertParam: param.value must be accepted by the parameter "levelDb" of that insert',
+      );
     } finally {
       engine.destroy();
     }
