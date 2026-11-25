@@ -10,8 +10,12 @@
 #include "engine/instrument_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
+#include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::engine {
+
+using sonare::constants::kFloorDb;
 
 bool RealtimeEngine::push_command(const rt::Command& command) noexcept {
   // Runs on the CONTROL thread. The telemetry_ SPSC queue's sole producer is
@@ -617,8 +621,8 @@ void RealtimeEngine::set_param_smoothing_ms(float smoothing_ms) noexcept {
 void RealtimeEngine::settle_parameters() noexcept {
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;
-    const float target = slot.smoother.target();
-    slot.smoother.reset(target);
+    const float target = slot.linear_gain ? slot.requested : slot.smoother.target();
+    slot.smoother.reset(slot.smoother.target());
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
     if (parameter_target_reserved(slot.target_id)) {
       route_engine_parameter(slot.target_id, target);
@@ -703,7 +707,7 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   for (SmoothedParam& slot : smoothed_params_) {
     if (slot.assigned && slot.target_id == target_id) {
       if (slot.active) {
-        slot.smoother.set_target(value);
+        retarget_smoothed_slot(slot, value);
         return true;
       }
       settled_match = &slot;
@@ -714,7 +718,7 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   }
   if (settled_match != nullptr) {
     settled_match->active = true;
-    settled_match->smoother.set_target(value);
+    retarget_smoothed_slot(*settled_match, value);
     return true;
   }
   if (free_slot == nullptr) {
@@ -739,6 +743,7 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   free_slot->active = true;
   free_slot->assigned = true;
   free_slot->target_id = target_id;
+  free_slot->linear_gain = smooths_linear_gain(target_id);
   // A free slot may have carried an unrelated target previously, so the ramp starts from this
   // target's recorded base, or from the value its owner holds when none was recorded.
   float start = value;
@@ -746,9 +751,21 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
     start = value;
   }
   if (!std::isfinite(start)) start = value;
-  free_slot->smoother.reset(start);
-  free_slot->smoother.set_target(value);
+  reseed_smoothed_slot(*free_slot, start);
+  retarget_smoothed_slot(*free_slot, value);
   return true;
+}
+
+void RealtimeEngine::reseed_smoothed_slot(SmoothedParam& slot, float value) noexcept {
+  slot.smoother.reset(slot.linear_gain ? db_to_linear(value) : value);
+  slot.requested = value;
+  slot.upper = value;
+}
+
+void RealtimeEngine::retarget_smoothed_slot(SmoothedParam& slot, float value) noexcept {
+  slot.smoother.set_target(slot.linear_gain ? db_to_linear(value) : value);
+  slot.requested = value;
+  slot.upper = std::max(slot.upper, value);
 }
 
 bool RealtimeEngine::current_parameter_value(uint32_t target_id, float* out_value) const noexcept {
@@ -762,7 +779,7 @@ void RealtimeEngine::reseed_smoothed_param(uint32_t target_id, float value) noex
   // An immediate set ends any ramp on the target and is where the next one starts.
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.assigned || slot.target_id != target_id) continue;
-    slot.smoother.reset(value);
+    reseed_smoothed_slot(slot, value);
     slot.active = false;
   }
 }
@@ -789,7 +806,14 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   }
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;
-    const float current = slot.smoother.advance(num_steps);
+    const float position = slot.smoother.advance(num_steps);
+    // A ramp that has effectively settled lands on its target, so a linear-gain ramp to the floor
+    // pushes the floor itself rather than a value just above it.
+    const bool settled = std::abs(slot.smoother.target() - position) <= kSettleEpsilon;
+    float current = position;
+    if (slot.linear_gain) {
+      current = settled ? slot.requested : std::clamp(linear_to_db(position), kFloorDb, slot.upper);
+    }
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
     if (parameter_target_reserved(slot.target_id)) {
       if (!route_engine_parameter(slot.target_id, current)) {
@@ -808,7 +832,7 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
 #endif
     // Retire the slot once the ramp has effectively settled at its target so
     // the bank does not stay saturated with finished ramps.
-    if (std::abs(slot.smoother.target() - current) <= kSettleEpsilon) {
+    if (settled) {
       slot.smoother.reset(slot.smoother.target());
       slot.active = false;
     }

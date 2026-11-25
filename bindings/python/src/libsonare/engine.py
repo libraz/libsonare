@@ -828,7 +828,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         ramps over this time and then through the target's fixed 5 ms click guard,
         which a stepped set passes through too. Changing it retimes ramps already
         running, and MIDI-CC mappings apply their values directly. The default is
-        20 ms; ``0`` makes a smoothed set a step.
+        20 ms; ``0`` makes a smoothed set a step. A track, bus or master fader ramps
+        its linear gain while its value stays in dB, so a fade's length does not depend
+        on how far below audibility it starts; every other target ramps in its own unit.
         """
         lib = _get_lib()
         _check(

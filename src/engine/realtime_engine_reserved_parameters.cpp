@@ -251,6 +251,22 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
   return false;
 }
 
+bool RealtimeEngine::smooths_linear_gain(uint32_t target_id) const noexcept {
+  if (!parameter_target_reserved(target_id)) return false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (is_instrument_param_id(target_id)) return false;
+#endif
+  if (is_insert_param_id(target_id)) {
+    if (insert_param_param(target_id) != TrackMixerRuntime::kFaderDb) return false;
+    const InsertAutomationTarget* target = live_insert_target(target_id);
+    return target != nullptr && (target->strip == InsertStripKind::kTrackLane ||
+                                 target->strip == InsertStripKind::kBusLane);
+  }
+  const uint32_t lane = (target_id & kEngineParamLaneMask) >> kEngineParamLaneShift;
+  return lane == kEngineParamLaneMaster &&
+         (target_id & kEngineParamKindMask) == MixingRuntime::kFaderDb;
+}
+
 bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
                                                   float value) noexcept {
   return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
@@ -442,6 +458,10 @@ bool RealtimeEngine::restore_track_lane_parameter(uint32_t target_id) noexcept {
   return track_mixer_runtime_.restore_track_parameter(target->owner_id,
                                                       insert_param_param(target_id));
 }
+
+#else
+
+bool RealtimeEngine::smooths_linear_gain(uint32_t) const noexcept { return false; }
 
 #endif
 

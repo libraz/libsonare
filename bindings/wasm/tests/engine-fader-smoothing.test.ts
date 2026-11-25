@@ -60,11 +60,13 @@ describe('a reserved fader target under setParameter', () => {
   it('ramps a smoothed set over the smoothing time, cascaded with the 5 ms guard', () => {
     const rig = faderRig();
     rig.set(true);
-    // One time constant covers 1 - 1/e of the move in dB. The guard lags the ramp by about its
-    // own time times the ramp's slope, so the band is three times that lag.
-    const expected = TO_DB * (1 - Math.exp(-1));
-    const guardLag = (-TO_DB / SMOOTHING_MS) * Math.exp(-1) * GUARD_MS;
-    expect(Math.abs(toDb(rig.level(SMOOTHING_MS)) - expected)).toBeLessThan(3 * guardLag);
+    // The ramp runs on the linear gain, like the guard under it: one time constant covers
+    // 1 - 1/e of the amplitude move. The guard lags the ramp by about its own time times the
+    // ramp's slope, so the band is three times that lag.
+    const target = 10 ** (TO_DB / 20);
+    const expected = 1 + (target - 1) * (1 - Math.exp(-1));
+    const guardLag = ((1 - target) / SMOOTHING_MS) * Math.exp(-1) * GUARD_MS;
+    expect(Math.abs(rig.level(SMOOTHING_MS) - expected)).toBeLessThan(3 * guardLag);
     // Ten guard time constants in, the ramp has covered under a quarter of the move.
     expect(toDb(rig.level(10 * GUARD_MS)) / TO_DB).toBeLessThan(0.25);
   });

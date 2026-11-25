@@ -26,6 +26,7 @@
 #include "support/alloc_guard.h"
 #include "support/float_roundoff.h"
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -3549,17 +3550,19 @@ int blocks_for_ms(double ms) {
 
 TEST_CASE("A smoothed fader set ramps over the smoothing time; a stepped one settles on its guard",
           "[engine][realtime]") {
-  // After one time constant a one-pole ramp has covered 1 - 1/e of the move. The 5 ms guard
-  // under it lags by about its own time times the ramp's slope, 0.18 dB here, so the band is
-  // three times that.
-  const double expected_db = kRampToDb * (1.0 - std::exp(-1.0));
-  const double guard_lag_db =
-      -kRampToDb / kRampSmoothingMs * std::exp(-1.0) * sonare::rt::kClickGuardMs;
+  // The ramp runs on the linear gain, the domain of the fader's own guard: after one time
+  // constant it has covered 1 - 1/e of the amplitude move. The 5 ms guard under it lags by about
+  // its own time times the ramp's slope, so the band is three times that.
+  const double to_gain = std::pow(10.0, kRampToDb / 20.0);
+  const double expected_gain = 1.0 + (to_gain - 1.0) * (1.0 - std::exp(-1.0));
+  const double guard_lag =
+      (1.0 - to_gain) / kRampSmoothingMs * std::exp(-1.0) * sonare::rt::kClickGuardMs;
   {
     FaderRig rig;
     rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.fader, kRampToDb);
     rig.run(blocks_for_ms(kRampSmoothingMs));
-    CHECK(rig.level_db() == Catch::Approx(expected_db).margin(3.0 * guard_lag_db));
+    CHECK(static_cast<double>(rig.out.back()) ==
+          Catch::Approx(expected_gain).margin(3.0 * guard_lag));
   }
   {
     // Ten guard time constants: a step has settled, a 200 ms ramp has covered under a quarter.
@@ -3607,6 +3610,129 @@ TEST_CASE("A smoothed fader set with every smoother slot busy steps and reports 
                 telemetry.value == rig.fader);
   }
   CHECK(capacity);
+}
+
+namespace {
+
+/// Two track lanes playing the same full-scale DC into one output, faders stepped to a base.
+struct TwoLaneFaderRig {
+  sonare::engine::RealtimeEngine engine;
+  std::vector<float> clip;
+  const float* channels[1] = {};
+  uint32_t first = 0;
+  uint32_t second = 0;
+  std::vector<float> trace;
+
+  TwoLaneFaderRig(float first_db, float second_db)
+      : clip(static_cast<size_t>(kRampRate * 2), 1.0f) {
+    engine.prepare(kRampRate, kRampBlock);
+    channels[0] = clip.data();
+    const auto frames = static_cast<int64_t>(clip.size());
+    sonare::engine::ClipSchedule a{1, {channels, 1, frames}, 0.0, 0, 0, frames, false, 1.0f, 0, 0};
+    a.track_id = 10;
+    sonare::engine::ClipSchedule b{2, {channels, 1, frames}, 0.0, 0, 0, frames, false, 1.0f, 0, 0};
+    b.track_id = 11;
+    engine.set_clips({a, b});
+    REQUIRE(engine.set_track_lanes({{10}, {11}}));
+    first = track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
+    second = track_lane_target(engine, 11, sonare::engine::TrackMixerRuntime::kFaderDb);
+    push(sonare::rt::CommandType::kTransportPlay, 0, 0.0f);
+    push(sonare::rt::CommandType::kSetParam, first, first_db);
+    push(sonare::rt::CommandType::kSetParam, second, second_db);
+    run(blocks_for_ms(200.0));
+    trace.clear();
+  }
+
+  void push(sonare::rt::CommandType type, uint32_t target, float value) {
+    sonare::rt::Command command{};
+    command.type = type;
+    command.target_id = target;
+    command.sample_time = -1;
+    command.arg.f = value;
+    REQUIRE(engine.push_command(command));
+  }
+
+  void run(int blocks) {
+    std::array<float, kRampBlock> out{};
+    float* io[] = {out.data()};
+    for (int i = 0; i < blocks; ++i) {
+      out.fill(0.0f);
+      engine.process(io, 1, kRampBlock);
+      trace.insert(trace.end(), out.begin(), out.end());
+    }
+  }
+
+  /// Milliseconds until the output first comes within 1 dB of unity.
+  double ms_to_within_1db() const {
+    const float within = std::pow(10.0f, -1.0f / 20.0f);
+    for (size_t i = 0; i < trace.size(); ++i) {
+      if (trace[i] >= within) return 1000.0 * static_cast<double>(i) / kRampRate;
+    }
+    return std::numeric_limits<double>::infinity();
+  }
+};
+
+}  // namespace
+
+TEST_CASE("A complementary smoothed fader swap keeps the summed level", "[engine][realtime]") {
+  // One fader falls to the floor while the other rises from it: ramps on the linear gain sum to
+  // a constant, where ramps on the dB value cross near the floor and leave a hole.
+  TwoLaneFaderRig rig(0.0f, sonare::constants::kFloorDb);
+  rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.first, sonare::constants::kFloorDb);
+  rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.second, 0.0f);
+  rig.run(blocks_for_ms(300.0));
+  const float quietest = *std::min_element(rig.trace.begin(), rig.trace.end());
+  CHECK(20.0 * std::log10(static_cast<double>(quietest)) > -0.1);
+}
+
+TEST_CASE("A smoothed fade-in takes the same time from any starting level below audibility",
+          "[engine][realtime]") {
+  // The time to come within 1 dB is set by the smoothing time, not by how far below audibility
+  // the fader started, so the floor constant does not stretch a fade.
+  TwoLaneFaderRig from_floor(sonare::constants::kFloorDb, sonare::constants::kFloorDb);
+  from_floor.push(sonare::rt::CommandType::kSetParamSmoothed, from_floor.first, 0.0f);
+  from_floor.run(blocks_for_ms(300.0));
+  TwoLaneFaderRig from_minus_60(-60.0f, sonare::constants::kFloorDb);
+  from_minus_60.push(sonare::rt::CommandType::kSetParamSmoothed, from_minus_60.first, 0.0f);
+  from_minus_60.run(blocks_for_ms(300.0));
+  // One time constant of the default 20 ms smoothing covers 1 - 1/e; 1 dB needs ln(1/0.109).
+  // The guard and the 64-sample control period each delay the output by up to their length.
+  const double expected_ms = 20.0 * std::log(1.0 / (1.0 - std::pow(10.0, -1.0 / 20.0)));
+  const double lag_ms = sonare::rt::kClickGuardMs + 1000.0 * kRampBlock / kRampRate;
+  CHECK(from_floor.ms_to_within_1db() ==
+        Catch::Approx(expected_ms + 0.5 * lag_ms).margin(0.5 * lag_ms));
+  CHECK(from_minus_60.ms_to_within_1db() ==
+        Catch::Approx(from_floor.ms_to_within_1db()).margin(0.5));
+}
+
+TEST_CASE("A smoothed master fader fade-in takes the same time from any starting level",
+          "[engine][realtime]") {
+  const uint32_t master = engine_master_param_target(sonare::engine::TrackMixerRuntime::kFaderDb);
+  auto ms_from = [&](float from_db) {
+    TwoLaneFaderRig rig(0.0f, sonare::constants::kFloorDb);
+    rig.push(sonare::rt::CommandType::kSetParam, master, from_db);
+    rig.run(blocks_for_ms(200.0));
+    rig.trace.clear();
+    rig.push(sonare::rt::CommandType::kSetParamSmoothed, master, 0.0f);
+    rig.run(blocks_for_ms(300.0));
+    return rig.ms_to_within_1db();
+  };
+  CHECK(ms_from(-60.0f) == Catch::Approx(ms_from(sonare::constants::kFloorDb)).margin(0.5));
+}
+
+TEST_CASE("A smoothed fade to the floor settles on the floor and reports no error",
+          "[engine][realtime][telemetry]") {
+  TwoLaneFaderRig rig(0.0f, sonare::constants::kFloorDb);
+  rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.first, sonare::constants::kFloorDb);
+  rig.run(blocks_for_ms(1000.0));
+  CHECK(static_cast<double>(rig.trace.back()) ==
+        Catch::Approx(2.0 * std::pow(10.0, sonare::constants::kFloorDb / 20.0)).margin(1e-9));
+  sonare::engine::Telemetry telemetry{};
+  bool error = false;
+  while (rig.engine.pop_telemetry(telemetry)) {
+    error = error || telemetry.type == sonare::engine::TelemetryType::kError;
+  }
+  CHECK_FALSE(error);
 }
 
 TEST_CASE("A smoothed fader ramp allocates nothing on the audio thread", "[engine][realtime]") {

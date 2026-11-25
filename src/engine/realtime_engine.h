@@ -1161,9 +1161,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// with no recorded base starts its ramp. Reads audio-side state without allocating: call it
   /// on the audio thread or while process() is not running. False for an unknown target.
   bool current_parameter_value(uint32_t target_id, float* out_value) const noexcept;
+  // True for a track, bus or master fader, whose engine ramp runs on the linear gain.
+  bool smooths_linear_gain(uint32_t target_id) const noexcept;
   // Ramp time of kSetParamSmoothed on every target, reserved ones included, in ms; it retimes
   // running ramps, and 0 makes a smoothed set a step. kSetParam is a step on every target. A
-  // mixer, insert or instrument target keeps its rt::kClickGuardMs glide under both.
+  // mixer, insert or instrument target keeps its rt::kClickGuardMs glide under both. A ramp runs
+  // in the domain of that glide: a track, bus or master fader ramps its linear gain while its
+  // value stays in dB, so a fade's audible length does not depend on the dB floor and a
+  // complementary swap sums to a constant; every other target ramps in its own unit.
   void set_param_smoothing_ms(float smoothing_ms) noexcept;
   /// Snaps every in-flight parameter ramp to its target: engine-level smoothed
   /// parameters are pushed at their final value and retired, and the track
@@ -2013,9 +2018,18 @@ class RealtimeEngine : private ClipPageRequestSink {
     uint32_t target_id = 0;
     bool active = false;
     bool assigned = false;
+    // The smoother holds the target's linear gain rather than its dB value. Its ramp then
+    // pushes dB values clamped to [kFloorDb, upper], upper being the highest dB value the ramp
+    // has started from or been sent to, and lands on the requested dB value exactly.
+    bool linear_gain = false;
+    float requested = 0.0f;
+    float upper = 0.0f;
     rt::ParamSmoother smoother{};
   };
   std::array<SmoothedParam, kMaxSmoothedParams> smoothed_params_{};
+  // Puts @p slot at @p value (the parameter's unit) without a ramp, or ramps it toward @p value.
+  static void reseed_smoothed_slot(SmoothedParam& slot, float value) noexcept;
+  static void retarget_smoothed_slot(SmoothedParam& slot, float value) noexcept;
 
   // Audio-thread base-value table (see record_parameter_base() /
   // release_parameter_base()), sized and allocated once in prepare() so the

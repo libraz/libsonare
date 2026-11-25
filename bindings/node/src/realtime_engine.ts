@@ -1881,6 +1881,9 @@ export class RealtimeEngine {
    * change a step. The time is one time constant: about 63% of the way at the set time. MIDI-CC
    * mappings apply their values directly. A reserved target — fader, pan, width, insert or
    * instrument parameter — keeps its fixed 5 ms glide under the ramp whatever this is set to.
+   * A track, bus or master fader ramps its linear gain while its value stays in dB, so the time
+   * a fade takes does not depend on how far below audibility it starts; every other target
+   * ramps in its own unit.
    */
   setParamSmoothingMs(smoothingMs: number): void {
     this.native.setParamSmoothingMs(smoothingMs);

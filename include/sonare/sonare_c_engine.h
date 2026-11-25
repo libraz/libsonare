@@ -1274,7 +1274,10 @@ SonareError sonare_engine_set_parameter(SonareEngine* engine, uint32_t param_id,
 ///          set a step. A smoothed set on a reserved target ramps over this time,
 ///          feeding the target's fixed 5 ms click guard, which a stepped set passes
 ///          through too; changing it retimes ramps already running. A target with
-///          no recorded value ramps from the value its owner currently holds.
+///          no recorded value ramps from the value its owner currently holds. A track,
+///          bus or master fader ramps its linear gain while its value stays in dB, so
+///          a fade's length does not depend on how far below audibility it starts;
+///          every other target ramps in its own unit.
 ///          MIDI-CC mappings apply their values directly. The default is 20 ms.
 ///          @p smoothing_ms must be finite and >= 0.
 SonareError sonare_engine_set_param_smoothing_ms(SonareEngine* engine, float smoothing_ms);
