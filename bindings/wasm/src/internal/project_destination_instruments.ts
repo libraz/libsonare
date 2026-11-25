@@ -115,6 +115,99 @@ function requireProjectText(value: unknown, name: string): string {
   return value;
 }
 
+/**
+ * Refuses a synth patch the caller wrote at @p at by its path: an undeclared key, a field of the
+ * wrong type, a token outside its set, an empty preset name and a malformed mod routing.
+ */
+export function checkSynthPatch(patch: Record<string, unknown>, at: string): void {
+  const patchInfo = synthPatchParamInfo();
+  assertDeclaredKeys(patch, [...SYNTH_PATCH_KEYS, ...patchInfo.map((field) => field.name)], at);
+  refuseSynthPatchOrdinals(patch, at);
+  if (!isAbsent(patch.preset)) {
+    if (typeof patch.preset !== 'string') {
+      throw refuseType(`${at}.preset must be a string`);
+    }
+    if (patch.preset.replace(/^va:/, '').length === 0) {
+      throw refuse(`${at}.preset must not be empty; omit it for the init patch`);
+    }
+  }
+  if (!isAbsent(patch.engineMode)) {
+    assertClosedToken(patch.engineMode, SYNTH_ENGINE_MODES, `${at}.engineMode`);
+  }
+  for (const field of patchInfo) {
+    const value = patch[field.name];
+    if (isAbsent(value)) {
+      continue;
+    }
+    if (field.type === 'enum') {
+      assertClosedToken(value, field.values, `${at}.${field.name}`);
+    } else if (field.type === 'boolean' && typeof value !== 'boolean') {
+      throw refuseType(`${at}.${field.name} must be a boolean`);
+    } else if (field.type === 'number' && typeof value !== 'number') {
+      throw refuseType(`${at}.${field.name} must be a number`);
+    }
+  }
+  if (!isAbsent(patch.engineParams) && !isNonArrayObject(patch.engineParams)) {
+    throw refuseType(`${at}.engineParams must be an object`);
+  }
+  if (!isAbsent(patch.modRoutings)) {
+    if (!Array.isArray(patch.modRoutings)) {
+      throw refuseType(`${at}.modRoutings must be an array`);
+    }
+    if (patch.modRoutings.length > 8) {
+      throw refuse(`${at}.modRoutings must contain at most 8 entries`);
+    }
+    for (const [index, routing] of patch.modRoutings.entries()) {
+      const path = `${at}.modRoutings[${index}]`;
+      if (!isNonArrayObject(routing)) {
+        throw refuseType(`${path} must be an object`);
+      }
+      assertDeclaredKeys(routing, SYNTH_MOD_ROUTING_KEYS, path);
+      if (isAbsent(routing.source)) {
+        throw refuseType(`${path}.source must be given`);
+      }
+      if (isAbsent(routing.destination)) {
+        throw refuseType(`${path}.destination must be given`);
+      }
+      assertClosedToken(routing.source, SYNTH_MOD_SOURCES, `${path}.source`);
+      assertClosedToken(routing.destination, SYNTH_MOD_DESTINATIONS, `${path}.destination`);
+      for (const end of ['source', 'destination'] as const) {
+        if (routing[end] === 'none') {
+          throw refuse(`${path}.${end} must not be none`);
+        }
+      }
+      assertFiniteScalar(routing.depth as number, `${path}.depth`);
+    }
+  }
+}
+
+/** Refuses a builtin synth configuration the caller wrote at @p at by its path. */
+export function checkBuiltinConfig(config: Record<string, unknown>, at: string): void {
+  assertDeclaredKeys(config, BUILTIN_CONFIG_KEYS, at);
+  refuseBuiltinSynthOrdinals(config);
+  if (!isAbsent(config.waveform)) {
+    assertClosedToken(config.waveform, BUILTIN_SYNTH_WAVEFORMS, `${at}.waveform`);
+  }
+}
+
+/** Refuses a SoundFont instrument configuration the caller wrote at @p at by its path. */
+export function checkSf2Config(config: Record<string, unknown>, at: string): void {
+  assertDeclaredKeys(config, SF2_CONFIG_KEYS, at);
+  if (!isAbsent(config.gsEfxRealization)) {
+    assertClosedToken(config.gsEfxRealization, ['modern', 'classic'], `${at}.gsEfxRealization`);
+  }
+  if (!isAbsent(config.preferModelForModeledFamilies)) {
+    optionalBoolean(
+      config.preferModelForModeledFamilies,
+      `${at}.preferModelForModeledFamilies`,
+      false,
+    );
+  }
+  if (!isAbsent(config.clearBankRig)) {
+    optionalBoolean(config.clearBankRig, `${at}.clearBankRig`, false);
+  }
+}
+
 /** Validate one destination instrument and its bank/program overrides. */
 export function normalizeProjectDestinationInstrument(
   instrument: unknown,
@@ -158,12 +251,6 @@ export function normalizeProjectDestinationInstrument(
       throw refuseType('instrument.patch must be an object');
     }
     const patch = instrument.patch;
-    const patchInfo = synthPatchParamInfo();
-    assertDeclaredKeys(
-      patch,
-      [...SYNTH_PATCH_KEYS, ...patchInfo.map((field) => field.name)],
-      'instrument.patch',
-    );
     if (!isAbsent(patch.sampleBank)) {
       throw codedError(
         ErrorCode.NotSupported,
@@ -171,48 +258,7 @@ export function normalizeProjectDestinationInstrument(
         { reason: 'notPersistable' },
       );
     }
-    refuseSynthPatchOrdinals(patch, 'instrument.patch');
-    if (!isAbsent(patch.engineMode)) {
-      assertClosedToken(patch.engineMode, SYNTH_ENGINE_MODES, 'instrument.patch.engineMode');
-    }
-    for (const field of patchInfo) {
-      if (field.type !== 'enum' || isAbsent(patch[field.name])) {
-        continue;
-      }
-      assertClosedToken(patch[field.name], field.values, `instrument.patch.${field.name}`);
-    }
-    if (!isAbsent(patch.modRoutings)) {
-      if (!Array.isArray(patch.modRoutings)) {
-        throw refuseType('instrument.patch.modRoutings must be an array');
-      }
-      if (patch.modRoutings.length > 8) {
-        throw refuse('instrument.patch.modRoutings must contain at most 8 entries');
-      }
-      for (const [index, routing] of patch.modRoutings.entries()) {
-        const path = `instrument.patch.modRoutings[${index}]`;
-        if (!isNonArrayObject(routing)) {
-          throw refuseType(`${path} must be an object`);
-        }
-        assertDeclaredKeys(routing, SYNTH_MOD_ROUTING_KEYS, path);
-        if (isAbsent(routing.source)) {
-          throw refuseType(`${path}.source must be given`);
-        }
-        if (isAbsent(routing.destination)) {
-          throw refuseType(`${path}.destination must be given`);
-        }
-        assertClosedToken(
-          routing.source,
-          SYNTH_MOD_SOURCES.filter((token) => token !== 'none'),
-          `${path}.source`,
-        );
-        assertClosedToken(
-          routing.destination,
-          SYNTH_MOD_DESTINATIONS.filter((token) => token !== 'none'),
-          `${path}.destination`,
-        );
-        assertFiniteScalar(routing.depth as number, `${path}.depth`);
-      }
-    }
+    checkSynthPatch(patch, 'instrument.patch');
     const rawUseGmPrograms = isAbsent(instrument.useGmPrograms)
       ? patch.useGmPrograms
       : instrument.useGmPrograms;
@@ -241,39 +287,14 @@ export function normalizeProjectDestinationInstrument(
     if (!isNonArrayObject(instrument.config)) {
       throw refuseType('instrument.config must be an object');
     }
-    assertDeclaredKeys(instrument.config, BUILTIN_CONFIG_KEYS, 'instrument.config');
-    refuseBuiltinSynthOrdinals(instrument.config);
-    if (!isAbsent(instrument.config.waveform)) {
-      assertClosedToken(
-        instrument.config.waveform,
-        BUILTIN_SYNTH_WAVEFORMS,
-        'instrument.config.waveform',
-      );
-    }
+    checkBuiltinConfig(instrument.config, 'instrument.config');
     normalized = { kind, config: instrument.config as unknown as BuiltinSynthConfig };
   } else if (kind === 'sf2') {
     assertDeclaredKeys(instrument, SF2_INSTRUMENT_KEYS, 'instrument');
     if (!isNonArrayObject(instrument.config)) {
       throw refuseType('instrument.config must be an object');
     }
-    assertDeclaredKeys(instrument.config, SF2_CONFIG_KEYS, 'instrument.config');
-    if (!isAbsent(instrument.config.gsEfxRealization)) {
-      assertClosedToken(
-        instrument.config.gsEfxRealization,
-        ['modern', 'classic'],
-        'instrument.config.gsEfxRealization',
-      );
-    }
-    if (!isAbsent(instrument.config.preferModelForModeledFamilies)) {
-      optionalBoolean(
-        instrument.config.preferModelForModeledFamilies,
-        'instrument.config.preferModelForModeledFamilies',
-        false,
-      );
-    }
-    if (!isAbsent(instrument.config.clearBankRig)) {
-      optionalBoolean(instrument.config.clearBankRig, 'instrument.config.clearBankRig', false);
-    }
+    checkSf2Config(instrument.config, 'instrument.config');
     const soundFontUri = isAbsent(instrument.soundFontUri)
       ? undefined
       : requireProjectText(instrument.soundFontUri, 'instrument.soundFontUri');

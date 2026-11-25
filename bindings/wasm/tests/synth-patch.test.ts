@@ -125,6 +125,8 @@ describe('Sonare WASM NativeSynth', () => {
     expect(expectRefusalOf(() => synthPresetPatch('no-such-preset'), RangeError).message).toBe(
       'synthPresetPatch: name must be one of sine, saw, square, triangle, sawLead, squareLead, subBass, warmPad, ePiano, bell, brass, pluck, classicalGuitar, steelGuitar, electricGuitar, harp, harpsichord, bassAcoustic, bassFingered, bassPicked, bassFretless, bassSlap, marimba, glass, organ, drumKit, acousticPiano, churchOrgan, churchFlute, churchBourdon, churchTrumpet, violin, viola, cello, contrabass, clarinet, sopranoSax, altoSax, tenorSax, baritoneSax, oboe, englishHorn, bassoon, trumpet, trombone, tuba, frenchHorn, mutedTrumpet, cornet, flugelhorn, euphonium, concertFlute, piccolo, recorder, panFlute, shakuhachi, tinWhistle, ocarina, blownBottle, harpPlucked, koto, sitar, tanpura, choirAah, choirOoh, voiceEeh, accordion, harmonica, bandoneon, reedOrgan, singingVoice',
     );
+    // The 1.x kebab-case names are refused rather than read as their lowerCamel ids.
+    expect(() => synthPresetPatch('saw-lead')).toThrow(RangeError);
   });
 
   it('keeps every NativeSynth enum table in parity with native round-trip names', () => {
@@ -358,7 +360,9 @@ describe('Sonare WASM NativeSynth', () => {
           () => bounceSynth(project, 'no-such-preset', { totalFrames: 128 }),
           RangeError,
         ).message,
-      ).toBe('Project.bounce: synthInstruments[0].patch.preset must name a synth catalog preset');
+      ).toBe(
+        'Project.bounce: synthInstruments[0].instrument.preset must name a synth catalog preset',
+      );
     } finally {
       project.destroy();
     }
@@ -458,7 +462,7 @@ describe('Sonare WASM NativeSynth', () => {
         const error = rejection(patch);
         expect(error, key).toBeInstanceOf(RangeError);
         expect((error as Error).message, key).toContain(
-          `synthInstruments[0].patch.${key} must be `,
+          `synthInstruments[0].instrument.${key} must be `,
         );
       }
       // The published ends are accepted.
@@ -483,7 +487,9 @@ describe('Sonare WASM NativeSynth', () => {
             ),
           RangeError,
         ).message,
-      ).toBe('Project.bounce: synthInstruments[0].patch.modRoutings[0].source must not be none');
+      ).toBe(
+        'Project.bounce: synthInstruments[0].instrument.modRoutings[0].source must not be none',
+      );
       expect(
         expectRefusalOf(
           () =>
@@ -495,7 +501,7 @@ describe('Sonare WASM NativeSynth', () => {
           RangeError,
         ).message,
       ).toBe(
-        'Project.bounce: synthInstruments[0].patch.modRoutings[0].destination must not be none',
+        'Project.bounce: synthInstruments[0].instrument.modRoutings[0].destination must not be none',
       );
       // Not vacuous: a real routing on both ends still passes.
       const audio = bounceSynth(
@@ -532,7 +538,9 @@ describe('Sonare WASM NativeSynth', () => {
             bounceSynth(project, { waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
           RangeError,
         ).message,
-      ).toBe("Project.bounce: Unknown oscillator waveform name: 'sawtooth-ish'");
+      ).toBe(
+        'Project.bounce: synthInstruments[0].instrument.waveform must be one of default, sine, saw, square, triangle, noise',
+      );
     } finally {
       project.destroy();
     }

@@ -25,9 +25,13 @@ import { withMonoHeap } from './internal/memory_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { sceneArgumentJson, sceneArgumentRefusal } from './internal/mix_scene.js';
 import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
-import { normalizeProjectDestinationInstrument } from './internal/project_destination_instruments.js';
+import {
+  checkBuiltinConfig,
+  checkSf2Config,
+  checkSynthPatch,
+  normalizeProjectDestinationInstrument,
+} from './internal/project_destination_instruments.js';
 import { respellRefusal, withRespelled } from './internal/respell.js';
-import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
 import {
   compSegmentsToNative,
@@ -445,6 +449,28 @@ function respellSourceAudioRefusal(error: unknown, numChannels: number): unknown
 
 /** Marks a {@link ProjectTimeline} construction as coming from this module. */
 const timelineToken = Symbol('ProjectTimeline');
+
+/**
+ * Re-renders a bounce refusal the C entry names under its own binding member (`patch` /
+ * `config`) at the `instrument` the caller wrote in that `{ destinationId?, instrument }` pair.
+ */
+function respellBounceInstrument(error: unknown): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined) {
+    return error;
+  }
+  const respelled: Record<string, { name: string; scale: number }> = {};
+  for (const subject of refusal.subjects) {
+    const name = subject.replace(
+      /^((?:builtin|synth|sf2)Instruments\[\d+\])\.(?:patch|config)(?=\.|$)/,
+      '$1.instrument',
+    );
+    if (name !== subject) {
+      respelled[subject] = { name, scale: 1 };
+    }
+  }
+  return respellRefusal(error, respelled);
+}
 
 /**
  * An immutable compiled snapshot of a {@link Project}, produced by
@@ -1326,8 +1352,8 @@ export class Project {
         ? undefined
         : normalizeInstrumentBindings(
             builtinInstruments,
-            (instrument) => {
-              refuseBuiltinSynthOrdinals(instrument);
+            (instrument, _binding, label) => {
+              checkBuiltinConfig(instrument as Record<string, unknown>, `${label}.instrument`);
               return instrument;
             },
             'builtinInstruments',
@@ -1358,7 +1384,10 @@ export class Project {
         ? undefined
         : normalizeInstrumentBindings(
             synthInstruments,
-            (instrument) => normalizeSynthInstrument(instrument) as NativeSynthBinding,
+            (instrument, _binding, label) => {
+              checkSynthPatch(instrument as Record<string, unknown>, `${label}.instrument`);
+              return normalizeSynthInstrument(instrument) as NativeSynthBinding;
+            },
             'synthInstruments',
           );
     const sf2Bindings =
@@ -1371,6 +1400,7 @@ export class Project {
               if ('soundFontUri' in instrument) {
                 throw refuseUnknownKey(`${label}.instrument.soundFontUri`, [subject]);
               }
+              checkSf2Config(instrument as Record<string, unknown>, `${label}.instrument`);
               if (binding.soundFontUri === undefined) {
                 return instrument;
               }
@@ -1419,9 +1449,19 @@ export class Project {
     this.instrumentBounceActive = externalBindings !== undefined;
     let result: ReturnType<WasmProject['bounce']>;
     try {
-      result = withRespelled(refusalNames, () =>
-        nativeProject.bounce(native, builtinBindings, externalBindings, synthBindings, sf2Bindings),
-      );
+      result = withRespelled(refusalNames, () => {
+        try {
+          return nativeProject.bounce(
+            native,
+            builtinBindings,
+            externalBindings,
+            synthBindings,
+            sf2Bindings,
+          );
+        } catch (error) {
+          throw respellBounceInstrument(error);
+        }
+      });
     } finally {
       this.instrumentBounceActive = false;
     }

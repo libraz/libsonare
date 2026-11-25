@@ -555,6 +555,117 @@ function respellDestinationInstrument(error: unknown): unknown {
   return respellRefusal(error, respelled);
 }
 
+/**
+ * Re-renders a bounce refusal the C entry names under its own binding member (`patch` /
+ * `config`) at the `instrument` the caller wrote in that `{ destinationId?, instrument }` pair.
+ */
+function respellBounceInstrument(error: unknown): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined) {
+    return error;
+  }
+  const respelled: Record<string, Respelling> = {};
+  for (const subject of refusal.subjects) {
+    const name = subject.replace(
+      /^((?:builtin|synth|sf2)Instruments\[\d+\])\.(?:patch|config)(?=\.|$)/,
+      '$1.instrument',
+    );
+    if (name !== subject) {
+      respelled[subject] = { name, scale: 1 };
+    }
+  }
+  return respellRefusal(error, respelled);
+}
+
+/** The keys a {@link SynthPatch} declares, in the order the patch catalog lists them. */
+function synthPatchKeys(): string[] {
+  return [
+    'preset',
+    'engineMode',
+    'engineParams',
+    'modRoutings',
+    'useGmPrograms',
+    'sampleBank',
+    ...projectSynthPatchRows().map((r) => r.name),
+  ];
+}
+
+/**
+ * Refuses a synth patch the caller wrote at @p at by its path: an undeclared key, a field of the
+ * wrong type, a token outside its set, an empty preset name and a malformed mod routing.
+ */
+function checkSynthPatch(patch: Record<string, unknown>, at: string): void {
+  const rows = projectSynthPatchRows();
+  assertDeclaredKeys(patch, synthPatchKeys(), at);
+  refuseSynthPatchOrdinals(patch, at);
+  if (!isAbsent(patch.preset)) {
+    if (typeof patch.preset !== 'string') {
+      throw refuseType(`${at}.preset must be a string`);
+    }
+    if (patch.preset.replace(/^va:/, '').length === 0) {
+      throw refuse(`${at}.preset must not be empty; omit it for the init patch`);
+    }
+  }
+  if (!isAbsent(patch.engineMode)) {
+    assertClosedToken(patch.engineMode, SYNTH_ENGINE_MODES, `${at}.engineMode`);
+  }
+  for (const row of rows) {
+    const value = patch[row.name];
+    if (isAbsent(value)) {
+      continue;
+    }
+    if (row.type === 'enum') {
+      assertClosedToken(value, row.values, `${at}.${row.name}`);
+    } else if (row.type === 'boolean' && typeof value !== 'boolean') {
+      throw refuseType(`${at}.${row.name} must be a boolean`);
+    } else if (row.type === 'number' && typeof value !== 'number') {
+      throw refuseType(`${at}.${row.name} must be a number`);
+    }
+  }
+  if (!isAbsent(patch.engineParams) && !isNonArrayObject(patch.engineParams)) {
+    throw refuseType(`${at}.engineParams must be an object`);
+  }
+  if (!isAbsent(patch.modRoutings)) {
+    if (!Array.isArray(patch.modRoutings)) {
+      throw refuseType(`${at}.modRoutings must be an array`);
+    }
+    if (patch.modRoutings.length > MAX_SYNTH_MOD_ROUTINGS) {
+      throw refuse(`${at}.modRoutings must contain at most ${MAX_SYNTH_MOD_ROUTINGS} entries`);
+    }
+    patch.modRoutings.forEach((routing, index) => {
+      const path = `${at}.modRoutings[${index}]`;
+      if (!isNonArrayObject(routing)) {
+        throw refuseType(`${path} must be an object`);
+      }
+      assertDeclaredKeys(routing, ['source', 'destination', 'depth'], path);
+      assertClosedToken(routing.source, SYNTH_MOD_SOURCES, `${path}.source`);
+      assertClosedToken(routing.destination, SYNTH_MOD_DESTINATIONS, `${path}.destination`);
+      for (const end of ['source', 'destination'] as const) {
+        if (routing[end] === 'none') {
+          throw refuse(`${path}.${end} must not be none`);
+        }
+      }
+    });
+  }
+}
+
+/** Refuses a builtin synth configuration the caller wrote at @p at by its path. */
+function checkBuiltinConfig(config: Record<string, unknown>, at: string): void {
+  assertDeclaredKeys(config, BUILTIN_INSTRUMENT_KEYS, at);
+  refuseBuiltinSynthOrdinals(config);
+  if (!isAbsent(config.waveform)) {
+    assertClosedToken(config.waveform, BUILTIN_SYNTH_WAVEFORMS, `${at}.waveform`);
+  }
+}
+
+/** Refuses a SoundFont instrument configuration the caller wrote at @p at by its path. */
+function checkSf2Config(config: Record<string, unknown>, at: string): void {
+  assertDeclaredKeys(config, SF2_INSTRUMENT_KEYS, at);
+  if (!isAbsent(config.gsEfxRealization)) {
+    assertClosedToken(config.gsEfxRealization, ['modern', 'classic'], `${at}.gsEfxRealization`);
+  }
+}
+
 function normalizeDestinationInstrument(
   value: unknown,
   options: unknown,
@@ -629,18 +740,7 @@ function normalizeDestinationInstrument(
         reason: 'notPersistable',
       });
     }
-    const rows = projectSynthPatchRows();
-    const patchKeys = [
-      'preset',
-      'engineMode',
-      'engineParams',
-      'modRoutings',
-      'useGmPrograms',
-      'sampleBank',
-      ...rows.map((r) => r.name),
-    ];
-    assertDeclaredKeys(patch, patchKeys, 'instrument.patch');
-    refuseSynthPatchOrdinals(patch, 'instrument.patch');
+    checkSynthPatch(patch, 'instrument.patch');
     const nestedUseGmPrograms = isAbsent(patch.useGmPrograms)
       ? undefined
       : requireBoolean(patch.useGmPrograms, 'instrument.patch.useGmPrograms');
@@ -655,39 +755,6 @@ function normalizeDestinationInstrument(
       throw refuse('instrument.useGmPrograms conflicts with instrument.patch.useGmPrograms');
     }
     const useGmPrograms = outerUseGmPrograms ?? nestedUseGmPrograms;
-    if (!isAbsent(patch.engineMode)) {
-      assertClosedToken(patch.engineMode, SYNTH_ENGINE_MODES, 'instrument.patch.engineMode');
-    }
-    for (const row of rows) {
-      if (row.type === 'enum' && !isAbsent(patch[row.name])) {
-        assertClosedToken(patch[row.name], row.values, `instrument.patch.${row.name}`);
-      }
-    }
-    if (!isAbsent(patch.engineParams) && !isNonArrayObject(patch.engineParams)) {
-      throw refuseType('instrument.patch.engineParams must be an object');
-    }
-    if (!isAbsent(patch.modRoutings)) {
-      if (!Array.isArray(patch.modRoutings)) {
-        throw refuseType('instrument.patch.modRoutings must be an array');
-      }
-      if (patch.modRoutings.length > MAX_SYNTH_MOD_ROUTINGS) {
-        throw refuse(
-          `instrument.patch.modRoutings must contain at most ${MAX_SYNTH_MOD_ROUTINGS} entries`,
-        );
-      }
-      patch.modRoutings.forEach((routing, index) => {
-        const at = `instrument.patch.modRoutings[${index}]`;
-        if (!isNonArrayObject(routing)) {
-          throw refuseType(`${at} must be an object`);
-        }
-        assertDeclaredKeys(routing, ['source', 'destination', 'depth'], at);
-        assertClosedToken(routing.source, SYNTH_MOD_SOURCES, `${at}.source`);
-        assertClosedToken(routing.destination, SYNTH_MOD_DESTINATIONS, `${at}.destination`);
-        if (routing.source === 'none' || routing.destination === 'none') {
-          throw refuse(`${at}.source and ${at}.destination must not be 'none'`);
-        }
-      });
-    }
     if (useGmPrograms !== undefined) {
       normalized.useGmPrograms = useGmPrograms;
     }
@@ -701,11 +768,7 @@ function normalizeDestinationInstrument(
       throw refuseType('instrument.config must be an object');
     }
     const config = instrument.config as Record<string, unknown>;
-    assertDeclaredKeys(config, BUILTIN_INSTRUMENT_KEYS, 'instrument.config');
-    refuseBuiltinSynthOrdinals(config);
-    if (!isAbsent(config.waveform)) {
-      assertClosedToken(config.waveform, BUILTIN_SYNTH_WAVEFORMS, 'instrument.config.waveform');
-    }
+    checkBuiltinConfig(config, 'instrument.config');
     normalized.config = config;
   } else {
     assertDeclaredKeys(instrument, ['kind', 'config', 'soundFontUri'], 'instrument');
@@ -713,14 +776,7 @@ function normalizeDestinationInstrument(
       throw refuseType('instrument.config must be an object');
     }
     const config = instrument.config as Record<string, unknown>;
-    assertDeclaredKeys(config, SF2_INSTRUMENT_KEYS, 'instrument.config');
-    if (!isAbsent(config.gsEfxRealization)) {
-      assertClosedToken(
-        config.gsEfxRealization,
-        ['modern', 'classic'],
-        'instrument.config.gsEfxRealization',
-      );
-    }
+    checkSf2Config(config, 'instrument.config');
     normalized.config = config;
     if (!isAbsent(instrument.soundFontUri)) {
       const uri = requireProjectText(instrument.soundFontUri, 'instrument.soundFontUri');
@@ -2267,8 +2323,8 @@ export class Project {
         : bindInstruments(
             'builtinInstruments',
             request.builtinInstruments,
-            (i) => {
-              refuseBuiltinSynthOrdinals(i);
+            (i, _binding, label) => {
+              checkBuiltinConfig(i as Record<string, unknown>, `${label}.instrument`);
               return i;
             },
             withDestinationCopy,
@@ -2279,7 +2335,10 @@ export class Project {
         : bindInstruments(
             'synthInstruments',
             request.synthInstruments,
-            (i) => normalizeSynthInstrument(i) as SynthPatch,
+            (i, _binding, label) => {
+              checkSynthPatch(i as Record<string, unknown>, `${label}.instrument`);
+              return normalizeSynthInstrument(i) as SynthPatch;
+            },
             withDestinationCopy,
           );
     const sf2 =
@@ -2294,6 +2353,7 @@ export class Project {
                   `${label}.soundFontUri`,
                 ]);
               }
+              checkSf2Config(instrument as Record<string, unknown>, `${label}.instrument`);
               if (binding.soundFontUri === undefined) {
                 return instrument;
               }
@@ -2313,15 +2373,21 @@ export class Project {
         : bindInstruments('instruments', request.instruments, (i) => i, withDestinationLayer);
     const settings = bounceSettings(request);
     const native = this.native;
+    const run = (): ReturnType<typeof native.bounce> => {
+      try {
+        return callbacks === undefined
+          ? native.bounce(settings, builtin, synth, sf2)
+          : native.bounce(settings, builtin, synth, sf2, callbacks);
+      } catch (error) {
+        throw respellBounceInstrument(error);
+      }
+    };
     if (callbacks === undefined) {
-      return planarBounce(native.bounce(settings, builtin, synth, sf2), native.getSampleRate());
+      return planarBounce(run(), native.getSampleRate());
     }
     this.instrumentBounceActive = true;
     try {
-      return planarBounce(
-        native.bounce(settings, builtin, synth, sf2, callbacks),
-        native.getSampleRate(),
-      );
+      return planarBounce(run(), native.getSampleRate());
     } finally {
       this.instrumentBounceActive = false;
     }

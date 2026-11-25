@@ -819,3 +819,41 @@ def test_control_last_bounce_compile_result_survives_a_later_compile_failure() -
         assert project.last_bounce_compile_result() == successful
     finally:
         project.close()
+
+
+# RED WHEN: a refusal names the C binding member (``patch`` / ``config``) where the caller
+# wrote ``instrument`` in the binding.
+@pytest.mark.parametrize(
+    ("option", "binding", "text"),
+    [
+        (
+            "synth_instruments",
+            ProjectInstrumentBinding(instrument=SynthPatch(preset="saw-lead")),
+            r"synth_instruments\[0\]\.instrument\.preset must name a synth catalog preset$",
+        ),
+        (
+            "synth_instruments",
+            ProjectInstrumentBinding(instrument=SynthPatch(cutoff_hz=1e6)),
+            r"synth_instruments\[0\]\.instrument\.cutoff_hz must be finite and in \[10, 22000\]$",
+        ),
+        (
+            "builtin_instruments",
+            ProjectInstrumentBinding(instrument=BuiltinSynthConfig(polyphony=999)),
+            r"builtin_instruments\[0\]\.instrument\.polyphony must be an integer in \[1, 64\]$",
+        ),
+        (
+            "sf2_instruments",
+            ProjectSf2InstrumentBinding(instrument=Sf2InstrumentConfig(polyphony=999)),
+            r"sf2_instruments\[0\]\.instrument\.polyphony must be an integer in \[1, 64\]$",
+        ),
+    ],
+)
+def test_bounce_names_an_instrument_field_where_the_caller_wrote_it(
+    option: str, binding: ProjectInstrumentBinding, text: str
+) -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(SonareValueError, match=text):
+            project.bounce(total_frames=128, **{option: [binding]})
+    finally:
+        project.close()

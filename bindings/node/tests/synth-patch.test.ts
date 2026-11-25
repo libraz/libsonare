@@ -158,6 +158,8 @@ describe('NativeSynth preset catalog', () => {
     expect(synthPresetPatch('acousticPiano').engineMode).toBe('piano');
     expect(synthPresetPatch('clarinet').engineMode).toBe('reed');
     expect(() => synthPresetPatch('no-such-preset')).toThrow();
+    // The 1.x kebab-case names are refused rather than read as their lowerCamel ids.
+    expect(() => synthPresetPatch('saw-lead')).toThrow(RangeError);
   });
 
   it('keeps every NativeSynth enum table in parity with native round-trip ordinals', () => {
@@ -461,7 +463,7 @@ describe('Project.bounce with synthInstruments', () => {
       ] as [SynthPatch, string][]) {
         const error = rejection(patch);
         expect(error.name, key).toBe('RangeError');
-        expect(error.message, key).toContain(`patch.${key} must be `);
+        expect(error.message, key).toContain(`synthInstruments[0].instrument.${key} must be `);
       }
       // The published ends are accepted.
       expect(() =>
@@ -481,14 +483,22 @@ describe('Project.bounce with synthInstruments', () => {
           { modRoutings: [{ source: 'none', destination: 'pitchCents', depth: 80 }] },
           { totalFrames: 128 },
         ),
-      ).toThrow();
+      ).toThrow(
+        new RangeError(
+          `Project.bounce: synthInstruments[0].instrument.modRoutings[0].source must not be none`,
+        ),
+      );
       expect(() =>
         bounceSynth(
           project,
           { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
           { totalFrames: 128 },
         ),
-      ).toThrow();
+      ).toThrow(
+        new RangeError(
+          `Project.bounce: synthInstruments[0].instrument.modRoutings[0].destination must not be none`,
+        ),
+      );
       // Not vacuous: a real routing on both ends still passes.
       const audio = bounceSynth(
         project,

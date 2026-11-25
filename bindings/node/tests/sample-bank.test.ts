@@ -462,7 +462,7 @@ describe('bouncing a project through a sample patch', () => {
             synthInstruments: // @ts-expect-error deliberately unknown loop mode name.
               [{ instrument: { engineMode: 'sample', sampleBank: bank, sampleLoop: 'ping-pong' } }],
           }),
-        ).toThrow(/sample loop mode/);
+        ).toThrow(/synthInstruments\[0\]\.instrument\.sampleLoop must be one of /);
       } finally {
         project.destroy();
       }

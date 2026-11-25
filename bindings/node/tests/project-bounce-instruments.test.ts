@@ -583,4 +583,68 @@ describe('Project.bounce refusal subjects', () => {
       }),
     ).toThrow(/^Project\.bounce: builtinInstruments\[1\]\.destinationId must be an integer/);
   });
+
+  // RED WHEN: a refusal names the C binding member (`patch` / `config`) where the caller wrote
+  // `instrument`, or an undeclared key inside the instrument is dropped without a refusal.
+  it.each([
+    [
+      'an unknown synth preset',
+      { synthInstruments: [{ instrument: { preset: 'saw-lead' } }] },
+      RangeError,
+      'synthInstruments[0].instrument.preset must name a synth catalog preset',
+    ],
+    [
+      'a synth field out of range',
+      { synthInstruments: [{ instrument: { polyphony: 999 } }] },
+      RangeError,
+      'synthInstruments[0].instrument.polyphony must be an integer in [1, 64]',
+    ],
+    [
+      'a synth token outside its set',
+      { synthInstruments: [{ instrument: { waveform: 'nope' } }] },
+      RangeError,
+      'synthInstruments[0].instrument.waveform must be one of default, sine, saw, square, triangle, noise',
+    ],
+    [
+      'a synth field of the wrong type',
+      { synthInstruments: [{ instrument: { cutoffHz: 'x' } }] },
+      TypeError,
+      'synthInstruments[0].instrument.cutoffHz must be a number',
+    ],
+    [
+      'an undeclared synth key',
+      { synthInstruments: [{ instrument: { filterCutoffHz: 1 } }] },
+      TypeError,
+      'unknown key synthInstruments[0].instrument.filterCutoffHz',
+    ],
+    [
+      'a builtin field out of range',
+      { builtinInstruments: [{ instrument: { polyphony: 999 } }] },
+      RangeError,
+      'builtinInstruments[0].instrument.polyphony must be an integer in [1, 64]',
+    ],
+    [
+      'an undeclared builtin key',
+      { builtinInstruments: [{ instrument: { cutoffHz: 1 } }] },
+      TypeError,
+      'unknown key builtinInstruments[0].instrument.cutoffHz',
+    ],
+    [
+      'a SoundFont field out of range',
+      { sf2Instruments: [{ instrument: { polyphony: 999 } }] },
+      RangeError,
+      'sf2Instruments[0].instrument.polyphony must be an integer in [1, 64]',
+    ],
+    [
+      'an undeclared SoundFont key',
+      { sf2Instruments: [{ instrument: { volume: 1 } }] },
+      TypeError,
+      'unknown key sf2Instruments[0].instrument.volume',
+    ],
+  ] as const)('names %s at the instrument the caller wrote', (_name, bindings, cls, text) => {
+    using project = midiProject();
+    const call = () => project.bounce({ ...OPTIONS, ...(bindings as ProjectBounceOptions) });
+    expect(call).toThrow(cls);
+    expect(call).toThrow(`Project.bounce: ${text}`);
+  });
 });

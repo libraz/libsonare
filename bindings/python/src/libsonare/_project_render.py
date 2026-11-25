@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ctypes
+import re
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, SupportsIndex, TypeVar, cast
 
@@ -11,6 +12,7 @@ import numpy as np
 
 from ._engine_conversions import _POSITIVE_COUNT, _POSITIVE_INT, _given_positive
 from ._errors import _entry, _malformed_output, _refuse, _refuse_type
+from ._field_spelling import surface_spelling
 from ._narrowing import _is_number
 from ._project_model import *  # noqa: F403
 from ._project_model import (
@@ -57,6 +59,30 @@ from ._runtime import (
 from ._types_engine import EngineMetronomeConfig
 
 _Row = TypeVar("_Row")
+
+
+_BOUNCE_METRONOME_SUBJECTS = frozenset(
+    {
+        "metronome.enabled",
+        "metronome.beat_gain",
+        "metronome.accent_gain",
+        "metronome.click_samples",
+        "metronome.click_sec",
+    }
+)
+_BOUNCE_BINDING_MEMBER = re.compile(
+    r"^((?:builtin|synth|sf2)_instruments\[\d+\])\.(?:patch|config)(?=\.|$)"
+)
+
+
+def _bounce_respelling(subject: str) -> _Respelling | None:
+    """Spell a bounce refusal at the ``instrument`` the caller wrote, not the C binding member."""
+    if subject in _BOUNCE_METRONOME_SUBJECTS:
+        return _Respelling(subject)
+    if _BOUNCE_BINDING_MEMBER.match(subject) is None:
+        return None
+    spelled = surface_spelling("project_bounce", subject)
+    return _Respelling(_BOUNCE_BINDING_MEMBER.sub(r"\1.instrument", spelled))
 
 
 def _binding_destination(binding: ProjectInstrumentBinding[_Row]) -> int:
@@ -530,14 +556,7 @@ class _ProjectRenderMixin:
             )
             # `keepalive` pins the ctypes trampolines until the bounce returns.
             keepalive.clear()
-            respelled = {
-                "metronome.enabled": _Respelling("metronome.enabled"),
-                "metronome.beat_gain": _Respelling("metronome.beat_gain"),
-                "metronome.accent_gain": _Respelling("metronome.accent_gain"),
-                "metronome.click_samples": _Respelling("metronome.click_samples"),
-                "metronome.click_sec": _Respelling("metronome.click_sec"),
-            }
-            _check(rc, flattened="options", respelled=respelled)
+            _check(rc, flattened="options", respelled=_bounce_respelling)
             if errors:
                 raise errors[0]
             if width.value <= 0:

@@ -731,7 +731,7 @@ def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> N
             (SynthPatch(gain=5.0), "gain"),
         ]
         for patch, key in cases:
-            expected = rf"synth_instruments\[0\]\.patch\.{key} must be "
+            expected = rf"synth_instruments\[0\]\.instrument\.{key} must be "
             with pytest.raises(SonareValueError, match=expected) as err:
                 project.bounce(
                     synth_instruments=[
