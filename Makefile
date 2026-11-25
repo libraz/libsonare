@@ -823,7 +823,11 @@ CHECK = @run() { echo "$$*"; if "$$@"; then echo "PASS $$*" >> "$(CHECK_RESULTS)
 CHECK_REPORT = @test -f "$(CHECK_RESULTS)" || { echo "no check recorded a result" >&2; exit 1; }; \
 	echo; echo "check results:"; sed 's/^/  /' "$(CHECK_RESULTS)"; \
 	passed=$$(grep -c '^PASS ' "$(CHECK_RESULTS)"); failed=$$(grep -c '^FAIL ' "$(CHECK_RESULTS)"); \
-	rm -f "$(CHECK_RESULTS)"; echo "$$passed passed, $$failed failed"; test "$$failed" = 0
+	notrun=$$(grep -c '^NOT PERFORMED ' "$(CHECK_RESULTS)"); rm -f "$(CHECK_RESULTS)"; \
+	summary="$$passed passed, $$failed failed"; test "$$notrun" = 0 || summary="$$summary, $$notrun not performed"; \
+	test "$$notrun" = 0 || test "$$SONARE_CONFORMANCE_REPORT_ONLY" = 1 || \
+		summary="$$summary (a check not performed fails; SONARE_CONFORMANCE_REPORT_ONLY=1 reports it)"; \
+	echo "$$summary"; test "$$failed" = 0 && { test "$$notrun" = 0 || test "$$SONARE_CONFORMANCE_REPORT_ONLY" = 1; }
 
 # Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
 # it reads the binding sources directly and exits non-zero on active drift.
@@ -1150,18 +1154,25 @@ conformance-checks:
 	$(CHECK) python3 tools/parity/check_parity.py --audit-allowlist
 	$(CHECK) python3 tools/api/check_surface.py --audit-only
 	$(CHECK) python3 tools/api/unnamed_integer_bounds.py --count
-	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
-		echo "python3 tools/conformance/check_cli_contract.py --native $(BUILD_DIR)/bin/sonare-cli --python bindings/python/.venv/bin/python"; \
-		python3 tools/conformance/check_cli_contract.py \
-			--native "$(BUILD_DIR)/bin/sonare-cli" \
-			--python "bindings/python/.venv/bin/python" \
-			&& echo "PASS live CLI contract (check_cli_contract.py --native --python)" >> $(CHECK_RESULTS) \
-			|| echo "FAIL live CLI contract (check_cli_contract.py --native --python)" >> $(CHECK_RESULTS); \
-	elif test "$$SONARE_CONFORMANCE_REPORT_ONLY" = 1; then \
-		echo "conformance: live CLI check not compared ($(BUILD_DIR)/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable; SONARE_CONFORMANCE_REPORT_ONLY=1)"; \
+	@build_both="cmake --build $(BUILD_DIR) --target sonare && cmake --build build-python-shared --target sonare_shared && uv sync --locked --project bindings/python"; \
+	if test ! -x "$(BUILD_DIR)/bin/sonare-cli"; then \
+		reason="$(BUILD_DIR)/bin/sonare-cli is not built"; \
+	elif test ! -x "bindings/python/.venv/bin/python"; then \
+		reason="bindings/python/.venv is not built"; \
 	else \
-		echo "conformance: live CLI check not compared: $(BUILD_DIR)/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable; build with: cmake --build $(BUILD_DIR) --target sonare && uv sync --locked --project bindings/python (or set SONARE_CONFORMANCE_REPORT_ONLY=1 to report it)"; \
-		echo "FAIL live CLI contract: not compared" >> $(CHECK_RESULTS); \
+		echo "python3 tools/conformance/check_cli_contract.py --native $(BUILD_DIR)/bin/sonare-cli --python bindings/python/.venv/bin/python"; \
+		out=$$(python3 tools/conformance/check_cli_contract.py \
+			--native "$(BUILD_DIR)/bin/sonare-cli" \
+			--python "bindings/python/.venv/bin/python" 2>&1); rc=$$?; \
+		printf '%s\n' "$$out"; \
+		reason=$$(printf '%s\n' "$$out" | sed -n 's/^cli contract v2: not compared: //p' | sed 's/ -- rebuild both.*//' | head -n 1); \
+		if test -n "$$reason"; then :; \
+		elif test "$$rc" = 0; then echo "PASS live CLI contract (check_cli_contract.py --native --python)" >> $(CHECK_RESULTS); \
+		else echo "FAIL live CLI contract (check_cli_contract.py --native --python)" >> $(CHECK_RESULTS); fi; \
+	fi; \
+	if test -n "$$reason"; then \
+		echo "conformance: live CLI contract not performed: $$reason; build both locally with: $$build_both"; \
+		echo "NOT PERFORMED live CLI contract: $$reason; build both locally with: $$build_both" >> $(CHECK_RESULTS); \
 	fi
 
 # C-ABI contract scans, kept as named targets for running one on its own;

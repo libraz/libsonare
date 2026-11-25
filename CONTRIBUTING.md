@@ -227,7 +227,7 @@ Before merging, the maintainer brings a change here to the following:
 - "Reach it from the library instead" holds for a native-only command because a Python CLI user has the library in the same language and process. The native binary's user has no toolchain, so a capability missing there has no fallback.
 - An `unported` reason expires with the port, the way an allowlist entry expires with its divergence.
 - The core's JSON producers emit camelCase; `analysis_json_for_cli()` (native) and `_json_keys_to_snake_case()` (Python) re-key for the CLI.
-- The live comparison is skipped, and says so, when either binary is missing.
+- When the live comparison cannot run (either binary missing, or one older than the sources), the check summary lists it as `NOT PERFORMED` beside the pass/fail count, with the reason and the command that builds both binaries; it fails unless `SONARE_CONFORMANCE_REPORT_ONLY=1`.
 
 ### The C ABI
 
