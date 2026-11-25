@@ -335,6 +335,11 @@ class SonareProjectClip(CStruct):
         ("gain", ctypes.c_float),
         ("loop_mode", ctypes.c_uint32),
         ("loop_length_ppq", ctypes.c_double),
+        ("fade_in_ppq", ctypes.c_double),
+        ("fade_out_ppq", ctypes.c_double),
+        ("loop_crossfade_ppq", ctypes.c_double),
+        ("fade_in_curve", ctypes.c_uint32),
+        ("fade_out_curve", ctypes.c_uint32),
     ]
 
 

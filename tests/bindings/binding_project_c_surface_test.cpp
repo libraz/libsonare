@@ -532,6 +532,21 @@ TEST_CASE("project C surface reads stored tracks clips and sources by index", "[
   CHECK(clip.id == clip_id);
   CHECK(clip.track_id == track_id);
   CHECK(clip.start_ppq == Catch::Approx(2.0));
+  CHECK(clip.fade_in_ppq == 0.0);
+  CHECK(clip.fade_out_ppq == 0.0);
+  CHECK(clip.loop_crossfade_ppq == 0.0);
+  const SonareProjectClipFade fade_in{0.5, 1u};
+  const SonareProjectClipFade fade_out{0.75, 2u};
+  REQUIRE(sonare_project_set_clip_fade(project, clip_id, &fade_in, &fade_out) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, clip_id, SONARE_LOOP_MODE_LOOP, 2.0, 0.25) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_clip_by_index(project, 0, &clip) == SONARE_OK);
+  CHECK(clip.fade_in_ppq == 0.5);
+  CHECK(clip.fade_in_curve == 1u);
+  CHECK(clip.fade_out_ppq == 0.75);
+  CHECK(clip.fade_out_curve == 2u);
+  CHECK(clip.loop_length_ppq == 2.0);
+  CHECK(clip.loop_crossfade_ppq == 0.25);
   SonareProjectSource source{};
   REQUIRE(sonare_project_source_by_index(project, 0, &source) == SONARE_OK);
   CHECK(source.id == clip.source_id);

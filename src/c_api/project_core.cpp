@@ -483,6 +483,11 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
   out->gain = clip.gain;
   out->loop_mode = static_cast<uint32_t>(clip.loop_mode);
   out->loop_length_ppq = clip.loop_length_ppq;
+  out->fade_in_ppq = clip.fade_in.length_ppq;
+  out->fade_out_ppq = clip.fade_out.length_ppq;
+  out->loop_crossfade_ppq = clip.loop_crossfade_ppq;
+  out->fade_in_curve = static_cast<uint32_t>(clip.fade_in.curve);
+  out->fade_out_curve = static_cast<uint32_t>(clip.fade_out.curve);
   return SONARE_OK;
 #else
   if (out) *out = {};

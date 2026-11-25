@@ -390,6 +390,12 @@ typedef struct {
   float gain;                ///< Linear playback gain, >= 0 (0 = silent).
   uint32_t loop_mode;        ///< A @ref SonareProjectLoopMode ordinal.
   double loop_length_ppq;    ///< Loop length in quarter notes; 0 = loop the whole clip.
+  double fade_in_ppq;        ///< Fade-in length in quarter notes; 0 = no fade.
+  double fade_out_ppq;       ///< Fade-out length in quarter notes; 0 = no fade.
+  /// Equal-power crossfade at the loop seam in quarter notes, as set; 0 = hard wrap.
+  double loop_crossfade_ppq;
+  uint32_t fade_in_curve;   ///< A @ref SonareProjectFadeCurve ordinal.
+  uint32_t fade_out_curve;  ///< A @ref SonareProjectFadeCurve ordinal.
 } SonareProjectClip;
 
 /// @brief Flat, read-only source descriptor returned by @ref sonare_project_source_by_index.
@@ -405,10 +411,14 @@ typedef struct {
 #ifdef __cplusplus
 static_assert(sizeof(SonareProjectTrack) == 88u, "SonareProjectTrack layout drift");
 static_assert(offsetof(SonareProjectTrack, name) == 24u, "SonareProjectTrack name offset");
-static_assert(sizeof(SonareProjectClip) == 56u, "SonareProjectClip layout drift");
+static_assert(sizeof(SonareProjectClip) == 88u, "SonareProjectClip layout drift");
 static_assert(offsetof(SonareProjectClip, start_ppq) == 16u, "SonareProjectClip start_ppq offset");
 static_assert(offsetof(SonareProjectClip, loop_length_ppq) == 48u,
               "SonareProjectClip loop_length_ppq offset");
+static_assert(offsetof(SonareProjectClip, loop_crossfade_ppq) == 72u,
+              "SonareProjectClip loop_crossfade_ppq offset");
+static_assert(offsetof(SonareProjectClip, fade_out_curve) == 84u,
+              "SonareProjectClip fade_out_curve offset");
 static_assert(sizeof(SonareProjectSource) == 152u, "SonareProjectSource layout drift");
 static_assert(offsetof(SonareProjectSource, sample_rate_hint) == 16u,
               "SonareProjectSource sample_rate_hint offset");

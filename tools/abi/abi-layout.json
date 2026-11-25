@@ -7807,9 +7807,39 @@
         "name": "loop_length_ppq",
         "offset": 48,
         "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "fade_in_ppq",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "fade_out_ppq",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "loop_crossfade_ppq",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "fade_in_curve",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "fade_out_curve",
+        "offset": 84,
+        "size": 4
       }
     ],
-    "size": 56
+    "size": 88
   },
   "SonareProjectClipCompSegment": {
     "align": 8,
