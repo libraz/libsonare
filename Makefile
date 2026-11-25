@@ -451,6 +451,7 @@ lint:
 	$(CHECK) python3 tests/conformance/check_facade_refusal_ratchet.py
 	$(CHECK) sh tools/conformance/check_adapter_counts.sh broad-catches
 	$(CHECK) sh tools/conformance/check_adapter_counts.sh zero-empty-fallbacks
+	$(CHECK) sh tools/conformance/check_adapter_counts.sh universal-literals
 	$(CHECK_REPORT)
 
 .PHONY: lint-gs-efx-sr-coefficient lint-mastering-enum-cast lint-gs-efx-convert-test-scope \
