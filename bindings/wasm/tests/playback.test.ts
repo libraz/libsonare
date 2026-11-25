@@ -171,6 +171,22 @@ describe('playback renderer (WASM)', () => {
     }
   });
 
+  // RED WHEN: a non-buffer samples argument reaches the size check and is reported as an
+  // allocation of "undefined samples" instead of as the wrong type.
+  it('refuses a renderOffline samples argument that is not a Float32Array by type', () => {
+    const config = { target: { kind: 'speakers', layout: 'stereo' } } as const;
+    const renderer = new PlaybackRenderer({ sampleRate: SR, config });
+    try {
+      for (const samples of [0, -1, Number.NaN, 1e30]) {
+        expect(() => renderer.renderOffline(samples as never, 2)).toThrow(
+          new TypeError('PlaybackRenderer.renderOffline: samples must be a Float32Array'),
+        );
+      }
+    } finally {
+      renderer.destroy();
+    }
+  });
+
   it('reports the given block size', () => {
     const config = { target: { kind: 'speakers', layout: 'stereo' } } as const;
     const renderer = new PlaybackRenderer({ sampleRate: SR, config, maxBlockSize: 256 });

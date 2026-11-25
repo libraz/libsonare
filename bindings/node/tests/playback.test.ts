@@ -138,6 +138,20 @@ describe('PlaybackRenderer processing', () => {
     );
   });
 
+  // RED WHEN: a non-buffer samples argument reaches the size check and is reported as an
+  // allocation of "undefined samples" instead of as the wrong type.
+  it('refuses a renderOffline samples argument that is not a Float32Array by type', () => {
+    using renderer = new PlaybackRenderer({
+      config: { target: { kind: 'speakers', layout: 'stereo' } },
+      sampleRate: 48000,
+    });
+    for (const samples of [0, -1, Number.NaN, 1e30]) {
+      expect(() => renderer.renderOffline(samples as never, 2)).toThrow(
+        new TypeError('PlaybackRenderer.renderOffline: samples must be a Float32Array'),
+      );
+    }
+  });
+
   it('processes a stereo planar block to a stereo-speakers target', () => {
     using renderer = new PlaybackRenderer({
       config: { target: { kind: 'speakers', layout: 'stereo' } },

@@ -15,6 +15,7 @@ import type {
 import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } from './sonare.js';
 import {
   assertAudioInput,
+  assertAudioSamples,
   assertFloatValue,
   assertPositiveInteger,
   assertSampleRate,
@@ -171,6 +172,7 @@ export class PlaybackRenderer {
    * Unlike the block methods, an empty buffer or a non-finite sample throws.
    */
   renderOffline(samples: Float32Array, inChannels: number): Float32Array {
+    assertAudioSamples(samples);
     // The output width is the target layout the handle holds; the native reader refuses
     // a channel count that is not a positive integer, so only a valid one is sized.
     const outChannels = this.native.outputChannels();
