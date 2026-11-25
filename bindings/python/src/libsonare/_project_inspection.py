@@ -17,6 +17,7 @@ from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
 from ._narrowing import _domain_double, _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _FADE_CURVES,
     _LOOP_MODES,
     _NO_PITCH_CLASS,
     _OVERLAP_POLICIES,
@@ -24,6 +25,7 @@ from ._project_model import (
     _PROJECT_KEY_MODES,
     _SOURCE_KINDS,
     _TRACK_KINDS,
+    ProjectFadeCurve,
     ProjectLoopMode,
     ProjectSourceKind,
     ProjectTrackKind,
@@ -825,6 +827,16 @@ class _ProjectInspectionMixin:
             gain=float(raw.gain),
             loop_mode=cast(ProjectLoopMode, _LOOP_MODES[int(raw.loop_mode)]),
             loop_length_ppq=float(raw.loop_length_ppq) or None,
+            fade_in_ppq=float(raw.fade_in_ppq),
+            fade_in_curve=cast(
+                ProjectFadeCurve, _ordinal_token(int(raw.fade_in_curve), _FADE_CURVES, "fade curve")
+            ),
+            fade_out_ppq=float(raw.fade_out_ppq),
+            fade_out_curve=cast(
+                ProjectFadeCurve,
+                _ordinal_token(int(raw.fade_out_curve), _FADE_CURVES, "fade curve"),
+            ),
+            loop_crossfade_ppq=float(raw.loop_crossfade_ppq),
         )
 
     def _source_by_index(self, index: int) -> ProjectSource:

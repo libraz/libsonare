@@ -50,6 +50,7 @@ import {
   projectChordQualityName,
   projectChordSymbolsToNative,
   projectCompileResultFromNative,
+  projectFadeCurveName,
   projectFadeCurveValue,
   projectKeyModeName,
   projectKeySegmentsToNative,
@@ -1900,6 +1901,8 @@ export class Project {
         ...(loopLengthPpq === 0 ? {} : { loopLengthPpq }),
         sourceKind: projectSourceKindName(clip.sourceKind),
         loopMode: projectLoopModeName(clip.loopMode),
+        fadeInCurve: projectFadeCurveName(clip.fadeInCurve),
+        fadeOutCurve: projectFadeCurveName(clip.fadeOutCurve),
       };
     });
   }

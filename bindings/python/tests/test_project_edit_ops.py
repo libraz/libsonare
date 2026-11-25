@@ -59,6 +59,26 @@ def test_set_clip_gain_accepts_zero_mute_and_undoes() -> None:
         p.set_clip_gain(clip, -1.0)
 
 
+def test_clip_reads_back_its_fades_and_loop_crossfade() -> None:
+    p, _track, clip = _audio_project()
+    unset = p.clips()[0]
+    assert (unset.fade_in_ppq, unset.fade_in_curve) == (0.0, "linear")
+    assert (unset.fade_out_ppq, unset.fade_out_curve) == (0.0, "linear")
+    assert unset.loop_crossfade_ppq == 0.0
+    p.set_clip_fade(
+        clip,
+        fade_in_ppq=24.0,
+        fade_out_ppq=48.0,
+        fade_in_curve="exponential",
+        fade_out_curve="logarithmic",
+    )
+    p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=12.0)
+    read = p.clips()[0]
+    assert (read.fade_in_ppq, read.fade_in_curve) == (24.0, "exponential")
+    assert (read.fade_out_ppq, read.fade_out_curve) == (48.0, "logarithmic")
+    assert read.loop_crossfade_ppq == 12.0
+
+
 def test_set_clip_fade_and_loop_round_trip() -> None:
     p, _track, clip = _audio_project()
     before = p.to_json()

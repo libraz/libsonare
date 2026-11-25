@@ -765,6 +765,11 @@ Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
   out.Set("gain", clip.gain);
   out.Set("loopMode", clip.loop_mode);
   out.Set("loopLengthPpq", clip.loop_length_ppq);
+  out.Set("fadeInPpq", clip.fade_in_ppq);
+  out.Set("fadeInCurve", clip.fade_in_curve);
+  out.Set("fadeOutPpq", clip.fade_out_ppq);
+  out.Set("fadeOutCurve", clip.fade_out_curve);
+  out.Set("loopCrossfadePpq", clip.loop_crossfade_ppq);
   return out;
   SONARE_NODE_CATCH(env)
 }

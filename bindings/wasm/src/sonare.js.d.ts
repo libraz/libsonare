@@ -1152,6 +1152,11 @@ export interface WasmProjectClip {
   gain: number;
   loopMode: number;
   loopLengthPpq: number;
+  fadeInPpq: number;
+  fadeInCurve: number;
+  fadeOutPpq: number;
+  fadeOutCurve: number;
+  loopCrossfadePpq: number;
 }
 export interface WasmProjectSource {
   id: number;

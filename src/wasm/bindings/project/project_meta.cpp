@@ -593,6 +593,11 @@ val ProjectWasm::clipByIndex(const val& index_val) const {
   out.set("gain", d.gain);
   out.set("loopMode", d.loop_mode);
   out.set("loopLengthPpq", d.loop_length_ppq);
+  out.set("fadeInPpq", d.fade_in_ppq);
+  out.set("fadeInCurve", d.fade_in_curve);
+  out.set("fadeOutPpq", d.fade_out_ppq);
+  out.set("fadeOutCurve", d.fade_out_curve);
+  out.set("loopCrossfadePpq", d.loop_crossfade_ppq);
   return out;
 }
 

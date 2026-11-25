@@ -328,6 +328,34 @@ describe('edits', () => {
     });
   });
 
+  it('reads clip fades and the loop crossfade back from the clip record', () => {
+    withProject((project) => {
+      const { clipId } = addUriClip(project);
+      const clip = () => project.clips().find((c) => c.id === clipId);
+      expect(clip()).toMatchObject({
+        fadeInPpq: 0,
+        fadeInCurve: 'linear',
+        fadeOutPpq: 0,
+        fadeOutCurve: 'linear',
+        loopCrossfadePpq: 0,
+      });
+      project.setClipFade(clipId, {
+        fadeInPpq: 0.5,
+        fadeInCurve: 'exponential',
+        fadeOutPpq: 1,
+        fadeOutCurve: 'logarithmic',
+      });
+      project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: 0.25 });
+      expect(clip()).toMatchObject({
+        fadeInPpq: 0.5,
+        fadeInCurve: 'exponential',
+        fadeOutPpq: 1,
+        fadeOutCurve: 'logarithmic',
+        loopCrossfadePpq: 0.25,
+      });
+    });
+  });
+
   it('sets clip loop, source audio and source metadata from one request object each', () => {
     withProject((project) => {
       const { clipId } = addUriClip(project);

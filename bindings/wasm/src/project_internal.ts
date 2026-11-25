@@ -209,6 +209,11 @@ export interface NativeProjectClip {
   gain: number;
   loopMode: number;
   loopLengthPpq: number;
+  fadeInPpq: number;
+  fadeInCurve: number;
+  fadeOutPpq: number;
+  fadeOutCurve: number;
+  loopCrossfadePpq: number;
 }
 
 /** A stored source as the embind layer returns it. */
@@ -1208,4 +1213,9 @@ export function projectLoopModeValue(mode: ProjectLoopMode): number {
 
 export function projectLoopModeName(ordinal: number): ProjectLoopMode {
   return tokenName(LOOP_MODES, ordinal, 'loop mode');
+}
+
+/** The fade-curve token for a C ordinal; an ordinal outside the mirror is refused. */
+export function projectFadeCurveName(ordinal: number): ProjectFadeCurve {
+  return tokenName(FADE_CURVES, ordinal, 'fade curve');
 }

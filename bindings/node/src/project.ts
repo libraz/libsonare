@@ -844,6 +844,8 @@ function clipFromNative(raw: Record<string, unknown>): ProjectClip {
     ...(loopLengthPpq === 0 ? {} : { loopLengthPpq }),
     sourceKind: tokenName(SOURCE_KIND, raw.sourceKind as number, 'source kind'),
     loopMode: tokenName(LOOP_MODE, raw.loopMode as number, 'loop mode'),
+    fadeInCurve: tokenName(FADE_CURVE, raw.fadeInCurve as number, 'fade curve'),
+    fadeOutCurve: tokenName(FADE_CURVE, raw.fadeOutCurve as number, 'fade curve'),
   } as ProjectClip;
 }
 

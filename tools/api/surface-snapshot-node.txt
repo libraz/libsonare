@@ -13201,9 +13201,14 @@
 . ProjectChordSymbol.slashBassPc property optional : number | undefined
 . ProjectChordSymbol.startPpq property required : number
 . ProjectClip interface
+. ProjectClip.fadeInCurve property required readonly : ProjectFadeCurve
+. ProjectClip.fadeInPpq property required readonly : number
+. ProjectClip.fadeOutCurve property required readonly : ProjectFadeCurve
+. ProjectClip.fadeOutPpq property required readonly : number
 . ProjectClip.gain property required readonly : number
 . ProjectClip.id property required readonly : number
 . ProjectClip.lengthPpq property required readonly : number
+. ProjectClip.loopCrossfadePpq property required readonly : number
 . ProjectClip.loopLengthPpq property optional readonly : number | undefined
 . ProjectClip.loopMode property required readonly : ProjectLoopMode
 . ProjectClip.sourceId property required readonly : number

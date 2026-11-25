@@ -89,6 +89,16 @@ export interface ProjectClip {
   readonly loopMode: ProjectLoopMode;
   /** Loop length in PPQ; absent for a whole-clip loop or a clip that does not loop. */
   readonly loopLengthPpq?: number;
+  /** Fade-in length in PPQ; `0` for no fade-in. */
+  readonly fadeInPpq: number;
+  /** Shape of the fade-in. */
+  readonly fadeInCurve: ProjectFadeCurve;
+  /** Fade-out length in PPQ; `0` for no fade-out. */
+  readonly fadeOutPpq: number;
+  /** Shape of the fade-out. */
+  readonly fadeOutCurve: ProjectFadeCurve;
+  /** Crossfade length in PPQ at each loop wrap; `0` for a hard wrap. */
+  readonly loopCrossfadePpq: number;
 }
 
 /** Read-only stored audio or MIDI source descriptor. */

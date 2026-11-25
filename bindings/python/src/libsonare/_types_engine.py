@@ -27,6 +27,7 @@ from ._types_enums import (
 
 if TYPE_CHECKING:
     from ._project_model import (
+        ProjectFadeCurve,
         ProjectLoopMode,
         ProjectSourceKind,
         ProjectTrackKind,
@@ -435,6 +436,16 @@ class ProjectClip:
     """Whether the clip loops (:data:`ProjectLoopMode`)."""
     loop_length_ppq: float | None
     """Loop length in PPQ as set; ``None`` when the clip loops its whole length."""
+    fade_in_ppq: float
+    """Fade-in length in PPQ; 0 for no fade-in."""
+    fade_in_curve: ProjectFadeCurve
+    """Shape of the fade-in (:data:`ProjectFadeCurve`)."""
+    fade_out_ppq: float
+    """Fade-out length in PPQ; 0 for no fade-out."""
+    fade_out_curve: ProjectFadeCurve
+    """Shape of the fade-out (:data:`ProjectFadeCurve`)."""
+    loop_crossfade_ppq: float
+    """Crossfade length in PPQ at each loop wrap; 0 for a hard wrap."""
 
 
 @dataclass(frozen=True, slots=True)

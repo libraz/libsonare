@@ -1650,9 +1650,14 @@ ProjectChordSymbol.roman_numeral field optional : NotRequired[str]
 ProjectChordSymbol.root_pc field required : int | None
 ProjectChordSymbol.slash_bass_pc field required : int | None
 ProjectChordSymbol.start_ppq field required : float
+ProjectClip.fade_in_curve field required : ProjectFadeCurve (member 12)
+ProjectClip.fade_in_ppq field required : float (member 11)
+ProjectClip.fade_out_curve field required : ProjectFadeCurve (member 14)
+ProjectClip.fade_out_ppq field required : float (member 13)
 ProjectClip.gain field required : float (member 8)
 ProjectClip.id field required : int (member 1)
 ProjectClip.length_ppq field required : float (member 6)
+ProjectClip.loop_crossfade_ppq field required : float (member 15)
 ProjectClip.loop_length_ppq field required : float | None (member 10)
 ProjectClip.loop_mode field required : ProjectLoopMode (member 9)
 ProjectClip.source_id field required : int (member 3)
