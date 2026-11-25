@@ -136,3 +136,89 @@ describe('keyModeFromAnalysis', () => {
     expect(() => keyModeFromAnalysis(-1 as never)).toThrow(TypeError);
   });
 });
+
+describe('annotation list refusals name the field by its path from the argument root', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const key = { startPpq: 0, endPpq: 4 };
+  const modes = 'unknown, major, minor, dorian, phrygian, lydian, mixolydian, locrian';
+  const cases: ReadonlyArray<readonly [string, (project: Project) => void, Error]> = [
+    [
+      'an absent key end',
+      (p) => p.annotateKeys([key, { startPpq: 4 } as never]),
+      new TypeError('Project.annotateKeys: keys[1].endPpq must be a number'),
+    ],
+    [
+      'a number key',
+      (p) => p.annotateKeys([42 as never]),
+      new TypeError('Project.annotateKeys: keys[0] must be an object'),
+    ],
+    [
+      'a null key',
+      (p) => p.annotateKeys([null as never]),
+      new TypeError('Project.annotateKeys: keys[0] must be an object'),
+    ],
+    [
+      'an out-of-range tonic',
+      (p) => p.annotateKeys([{ ...key, tonicPc: 12 }]),
+      new RangeError(
+        'Project.annotateKeys: keys[0].tonicPc must be an integer in [0, 11], or omitted',
+      ),
+    ],
+    [
+      'a wrong-typed tonic',
+      (p) => p.annotateKeys([{ ...key, tonicPc: 'C' as never }]),
+      new TypeError('Project.annotateKeys: keys[0].tonicPc must be an integer'),
+    ],
+    [
+      'an unknown mode',
+      (p) => p.annotateKeys([{ ...key, mode: 'bogus' as never }]),
+      new RangeError(`Project.annotateKeys: keys[0].mode must be one of ${modes}`),
+    ],
+    [
+      'a numeric mode',
+      (p) => p.annotateKeys([{ ...key, mode: 3 as never }]),
+      new TypeError(`Project.annotateKeys: keys[0].mode must be one of ${modes}`),
+    ],
+    [
+      'an absent chord start',
+      (p) => p.annotateChords([{ endPpq: 4 } as never]),
+      new TypeError('Project.annotateChords: chords[0].startPpq must be a number'),
+    ],
+    [
+      'a wrong-typed chord end',
+      (p) => p.annotateChords([{ startPpq: 0, endPpq: 'x' as never }]),
+      new TypeError('Project.annotateChords: chords[0].endPpq must be a number'),
+    ],
+    [
+      'an out-of-range chord root',
+      (p) => p.annotateChords([{ startPpq: 0, endPpq: 4, rootPc: 12 }]),
+      new RangeError(
+        'Project.annotateChords: chords[0].rootPc must be an integer in [0, 11], or omitted',
+      ),
+    ],
+    [
+      'an out-of-range slash bass',
+      (p) => p.annotateChords([{ startPpq: 0, endPpq: 4, slashBassPc: -1 }]),
+      new RangeError(
+        'Project.annotateChords: chords[0].slashBassPc must be an integer in [0, 11], or omitted',
+      ),
+    ],
+    [
+      'a wrong-typed modulation flag',
+      (p) => p.annotateChords([{ startPpq: 0, endPpq: 4, modulationBoundary: 1 as never }]),
+      new TypeError('Project.annotateChords: chords[0].modulationBoundary must be a boolean'),
+    ],
+  ];
+
+  it.each(cases)('refuses %s', (_name, call, error) => {
+    const project = new Project();
+    try {
+      expect(() => call(project)).toThrow(error);
+    } finally {
+      project.destroy();
+    }
+  });
+});

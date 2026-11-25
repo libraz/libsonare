@@ -1014,10 +1014,10 @@ describe('Sonare WASM Project', () => {
       const chord = { startPpq: 0, endPpq: 4, extensions: [7] } as const;
       project.annotateChords([chord] as const);
       expect(() => project.annotateChords([{ endPpq: 4 } as never])).toThrow(
-        new TypeError('Project.annotateChords: startPpq must be a number'),
+        new TypeError('Project.annotateChords: chords[0].startPpq must be a number'),
       );
       expect(() => project.annotateChords([{ startPpq: 0 } as never])).toThrow(
-        new TypeError('Project.annotateChords: endPpq must be a number'),
+        new TypeError('Project.annotateChords: chords[0].endPpq must be a number'),
       );
       expect(() => project.annotateChords([chord, { ...chord, extensions: [7, 256] }])).toThrow(
         new RangeError(

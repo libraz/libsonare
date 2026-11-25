@@ -2081,6 +2081,9 @@ export class RealtimeEngine {
       requireListBudget(lanes, 'lanes');
     }
     const nativeLanes = lanes.map((lane, i) => {
+      if (!isNonArrayObject(lane)) {
+        throw refuseType(`lanes[${i}] must be an object`);
+      }
       const { sourceChannelLayout, outputBusId, ...rest } = lane;
       return {
         ...rest,
@@ -2217,6 +2220,9 @@ export class RealtimeEngine {
     this.native.setTrackBuses(
       Array.isArray(buses)
         ? buses.map((bus, i) => {
+            if (!isNonArrayObject(bus)) {
+              throw refuseType(`buses[${i}] must be an object`);
+            }
             const { channelLayout, outputBusId, ...rest } = bus;
             return {
               ...rest,

@@ -698,7 +698,8 @@ uint32_t checkedUintFromVal(const val& value, const char* key);
 inline uint32_t checkedUintFromVal(const val& value, const std::string& path) {
   return checkedUintFromVal(value, path.data());
 }
-uint32_t uintProperty(val object, const char* key, uint32_t default_value);
+uint32_t uintProperty(val object, const char* key, uint32_t default_value,
+                      const std::string& at = std::string());
 /// @brief Reads a size_t count or position.
 /// @throws WasmTypeError unless a number; WasmRangeError unless a finite non-negative integer
 ///         within both Number.MAX_SAFE_INTEGER and the native size_t maximum, both naming @p key.

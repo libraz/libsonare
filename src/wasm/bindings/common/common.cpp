@@ -677,9 +677,10 @@ std::size_t sizeTFromNumber(double number, const char* key) {
   return static_cast<std::size_t>(number);
 }
 
-uint32_t uintProperty(val object, const char* key, uint32_t default_value) {
-  val value = typedPropertyValue(object, key, "number", key, true);
-  return value.isUndefined() ? default_value : checkedUintFromVal(value, key);
+uint32_t uintProperty(val object, const char* key, uint32_t default_value, const std::string& at) {
+  const std::string name = elementField(at, key);
+  val value = typedPropertyValue(object, key, "number", name, true);
+  return value.isUndefined() ? default_value : checkedUintFromVal(value, name.c_str());
 }
 
 uint32_t checkedWordFromVal(const val& value, const char* key) {

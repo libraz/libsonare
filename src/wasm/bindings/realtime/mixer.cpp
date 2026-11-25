@@ -38,13 +38,14 @@ void checkEqBandIndex(int band_index) {
 // Reads a `sends` array (a lane's, a bus's or the positional ops'), in the one
 // shape all share. sendTiming mirrors SonareSendTiming (0 post, 1 pre) and
 // defaults to post-fader.
-std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
+std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends,
+                                                             const std::string& subject) {
   std::vector<sonare::engine::TrackLaneConfig::Send> out;
-  const int send_count = static_cast<int>(wasmArrayLength(sends, "sends"));
+  const int send_count = static_cast<int>(wasmArrayLength(sends, subject.c_str()));
   out.reserve(static_cast<size_t>(send_count));
   for (int send_index = 0; send_index < send_count; ++send_index) {
-    const val send = requiredElementObject(sends, send_index, "sends");
-    const std::string at = elementAt("sends", send_index);
+    const val send = requiredElementObject(sends, send_index, subject);
+    const std::string at = elementAt(subject, send_index);
     const uint32_t bus_id = checkedUintFromVal(requiredDomainIntProperty(send, "busId", at),
                                                elementField(at, "busId").c_str());
     const sonare::engine::TrackLaneConfig::Send defaults{};
@@ -57,15 +58,16 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
     const sonare::mixing::SendTiming timing = timing_value == 1
                                                   ? sonare::mixing::SendTiming::PreFader
                                                   : sonare::mixing::SendTiming::PostFader;
-    out.push_back({bus_id, floatProperty(send, "levelDb", defaults.level_db),
-                   boolProperty(send, "enabled", true), timing});
+    out.push_back({bus_id, floatProperty(send, "levelDb", defaults.level_db, at),
+                   boolProperty(send, "enabled", true, at), timing});
   }
   return out;
 }
 
-std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner) {
+std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner,
+                                                                     const std::string& subject) {
   if (owner["sends"].isUndefined() || owner["sends"].isNull()) return {};
-  return readSends(owner["sends"]);
+  return readSends(owner["sends"], subject);
 }
 
 sonare::engine::SidechainSourceKind sidechainSourceKind(int source_kind) {
@@ -129,7 +131,9 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
       }
       config.source_layout = sonare::ChannelLayout::Stereo;
     }
-    if (lane_val.typeOf().as<std::string>() == "object") config.sends = readOptionalSends(lane_val);
+    if (lane_val.typeOf().as<std::string>() == "object") {
+      config.sends = readOptionalSends(lane_val, elementAt("lanes", i) + ".sends");
+    }
     configs.push_back(std::move(config));
   }
   withCEntryRefusal("engine_set_track_lanes", [&] {
@@ -149,7 +153,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
 void RealtimeEngineWasm::setTrackSends(const val& track_id_val, const val& sends_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
 #if defined(SONARE_WITH_MIXING)
-  auto sends = readSends(sends_val);
+  auto sends = readSends(sends_val, "sends");
   withCEntryRefusal("engine_set_track_sends", [&] {
     sonare_c_detail::require_track_lane_edit(engine_,
                                              engine_.set_track_sends(track_id, std::move(sends)),
@@ -292,7 +296,7 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
         bus_id, floatProperty(bus, "gainDb", sonare::engine::TrackBusConfig{}.gain_db),
         static_cast<sonare::ChannelLayout>(layout_value)};
     config.output_bus_id = uintProperty(bus, "outputBusId", config.output_bus_id);
-    config.sends = readOptionalSends(bus);
+    config.sends = readOptionalSends(bus, at + ".sends");
     configs.push_back(std::move(config));
   }
   withCEntryRefusal("engine_set_track_buses", [&] {

@@ -639,6 +639,18 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'refusal name built from a literal key under an optional list-element path',
     },
     {
+      file: 'common/common.cpp',
+      text: 'default_value : checkedUintFromVal(value, name.c_str())',
+      count: 1,
+      reason: 'refusal name built from a literal key under an optional list-element path',
+    },
+    {
+      file: 'realtime/mixer.cpp',
+      text: 'wasmArrayLength(sends, subject.c_str())',
+      count: 1,
+      reason: 'error-subject label built from a literal list name and an element index',
+    },
+    {
       file: 'common/midi_cc_kind.h',
       text: 'stringFromVal(value, name.c_str())',
       count: 1,
@@ -713,7 +725,7 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'project/project_meta.cpp',
       text: '(at + ".',
-      count: 2,
+      count: 4,
       reason: 'refusal name built from a literal list name, a segment index and a literal key',
     },
     {

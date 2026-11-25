@@ -98,8 +98,8 @@ void ProjectWasm::annotateKeys(val keys) {
       seg.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
       seg.end_ppq = requiredDomainDoubleProperty(entry, "endPpq", at);
       seg.tonic_pc =
-          static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "tonicPc", 0, 11, 255));
-      seg.mode = uintProperty(entry, "mode", seg.mode);
+          static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "tonicPc", 0, 11, 255, at));
+      seg.mode = uintProperty(entry, "mode", seg.mode, at);
       segments.push_back(seg);
     }
   }
@@ -158,14 +158,15 @@ void ProjectWasm::annotateChords(val chords) {
         "romanNumeral", "rootPc",     "slashBassPc",        "startPpq"};
     refuseUnknownAnnotationKeys(entry, "chords", i, kAllowed);
     SonareProjectChordSymbol sym{};
-    sym.start_ppq = checkedDoubleFromVal(entry["startPpq"], "startPpq");
-    sym.end_ppq = checkedDoubleFromVal(entry["endPpq"], "endPpq");
-    sym.root_pc = static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "rootPc", 0, 11, 255));
-    sym.quality = uintProperty(entry, "quality", sym.quality);
+    sym.start_ppq = checkedDoubleFromVal(entry["startPpq"], (at + ".startPpq").c_str());
+    sym.end_ppq = checkedDoubleFromVal(entry["endPpq"], (at + ".endPpq").c_str());
+    sym.root_pc =
+        static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "rootPc", 0, 11, 255, at));
+    sym.quality = uintProperty(entry, "quality", sym.quality, at);
     sym.slash_bass_pc =
-        static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "slashBassPc", 0, 11, 255));
+        static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "slashBassPc", 0, 11, 255, at));
     sym.modulation_boundary =
-        boolProperty(entry, "modulationBoundary", sym.modulation_boundary != 0) ? 1 : 0;
+        boolProperty(entry, "modulationBoundary", sym.modulation_boundary != 0, at) ? 1 : 0;
     std::vector<uint8_t> exts;
     if (hasProperty(entry, "extensions")) {
       val ext_arr = entry["extensions"];

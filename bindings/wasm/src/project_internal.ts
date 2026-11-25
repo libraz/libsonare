@@ -908,11 +908,14 @@ export function projectKeySegmentsToNative(
   keys: ReadonlyArray<ProjectKeySegment>,
 ): NativeKeySegment[] {
   requireListBudget(keys, 'keys');
-  return keys.map((key) =>
-    key.mode === undefined
+  return keys.map((key: ProjectKeySegment, index) => {
+    if (key === null || (typeof key !== 'object' && typeof key !== 'function')) {
+      throw refuseType(`keys[${index}] must be an object`);
+    }
+    return key.mode === undefined
       ? (key as NativeKeySegment)
-      : { ...key, mode: resolveEnumOrdinal(key.mode, KEY_MODES, 'mode') },
-  );
+      : { ...key, mode: resolveEnumOrdinal(key.mode, KEY_MODES, `keys[${index}].mode`) };
+  });
 }
 
 export function projectChordSymbolsToNative(
@@ -930,7 +933,11 @@ export function projectChordSymbolsToNative(
       ? (chord as NativeChordSymbol)
       : {
           ...chord,
-          quality: resolveEnumOrdinal(chord.quality, CHORD_QUALITY_CODES, 'quality'),
+          quality: resolveEnumOrdinal(
+            chord.quality,
+            CHORD_QUALITY_CODES,
+            `chords[${index}].quality`,
+          ),
         };
   });
 }
