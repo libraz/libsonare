@@ -1166,6 +1166,38 @@ class CErrorPathRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
         self.assertIn("sonare_bad:4", verdict.violations[0].detail)
 
+    BRANCHES = (
+        "SonareError sonare_branches(int* out) {\n"
+        "  SONARE_C_API_ENTRY;\n"
+        "  if (*out > 9) {\n"
+        '    set_last_error(SONARE_ERROR_INVALID_FORMAT, "big");\n'
+        "  } else if (*out < 0) {\n"
+        '    set_last_error(SONARE_ERROR_INVALID_FORMAT, "negative");\n'
+        "  } else {\n"
+        '    set_last_error(SONARE_ERROR_INVALID_FORMAT, "other");\n'
+        "  }\n"
+        "  return SONARE_ERROR_INVALID_FORMAT;\n"
+        "}\n"
+    )
+
+    def test_a_return_after_every_branch_sets_the_message_passes(self) -> None:
+        self.assertFalse(self.judge(branches=self.BRANCHES).failed)
+
+    def test_a_branch_that_sets_no_message_is_named(self) -> None:
+        one_arm = self.BRANCHES.replace(
+            '    set_last_error(SONARE_ERROR_INVALID_FORMAT, "negative");\n', ""
+        )
+        verdict = self.judge(branches=one_arm)
+        self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/branches.cpp"])
+        self.assertIn("sonare_branches:9", verdict.violations[0].detail)
+
+    def test_a_chain_without_a_final_else_is_named(self) -> None:
+        no_else = self.BRANCHES.replace(
+            '  } else {\n    set_last_error(SONARE_ERROR_INVALID_FORMAT, "other");\n', ""
+        )
+        verdict = self.judge(branches=no_else)
+        self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/branches.cpp"])
+
     def test_an_audio_thread_entry_keeps_its_bare_code(self) -> None:
         rt = self.BAD.replace("SONARE_C_API_ENTRY", "SONARE_C_RT_API_ENTRY")
         self.assertFalse(self.judge(good=self.GOOD, rt=rt).failed)

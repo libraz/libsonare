@@ -1335,14 +1335,25 @@ def _c_unset_returns(body: str, setters: set[str]) -> list[tuple[int, str]]:
     token = re.compile(
         r"[{}]|" + _C_ERROR_RETURN.pattern + r"|\b(?:" + "|".join(sorted(setters)) + r")\s*\("
     )
-    stack, bad = [False], []
+    # Per open block: whether its path set the message, whether it is a final `else` arm, and
+    # the arms of an if/else chain still open inside it; a chain whose every arm set it sets it.
+    stack, final_else, arms, bad = [False], [False], [[]], []
     for match in token.finditer(body):
         text = match.group(0)
         if text == "{":
             stack.append(False)
+            final_else.append(re.search(r"\belse\s*$", body[: match.start()]) is not None)
+            arms.append([])
         elif text == "}":
             if len(stack) > 1:
-                stack.pop()
+                closed, was_final = stack.pop(), final_else.pop()
+                arms.pop()
+                if re.match(r"\s*else\b", body[match.end() :]):
+                    arms[-1].append(closed)
+                else:
+                    chain, arms[-1] = arms[-1] + [closed], []
+                    if was_final and all(chain):
+                        stack[-1] = True
         elif text.startswith("return"):
             if not any(stack):
                 bad.append((match.start(), match.group(1)))
