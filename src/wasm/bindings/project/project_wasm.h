@@ -77,6 +77,12 @@ inline val projectCompileResultToVal(const SonareProjectCompileResult& result) {
   return out;
 }
 
+/// A non-NULL pointer to @p bytes, also when it is empty.
+inline const uint8_t* nonNullBytes(const std::vector<uint8_t>& bytes) {
+  static constexpr uint8_t kNoBytes = 0;
+  return bytes.empty() ? &kNoBytes : bytes.data();
+}
+
 /// Throws via throwCodedCError unless @p err is SONARE_OK.
 inline void checkCodedCError(SonareError err) {
   if (err != SONARE_OK) throwCodedCError(err);

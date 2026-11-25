@@ -116,8 +116,17 @@ def test_load_sound_font_rejects_malformed_bytes() -> None:
             project.load_sound_font(b"not an sf2 file")
         # The previous SoundFont is kept after a failed load.
         assert project.sound_font_preset_count() == 3
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            SonareValueError, match="^Project.load_sound_font: data must not be empty$"
+        ):
             project.load_sound_font(b"")
+        with (
+            ls.RealtimeEngine(sample_rate=48000) as engine,
+            pytest.raises(
+                SonareValueError, match="^RealtimeEngine.load_sound_font: data must not be empty$"
+            ),
+        ):
+            engine.load_sound_font(b"")
     finally:
         project.close()
 

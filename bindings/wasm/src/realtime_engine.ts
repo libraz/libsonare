@@ -787,6 +787,9 @@ export class RealtimeEngine {
    * not referenced afterwards. Replaces any previously loaded SoundFont.
    */
   loadSoundFont(data: Uint8Array): void {
+    if (data instanceof Uint8Array && data.length === 0) {
+      throw refuse('data must not be empty');
+    }
     this.native.loadSoundFont(data);
   }
 

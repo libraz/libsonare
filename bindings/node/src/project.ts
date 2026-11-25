@@ -2333,9 +2333,12 @@ export class Project {
    * font at the selected URI. Omit the URI to use the default font.
    */
   loadSoundFont(data: Uint8Array, options?: ProjectSoundFontOptions): void {
-    withEntry('Project.loadSoundFont', () =>
-      this.native.loadSoundFont(data, soundFontUri(options)),
-    );
+    withEntry('Project.loadSoundFont', () => {
+      if (data instanceof Uint8Array && data.length === 0) {
+        throw refuse('data must not be empty');
+      }
+      this.native.loadSoundFont(data, soundFontUri(options));
+    });
   }
 
   /** Release the project's loaded SoundFont (no-op when none is loaded). */

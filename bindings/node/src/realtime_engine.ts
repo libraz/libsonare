@@ -2005,6 +2005,9 @@ export class RealtimeEngine {
    * created with); the input buffer is not referenced after the call.
    */
   loadSoundFont(data: Uint8Array): void {
+    if (data instanceof Uint8Array && data.length === 0) {
+      throw refuse('data must not be empty');
+    }
     this.native.loadSoundFont(data);
   }
 

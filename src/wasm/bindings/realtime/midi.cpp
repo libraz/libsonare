@@ -294,13 +294,12 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
   // error, as in sonare_engine_load_sound_font; parse() applies the same SF2 file
   // size limit, and the engine's SoundFont is replaced only after it succeeds.
   if (bytes.empty()) {
-    throw WasmRangeError("SoundFont data must not be empty");
+    throw WasmRangeError("data must not be empty");
   }
   auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
   std::string error;
   if (!soundfont->parse(bytes.data(), bytes.size(), &error)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "failed to load SoundFont: " + error);
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, error);
   }
   soundfont_ = std::move(soundfont);
 #else

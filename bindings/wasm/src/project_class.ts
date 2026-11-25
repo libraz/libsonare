@@ -1439,6 +1439,9 @@ export class Project {
    * Omit `uri` to select the default. Malformed input leaves the previous font in place.
    */
   loadSoundFont(data: Uint8Array, options?: ProjectSoundFontOptions): void {
+    if (data instanceof Uint8Array && data.length === 0) {
+      throw refuse('data must not be empty');
+    }
     this.native.loadSoundFont(data, soundFontUri('Project.loadSoundFont', options));
   }
 

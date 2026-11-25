@@ -115,6 +115,45 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     }
   });
 
+  it('refuses empty SoundFont bytes alike from Project and RealtimeEngine', () => {
+    const project = new Project();
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
+    try {
+      const refusals = [
+        () => project.loadSoundFont(new Uint8Array(0)),
+        () => project.loadSoundFont(new Uint8Array(0), { uri: 'alternate' }),
+        () => engine.loadSoundFont(new Uint8Array(0)),
+      ].map((call) => {
+        try {
+          call();
+        } catch (error) {
+          return error;
+        }
+        return undefined;
+      });
+      for (const error of refusals) {
+        expect(error).toBeInstanceOf(RangeError);
+        expect((error as Error).message).toMatch(/\.loadSoundFont: data must not be empty$/);
+      }
+      const junk = [
+        () => project.loadSoundFont(new Uint8Array([9, 9, 9])),
+        () => engine.loadSoundFont(new Uint8Array([9, 9, 9])),
+      ].map((call) => {
+        try {
+          call();
+        } catch (error) {
+          return (error as Error).message.replace(/^[A-Za-z]+\.loadSoundFont: /, '');
+        }
+        return undefined;
+      });
+      expect(junk[0]).toBeDefined();
+      expect(junk[1]).toBe(junk[0]);
+    } finally {
+      engine.destroy();
+      project.destroy();
+    }
+  });
+
   it('refuses an empty SoundFont URI', () => {
     const project = new Project();
     try {

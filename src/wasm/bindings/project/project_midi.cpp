@@ -25,12 +25,6 @@
 
 namespace {
 
-// A non-NULL pointer to @p bytes, also when it is empty.
-const uint8_t* nonNullBytes(const std::vector<uint8_t>& bytes) {
-  static constexpr uint8_t kNoBytes = 0;
-  return bytes.empty() ? &kNoBytes : bytes.data();
-}
-
 struct MidiEventListGuard {
   SonareMidiEventList value{};
 

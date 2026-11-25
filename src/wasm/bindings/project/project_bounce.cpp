@@ -633,8 +633,9 @@ void ProjectWasm::loadSoundFont(val data, const val& uri_val) {
     uri = wasmCString(uri_storage, "uri");
   }
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
-  const SonareError err = sonare_project_load_sound_font(
-      project_.get(), uri, bytes.empty() ? nullptr : bytes.data(), bytes.size());
+  // An empty buffer reaches the C entry as one, which refuses it as empty rather than as NULL.
+  const SonareError err =
+      sonare_project_load_sound_font(project_.get(), uri, nonNullBytes(bytes), bytes.size());
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
