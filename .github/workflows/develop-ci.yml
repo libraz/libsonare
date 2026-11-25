@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
@@ -88,14 +88,18 @@ jobs:
         # Against the declarations just emitted, which is what a consumer sees.
         run: yarn test:types
       - name: Lint and type-check the Node binding
-        # Neither check needs the native addon built: tsconfig.test.json
-        # excludes dist/ and build/, and the tests import from ../src rather
-        # than the package entry point.
+        # Several tests resolve the Node package's emitted declarations.
+        # The TypeScript build emits them without building the native addon.
         working-directory: bindings/node
         run: |
           yarn install --immutable
           yarn lint
+          yarn build:ts
           yarn test:types
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          version: "0.13.9"
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Lint Python
         # The ruff uv.lock resolves for the binding's lint group, so a new ruff
         # release cannot fail an unrelated pull request.
@@ -129,6 +133,12 @@ jobs:
             echo "python_catalog_invalid.py unexpectedly passed mypy" >&2
             exit 1
           fi
+      # The binding checks above exercise the package's Node floor. The
+      # repository's audition suite uses jsdom, which needs a newer Node.
+      - uses: actions/setup-node@v7
+        if: matrix.node == '22.12.0'
+        with:
+          node-version: '26'
       - name: Drift gates
         # The mechanical cross-surface gates, all read-only and stdlib-only
         # except numpy: the bank-policy gate imports the shipping
@@ -169,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
@@ -229,7 +239,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
@@ -321,7 +331,7 @@ jobs:
     container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock

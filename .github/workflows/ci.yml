@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
@@ -81,14 +81,18 @@ jobs:
         # is left alone.
         run: yarn build:types
       - name: Lint and type-check the Node binding
-        # Neither check needs the native addon built: tsconfig.test.json
-        # excludes dist/ and build/, and the tests import from ../src rather
-        # than the package entry point.
+        # Several tests resolve the Node package's emitted declarations.
+        # The TypeScript build emits them without building the native addon.
         working-directory: bindings/node
         run: |
           yarn install --immutable
           yarn lint
+          yarn build:ts
           yarn test:types
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          version: "0.13.9"
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Lint Python
         # The ruff uv.lock resolves for the binding's lint group, so a new ruff
         # release cannot fail an unrelated pull request.
@@ -101,6 +105,12 @@ jobs:
         run: |
           uv sync --locked --project bindings/python --only-group lint
           uv run --no-sync --project bindings/python ruff check .
+      # The binding checks above exercise the package's Node floor. The
+      # repository's audition suite uses jsdom, which needs a newer Node.
+      - uses: actions/setup-node@v7
+        if: matrix.node == '22.12.0'
+        with:
+          node-version: '26'
       - name: Drift gates
         # The mechanical cross-surface gates, all read-only and stdlib-only
         # except numpy: the bank-policy gate imports the shipping
@@ -148,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
@@ -204,7 +214,7 @@ jobs:
       # finer than the float reproducibility across architectures and libm
       # implementations, so a hash generated on one host cannot match another.
       # They stay a same-environment regression check, run locally.
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         if: runner.os == 'Linux'
         with:
           version: "0.13.9"
@@ -409,7 +419,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock

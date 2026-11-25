@@ -210,7 +210,7 @@ jobs:
           tar -xzf "release-assets/${asset}.tar.gz" -C "${smoke}"
           cli="${smoke}/${asset}/sonare-cli"
           "${cli}" version
-          "${cli}" tone --frequency 440 --duration 0.5 -o "${smoke}/tone.wav"
+          "${cli}" tone --frequency-hz 440 --duration-sec 0.5 -o "${smoke}/tone.wav"
           "${cli}" info "${smoke}/tone.wav"
 
       - name: Attach native CLI assets
@@ -265,7 +265,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
