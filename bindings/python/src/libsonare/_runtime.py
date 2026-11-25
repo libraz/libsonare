@@ -1436,6 +1436,7 @@ def _mapping_keys(
 
 # Keys of a tempo / time-signature segment mapping; shared by Project and Engine.
 _TEMPO_SEGMENT_KEYS = ("start_ppq", "bpm", "end_bpm")
+_TEMPO_SEGMENT_REQUIRED = ("start_ppq", "bpm")
 _METER_SEGMENT_KEYS = ("start_ppq", "numerator", "denominator")
 
 

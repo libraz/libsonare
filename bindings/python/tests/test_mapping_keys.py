@@ -114,6 +114,64 @@ def test_project_mappings_take_one_spelling() -> None:
         project.close()
 
 
+def _requires(
+    call: Callable[[dict[str, object]], object], good: Mapping[str, object], key: str, path: str
+) -> None:
+    call(dict(good))
+    missing = {k: v for k, v in good.items() if k != key}
+    with pytest.raises(SonareValueError, match=rf"(^|: ){re.escape(path)} must be given$"):
+        call(missing)
+
+
+@needs_lib
+def test_a_missing_required_key_is_refused_by_its_path() -> None:
+    from libsonare import Project, RealtimeEngine
+
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        tempo = {"start_ppq": 0.0, "bpm": 120.0}
+        for key in ("start_ppq", "bpm"):
+            _requires(lambda m: engine.set_tempo_segments([m]), tempo, key, f"segments[0].{key}")
+        meter = {"start_ppq": 0.0, "numerator": 4, "denominator": 4}
+        for key in ("start_ppq", "numerator", "denominator"):
+            _requires(
+                lambda m: engine.set_time_signature_segments([m]), meter, key, f"segments[0].{key}"
+            )
+        bus = {"bus_id": 1}
+        target = {"bus_id": 2}
+        _requires(lambda m: engine.set_track_buses([m, target]), bus, "bus_id", "buses[0].bus_id")
+        send = {"bus_id": 2, "level_db": -3.0}
+        _requires(
+            lambda m: engine.set_track_buses([{"bus_id": 1, "sends": [m]}, target]),
+            send,
+            "bus_id",
+            "buses[0].sends[0].bus_id",
+        )
+        engine.set_track_buses([bus, target])
+        _requires(
+            lambda m: engine.set_track_lanes([{"track_id": 10, "sends": [m]}]),
+            send,
+            "bus_id",
+            "lanes[0].sends[0].bus_id",
+        )
+        lane = {"track_id": 10}
+        _requires(lambda m: engine.set_track_lanes([m]), lane, "track_id", "lanes[0].track_id")
+        _requires(lambda m: engine.set_track_sends(10, [m]), send, "bus_id", "sends[0].bus_id")
+
+    project = Project()
+    try:
+        tempo = {"start_ppq": 0.0, "bpm": 120.0}
+        for key in ("start_ppq", "bpm"):
+            _requires(lambda m: project.set_tempo_segments([m]), tempo, key, f"segments[0].{key}")
+        meter = {"start_ppq": 0.0, "numerator": 3, "denominator": 4}
+        for key in ("start_ppq", "numerator", "denominator"):
+            _requires(lambda m: project.set_time_signatures([m]), meter, key, f"segments[0].{key}")
+        segment = {"start_ppq": 0.0, "end_ppq": 480.0}
+        for key in ("start_ppq", "end_ppq"):
+            _requires(lambda m: project.annotate_keys([m]), segment, key, f"keys[0].{key}")
+    finally:
+        project.close()
+
+
 @needs_lib
 def test_an_external_stem_takes_one_spelling_and_a_layout_token() -> None:
     from libsonare import Project

@@ -115,7 +115,7 @@ def _marshal_sends(
     """Pack send mappings into a ``SonareEngineTrackSend`` array."""
     send_array = (SonareEngineTrackSend * len(sends))()
     for send_index, raw_send in enumerate(sends):
-        send = _mapping_keys(raw_send, _SEND_KEYS, f"{where}[{send_index}]")
+        send = _mapping_keys(raw_send, _SEND_KEYS, f"{where}[{send_index}]", required=("bus_id",))
         send_array[send_index].bus_id = cast(int, send["bus_id"])
         send_array[send_index].level_db = _narrow_double(
             send.get("level_db", 0.0), f"{where}[{send_index}].level_db"
@@ -153,7 +153,7 @@ class _EngineMixingMixin:
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
             where = f"lanes[{i}]"
-            lane = _mapping_keys(lane, _LANE_KEYS, where)
+            lane = _mapping_keys(lane, _LANE_KEYS, where, required=("track_id",))
             # Assigned unconverted so the struct's own narrowing sees the
             # caller value; int() would truncate a fraction past it.
             raw[i].track_id = cast(int, lane["track_id"])
@@ -359,7 +359,7 @@ class _EngineMixingMixin:
         send_arrays: list[object] = []
         for i, raw_bus in enumerate(buses):
             where = f"buses[{i}]"
-            bus = _mapping_keys(raw_bus, _BUS_KEYS, where)
+            bus = _mapping_keys(raw_bus, _BUS_KEYS, where, required=("bus_id",))
             # Assigned unconverted so the struct's own narrowing sees the caller
             # value; int() would truncate a fraction past it.
             raw[i].bus_id = cast(int, bus["bus_id"])

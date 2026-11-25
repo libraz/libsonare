@@ -9651,7 +9651,7 @@ test = "bindings/python/tests/test_engine_clips.py::test_realtime_engine_warp_mo
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_lanes(lanes)"
-changed = "each lane is a mapping (a bare track id is TypeError) taking track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the lane on the master mix and 0 raises SonareValueError"
+changed = "each lane is a mapping (a bare track id is TypeError) taking track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the lane on the master mix and 0 raises SonareValueError; a lane without track_id or a send without bus_id raises SonareValueError \"lanes[i].track_id must be given\" / \"lanes[i].sends[j].bus_id must be given\" instead of KeyError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
@@ -9659,7 +9659,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_buses(buses)"
-changed = "a bus mapping takes bus_id, gain_db, channel_layout, sends and output_bus_id only, and its sends take the set_track_lanes send keys; busId, gainDb, channelLayout, outputBusId, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the bus on the master mix and 0 raises SonareValueError"
+changed = "a bus mapping takes bus_id, gain_db, channel_layout, sends and output_bus_id only, and its sends take the set_track_lanes send keys; busId, gainDb, channelLayout, outputBusId, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the bus on the master mix and 0 raises SonareValueError; a bus or send without bus_id raises SonareValueError \"buses[i].bus_id must be given\" / \"buses[i].sends[j].bus_id must be given\" instead of KeyError"
 domain = "engine"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
@@ -9667,7 +9667,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_sends(sends)"
-changed = "a send takes bus_id, level_db, enabled and send_timing only; busId, levelDb, sendTiming and timing raise SonareValueError naming the key"
+changed = "a send takes bus_id, level_db, enabled and send_timing only; busId, levelDb, sendTiming and timing raise SonareValueError naming the key; a send without bus_id raises SonareValueError \"sends[i].bus_id must be given\" instead of KeyError"
 domain = "engine"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
@@ -9675,7 +9675,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_tempo_segments(segments)"
-changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; any other key raises SonareValueError naming it instead of being ignored"
+changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; any other key raises SonareValueError naming it instead of being ignored; a segment without start_ppq or bpm raises SonareValueError \"segments[i].<key> must be given\" instead of KeyError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_segments_take_one_spelling"
@@ -9683,7 +9683,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_time_signature_segments(segments)"
-changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored"
+changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored; a segment without start_ppq, numerator or denominator raises SonareValueError \"segments[i].<key> must be given\" instead of KeyError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_segments_take_one_spelling"
@@ -9739,7 +9739,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_an_external_stem_takes_
 [[entry]]
 kind = "option"
 old = "Project.set_tempo_segments(segments)"
-changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; start_sample, which was ignored, and any other key raise SonareValueError naming it"
+changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; start_sample, which was ignored, and any other key raise SonareValueError naming it; a segment without start_ppq or bpm raises SonareValueError \"segments[i].<key> must be given\" instead of KeyError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -9747,7 +9747,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.set_time_signatures(segments)"
-changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored"
+changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored; a segment without start_ppq, numerator or denominator raises SonareValueError \"segments[i].<key> must be given\" instead of KeyError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -10176,7 +10176,7 @@ test = "bindings/python/tests/test_engine_midi.py::test_a_cc_binding_mapping_is_
 [[entry]]
 kind = "option"
 old = "Project.annotate_keys(keys)"
-changed = "each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'; an unknown tonic_pc is absent or None, and 255 or any value outside 0..11 raises SonareValueError naming the field"
+changed = "each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'; an unknown tonic_pc is absent or None, and 255 or any value outside 0..11 raises SonareValueError naming the field; a key without start_ppq or end_ppq raises SonareValueError \"keys[i].<key> must be given\" instead of KeyError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_chord_annotation.py::test_a_key_segment_tuple_is_a_type_error"
@@ -13944,17 +13944,9 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.set_parameter_smoothed"
-removed = "call RealtimeEngine.set_parameter(param_id, value, render_frame, smoothed=True)"
+removed = "call RealtimeEngine.set_parameter(param_id, value, render_frame, smoothed=True); a smoothed set ramps every target over the engine smoothing time (20 ms by default), reserved fader, pan, width, insert and instrument targets included; 1.x stepped a reserved target onto its 5 ms click guard. A track, bus or master fader ramps its linear gain while its value stays in dB; every other target ramps in its own unit. A first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step."
 domain = "engine"
 rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "option"
-old = "RealtimeEngine.set_parameter(smoothed)"
-changed = "a smoothed set ramps every target over the engine smoothing time (20 ms by default), reserved fader, pan, width, insert and instrument targets included; 1.x stepped a reserved target onto its 5 ms click guard. A track, bus or master fader ramps its linear gain while its value stays in dB; every other target ramps in its own unit. A first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step."
-domain = "engine"
-rule = "individual"
-test = "tests/engine/instrument_automation_test.cpp::A first smoothed set on each mixer target ramps from the value its owner holds"
 
 [[entry]]
 kind = "method"

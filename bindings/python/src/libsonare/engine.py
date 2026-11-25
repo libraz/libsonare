@@ -74,6 +74,7 @@ from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
+    _TEMPO_SEGMENT_REQUIRED,
     _UINT8_MAX,
     _UINT32_MAX,
     SonareValueError,
@@ -456,7 +457,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         count = len(rows)
         c_segments = (_ffi_project.SonareProjectTempoSegment * count)() if count else None
         for i, seg in enumerate(rows):
-            fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
+            fields = _mapping_keys(
+                seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]", required=_TEMPO_SEGMENT_REQUIRED
+            )
             start_ppq = _narrow_double(fields["start_ppq"], f"segments[{i}].start_ppq")
             bpm = _narrow_double(fields["bpm"], f"segments[{i}].bpm")
             end_bpm = _narrow_double(fields.get("end_bpm", 0.0), f"segments[{i}].end_bpm")
@@ -486,7 +489,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         # narrowing sees each caller value; int() truncated 4.5 onto the legal 4,
         # which the core's positive-signature check then accepts as written.
         for i, seg in enumerate(rows):
-            fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
+            fields = _mapping_keys(
+                seg, _METER_SEGMENT_KEYS, f"segments[{i}]", required=_METER_SEGMENT_KEYS
+            )
             c_segments[i].start_ppq = _narrow_double(
                 fields["start_ppq"], f"segments[{i}].start_ppq"
             )

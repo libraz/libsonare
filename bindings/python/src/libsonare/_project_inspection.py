@@ -43,6 +43,7 @@ from ._runtime import (
     _INT64_MAX,
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
+    _TEMPO_SEGMENT_REQUIRED,
     SONARE_AUTOMATION_INSERT_INDEX_NONE,
     SonareProjectAssistSidecar,
     SonareProjectAudioSourceMetadata,
@@ -418,7 +419,9 @@ class _ProjectInspectionMixin:
         count = len(rows)
         c_keys = (SonareProjectKeySegment * count)()
         for i, key in enumerate(rows):
-            k = _mapping_keys(key, _KEY_SEGMENT_KEYS, f"keys[{i}]")
+            k = _mapping_keys(
+                key, _KEY_SEGMENT_KEYS, f"keys[{i}]", required=("start_ppq", "end_ppq")
+            )
             c_keys[i].start_ppq = _narrow_double(k["start_ppq"], f"keys[{i}].start_ppq")
             c_keys[i].end_ppq = _narrow_double(k["end_ppq"], f"keys[{i}].end_ppq")
             c_keys[i].tonic_pc = _absent_or_in_range(
@@ -994,7 +997,9 @@ class _ProjectInspectionMixin:
         count = len(rows)
         c_segments = (SonareProjectTempoSegment * count)()
         for i, seg in enumerate(rows):
-            fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
+            fields = _mapping_keys(
+                seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]", required=_TEMPO_SEGMENT_REQUIRED
+            )
             start_ppq = _narrow_double(fields["start_ppq"], f"segments[{i}].start_ppq")
             bpm = _narrow_double(fields["bpm"], f"segments[{i}].bpm")
             end_bpm = _narrow_double(fields.get("end_bpm", 0.0), f"segments[{i}].end_bpm")
@@ -1021,7 +1026,9 @@ class _ProjectInspectionMixin:
         count = len(rows)
         c_segments = (SonareProjectTimeSignatureSegment * count)()
         for i, seg in enumerate(rows):
-            fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
+            fields = _mapping_keys(
+                seg, _METER_SEGMENT_KEYS, f"segments[{i}]", required=_METER_SEGMENT_KEYS
+            )
             c_segments[i].start_ppq = _narrow_double(
                 fields["start_ppq"], f"segments[{i}].start_ppq"
             )
