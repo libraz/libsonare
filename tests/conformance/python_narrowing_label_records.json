@@ -517,13 +517,6 @@
     },
     {
       "file": "vocal_project.py",
-      "function": "_apply_project_vocal_edit",
-      "label": "sve1_size",
-      "state": "bounded",
-      "reason": "len() of the caller's bytes; below 2**63, inside the uint64 range"
-    },
-    {
-      "file": "vocal_project.py",
       "function": "_token_to_c",
       "label": "render_token.draft_id",
       "state": "caller",
