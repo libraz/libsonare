@@ -667,7 +667,7 @@ export class VocalEditWorkerClient {
   /** Analyses mono PCM in the Worker and opens an editing session. */
   create(
     request: VocalCreateRequest,
-    options: VocalEditWorkerCallOptions | null = {},
+    options: VocalEditWorkerCallOptions = {},
   ): Promise<VocalEditWorkerSession> {
     return this.core.open({ kind: 'create', request }, options ?? {});
   }
@@ -675,7 +675,7 @@ export class VocalEditWorkerClient {
   /** Opens a session in the Worker from an exported state blob and the same source PCM. */
   restore(
     request: VocalRestoreRequest,
-    options: VocalEditWorkerCallOptions | null = {},
+    options: VocalEditWorkerCallOptions = {},
   ): Promise<VocalEditWorkerSession> {
     return this.core.open({ kind: 'restore', request }, options ?? {});
   }
