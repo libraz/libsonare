@@ -3,7 +3,7 @@
 // Usage: node tools/api/ts_request_fields.cjs <packageDir>
 // Reads <packageDir>/src/index.ts through the package's own TypeScript checker. Output is a JSON
 // array on stdout, one object per (entry, parameter): entry (`fn` or `Class.method`, `Class` for a
-// constructor), parameter name, and the property names its declared type holds. A union takes
+// constructor), parameter index and name, and the property names its declared type holds. A union takes
 // every arm's properties; a rest tuple (`...args: [request: R]`) takes its elements' types. Arrays
 // and standard-library objects hold no fields.
 'use strict';
@@ -49,10 +49,10 @@ function fieldsOf(t) {
 const rows = [];
 function addSignatures(entry, signatures) {
   for (const g of signatures) {
-    for (const p of g.getParameters()) {
+    for (const [index, p] of g.getParameters().entries()) {
       const pd = (p.declarations || [])[0];
       const fields = fieldsOf(checker.getTypeOfSymbolAtLocation(p, pd || g.getDeclaration()));
-      if (fields.length > 0) rows.push({ entry, param: p.getName(), fields });
+      if (fields.length > 0) rows.push({ entry, index, param: p.getName(), fields });
     }
   }
 }

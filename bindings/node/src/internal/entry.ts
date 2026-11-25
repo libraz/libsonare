@@ -91,6 +91,8 @@ export interface RefusalRecord {
   /** The entry key of the C-ABI call that refused; null or absent when a direct core call did. */
   readonly cEntry?: string | null;
   /** Original native subjects, present only in an opt-in refusal capture. */
+  /** Explicit facade subject conversions, aligned with the captured native subjects. */
+  readonly convertedSubjects?: readonly (string | null)[];
   readonly raw?: {
     readonly code: number;
     readonly subjects: readonly string[];
@@ -138,7 +140,12 @@ export function refusalOf(error: unknown): RefusalRecord | undefined {
  * Replaces the refusal @p error carries with @p refusal, whose text @p text is, keeping the error's
  * class, code and any entry prefix already in front of the old text.
  */
-export function retextRefusal(error: Error, refusal: RefusalRecord, text: string): void {
+export function retextRefusal(
+  error: Error,
+  refusal: RefusalRecord,
+  text: string,
+  convertedSubjects?: readonly (string | null)[],
+): void {
   const named = error as NamedError;
   const old = refusalOf(error)?.text ?? '';
   const swap = (message: string): string =>
@@ -155,9 +162,19 @@ export function retextRefusal(error: Error, refusal: RefusalRecord, text: string
   }
   const previous = refusalOf(error);
   const raw = previous?.raw ?? refusal.raw;
+  const hasNewConversions = convertedSubjects?.some((subject) => subject !== null) ?? false;
+  const hasPreviousConversions =
+    previous?.convertedSubjects?.some((subject) => subject !== null) ?? false;
+  const capturedConversions =
+    raw !== undefined && (hasNewConversions || hasPreviousConversions)
+      ? refusal.subjects.map(
+          (_, index) => convertedSubjects?.[index] ?? previous?.convertedSubjects?.[index] ?? null,
+        )
+      : undefined;
   attachRefusal(error, {
     ...refusal,
     ...(raw === undefined ? {} : { raw }),
+    ...(capturedConversions === undefined ? {} : { convertedSubjects: capturedConversions }),
     cEntry: previous?.cEntry ?? null,
   });
 }

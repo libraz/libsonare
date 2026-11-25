@@ -72,6 +72,7 @@ class EmittedPairsTest(unittest.TestCase):
             {(key, "track_id"): "ref", (key, "value"): "param.value"},
             {},
             set(),
+            {},
         )
         rows = [
             {
@@ -96,10 +97,129 @@ class EmittedPairsTest(unittest.TestCase):
 
     def test_a_required_record_missing_from_a_bridge_refusal_is_a_failure(self):
         rows = [{"entry": "RealtimeEngine.resolveStripAutomationId", "requireNative": True}]
-        compared, missing, failures = plugin.emitted_pairs("wasm", rows, ({}, set(), {}, {}, set()))
+        compared, missing, failures = plugin.emitted_pairs("wasm", rows, ({}, set(), {}, {}, set(), {}))
         self.assertEqual(compared, set())
         self.assertEqual(missing, set())
         self.assertEqual(len(failures), 1)
+
+
+    def test_converted_bound_uses_the_selected_argument(self):
+        key = "engine_set_capture_timing"
+        native = "punch_end_sample"
+        facts = (
+            {key: {native}},
+            {(key, native)},
+            {(key, native): "punchEndSample"},
+            {},
+            {(key, "punch")},
+            {},
+        )
+        raw = {"subjects": [native], "code": 4, "callerSpelled": False, "fromC": True}
+        final = {
+            "cEntry": key, "code": 4, "raw": raw,
+            "subjects": ["punch.endSec"],
+            "convertedSubjects": ["punch.endSec"],
+        }
+        row = {
+            "entry": "RealtimeEngine.configureCapture",
+            "args": [{"punch": {"startSec": 2, "endSec": 1}}],
+            "refusal": final,
+        }
+        self.assertEqual(
+            plugin.emitted_pairs("node", [row], facts), ({(key, native)}, set(), set())
+        )
+        final["subjects"] = ["punch.startSec"]
+        _, _, failures = plugin.emitted_pairs("node", [row], facts)
+        self.assertTrue(any("expected 'punch.endSec'" in f for f in failures))
+        final["convertedSubjects"] = ["punch.startSec"]
+        _, _, failures = plugin.emitted_pairs("node", [row], facts)
+        self.assertTrue(any("expected 'punch.endSec'" in f for f in failures))
+        raw["subjects"] = ["undeclared"]
+        final["convertedSubjects"] = ["punch.endSec"]
+        final["subjects"] = ["punch.endSec"]
+        _, _, failures = plugin.emitted_pairs("node", [row], facts)
+        self.assertTrue(any("'undeclared' names no C argument" in f for f in failures))
+        raw["subjects"] = [native]
+        final["subjects"] = final["convertedSubjects"] = ["punch.absent"]
+        _, _, failures = plugin.emitted_pairs("node", [row], facts)
+        self.assertTrue(any("expected 'punchEndSample'" in f for f in failures))
+
+    def test_positional_record_prefix_comes_from_public_signature(self):
+        key = "project_set_destination_instrument"
+        entry = "Project.setDestinationInstrument"
+        facts = (
+            {key: {"instrument"}},
+            {(key, "instrument")},
+            {},
+            {},
+            {(key, "instrument")},
+            {entry: {(1, "instrument")}},
+        )
+        row = {
+            "entry": entry,
+            "args": [1, {"kind": "builtin", "config": {"gain": 5}}],
+            "refusal": {
+                "cEntry": key, "code": 4, "subjects": ["instrument.config.gain"],
+                "convertedSubjects": ["instrument.config.gain"],
+                "raw": {
+                    "subjects": ["instrument.builtin.gain"],
+                    "code": 4, "callerSpelled": False, "fromC": True,
+                },
+            },
+        }
+        self.assertEqual(
+            plugin.emitted_pairs("node", [row], facts), ({(key, "instrument")}, set(), set())
+        )
+
+    def test_direct_bridge_can_name_the_declared_request_field(self):
+        key = "midi_param_to_cc"
+        facts = (
+            {key: {"param_id"}},
+            {(key, "param_id")},
+            {(key, "param_id"): "paramId"},
+            {},
+            {(key, "paramId")},
+            {},
+        )
+        row = {
+            "entry": "midiParamToCc",
+            "args": [{"paramId": 0}],
+            "refusal": {
+                "code": 4,
+                "subjects": ["paramId"],
+                "raw": {"subjects": ["paramId"], "code": 4, "callerSpelled": True, "fromC": False},
+            },
+        }
+        self.assertEqual(
+            plugin.emitted_pairs("node", [row], facts), ({(key, "param_id")}, set(), set())
+        )
+
+    def test_direct_core_bag_keeps_its_literal_key_under_the_supplied_root(self):
+        key = "streaming_loudness_gain"
+        facts = (
+            {key: {"config_json"}},
+            {(key, "config_json")},
+            {(key, "config_json"): "config"},
+            {},
+            {(key, "config")},
+            {},
+        )
+        row = {
+            "entry": "streamingLoudnessGain",
+            "args": [{"config": {"no.such.key": 1}}],
+            "refusal": {
+                "code": 4,
+                "form": "unknownKey",
+                "subjects": ["config.no.such.key"],
+                "raw": {
+                    "subjects": ["config.no.such.key"],
+                    "code": 4, "callerSpelled": False, "fromC": False,
+                },
+            },
+        }
+        self.assertEqual(
+            plugin.emitted_pairs("node", [row], facts), ({(key, "config_json")}, set(), set())
+        )
 
 
 if __name__ == "__main__":

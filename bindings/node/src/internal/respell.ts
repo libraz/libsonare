@@ -35,12 +35,14 @@ export function respellRefusal(error: unknown, respelled: Respelled): unknown {
   if (!subjects.some((subject) => own(subject) !== undefined)) {
     return error;
   }
+  const convertedSubjects =
+    refusal.raw === undefined ? undefined : subjects.map((subject) => own(subject)?.name ?? null);
   const rendered = RENDER(
     refusal,
     subjects.map((subject) => own(subject)?.name ?? subject),
     subjects.map((subject) => own(subject)?.scale ?? 1),
   );
-  retextRefusal(error, rendered.refusal, rendered.message);
+  retextRefusal(error, rendered.refusal, rendered.message, convertedSubjects);
   return error;
 }
 

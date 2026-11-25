@@ -99,6 +99,9 @@ function refusalFacts(error) {
     form: r.form,
     subjects: [...r.subjects],
     cEntry: r.cEntry ?? null,
+    ...(r.convertedSubjects === undefined
+      ? {}
+      : { convertedSubjects: [...r.convertedSubjects] }),
     raw:
       r.raw === undefined
         ? undefined

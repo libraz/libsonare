@@ -241,7 +241,11 @@ def declaration_facts(surface: str):
     for row in requests.get(surface, ()):
         for key in spelling.entry_keys(row["entry"]):
             visible.update((key, name) for name in [row["param"], *row["fields"]])
-    return header_parameters(), declared, bound, roots, visible
+    records = defaultdict(set)
+    for row in requests.get(surface, ()):
+        if (index := row.get("index")) is not None:
+            records[row["entry"]].add((index, row["param"]))
+    return header_parameters(), declared, bound, roots, visible, records
 
 
 def argument_paths(value, prefix=""):
@@ -257,7 +261,7 @@ def argument_paths(value, prefix=""):
 
 
 def emitted_pairs(surface, rows, facts):
-    params, declared, bound, documents, visible = facts
+    params, declared, bound, documents, visible, records = facts
     sys.path.insert(0, str(ROOT / "tools/api"))
     from gen_field_spelling import entry_key as canonical_entry
     from gen_field_spelling import entry_keys, mechanical
@@ -269,6 +273,12 @@ def emitted_pairs(surface, rows, facts):
             return canonical
         candidates = entry_keys(entry) & params.keys()
         return next(iter(candidates)) if len(candidates) == 1 else None
+
+    def position_stem(subject):
+        # Unit alternatives retain their position name when a facade folds them.
+        name = canonical_entry(subject)
+        stem, _, unit = name.rpartition("_")
+        return stem if unit in {"sample", "samples", "sec", "ppq"} else None
 
     checked, failures = set(), set()
     for row in rows:
@@ -282,15 +292,23 @@ def emitted_pairs(surface, rows, facts):
         key = final.get("cEntry") or direct_entry(entry)
         if key is None:
             continue
-        supplied = {p for arg in row.get("args", []) for p in argument_paths(arg)}
+        args = row.get("args", [])
+        supplied = {p for arg in args for p in argument_paths(arg)}
+        rooted_paths = {
+            path
+            for index, name in records.get(entry, ())
+            if index < len(args)
+            for path in argument_paths(args[index], name)
+        }
+        positional = not any(isinstance(arg, dict) for arg in args)
         names = params.get(key, set())
         prefix, root = documents.get(key, ("", ""))
         subjects = final["subjects"]
-        if len(subjects) != len(raw["subjects"]):
+        converted = final.get("convertedSubjects", [None] * len(subjects))
+        if len(subjects) != len(raw["subjects"]) or len(subjects) != len(converted):
             failures.add(f"{entry} ({key}): subject count changed")
             continue
-        for original, shown in zip(raw["subjects"], subjects, strict=True):
-            args = row.get("args", [])
+        for original, shown, conversion in zip(raw["subjects"], subjects, converted, strict=True):
             typed = final.get("typedDocument") or bool(args and isinstance(args[0], dict))
             rooted = root and (prefix or typed and raw["code"] == _INVALID_FORMAT)
             if rooted and (original.startswith(prefix) or original == prefix[:-1]):
@@ -307,7 +325,28 @@ def emitted_pairs(surface, rows, facts):
             head, _, tail = original.partition(".")
             match = _ROOT_SEGMENT.match(head)
             raw_root = match.group() if match else ""
-            flatten = head in {final.get("flattened"), raw.get("flattened")} or (
+            flattened = head in {final.get("flattened"), raw.get("flattened")}
+            direct = not (raw.get("fromC") or row.get("requireNative"))
+            # A direct bridge can already hold a public field or a literal key in its bag.
+            # Use the original witness and declaration, never the rendered subject, to identify it.
+            if (
+                direct
+                and not flattened
+                and original in supplied
+                and (raw["callerSpelled"] or final.get("form") == "unknownKey")
+            ):
+                matches = {
+                    name for name in names
+                    if bound.get((key, name), mechanical(name, surface)) == raw_root
+                }
+                if len(matches) == 1:
+                    checked.add((key, next(iter(matches))))
+                    if shown != original:
+                        failures.add(
+                            f"{entry} ({key}): {original!r} -> {shown!r}; expected {original!r}"
+                        )
+                    continue
+            flatten = flattened or (
                 surface != "python" and head in {"config", "options"} and not raw["callerSpelled"]
             )
             leaf = tail if tail and flatten else original
@@ -318,15 +357,32 @@ def emitted_pairs(surface, rows, facts):
             nested = supplied.intersection({original, shown})
             public_root = _ROOT_SEGMENT.match(shown)
             visible_pair = public_root and (key, public_root.group()) in visible
-            if raw_root not in names:
-                lost_root = original in row.get("strings", []) or any(
-                    path.endswith(f".{original}") for path in supplied
-                )
-                if raw.get("fromC") or row.get("requireNative") or lost_root:
-                    failures.add(f"{entry} ({key}): {original!r} names no C argument")
-                    continue
-                if not (nested or visible_pair):
-                    continue
+            lost_root = original in row.get("strings", []) or any(
+                path.endswith(f".{original}") for path in supplied
+            )
+            if raw_root not in names and (not direct or lost_root):
+                failures.add(f"{entry} ({key}): {original!r} names no C argument")
+                continue
+            # Explicit conversions are declared at the call site. Check that the target exists
+            # on the supplied request or is a declared positional name before using the trace.
+            if conversion is not None and (
+                conversion in supplied
+                or conversion in rooted_paths
+                or positional and (key, conversion) in visible
+            ):
+                stem = position_stem(original)
+                if stem is not None and position_stem(conversion) not in {None, stem}:
+                    alternatives = {path for path in supplied if position_stem(path) == stem}
+                    if len(alternatives) == 1:
+                        conversion = next(iter(alternatives))
+                checked.add(label)
+                if shown != conversion:
+                    failures.add(
+                        f"{entry} ({key}): {original!r} -> {shown!r}; expected {conversion!r}"
+                    )
+                continue
+            if raw_root not in names and not (nested or visible_pair):
+                continue
             if expected is None and label not in declared and not (nested or visible_pair):
                 continue
             if (
