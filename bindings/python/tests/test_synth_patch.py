@@ -1180,15 +1180,16 @@ def test_subtractive_engine_params_are_accepted_by_key() -> None:
 def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
     project = _build_midi_only_project()
     try:
+        at = r"synth_instruments\[0\]\.instrument\.engine_params\."
         cases = [
-            ("bowedString", {"noSuchKey": 1.0}, "noSuchKey"),
-            ("bowedString", {"bowForce": 7.0}, "bowForce"),
-            ("bowedString", {"bowForce": float("nan")}, "bowForce"),
-            ("fm", {"bowForce": 0.5}, "bowForce"),
-            ("percussion", {"numModes": 2.5}, "numModes"),
+            ("bowedString", {"noSuchKey": 1.0}, rf"unknown key {at}noSuchKey \(expected "),
+            ("bowedString", {"bowForce": 7.0}, rf"{at}bowForce must be finite and in \["),
+            ("bowedString", {"bowForce": float("nan")}, r"engine_params\.bowForce must be finite"),
+            ("fm", {"bowForce": 0.5}, rf"unknown key {at}bowForce \(expected "),
+            ("percussion", {"numModes": 2.5}, rf"{at}numModes must be an integer in \["),
         ]
-        for engine_mode, params, key in cases:
-            with pytest.raises(SonareValueError, match=key) as err:
+        for engine_mode, params, text in cases:
+            with pytest.raises(SonareValueError, match=text) as err:
                 project.bounce(
                     synth_instruments=[
                         ProjectInstrumentBinding(

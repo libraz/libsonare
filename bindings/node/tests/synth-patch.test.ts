@@ -841,9 +841,9 @@ describe('SynthPatch.engineParams', () => {
     }
   });
 
-  it('refuses a bad key or value with a RangeError naming the key', () => {
+  it('refuses an undeclared key as a TypeError and a bad value as a RangeError', () => {
     const unknown = rejection({ engineMode: 'bowedString', engineParams: { noSuchField: 1 } });
-    expect(unknown.name).toBe('RangeError');
+    expect(unknown.name).toBe('TypeError');
     expect(unknown.message).toContain('noSuchField');
 
     const info = synthEngineParamInfo('bowedString');
@@ -855,7 +855,7 @@ describe('SynthPatch.engineParams', () => {
       engineMode: 'bowedString',
       engineParams: { [otherEngine?.name as string]: 0.5 },
     });
-    expect(wrongEngine.name).toBe('RangeError');
+    expect(wrongEngine.name).toBe('TypeError');
     expect(wrongEngine.message).toContain(otherEngine?.name as string);
 
     const bounded = info.find((field) => field.min !== undefined && field.max !== undefined);
@@ -893,7 +893,7 @@ describe('SynthPatch.engineParams', () => {
     expect(read.engineParams).toBeUndefined();
   });
 
-  it('binds engineParams on a realtime engine and surfaces a refusal', () => {
+  it('binds engineParams on a realtime engine and refuses an undeclared key by shape', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
       engine.setSynthInstrument(0, { engineMode: 'bowedString', engineParams: { bowForce: 0.5 } });
@@ -904,9 +904,18 @@ describe('SynthPatch.engineParams', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          name: 'RangeError',
-          message: expect.stringMatching(/noSuchField/),
+          name: 'TypeError',
+          message: expect.stringMatching(
+            /^RealtimeEngine\.setSynthInstrument: unknown key patch\.engineParams\.noSuchField \(expected [^)]*\bbowForce\b/,
+          ),
         }),
+      );
+      expect(() =>
+        engine.setSynthInstrument(0, { engineMode: 'bowedString', engineParams: { bowForce: 2 } }),
+      ).toThrow(
+        new RangeError(
+          'RealtimeEngine.setSynthInstrument: patch.engineParams.bowForce must be finite and in [0, 1]',
+        ),
       );
     } finally {
       engine.destroy();

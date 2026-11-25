@@ -214,9 +214,9 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
           engineParams: { noSuchKey: 1 },
         }),
       );
-      expect(patch).toBeInstanceOf(RangeError);
+      expect(patch).toBeInstanceOf(TypeError);
       expect(isSonareError(patch)).toBe(false);
-      expect((patch as Error).message).toContain('noSuchKey');
+      expect((patch as Error).message).toContain('unknown key patch.engineParams.noSuchKey');
       const typo = '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
       // A key refused inside the settings object is a refused argument, not a document error.
       const strip = thrown(() => engine.setStrip(10, JSON.parse(typo).strips[0]));

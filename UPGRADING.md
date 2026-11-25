@@ -7364,6 +7364,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `PlaybackRenderer.processPlanar` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
 | `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
+| `SynthPatch.engineParams` | a key the selected engine's section does not declare (another engine's key or a common patch field included) is a TypeError reading 'unknown key <path>.engineParams.<key> (expected a, b, c)' instead of a RangeError; a value outside its field's domain stays a RangeError and names <path>.engineParams.<key> with the whole domain ('must be finite and in [lo, hi]' or 'must be an integer in [lo, hi]') |
 
 #### A refusal names the public entry the caller invoked
 
@@ -12797,6 +12798,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
 | `SonareEngineSyncErrorMessage.failure` (`./worklet`) | `EngineSyncErrorMessage.failure`: typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload |
 | `SonareRealtimeEngineNode.onSyncError` (`./worklet`) | the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload, and its text names the public entry whose call posted the sync (SonareEngine.setTempo: ...), not the audio thread's inner RealtimeEngine name |
+| `SynthPatch.engineParams` | a key the selected engine's section does not declare (another engine's key or a common patch field included) is a TypeError reading 'unknown key <path>.engineParams.<key> (expected a, b, c)' instead of a RangeError; a value outside its field's domain stays a RangeError and names <path>.engineParams.<key> with the whole domain ('must be finite and in [lo, hi]' or 'must be an integer in [lo, hi]') |
 
 #### Cheap scalar state reads are getters and properties
 

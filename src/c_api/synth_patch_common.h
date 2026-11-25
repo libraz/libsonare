@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -65,10 +66,9 @@ inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c,
                                                                     const std::string& subject) {
   namespace check = sonare::util::check;
   sonare::midi::BuiltinSynthConfig cfg;
-  if (!ordinal_to_enum(c.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1, &cfg.waveform)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "waveform is not a SONARE_SYNTH_WAVEFORM_* value");
-  }
+  check::integer_in_range(c.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
+                          (subject + "waveform").c_str());
+  cfg.waveform = admitted_ordinal_to_enum<decltype(cfg.waveform)>(c.waveform);
   check::within(c.gain, kBuiltinSynthGainDomain, (subject + "gain").c_str());
   check::within(c.attack_ms, kBuiltinSynthStageMsDomain, (subject + "attack_ms").c_str());
   check::within(c.decay_ms, kBuiltinSynthStageMsDomain, (subject + "decay_ms").c_str());
@@ -325,7 +325,7 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
 /// with an unknown source or destination or a depth that is non-finite or beyond the patch clamp,
 /// or more mod routings than the matrix holds.
 /// @throws sonare::SonareParameterRefusal (InvalidParameter) naming the field; a refused engine
-///         param is a SonareException carrying the engine's own text.
+///         param is named under `engine_params` by its key, or by its index for a null key.
 inline sonare::midi::synth::NativeSynthConfig synth_config_from_patch_c(
     const SonareSynthPatch& c, const std::string& subject) {
   namespace check = sonare::util::check;
@@ -518,9 +518,14 @@ inline sonare::midi::synth::NativeSynthConfig synth_config_from_patch_c(
     for (size_t i = 0; i < engine_param_count; ++i) {
       params[i] = {c.engine_params[i].key, c.engine_params[i].value};
     }
-    std::string message;
-    if (!sonare::midi::synth::apply_engine_params(p, params.data(), params.size(), &message)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+    std::optional<sonare::SonareParameterRefusal> refused;
+    if (!sonare::midi::synth::apply_engine_params(p, params.data(), params.size(), &refused)) {
+      // A null key's subject is an index into the array, every other subject a key of it.
+      const std::string list = field("engine_params");
+      throw refused->respelled(
+          refused->code(),
+          [&list](const std::string& at) { return list + (at.front() == '[' ? "" : ".") + at; },
+          refused->caller_spelled());
     }
   }
   // Only a sample patch reads the sample block, which is what keeps set 0 addressable without a

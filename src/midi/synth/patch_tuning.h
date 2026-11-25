@@ -38,10 +38,12 @@
 /// `decayS`. The common (wrapper) section has no public key here.
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "mastering/api/param_meta.h"
+#include "util/exception.h"
 
 namespace sonare::midi::synth {
 
@@ -60,16 +62,17 @@ struct EngineParam {
 
 /// Assign @p count engine-section fields of @p patch's engine by public key.
 ///
-/// All or nothing: the first refusal leaves @p patch untouched, writes
-/// `engine param '<key>': <reason>` (followed by ` [<lo>, <hi>]` where the field
-/// has a range) to @p error when it is non-null, and returns false. Refused: a
-/// null or unknown key, a key outside this engine's section (the common section
-/// included), a key given twice, a non-finite value, a fractional value for an
-/// integer or boolean field, and a value outside the field's measured range or
-/// outside what the field's type can hold. Nothing is clamped. @p count 0 is a
+/// All or nothing: the first refusal leaves @p patch untouched, is stored in
+/// @p refusal when it is non-null, and returns false. A refusal's subject is
+/// relative to the list: `[<i>].key` for a null key, the key itself otherwise.
+/// Refused: a null key (a presence refusal), a key outside this engine's section,
+/// the common section included (an unknown key listing the section's keys), a key
+/// given twice, and a value outside the field's domain — non-finite, fractional
+/// for an integer or boolean field, or outside its measured range or what its
+/// type can hold — stated as that domain. Nothing is clamped. @p count 0 is a
 /// no-op returning true. Not for the audio thread.
 bool apply_engine_params(NativeSynthPatch& patch, const EngineParam* params, size_t count,
-                         std::string* error);
+                         std::optional<SonareParameterRefusal>* refusal);
 
 /// One condition another patch field must meet for an engine-section field to
 /// reach the voice. Only conditions on patch fields are stated; what a field

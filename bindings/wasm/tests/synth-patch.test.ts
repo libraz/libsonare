@@ -732,30 +732,39 @@ describe('Sonare WASM NativeSynth', () => {
           engineParams: { noSuchKey: 1 },
         }),
       );
-      expect(error).toBeInstanceOf(RangeError);
+      expect(error).toBeInstanceOf(TypeError);
       expect(isSonareError(error)).toBe(false);
-      expect((error as Error).message).toContain('noSuchKey');
+      expect((error as Error).message).toMatch(
+        /^RealtimeEngine\.setSynthInstrument: unknown key patch\.engineParams\.noSuchKey \(expected [^)]*\bbowForce\b/,
+      );
+      const value = thrownBy(() =>
+        engine.setSynthInstrument(8, { engineMode: 'bowedString', engineParams: { bowForce: 2 } }),
+      );
+      expect(value).toBeInstanceOf(RangeError);
+      expect((value as Error).message).toBe(
+        'RealtimeEngine.setSynthInstrument: patch.engineParams.bowForce must be finite and in [0, 1]',
+      );
     } finally {
       engine.destroy();
     }
   });
 
-  it('refuses a bad engine param as a RangeError naming the key', () => {
+  it('refuses an undeclared engine param key as a TypeError and a bad value as a RangeError', () => {
     const bowed = synthEngineParamInfo('bowedString');
     const force = bowed.find((info) => info.name === 'bowForce');
     const reedKey = synthEngineParamInfo('reed')[0].name;
     expect(bowed.map((info) => info.name)).not.toContain(reedKey);
-    const bad: [string, Record<string, number>][] = [
-      ['noSuchKey', { noSuchKey: 1 }],
-      [reedKey, { [reedKey]: 0.5 }],
-      ['bowForce', { bowForce: Number.NaN }],
-      ['bowForce', { bowForce: Number.POSITIVE_INFINITY }],
-      ['bowForce', { bowForce: (force?.max ?? 1) + 1000 }],
-      ['bowForce', { bowForce: (force?.min ?? 0) - 1000 }],
+    const bad: [string, Record<string, number>, ErrorConstructor][] = [
+      ['noSuchKey', { noSuchKey: 1 }, TypeError],
+      [reedKey, { [reedKey]: 0.5 }, TypeError],
+      ['bowForce', { bowForce: Number.NaN }, RangeError],
+      ['bowForce', { bowForce: Number.POSITIVE_INFINITY }, RangeError],
+      ['bowForce', { bowForce: (force?.max ?? 1) + 1000 }, RangeError],
+      ['bowForce', { bowForce: (force?.min ?? 0) - 1000 }, RangeError],
     ];
-    for (const [key, engineParams] of bad) {
+    for (const [key, engineParams, cls] of bad) {
       const error = thrownBy(() => bounce({ engineMode: 'bowedString', engineParams }));
-      expect(error, key).toBeInstanceOf(RangeError);
+      expect(error, key).toBeInstanceOf(cls);
       expect((error as Error).message, key).toContain(key);
     }
 

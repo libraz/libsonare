@@ -463,22 +463,31 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
     sonare_free_floats(out);
     return status;
   };
-  const auto refused = [&](int mode, const char* key, double value, const char* fragment) {
+  // Each refusal is named under the patch's engine_params by its key; an undeclared key is a
+  // shape refusal, a value outside its field's domain is not.
+  const auto refused = [&](int mode, const char* key, double value, bool shape,
+                           const char* fragment) {
     CAPTURE(key, value);
     REQUIRE(bounce_with(mode, key, value) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
     const std::string message = sonare_last_error_message();
     CAPTURE(message);
-    REQUIRE(message.find(std::string("'") + key + "'") != std::string::npos);
     REQUIRE(message.find(fragment) != std::string::npos);
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    const std::string subject = sonare_last_refusal_subject(0);
+    const std::string tail = std::string(".patch.engine_params.") + key;
+    REQUIRE(subject.size() > tail.size());
+    REQUIRE(subject.compare(subject.size() - tail.size(), tail.size(), tail) == 0);
+    REQUIRE(sonare_last_refusal_is_shape() == (shape ? 1 : 0));
   };
   const int bowed_mode = SONARE_SYNTH_ENGINE_BOWED_STRING;
-  refused(bowed_mode, "noSuchField", 1.0, "engine param");
-  refused(bowed_mode, "ops1.level", 0.5, "engine param");   // the FM section's
-  refused(bowed_mode, "cutoffHz", 1000.0, "engine param");  // a wrapper field
-  refused(bowed_mode, "bowForce", std::numeric_limits<double>::quiet_NaN(), "engine param");
-  refused(bowed_mode, "bowForce", max + 1.0, "[");
-  refused(integer_mode, integer_key.c_str(), 1.5, "engine param");
+  refused(bowed_mode, "noSuchField", 1.0, true, "unknown key ");
+  refused(bowed_mode, "ops1.level", 0.5, true, "(expected ");  // the FM section's
+  refused(bowed_mode, "cutoffHz", 1000.0, true, "bowForce");   // a wrapper field
+  refused(bowed_mode, "bowForce", std::numeric_limits<double>::quiet_NaN(), false,
+          "bowForce must be finite and in [");
+  refused(bowed_mode, "bowForce", max + 1.0, false, "bowForce must be finite and in [");
+  refused(integer_mode, integer_key.c_str(), 1.5, false, " must be an integer in [");
   // Not vacuous: an in-range value of the same field is accepted.
   REQUIRE(bounce_with(bowed_mode, "bowForce", mid) == SONARE_OK);
 

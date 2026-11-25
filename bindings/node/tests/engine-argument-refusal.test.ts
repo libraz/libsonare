@@ -71,9 +71,8 @@ describe('RealtimeEngine insert parameter bags', () => {
 describe('RealtimeEngine value refusals are RangeError, not SonareError', () => {
   const cases: Array<[string, (e: RealtimeEngine) => void]> = [
     [
-      'setSynthInstrument with an unknown engineParams key',
-      (e) =>
-        e.setSynthInstrument(0, { engineMode: 'bowedString', engineParams: { noSuchField: 1 } }),
+      'setSynthInstrument with an engineParams value outside its domain',
+      (e) => e.setSynthInstrument(0, { engineMode: 'bowedString', engineParams: { bowForce: 2 } }),
     ],
     ['setTrackSends on an unknown track', (e) => e.setTrackSends(UNKNOWN_ID, [])],
     ['setTrackOutputBus on an unknown bus', (e) => e.setTrackOutputBus(10, UNKNOWN_ID)],

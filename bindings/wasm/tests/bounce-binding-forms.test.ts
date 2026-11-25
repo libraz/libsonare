@@ -227,6 +227,26 @@ describe('bounce instrument options', () => {
       'unknown key synthInstruments[0].instrument.filterCutoffHz',
     ],
     [
+      'an engine param key the engine does not declare',
+      {
+        synthInstruments: [
+          { instrument: { engineMode: 'bowedString', engineParams: { noSuchKey: 1 } } },
+        ],
+      },
+      TypeError,
+      'unknown key synthInstruments[0].instrument.engineParams.noSuchKey (expected ',
+    ],
+    [
+      'an engine param outside its domain',
+      {
+        synthInstruments: [
+          { instrument: { engineMode: 'bowedString', engineParams: { bowForce: 2 } } },
+        ],
+      },
+      RangeError,
+      'synthInstruments[0].instrument.engineParams.bowForce must be finite and in [0, 1]',
+    ],
+    [
       'a builtin field out of range',
       { builtinInstruments: [{ instrument: { polyphony: 999 } }] },
       RangeError,

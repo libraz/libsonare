@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,6 +13,7 @@
 #include "midi/synth/engine_field_units.h"
 #include "midi/synth/native_synth.h"
 #include "util/insertion_sort.h"
+#include "util/refusal_predicates.h"
 #include "util/tunable.h"
 
 // The field table, the walker, the bounds probe and the key mapper compile in
@@ -102,11 +103,12 @@ std::string public_key(const std::string& path) {
   return key;
 }
 
-/// A range end as a refusal message spells it: whole numbers exactly, the rest in `%g`.
-std::string format_number(double value) {
-  char buffer[32];
-  std::snprintf(buffer, sizeof(buffer), value == std::floor(value) ? "%.0f" : "%g", value);
-  return buffer;
+/// The domain a refused engine-param value is stated in. A float field with an open end takes
+/// what a 32-bit float holds at that end, since that is what it refuses there.
+std::string engine_param_domain(bool integer, bool has_lo, double lo, bool has_hi, double hi) {
+  if (integer) return util::refusal::integer_range_predicate(lo, hi);
+  constexpr double kFloatMax = std::numeric_limits<float>::max();
+  return util::refusal::range_predicate(has_lo ? lo : -kFloatMax, has_hi ? hi : kFloatMax);
 }
 
 /// The state of one `apply_engine_params` walk: the caller's keys, which of
@@ -116,11 +118,11 @@ struct Assignment {
   size_t count = 0;
   const ModeBounds* bounds = nullptr;
   std::vector<bool> used;
-  std::string error;
+  std::optional<SonareParameterRefusal> refusal;
 
   /// Whether a caller's key names @p path; on success @p out holds the value.
   bool take(const char* path, bool integer, int type_lo, int type_hi, double* out) {
-    if (!error.empty()) return false;
+    if (refusal.has_value()) return false;
     const std::string key = public_key(path);
     size_t j = 0;
     while (j < count && key != params[j].key) ++j;
@@ -141,25 +143,15 @@ struct Assignment {
     const bool held_as_float = !integer && std::fabs(value) <= std::numeric_limits<float>::max();
     const double held = held_as_float ? static_cast<double>(static_cast<float>(value)) : value;
 
-    const char* reason = nullptr;
-    if (!std::isfinite(value)) {
-      reason = "not a finite number";
-    } else if (integer && value != std::floor(value)) {
-      reason = "not an integer";
-    } else if ((has_lo && held < lo) || (has_hi && held > hi)) {
-      reason = "out of range";
-    } else if (!integer && std::fabs(value) > std::numeric_limits<float>::max()) {
-      reason = "outside the 32-bit float range";
-    }
-    if (reason == nullptr) {
+    const bool accepted = std::isfinite(value) && (!integer || value == std::floor(value)) &&
+                          (integer || held_as_float) && !(has_lo && held < lo) &&
+                          !(has_hi && held > hi);
+    if (accepted) {
       *out = value;
       return true;
     }
-    error = "engine param '" + key + "': " + reason;
-    if (has_lo || has_hi) {
-      error += " [" + (has_lo ? format_number(lo) : std::string("-inf")) + ", " +
-               (has_hi ? format_number(hi) : std::string("inf")) + "]";
-    }
+    refusal = SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, key, engine_param_domain(integer, has_lo, lo, has_hi, hi));
     return false;
   }
 };
@@ -915,6 +907,7 @@ void walk_fields(NativeSynthPatch& p, const Fields& f) {
   walk_engine(p, f);
 }
 
+#if defined(SONARE_TUNING) && SONARE_TUNING
 /// The engine's name for the catalogue. Written here rather than in `tunable.h`
 /// so the util layer stays free of the synth enum, and as names rather than enum
 /// values so a renumbering cannot silently relabel a voice.
@@ -959,6 +952,7 @@ const char* mode_name(SynthEngineMode mode) {
   }
   return "subtractive";
 }
+#endif
 
 using patch_tuning_detail::find_unit;
 
@@ -1080,17 +1074,22 @@ void apply_patch_tuning(NativeSynthPatch& patch, const char* prefix) noexcept {
 }
 
 bool apply_engine_params(NativeSynthPatch& patch, const EngineParam* params, size_t count,
-                         std::string* error) {
+                         std::optional<SonareParameterRefusal>* refusal) {
   if (count == 0) return true;
-  const auto refuse = [error](std::string message) {
-    if (error != nullptr) *error = std::move(message);
+  const auto refuse = [refusal](SonareParameterRefusal stored) {
+    if (refusal != nullptr) *refusal = std::move(stored);
     return false;
   };
   for (size_t i = 0; i < count; ++i) {
-    if (params[i].key == nullptr) return refuse("engine param '': key is null");
+    if (params[i].key == nullptr) {
+      return refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                                      "[" + std::to_string(i) + "].key",
+                                                      util::refusal::kNonNullPredicate));
+    }
     for (size_t j = 0; j < i; ++j) {
       if (params[j].key != nullptr && std::strcmp(params[i].key, params[j].key) == 0) {
-        return refuse(std::string("engine param '") + params[i].key + "': given more than once");
+        return refuse(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, params[i].key,
+                                                        "must be given once"));
       }
     }
   }
@@ -1105,11 +1104,19 @@ bool apply_engine_params(NativeSynthPatch& patch, const EngineParam* params, siz
   assign.pass = FieldPass::kAssign;
   assign.assignment = &assignment;
   walk_engine(work, assign);
-  if (!assignment.error.empty()) return refuse(std::move(assignment.error));
+  if (assignment.refusal.has_value()) return refuse(std::move(*assignment.refusal));
   for (size_t i = 0; i < count; ++i) {
     if (!assignment.used[i]) {
-      return refuse(std::string("engine param '") + params[i].key + "': not a field of the " +
-                    mode_name(patch.mode) + " engine");
+      // Sorted, so the text survives a reordered field walk.
+      std::vector<std::string> keys;
+      for (EngineParamDescriptor& descriptor : engine_param_descriptors(patch)) {
+        keys.push_back(std::move(descriptor.key));
+      }
+      std::sort(keys.begin(), keys.end());
+      std::string expected;
+      for (const std::string& key : keys) expected += (expected.empty() ? "" : ", ") + key;
+      return refuse(
+          SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, params[i].key, expected));
     }
   }
   patch = work;

@@ -26610,6 +26610,14 @@ test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set
 
 [[entry]]
 kind = "field"
+old = "SynthPatch.engineParams"
+changed = "a key the selected engine's section does not declare (another engine's key or a common patch field included) is a TypeError reading 'unknown key <path>.engineParams.<key> (expected a, b, c)' instead of a RangeError; a value outside its field's domain stays a RangeError and names <path>.engineParams.<key> with the whole domain ('must be finite and in [lo, hi]' or 'must be an integer in [lo, hi]')"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/synth-patch.test.ts::refuses an undeclared engine param key as a TypeError and a bad value as a RangeError"
+
+[[entry]]
+kind = "field"
 old = "PartRigRequest.mode"
 changed = "type PartRigMode only; a number is refused with TypeError"
 domain = "engine"

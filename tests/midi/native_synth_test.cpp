@@ -21,6 +21,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -50,6 +51,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/math_utils.h"
+#include "util/refusal_predicates.h"
 
 namespace {
 
@@ -2146,10 +2148,13 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
 
 namespace {
 
+using sonare::SonareParameterRefusal;
 using sonare::midi::synth::apply_engine_params;
 using sonare::midi::synth::engine_param_descriptors;
 using sonare::midi::synth::EngineParam;
 using sonare::midi::synth::EngineParamDescriptor;
+using sonare::util::refusal::integer_range_predicate;
+using sonare::util::refusal::range_predicate;
 using EngineUnit = sonare::mastering::api::detail::Unit;
 
 // A default patch on each engine mode, in ordinal order.
@@ -2161,13 +2166,6 @@ std::vector<NativeSynthPatch> one_patch_per_engine_mode() {
     out.push_back(sonare::midi::synth::clamp_synth_patch(p));
   }
   return out;
-}
-
-// The message's number spelling: whole numbers exactly, the rest in %g.
-std::string printed(double value) {
-  char buffer[32];
-  std::snprintf(buffer, sizeof(buffer), value == std::floor(value) ? "%.0f" : "%g", value);
-  return buffer;
 }
 
 // The bytes of @p patch, padding included, for a bit-identity comparison.
@@ -2222,11 +2220,11 @@ TEST_CASE("engine params reach every engine-section field and read back through 
     for (size_t i = 0; i < before.size(); ++i) params.push_back({before[i].key.c_str(), wanted[i]});
 
     NativeSynthPatch patch = base;
-    std::string error;
-    const bool applied = apply_engine_params(patch, params.data(), params.size(), &error);
-    INFO(error);
+    std::optional<SonareParameterRefusal> refusal;
+    const bool applied = apply_engine_params(patch, params.data(), params.size(), &refusal);
+    INFO((refusal ? refusal->what() : ""));
     REQUIRE(applied);
-    REQUIRE(error.empty());
+    REQUIRE_FALSE(refusal.has_value());
 
     const std::vector<EngineParamDescriptor> after = engine_param_descriptors(patch);
     // In bounds means the clamp a render applies leaves the value where it was set.
@@ -2307,8 +2305,7 @@ TEST_CASE("engine param keys drop the section and camelCase each segment", "[mid
     NativeSynthPatch p;
     p.mode = probe.mode;
     const EngineParam param{probe.key, probe.value};
-    std::string error;
-    REQUIRE(apply_engine_params(p, &param, 1, &error));
+    REQUIRE(apply_engine_params(p, &param, 1, nullptr));
     REQUIRE(probe.member(p) == static_cast<float>(probe.value));
   }
 }
@@ -2329,12 +2326,12 @@ TEST_CASE("the FM algorithm is an engine param over the whole enum", "[midi][syn
   REQUIRE(algorithm->value == static_cast<float>(fm.fm.algorithm));
 
   const EngineParam pair{"algorithm", static_cast<double>(FmAlgorithm::kPair2x2)};
-  std::string error;
-  REQUIRE(apply_engine_params(fm, &pair, 1, &error));
+  std::optional<SonareParameterRefusal> refusal;
+  REQUIRE(apply_engine_params(fm, &pair, 1, &refusal));
   REQUIRE(fm.fm.algorithm == FmAlgorithm::kPair2x2);
   const EngineParam past{"algorithm", static_cast<double>(FmAlgorithm::kAdd2) + 1.0};
-  REQUIRE_FALSE(apply_engine_params(fm, &past, 1, &error));
-  REQUIRE(error == "engine param 'algorithm': out of range [0, 5]");
+  REQUIRE_FALSE(apply_engine_params(fm, &past, 1, &refusal));
+  REQUIRE(std::string(refusal->what()) == "algorithm must be an integer in [0, 5]");
   REQUIRE(fm.fm.algorithm == FmAlgorithm::kPair2x2);
 
   // No other engine's section carries the key.
@@ -2356,54 +2353,68 @@ TEST_CASE("engine params refuse what they cannot set and leave the patch untouch
   REQUIRE(strings != nullptr);
   REQUIRE(strings->integer);
   REQUIRE(strings->bounded);
-  const std::string brightness_range =
-      " [" + printed(brightness->lo) + ", " + printed(brightness->hi) + "]";
-  const std::string strings_range = " [" + printed(strings->lo) + ", " + printed(strings->hi) + "]";
+  const std::string brightness_domain = range_predicate(brightness->lo, brightness->hi);
+  const std::string strings_domain = integer_range_predicate(strings->lo, strings->hi);
 
   const auto refused = [](NativeSynthPatch patch, std::vector<EngineParam> params,
                           const std::string& message) {
     INFO(message);
     const std::vector<unsigned char> before = patch_bytes(patch);
-    std::string error;
-    REQUIRE_FALSE(apply_engine_params(patch, params.data(), params.size(), &error));
-    REQUIRE(error == message);
+    std::optional<SonareParameterRefusal> refusal;
+    REQUIRE_FALSE(apply_engine_params(patch, params.data(), params.size(), &refusal));
+    REQUIRE(refusal.has_value());
+    REQUIRE(refusal->code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(std::string(refusal->what()) == message);
     REQUIRE(patch_bytes(patch) == before);
+    return *refusal;
   };
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double inf = std::numeric_limits<double>::infinity();
+  // The accepted keys in byte order.
+  const auto expected_keys = [](const NativeSynthPatch& patch) {
+    std::set<std::string> sorted;
+    for (const EngineParamDescriptor& d : engine_param_descriptors(patch)) sorted.insert(d.key);
+    std::string keys;
+    for (const std::string& key : sorted) keys += (keys.empty() ? "" : ", ") + key;
+    return keys.empty() ? keys : " (expected " + keys + ")";
+  };
+  const std::string not_piano = expected_keys(piano);
+  REQUIRE_FALSE(not_piano.empty());
 
-  refused(piano, {{"notAField", 0.5}}, "engine param 'notAField': not a field of the piano engine");
+  // An undeclared key is a shape refusal naming the key, so a binding raises it as a type error.
+  const SonareParameterRefusal unknown =
+      refused(piano, {{"notAField", 0.5}}, "unknown key notAField" + not_piano);
+  REQUIRE(unknown.form() == SonareParameterRefusal::Form::UnknownKey);
+  REQUIRE(unknown.shape_error());
+  REQUIRE(unknown.subjects() == std::vector<std::string>{"notAField"});
   // Another engine's field and a common-section field are both outside the section.
-  refused(piano, {{"bowForce", 0.5}}, "engine param 'bowForce': not a field of the piano engine");
-  refused(piano, {{"cutoffHz", 1000.0}},
-          "engine param 'cutoffHz': not a field of the piano engine");
+  refused(piano, {{"bowForce", 0.5}}, "unknown key bowForce" + not_piano);
+  refused(piano, {{"cutoffHz", 1000.0}}, "unknown key cutoffHz" + not_piano);
   // The tuning path spelling is not a public key: the mapping runs forward only.
-  refused(piano, {{"piano.brightness", 0.5}},
-          "engine param 'piano.brightness': not a field of the piano engine");
-  refused(piano, {{"brightness", nan}},
-          "engine param 'brightness': not a finite number" + brightness_range);
-  refused(piano, {{"brightness", inf}},
-          "engine param 'brightness': not a finite number" + brightness_range);
-  refused(piano, {{"brightness", brightness->hi + 0.5}},
-          "engine param 'brightness': out of range" + brightness_range);
-  refused(piano, {{"brightness", brightness->lo - 0.5}},
-          "engine param 'brightness': out of range" + brightness_range);
-  refused(piano, {{"strings", 2.5}}, "engine param 'strings': not an integer" + strings_range);
-  refused(piano, {{"strings", strings->hi + 1.0}},
-          "engine param 'strings': out of range" + strings_range);
-  refused(piano, {{"brightness", 0.5}, {"brightness", 0.6}},
-          "engine param 'brightness': given more than once");
-  refused(piano, {{nullptr, 0.5}}, "engine param '': key is null");
+  refused(piano, {{"piano.brightness", 0.5}}, "unknown key piano.brightness" + not_piano);
+  // A value outside the domain is a domain refusal, subject the key, stating the whole domain.
+  const SonareParameterRefusal out_of_domain =
+      refused(piano, {{"brightness", nan}}, "brightness " + brightness_domain);
+  REQUIRE(out_of_domain.form() == SonareParameterRefusal::Form::Predicate);
+  REQUIRE_FALSE(out_of_domain.shape_error());
+  REQUIRE(out_of_domain.subjects() == std::vector<std::string>{"brightness"});
+  refused(piano, {{"brightness", inf}}, "brightness " + brightness_domain);
+  refused(piano, {{"brightness", brightness->hi + 0.5}}, "brightness " + brightness_domain);
+  refused(piano, {{"brightness", brightness->lo - 0.5}}, "brightness " + brightness_domain);
+  refused(piano, {{"strings", 2.5}}, "strings " + strings_domain);
+  refused(piano, {{"strings", strings->hi + 1.0}}, "strings " + strings_domain);
+  refused(piano, {{"brightness", 0.5}, {"brightness", 0.6}}, "brightness must be given once");
+  const SonareParameterRefusal null_key =
+      refused(piano, {{"brightness", 0.5}, {nullptr, 0.5}}, "[1].key must not be NULL");
+  REQUIRE(null_key.subjects() == std::vector<std::string>{"[1].key"});
   // All or nothing: a valid field before a refused one is not written either.
-  refused(piano, {{"brightness", 0.5}, {"nope", 1.0}},
-          "engine param 'nope': not a field of the piano engine");
-  refused(piano, {{"brightness", 0.5}, {"strings", 0.5}},
-          "engine param 'strings': not an integer" + strings_range);
+  refused(piano, {{"brightness", 0.5}, {"nope", 1.0}}, "unknown key nope" + not_piano);
+  refused(piano, {{"brightness", 0.5}, {"strings", 0.5}}, "strings " + strings_domain);
 
   NativeSynthPatch harpsichord;
   harpsichord.mode = SynthEngineMode::kHarpsichord;
-  refused(harpsichord, {{"eightA", 2.0}}, "engine param 'eightA': out of range [0, 1]");
-  refused(harpsichord, {{"eightA", 0.5}}, "engine param 'eightA': not an integer [0, 1]");
+  refused(harpsichord, {{"eightA", 2.0}}, "eightA must be an integer in [0, 1]");
+  refused(harpsichord, {{"eightA", 0.5}}, "eightA must be an integer in [0, 1]");
 
   // An unbounded field still refuses what a float cannot hold, and an integer
   // what lies past its range, however far.
@@ -2414,7 +2425,7 @@ TEST_CASE("engine params refuse what they cannot set and leave the patch untouch
   REQUIRE(coupling != nullptr);
   REQUIRE_FALSE(coupling->bounded);
   refused(ks, {{"bodyCoupling", 1e300}},
-          "engine param 'bodyCoupling': outside the 32-bit float range");
+          "bodyCoupling must be finite and in [-3.4028235e38, 3.4028235e38]");
   NativeSynthPatch vocal;
   vocal.mode = SynthEngineMode::kVocal;
   const std::vector<EngineParamDescriptor> vocal_descriptors = engine_param_descriptors(vocal);
@@ -2422,20 +2433,23 @@ TEST_CASE("engine params refuse what they cannot set and leave the patch untouch
   REQUIRE(vowel != nullptr);
   REQUIRE(vowel->integer);
   REQUIRE(vowel->bounded);
-  refused(vocal, {{"vowel", 1e12}},
-          "engine param 'vowel': out of range [" + printed(vowel->lo) + ", " + printed(vowel->hi) +
-              "]");
+  refused(vocal, {{"vowel", 1e12}}, "vowel " + integer_range_predicate(vowel->lo, vowel->hi));
 
+  // An engine without a section has no keys to list.
   NativeSynthPatch subtractive;
   refused(subtractive, {{"brightness", 0.5}},
-          "engine param 'brightness': not a field of the subtractive engine");
+          "unknown key brightness" + expected_keys(subtractive));
+  NativeSynthPatch sample;
+  sample.mode = SynthEngineMode::kSample;
+  REQUIRE(engine_param_descriptors(sample).empty());
+  refused(sample, {{"brightness", 0.5}}, "unknown key brightness");
 
   // The control: an accepted value is written, with no message.
   NativeSynthPatch accepted = piano;
   const EngineParam ok{"brightness", (brightness->lo + brightness->hi) / 2.0};
-  std::string error;
-  REQUIRE(apply_engine_params(accepted, &ok, 1, &error));
-  REQUIRE(error.empty());
+  std::optional<SonareParameterRefusal> refusal;
+  REQUIRE(apply_engine_params(accepted, &ok, 1, &refusal));
+  REQUIRE_FALSE(refusal.has_value());
   REQUIRE(accepted.piano.brightness == static_cast<float>(ok.value));
 }
 
@@ -2461,16 +2475,14 @@ TEST_CASE("engine params accept each published float bound as its shortest decim
         INFO(d.key << " = " << shortest(bound));
         NativeSynthPatch patch = base;
         const EngineParam param{d.key.c_str(), shortest(bound)};
-        std::string error;
-        REQUIRE(apply_engine_params(patch, &param, 1, &error));
+        REQUIRE(apply_engine_params(patch, &param, 1, nullptr));
         ++checked;
       }
       // One float step past the bound is still refused.
       NativeSynthPatch patch = base;
       const EngineParam past{d.key.c_str(), static_cast<double>(std::nextafter(
                                                 d.hi, std::numeric_limits<float>::infinity()))};
-      std::string error;
-      REQUIRE_FALSE(apply_engine_params(patch, &past, 1, &error));
+      REQUIRE_FALSE(apply_engine_params(patch, &past, 1, nullptr));
     }
   }
   REQUIRE(checked > 0);
@@ -2482,10 +2494,10 @@ TEST_CASE("engine params with none given leave every preset bit-identical", "[mi
     INFO(preset->name);
     NativeSynthPatch patch = preset->config.patch;
     const std::vector<unsigned char> before = patch_bytes(patch);
-    std::string error;
-    REQUIRE(apply_engine_params(patch, nullptr, 0, &error));
+    std::optional<SonareParameterRefusal> refusal;
+    REQUIRE(apply_engine_params(patch, nullptr, 0, &refusal));
     REQUIRE(apply_engine_params(patch, nullptr, 0, nullptr));
-    REQUIRE(error.empty());
+    REQUIRE_FALSE(refusal.has_value());
     REQUIRE(patch_bytes(patch) == before);
   }
 }
