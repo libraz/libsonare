@@ -100,7 +100,7 @@ def main() -> int:
         for fixture_name, samples in fixtures.items():
             start = time.perf_counter()
             with libsonare.RealtimeVoiceChanger(
-                sample_rate, preset, max_block_size=block, num_channels=1
+                sample_rate, config=preset, max_block_size=block, num_channels=1
             ) as changer:
                 output: list[float] = []
                 for pos in range(0, len(samples), block):
