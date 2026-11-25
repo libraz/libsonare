@@ -1572,7 +1572,21 @@ if(BUILD_WASM)
   # realtime loops, so they stay with the compute core.
   list(FILTER _sonare_wasm_glue_sources EXCLUDE REGEX
     "^wasm/bindings/(realtime/processing|effects/realtime_voice_changer|playback/playback|mixing/mixing_processing)\\.cpp$")
-  set_property(SOURCE ${_sonare_wasm_glue_sources}
+  # Project document, metadata and codec entry points run once per call, never per block.
+  set(_sonare_wasm_cold_sources
+    c_api/sonare_c_project.cpp
+    c_api/project_core.cpp
+    c_api/project_edit_track.cpp
+    c_api/project_edit_clip.cpp
+    c_api/project_instruments.cpp
+    c_api/codec.cpp
+    core/audio_tags.cpp
+    core/audio_tags_id3.cpp
+    serialize/project_serializer.cpp
+    serialize/project_serializer_encode.cpp
+    serialize/project_serializer_decode.cpp
+    serialize/project_serializer_helpers.cpp)
+  set_property(SOURCE ${_sonare_wasm_glue_sources} ${_sonare_wasm_cold_sources}
     TARGET_DIRECTORY sonare APPEND PROPERTY COMPILE_OPTIONS
     "$<$<CONFIG:Release>:-Oz>")
   target_link_options(sonare PRIVATE
