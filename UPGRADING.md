@@ -2082,7 +2082,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `BpmHypothesis.value` | `BpmCandidate.bpm` |
 | `SectionResult` | removed: analyze_sections returns SectionAnalysis, whose .sections is the list[Section] and whose .form is the form label |
 | `TranscribeResult.events` | a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
-| `analyze_sections` | returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only) |
+| `analyze_sections` | returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only); boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
 | `estimate_meter(beat_strengths)` | removed: Pass observations=analysis.beat_observations. |
 | `estimate_meter(beat_times)` | `estimate_meter(observations)` |
 | `estimate_meter` | takes observations: BeatObservations. Pass analysis.beat_observations to score an analysis result. |
@@ -2134,9 +2134,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `db_to_amplitude` | returns a float32 ndarray instead of list[float] |
 | `db_to_power` | returns a float32 ndarray instead of list[float] |
 | `deemphasis` | returns a float32 ndarray instead of list[float] |
-| `detect_beats` | returns a float32 ndarray instead of list[float] |
-| `detect_downbeats` | returns a float32 ndarray instead of list[float] |
-| `detect_onsets` | returns a float32 ndarray instead of list[float] |
+| `detect_beats` | returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
+| `detect_downbeats` | returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
+| `detect_onsets` | returns a float32 ndarray instead of list[float]; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `fix_frames` | returns an int32 ndarray instead of list[int] |
 | `fix_length` | returns a float32 ndarray instead of list[float] |
 | `momentary_lufs` | returns a float32 ndarray instead of list[float] |
@@ -2207,8 +2207,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `cross_similarity(y_cols)` | removed: read from the 2-D array's shape |
 | `cross_similarity(y_rows)` | removed: read from the 2-D array's shape |
 | `cross_similarity` | `segment_cross_similarity`: takes two 2-D (features, frames) arrays and returns a float32 ndarray instead of SegmentMatrix |
-| `cyclic_tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
-| `fourier_tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
+| `cyclic_tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list; for an empty onset envelope the result has n_bins rows and zero columns (1.x returned (0, [])) |
+| `fourier_tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list; for an empty onset envelope the result has win_length // 2 + 1 rows and zero columns (1.x returned (0, [])) |
 | `frame_signal` | returns a float32 (frame_length, n_frames) ndarray whose column j is frame j, instead of a tuple of n_frames and a flat list |
 | `griffin_lim(n_bins)` | removed: taken from the 2-D array's shape |
 | `griffin_lim(n_frames)` | removed: taken from the 2-D array's shape |
@@ -2249,7 +2249,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `tempogram_ratio(tempogram_data)` | `tempogram_ratio(tempogram)` |
 | `tempogram_ratio(win_length)` | removed: pass the 2-D tempogram; win_length is its row count |
 | `tempogram_ratio` | takes the 2-D (win_length, n_frames) tempogram and returns a float32 ndarray of one value per factor |
-| `tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
+| `tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list; for an empty onset envelope the result has win_length rows and zero columns (1.x returned (0, [])) |
 | `tonnetz(n_chroma)` | removed: taken from the 2-D array's shape |
 | `tonnetz(n_frames)` | removed: taken from the 2-D array's shape |
 | `tonnetz` | takes one 2-D (n_chroma, n_frames) array and returns a float32 (6, n_frames) ndarray |
@@ -3014,7 +3014,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `split_note` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
-| `voice_change_realtime` | `realtime_voice_changer_render`: a preset document must carry schemaVersion 4 (1.x wrote 1) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
+| `voice_change_realtime` | `realtime_voice_changer_render`: a preset document must carry schemaVersion 4 (1.x wrote 1) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown; the default uses PSOLA instead of the 1.x grain engine; select grain explicitly to retain the grain algorithm |
 
 ### Python: Mastering, mixing and loudness
 
@@ -4389,6 +4389,10 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.annotate_chords` | A read-only sequence of chord mappings is accepted. Both PPQ endpoints are required, and invalid extension and Roman text errors name the indexed chord field |
 | `Project.auto_tempo` | returns ProjectAutoTempoResult with bpm, bpm_confidence and the detected TimeSignature, including when apply_time_signatures is false. Every option after sample_rate is keyword-only, and supplied flags must be Boolean |
 | `Project.clear_soundfont` | `Project.clear_sound_font`: takes keyword-only uri=None to clear the named URI; None selects the default SoundFont and an empty URI is refused |
+| `Project.export_clip_file` | writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `Project.export_smf` | writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `Project.import_clip_file` | keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event. |
+| `Project.import_smf` | a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both). |
 | `Project.load_soundfont` | `Project.load_sound_font`: takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode |
 | `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
 | `Project.set_marker_ex(marker)` | removed: pass ppq and the marker's fields directly to Project.set_marker |
@@ -5296,7 +5300,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PlpRequest.tempoMax` | `PlpRequest.bpmMax` |
 | `PlpRequest.tempoMin` | `PlpRequest.bpmMin` |
 | `analyzeBpm` | bpmMin/bpmMax default 60/200 (was 30/300) |
-| `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined instead of NaN when no tempo is found; Audio.detectBpm likewise |
 | `plp` | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 
@@ -5316,7 +5320,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `analyzeImpulseResponse` | one positional form (analyzeImpulseResponse(samples, sampleRate, options?: Omit<AnalyzeImpulseResponseRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeImpulseResponseRequest |
 | `analyzeMelody` | one positional form (analyzeMelody(samples, sampleRate, options?: Omit<AnalyzeMelodyRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeMelodyRequest |
 | `analyzeRhythm` | one positional form (analyzeRhythm(samples, sampleRate, options?: Omit<AnalyzeRhythmRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeRhythmRequest |
-| `analyzeSections` | one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[] |
+| `analyzeSections` | one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
 | `analyzeTimbre` | one positional form (analyzeTimbre(samples, sampleRate, options?: Omit<AnalyzeTimbreRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeTimbreRequest |
 | `bassChroma(hopLength)` | removed: pass hopLength as a field of BassChromaRequest |
 | `bassChroma(nChroma)` | removed: pass nChroma as a field of BassChromaRequest |
@@ -5394,10 +5398,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `detectChords(smoothingWindow)` | removed: pass it as smoothingWindowSec in DetectChordsRequest |
 | `detectChords(threshold)` | removed: pass threshold as a field of DetectChordsRequest |
 | `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitting chord settings selects triads-only, HMM and CQT. Set useTriadsOnly: false, useHmm: false and chromaMethod: 'stft' for the released model selection. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
-| `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
+| `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
 | `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
 | `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest. Omitting tuningCents estimates the tuning. Pass tuningCents: 0 for the released nominal reference. |
-| `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
+| `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `estimateTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(hopLength)` | removed: pass hopLength as a field of EstimateTuningRequest |
 | `estimateTuning(nFft)` | removed: pass nFft as a field of EstimateTuningRequest |
@@ -6058,7 +6062,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `NnFilterRequest.aggregate` | string -> NnFilterAggregate ('mean'\|'median'\|'min'\|'max'); other strings refused with RangeError |
-| `realtimeVoiceChangerPresetConfig` | realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError) |
+| `realtimeVoiceChangerPresetConfig` | realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError); the neutral preset uses PSOLA, where 1.x used the grain engine; set voiceEngine to grain to retain the grain algorithm |
 | `scaleMaskForMode` | scaleMaskForMode(root: PitchClass, mode: KeyMode): number; numbers and Mode refused (TypeError) |
 
 #### Results are typed values, not JSON strings
@@ -7705,8 +7709,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.compile` | returns { diagnostics } with named codes and severities, plus timeline when withTimeline is set |
-| `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer |
-| `Project.exportSmf` | returns a plain Uint8Array, not a Buffer |
+| `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer; writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `Project.exportSmf` | returns a plain Uint8Array, not a Buffer; writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
 | `Project.lastBounceCompileResult` | Returns { diagnostics } from the last successful bounce and undefined before the first success. A failed bounce preserves that result. Read the error thrown by bounce for details of that failure. In 1.x this method returned a result object with hasTimeline even before the first bounce, and a failed bounce could clear or replace the recorded diagnostics. |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
@@ -7987,6 +7991,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.clearSoundFont` | clearSoundFont({ uri }?) releases one named SoundFont. Omit the URI for the default font. |
 | `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.importClipFile` | keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event. |
+| `Project.importSmf` | a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both). |
 | `Project.loadSoundFont` | loadSoundFont(data, { uri }?) loads or replaces one named SoundFont. Omit the URI for the default font. |
 | `Project.setMaxUndoDepth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention. |
 | `Project.setMixerSceneJson` | removed: Use setMixerScene(scene) with a scene object, or omit it to clear. Unknown keys are TypeError and refusal paths start at scene. Use version 2 or omit the version, and remove the former surroundPan distance and elevation keys. |
@@ -9496,8 +9502,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PlpRequest.tempoMin` | `PlpRequest.bpmMin` |
 | `analyzeBpm` (`./analysis`) | bpmMin/bpmMax default 60/200 (was 30/300) |
 | `analyzeBpm` | bpmMin/bpmMax default 60/200 (was 30/300) |
-| `detectBeats` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
-| `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBeats` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
+| `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `detectBpm` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined when no tempo is found (was NaN) |
 | `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); returns undefined when no tempo is found (was NaN) |
 | `plp` (`./analysis`) | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
@@ -9535,8 +9541,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `analyzeImpulseResponse` | one positional form (analyzeImpulseResponse(samples, sampleRate, options?: Omit<AnalyzeImpulseResponseRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeImpulseResponseRequest |
 | `analyzeMelody` (`./analysis`) | one positional form (analyzeMelody(samples, sampleRate, options?: Omit<AnalyzeMelodyRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeMelodyRequest |
 | `analyzeMelody` | one positional form (analyzeMelody(samples, sampleRate, options?: Omit<AnalyzeMelodyRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeMelodyRequest |
-| `analyzeSections` (`./analysis`) | one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[] |
-| `analyzeSections` | one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[] |
+| `analyzeSections` (`./analysis`) | one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
+| `analyzeSections` | one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
 | `bassChroma(hopLength)` (`./analysis`) | removed: pass hopLength as a field of BassChromaRequest |
 | `bassChroma(hopLength)` | removed: pass hopLength as a field of BassChromaRequest |
 | `bassChroma(nChroma)` (`./analysis`) | removed: pass nChroma as a field of BassChromaRequest |
@@ -9658,14 +9664,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `detectAcoustic` | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectChords` (`./analysis`) | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectChords` | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest. Omitted options now select triads-only, HMM and CQT. Supply useTriadsOnly: false, useHmm: false, chromaMethod: 'stft' for the released model selection. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
-| `detectDownbeats` (`./analysis`) | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
-| `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
+| `detectDownbeats` (`./analysis`) | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
+| `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
 | `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
 | `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError. Omit tuningCents to measure tuning. Pass tuningCents: 0 for the nominal reference. |
-| `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection |
-| `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection |
+| `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
+| `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest; explicit threshold 0 is refused, omit threshold for adaptive detection; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `estimateTuning(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(binsPerOctave)` | removed: pass binsPerOctave as a field of EstimateTuningRequest |
 | `estimateTuning(hopLength)` (`./analysis`) | removed: pass hopLength as a field of EstimateTuningRequest |
@@ -10841,7 +10847,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `NnFilterRequest.aggregate` (`./analysis`) | string -> NnFilterAggregate ('mean'\|'median'\|'min'\|'max'); other strings refused with RangeError |
 | `NnFilterRequest.aggregate` | string -> NnFilterAggregate ('mean'\|'median'\|'min'\|'max'); other strings refused with RangeError |
-| `realtimeVoiceChangerPresetConfig` | realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError) |
+| `realtimeVoiceChangerPresetConfig` | realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError); the neutral preset uses PSOLA, where 1.x used the grain engine; set voiceEngine to grain to retain the grain algorithm |
 | `scaleMaskForMode` | scaleMaskForMode(root: PitchClass, mode: KeyMode): number; numbers and Mode refused (TypeError) |
 
 #### Results are typed values, not JSON strings
@@ -13616,8 +13622,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.importClipFile` | empty data is a RangeError ('data must not be empty') instead of a TypeError |
-| `Project.importSmf` | empty data is a RangeError ('data must not be empty') instead of a TypeError |
+| `Project.importClipFile` | empty data is a RangeError ('data must not be empty') instead of a TypeError; keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event. |
+| `Project.importSmf` | empty data is a RangeError ('data must not be empty') instead of a TypeError; a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both). |
 | `Project.setTempoSegments` | a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `ProjectAutomationLaneDesc.targetParamId` | an absent targetParamId is a TypeError 'targetParamId must be an integer', as on Node (1.x read it as 0 and refused it with RangeError 'targetParamId must be an integer in [1, 4294967295]') |
 | `ProjectTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
@@ -13818,6 +13824,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipPageStreamerRequest.sample` | only on ClipPageSampleRequest, which also carries channel; narrow with "sample" in request |
 | `Project.annotateChords` | Accepts a readonly list and requires startPpq and endPpq on each chord. |
 | `Project.clearSoundFont` | Accepts ({ uri }?). Omit the URI to clear only the default SoundFont. |
+| `Project.exportClipFile` | writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `Project.exportSmf` | writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
 | `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.loadSoundFont` | Accepts (data, { uri }?). Omit the URI to replace the default SoundFont. A supplied empty URI is refused. |
@@ -14229,6 +14237,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 |---|---|
 | `room-morph` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override. |
 | `synthesize-rir` | An omitted source or listener position is scaled to the room. To retain the v1.10.0 fixed positions supply --source-x 1 --source-y 1 --source-z 1.2 --listener-x 5 --listener-y 4 --listener-z 1.7. Supply all three coordinates for each position you override. |
+| `voice-change` | an absolute formant factor must itself be in [0.55, 1.65] as well as reachable at the selected pitch shift. For example, 1.x accepted a factor of 1.9 at +5 semitones; this now refuses the factor as an invalid parameter (exit 3). |
 
 ### Command line: Mastering, mixing and loudness
 
@@ -14426,6 +14435,10 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 |---|---|
 | `midi-render --block-size` | removed, no replacement: the rendered audio does not depend on the block size the project is rendered in; leave the flag out |
 | `project.bounce --block-size` | removed, no replacement: the rendered audio does not depend on the block size the project is rendered in; leave the flag out |
+| `project.export-midi2` | writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `project.export-smf` | writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `project.import-midi2` | keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event. |
+| `project.import-smf` | a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both). |
 
 ## The conventions behind the changes
 

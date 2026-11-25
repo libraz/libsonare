@@ -2650,3 +2650,43 @@ changed = "Defaults to 80 Hz instead of 0 Hz. Pass --high-pass-hz 0 to retain un
 domain = "analysis"
 rule = "individual"
 test = "bindings/python/tests/test_cli_stated_defaults.py::test_key_options_left_out_are_not_passed"
+
+[[entry]]
+kind = "command"
+old = "project.import-smf"
+changed = "a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both)."
+domain = "project"
+rule = "individual"
+test = "tests/midi/smf_roundtrip_test.cpp::SMF import reads the format's 4/4 before a late first time signature"
+
+[[entry]]
+kind = "command"
+old = "project.import-midi2"
+changed = "keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event."
+domain = "project"
+rule = "individual"
+test = "tests/api/sonare_c_project_midi_meter_test.cpp::an exported project's meter map imports back unchanged"
+
+[[entry]]
+kind = "command"
+old = "project.export-smf"
+changed = "writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event)."
+domain = "project"
+rule = "individual"
+test = "tests/midi/smf_roundtrip_test.cpp::SMF export writes a late first time signature at tick 0 too"
+
+[[entry]]
+kind = "command"
+old = "project.export-midi2"
+changed = "writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event)."
+domain = "project"
+rule = "individual"
+test = "tests/midi/smf2_roundtrip_test.cpp::SMF2 export writes a late first time signature at tick 0 too"
+
+[[entry]]
+kind = "command"
+old = "voice-change"
+changed = "an absolute formant factor must itself be in [0.55, 1.65] as well as reachable at the selected pitch shift. For example, 1.x accepted a factor of 1.9 at +5 semitones; this now refuses the factor as an invalid parameter (exit 3)."
+domain = "effects"
+rule = "individual"
+test = "tests/cli/cli_effects_test.cpp::CLI voice-change formant mode"

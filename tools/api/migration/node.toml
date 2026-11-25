@@ -5028,10 +5028,10 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "analyzeSections"
-changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]"
+changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections reports each section's material group"
 
 [[entry]]
 kind = "function"
@@ -5075,10 +5075,10 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "detectBeats"
-changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
 domain = "analysis"
 rule = "tempo-range"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of silence sit on the clicks"
 
 [[entry]]
 kind = "function"
@@ -5099,10 +5099,10 @@ test = "bindings/node/tests/chord_functions.test.ts::defaults to the triads-only
 [[entry]]
 kind = "function"
 old = "detectDownbeats"
-changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300)"
+changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar phase for the same beats"
 
 [[entry]]
 kind = "function"
@@ -5123,10 +5123,10 @@ test = "bindings/node/tests/analysis_tuning.test.ts::measures the tuning by defa
 [[entry]]
 kind = "function"
 old = "detectOnsets"
-changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest"
+changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+test = "tests/analysis/beat_event_time_test.cpp::onset times sit on the attacks, backtracked onsets at their frame"
 
 [[entry]]
 kind = "function"
@@ -10832,10 +10832,10 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::takes one options obj
 [[entry]]
 kind = "function"
 old = "realtimeVoiceChangerPresetConfig"
-changed = "realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError)"
+changed = "realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError); the neutral preset uses PSOLA, where 1.x used the grain engine; set voiceEngine to grain to retain the grain algorithm"
 domain = "effects"
 rule = "string-closed-sets"
-test = "bindings/node/tests/surface/effects-voice.test.ts::preset config and preset JSON refuse"
+test = "bindings/node/tests/voice_changer_transform.test.ts::returns the transformer fields of the default psola engine"
 
 [[entry]]
 kind = "function"
@@ -11453,18 +11453,18 @@ test = "bindings/node/tests/surface/project.test.ts::requires a name to rename a
 [[entry]]
 kind = "method"
 old = "Project.exportSmf"
-changed = "returns a plain Uint8Array, not a Buffer"
+changed = "returns a plain Uint8Array, not a Buffer; writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event)."
 domain = "project"
 rule = "typed-results"
-test = "bindings/node/tests/surface/project.test.ts::exports MIDI files as plain bytes"
+test = "tests/midi/smf_roundtrip_test.cpp::SMF export writes a late first time signature at tick 0 too"
 
 [[entry]]
 kind = "method"
 old = "Project.exportClipFile"
-changed = "returns a plain Uint8Array, not a Buffer"
+changed = "returns a plain Uint8Array, not a Buffer; writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event)."
 domain = "project"
 rule = "typed-results"
-test = "bindings/node/tests/surface/project.test.ts::exports MIDI files as plain bytes"
+test = "tests/midi/smf2_roundtrip_test.cpp::SMF2 export writes a late first time signature at tick 0 too"
 
 [[entry]]
 kind = "method"
@@ -20495,3 +20495,19 @@ changed = "Pass interleaved samples containing whole frames. The call converts t
 domain = "engine"
 rule = "entry-named-refusals"
 test = "bindings/node/tests/playback.test.ts::names a non-finite interleaved input by its samples argument"
+
+[[entry]]
+kind = "method"
+old = "Project.importSmf"
+changed = "a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both)."
+domain = "project"
+rule = "individual"
+test = "tests/midi/smf_roundtrip_test.cpp::SMF import reads the format's 4/4 before a late first time signature"
+
+[[entry]]
+kind = "method"
+old = "Project.importClipFile"
+changed = "keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event."
+domain = "project"
+rule = "individual"
+test = "tests/api/sonare_c_project_midi_meter_test.cpp::an exported project's meter map imports back unchanged"
