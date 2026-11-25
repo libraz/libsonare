@@ -2710,7 +2710,7 @@ test = "tests/cli/cli_project_test.cpp::voice-preset emits PSOLA as the default 
 [[entry]]
 kind = "command"
 old = "beats"
-changed = "the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides"
+changed = "the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides. A first beat less than 0.6 ms (60 s / 100000 BPM, the shortest lead-in a tempo map can draw) from the start of the audio is reported at 0 s; the full analysis takes its beats from the same detector."
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"
@@ -2718,7 +2718,7 @@ test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the
 [[entry]]
 kind = "command"
 old = "downbeats"
-changed = "the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides"
+changed = "the tempo search defaults to 60–200 BPM instead of 30–300; these commands do not expose tempo-range overrides. A first downbeat less than 0.6 ms (60 s / 100000 BPM) from the start of the audio is reported at 0 s, as its beat is."
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/analysis/bpm_analyzer_test.cpp::Every tempo search defaults to the 60 to 200 BPM band"

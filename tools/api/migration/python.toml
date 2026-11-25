@@ -2079,7 +2079,7 @@ test = "bindings/python/tests/test_mel_filterbank.py::test_mel_family_refuses_an
 [[entry]]
 kind = "function"
 old = "detect_beats"
-changed = "returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range"
+changed = "returns a float32 ndarray instead of list[float]; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time; the tempo search defaults to 60–200 BPM instead of 30–300; pass bpm_min=30 and bpm_max=300 for the earlier range. A first beat less than 0.6 ms (60 s / 100000 BPM, the shortest lead-in a tempo map can draw) from the start of the audio is reported at 0 s; the full analysis takes its beats from the same detector."
 domain = "analysis"
 rule = "array-results"
 test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of silence sit on the clicks"
@@ -2087,7 +2087,7 @@ test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of s
 [[entry]]
 kind = "function"
 old = "detect_downbeats"
-changed = "returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio; the tempo search defaults to 60–200 BPM instead of 30–300; this entry does not expose tempo-range overrides"
+changed = "returns a float32 ndarray instead of list[float]; downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio; the tempo search defaults to 60–200 BPM instead of 30–300; this entry does not expose tempo-range overrides. A first downbeat less than 0.6 ms (60 s / 100000 BPM) from the start of the audio is reported at 0 s, as its beat is."
 domain = "analysis"
 rule = "array-results"
 test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar phase for the same beats"

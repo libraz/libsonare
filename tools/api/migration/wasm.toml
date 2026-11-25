@@ -9339,7 +9339,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBeats"
-changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time. A first beat less than 0.6 ms (60 s / 100000 BPM, the shortest lead-in a tempo map can draw) from the start of the audio is reported at 0 s; the full analysis takes its beats from the same detector."
 domain = "analysis"
 rule = "tempo-range"
 test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of silence sit on the clicks"
@@ -9347,7 +9347,7 @@ test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of s
 [[entry]]
 kind = "function"
 old = "detectBeats"
-changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050); audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time. A first beat less than 0.6 ms (60 s / 100000 BPM, the shortest lead-in a tempo map can draw) from the start of the audio is reported at 0 s; the full analysis takes its beats from the same detector."
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -9390,7 +9390,7 @@ test = "bindings/wasm/tests/chord_functions.test.ts::defaults to the triads-only
 [[entry]]
 kind = "function"
 old = "detectDownbeats"
-changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio"
+changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio. A first downbeat less than 0.6 ms (60 s / 100000 BPM) from the start of the audio is reported at 0 s, as its beat is."
 domain = "analysis"
 rule = "one-positional-form"
 test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar phase for the same beats"
@@ -9398,7 +9398,7 @@ test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar p
 [[entry]]
 kind = "function"
 old = "detectDownbeats"
-changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio"
+changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300); downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio. A first downbeat less than 0.6 ms (60 s / 100000 BPM) from the start of the audio is reported at 0 s, as its beat is."
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
