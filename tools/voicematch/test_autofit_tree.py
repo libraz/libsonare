@@ -416,6 +416,7 @@ _NATIVE_PROBE = (
     "if 'SONARE_LIB_PATH' not in os.environ and os.path.exists(sys.argv[1]):\n"
     "    os.environ['SONARE_LIB_PATH'] = sys.argv[1]\n"
     "import libsonare\n"
+    "libsonare.version()\n"
 )
 
 
