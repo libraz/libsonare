@@ -11,13 +11,8 @@
 #include <vector>
 
 namespace sonare::detail {
-namespace {
 
-constexpr size_t kHeaderSize = 10;
-constexpr size_t kFrameHeaderSize = 10;
-constexpr size_t kV1TagSize = 128;
-
-void append_codepoint(std::string& out, uint32_t codepoint) {
+[[gnu::noinline]] void append_tag_utf8(std::string& out, uint32_t codepoint) {
   if (codepoint <= 0x7Fu) {
     out.push_back(static_cast<char>(codepoint));
   } else if (codepoint <= 0x7FFu) {
@@ -35,10 +30,16 @@ void append_codepoint(std::string& out, uint32_t codepoint) {
   }
 }
 
+namespace {
+
+constexpr size_t kHeaderSize = 10;
+constexpr size_t kFrameHeaderSize = 10;
+constexpr size_t kV1TagSize = 128;
+
 std::string latin1_to_utf8(const uint8_t* data, size_t size) {
   std::string out;
   out.reserve(size * 2);
-  for (size_t i = 0; i < size && data[i] != 0; ++i) append_codepoint(out, data[i]);
+  for (size_t i = 0; i < size && data[i] != 0; ++i) append_tag_utf8(out, data[i]);
   return out;
 }
 
@@ -71,27 +72,27 @@ std::string decode_utf16(const uint8_t* data, size_t size, bool big_endian, bool
 
     if (first >= 0xD800u && first <= 0xDBFFu) {
       if (offset + 1 >= size) {
-        append_codepoint(out, 0xFFFDu);
+        append_tag_utf8(out, 0xFFFDu);
         break;
       }
       const uint16_t second = big_endian
                                   ? static_cast<uint16_t>((data[offset] << 8) | data[offset + 1])
                                   : static_cast<uint16_t>(data[offset] | (data[offset + 1] << 8));
       if (second < 0xDC00u || second > 0xDFFFu) {
-        append_codepoint(out, 0xFFFDu);
+        append_tag_utf8(out, 0xFFFDu);
         continue;
       }
       offset += 2;
       const uint32_t codepoint = 0x10000u + ((static_cast<uint32_t>(first) - 0xD800u) << 10) +
                                  (static_cast<uint32_t>(second) - 0xDC00u);
-      append_codepoint(out, codepoint);
+      append_tag_utf8(out, codepoint);
     } else if (first >= 0xDC00u && first <= 0xDFFFu) {
-      append_codepoint(out, 0xFFFDu);
+      append_tag_utf8(out, 0xFFFDu);
     } else {
-      append_codepoint(out, first);
+      append_tag_utf8(out, first);
     }
   }
-  if (!terminated && offset < size) append_codepoint(out, 0xFFFDu);
+  if (!terminated && offset < size) append_tag_utf8(out, 0xFFFDu);
   return out;
 }
 

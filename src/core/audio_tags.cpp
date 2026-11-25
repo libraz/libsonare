@@ -27,24 +27,6 @@ namespace {
 
 constexpr std::string_view kReplacement = "\xEF\xBF\xBD";
 
-void append_utf8(std::string& out, uint32_t codepoint) {
-  if (codepoint <= 0x7Fu) {
-    out.push_back(static_cast<char>(codepoint));
-  } else if (codepoint <= 0x7FFu) {
-    out.push_back(static_cast<char>(0xC0u | (codepoint >> 6)));
-    out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
-  } else if (codepoint <= 0xFFFFu) {
-    out.push_back(static_cast<char>(0xE0u | (codepoint >> 12)));
-    out.push_back(static_cast<char>(0x80u | ((codepoint >> 6) & 0x3Fu)));
-    out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
-  } else {
-    out.push_back(static_cast<char>(0xF0u | (codepoint >> 18)));
-    out.push_back(static_cast<char>(0x80u | ((codepoint >> 12) & 0x3Fu)));
-    out.push_back(static_cast<char>(0x80u | ((codepoint >> 6) & 0x3Fu)));
-    out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
-  }
-}
-
 std::string sanitize_utf8(std::string_view text) {
   std::string out;
   out.reserve(text.size());
@@ -110,9 +92,9 @@ std::string decode_cp1252(std::string_view text) {
   for (unsigned char value : text) {
     if (value == 0) break;
     if (value >= 0x80u && value <= 0x9Fu) {
-      append_utf8(out, kWindows1252[value - 0x80u]);
+      detail::append_tag_utf8(out, kWindows1252[value - 0x80u]);
     } else {
-      append_utf8(out, value);
+      detail::append_tag_utf8(out, value);
     }
   }
   return out;
