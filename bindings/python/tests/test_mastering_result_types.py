@@ -119,11 +119,9 @@ def test_audio_profile_result_with_defects(monkeypatch: pytest.MonkeyPatch) -> N
     assert result.defects.reverb.late_predictability is None
     (wire,) = wires
     expected = _cli_view(wire)
-    # The one intended difference: with no flat run there is no flat level, which the
-    # document still writes as a number.
     assert result.defects.clip.flat_run_count == 0
     assert result.defects.clip.flat_level is None
-    del expected["defects"]["clip"]["flat_level"]
+    assert "flat_level" not in expected["defects"]["clip"]
     assert _result_to_json_dict(result) == _without_nulls(expected)
 
 

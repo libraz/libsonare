@@ -111,7 +111,9 @@ Napi::Object EmitClipDetection(Napi::Env env, const T& detection) {
           Napi::Number::New(env, static_cast<double>(detection.longest_flat_run_samples)));
   out.Set("flatSampleCount",
           Napi::Number::New(env, static_cast<double>(detection.flat_sample_count)));
-  out.Set("flatLevel", Napi::Number::New(env, detection.flat_level));
+  if (detection.flat_run_count != 0) {
+    out.Set("flatLevel", Napi::Number::New(env, detection.flat_level));
+  }
   return out;
 }
 

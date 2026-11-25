@@ -144,7 +144,9 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("boundaries", boundaries);
   out.Set("noveltyCurve", novelty);
-  out.Set("noveltyPeak", Napi::Number::New(env, result.novelty_peak));
+  if (result.novelty_peak > 0.0f) {
+    out.Set("noveltyPeak", Napi::Number::New(env, result.novelty_peak));
+  }
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("hopLength", Napi::Number::New(env, result.hop_length));
   out.Set("nFrames", Napi::Number::New(env, result.n_frames));

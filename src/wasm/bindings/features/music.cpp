@@ -254,7 +254,8 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
   val out = val::object();
   out.set("boundaries", boundaries);
   out.set("noveltyCurve", vectorToFloat32Array(detector.novelty_curve()));
-  out.set("noveltyPeak", detector.novelty_peak());
+  const float peak = detector.novelty_peak();
+  if (peak > 0.0f) out.set("noveltyPeak", peak);
   // The analysis rate, not the caller's: input above 22.05 kHz is resampled
   // before any feature is computed, and `frame` indexes that grid.
   out.set("sampleRate", detector.sample_rate());

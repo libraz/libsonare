@@ -506,8 +506,8 @@ export function analyzeSections(...args: unknown[]): SectionAnalysis {
  *   sampleRate: 44100,
  *   absoluteThreshold: 0.01,
  * });
- * // If noveltyPeak > 0, noveltyCurve[i] * noveltyPeak recovers the nonnegative
- * // raw response. If noveltyPeak === 0, the curve is unnormalized.
+ * // If noveltyPeak is present, noveltyCurve[i] * noveltyPeak recovers
+ * // the raw response. Otherwise the curve is unnormalized.
  * ```
  */
 export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult;
@@ -555,7 +555,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
         strength: b.strength,
       })),
       noveltyCurve: result.noveltyCurve,
-      noveltyPeak: result.noveltyPeak,
+      ...(result.noveltyPeak === undefined ? {} : { noveltyPeak: result.noveltyPeak }),
       sampleRate: result.sampleRate,
       hopLength: result.hopLength,
       frameStride: result.frameStride,

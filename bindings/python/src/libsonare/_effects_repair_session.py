@@ -78,7 +78,6 @@ _STAGE_TYPES: dict[str, type[RepairStage]] = {
 def _detection(detection_type: type, values: Mapping[str, Any]) -> Any:
     detected = _fields(values)
     if detection_type is ClipDetection and not detected["flat_run_count"]:
-        # With no flat run there is no level to report; the document still carries one.
         detected["flat_level"] = None
     if detection_type is NoiseDetection:
         # The document omits the broadband floor when there is nothing to measure from.

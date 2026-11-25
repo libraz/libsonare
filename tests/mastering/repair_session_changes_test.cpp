@@ -146,7 +146,8 @@ TEST_CASE("repair apply changes contain one row per input channel for linked rep
 }
 
 TEST_CASE("repair apply schema paths match every report field", "[mastering][assistant][schema]") {
-  const std::vector<std::vector<float>> input = {tone()};
+  std::vector<std::vector<float>> input = {tone()};
+  std::fill_n(input[0].begin() + 400, 40, 0.25f);
   const Applied applied =
       run_apply(input, R"([{"stage":"dereverb","wpeEnabled":true},{"stage":"denoise"},
                   {"stage":"dehum"},{"stage":"decrackle"},{"stage":"declick"},

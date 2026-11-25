@@ -73,10 +73,18 @@ describe('detectBoundaries', () => {
     expect(Math.max(...result.noveltyCurve)).toBeCloseTo(1, 5);
   });
 
+  it('omits the peak when the novelty curve has no normalizable response', () => {
+    const samples = new Float32Array(SR);
+    const result = detectBoundaries({ samples, sampleRate: SR });
+    expect(result.noveltyCurve.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('noveltyPeak');
+  });
+
   it('empties the list when the absolute threshold is raised above the peak', () => {
     const samples = threeSections();
     const found = detectBoundaries({ samples, sampleRate: SR });
     expect(found.boundaries.length).toBeGreaterThan(0);
+    if (found.noveltyPeak === undefined) throw new Error('expected a measured novelty peak');
 
     const raised = detectBoundaries({
       samples,

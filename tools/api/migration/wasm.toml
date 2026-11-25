@@ -28809,6 +28809,23 @@ rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
+old = "BoundaryResult.noveltyPeak"
+changed = "Absent when the raw novelty curve has no normalizable peak. v1.10.0 returned 0. Check for absence before recovering the raw response."
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/detect-boundaries.test.ts::omits the peak when the novelty curve has no normalizable response"
+
+[[entry]]
+kind = "field"
+old = "BoundaryResult.noveltyPeak"
+changed = "Absent when the raw novelty curve has no normalizable peak. v1.10.0 returned 0. Check for absence before recovering the raw response."
+domain = "analysis"
+rule = "silence-is-infinite"
+entry = "./analysis"
+test = "bindings/wasm/tests/detect-boundaries.test.ts::omits the peak when the novelty curve has no normalizable response"
+
+[[entry]]
+kind = "field"
 old = "PitchResult.nFrames"
 removed = "read f0.length (every per-frame array has the same length)"
 domain = "analysis"
@@ -33779,8 +33796,25 @@ rule = "typed-results"
 
 [[entry]]
 kind = "field"
+old = "ClipDetection.flatLevel"
+changed = "Absent when no flat-top run was measured. v1.10.0 returned 0. Check for absence before reading the level."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/mastering-repair-detect.test.ts::omits unmeasured flat levels in the profile and repair analysis"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.flatLevel"
+changed = "Absent when no flat-top run was measured. v1.10.0 returned 0. Check for absence before reading the level."
+domain = "effects"
+rule = "silence-is-infinite"
+entry = "./analysis"
+test = "bindings/wasm/tests/mastering-repair-detect.test.ts::omits unmeasured flat levels in the profile and repair analysis"
+
+[[entry]]
+kind = "field"
 old = "MasteringAudioProfileDefects.clipFlatLevel"
-removed = "read defects.clip.flatLevel"
+removed = "read defects.clip.flatLevel when present. The key is absent when no flat-top run was measured. v1.10.0 returned 0."
 domain = "mastering"
 rule = "typed-results"
 

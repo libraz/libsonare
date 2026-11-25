@@ -183,6 +183,7 @@ TEST_CASE("the repair analysis schema list matches what the writer emits",
           "[mastering][assistant][schema]") {
   std::vector<std::vector<float>> planes = {material(440.0, 9), material(550.0, 10)};
   add_clicks(planes[0], 2000, 3500);
+  std::fill_n(planes[0].begin() + 400, 40, 0.25f);
   std::set<std::string> actual = sonare::test::schema_paths_of(
       assistant::repair_analyze_json(pointers(planes).data(), planes.size(), kLength, kSr, ""));
   // Settings below `recommended[]` depend on the stage, so the list stops at its `stage` key.

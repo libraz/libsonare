@@ -6556,7 +6556,7 @@ test = "tests/api/c_bare_refusal_mastering_repair_test.cpp::sonare_eq_magnitude_
 [[entry]]
 kind = "function"
 old = "sonare_mastering_repair_apply"
-changed = "a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Both the caller's audio planes and the owned report are written only on success. An allocation failure leaves the planes untouched and the report pointer null."
+changed = "a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Both the caller's audio planes and the owned report are written only on success. An allocation failure leaves the planes untouched and the report pointer null. The returned declip report omits detected.flatLevel when no flat-top run was measured. v1.10.0 returned 0."
 domain = "effects"
 rule = "json-input-kinds"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::sonare_mastering_repair_analyze and sonare_mastering_repair_apply"
@@ -7001,6 +7001,30 @@ changed = "Begins with uint32_t struct_size. Recompile and replace old aggregate
 domain = "mastering"
 rule = "options-struct"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::repair and dynamics configs are refused until their init sets struct_size"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_audio_profile"
+changed = "In the result JSON, read defects.clip.flatLevel when present. The field is absent when no flat-top run was measured. v1.10.0 returned 0 at defects.clipFlatLevel."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/mastering/assistant_defect_profile_test.cpp::the audio profile schema list matches what the writer emits"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_audio_profile_stereo"
+changed = "In the result JSON, read defects.clip.flatLevel when present. The field is absent when no flat-top run was measured. v1.10.0 returned 0 at defects.clipFlatLevel."
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/mastering/assistant_defect_profile_test.cpp::the audio profile schema list matches what the writer emits"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_analyze"
+changed = "In the result JSON, read defects.clip.flatLevel and channels[].clip.flatLevel when present. The field is absent when no flat-top run was measured. v1.10.0 returned 0 at defects.clipFlatLevel and channels[].clipFlatLevel."
+domain = "effects"
+rule = "silence-is-infinite"
+test = "tests/mastering/repair_session_test.cpp::the repair analysis schema list matches what the writer emits"
 
 [[entry]]
 kind = "option"

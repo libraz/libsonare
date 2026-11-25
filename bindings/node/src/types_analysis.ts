@@ -517,12 +517,12 @@ export interface BoundaryResult {
   /**
    * The novelty curve scaled by its own maximum, so values are in `[0, 1]` and
    * a peak of 1 means "the most novel frame here" rather than "a large change".
-   * Multiply by `noveltyPeak` to recover the raw response `absoluteThreshold`
-   * is compared against.
+   * When `noveltyPeak` is present, multiply by it to recover the raw response
+   * compared with `absoluteThreshold`.
    */
   noveltyCurve: Float32Array;
-  /** Maximum of the raw novelty response; 0 when nothing rose above the numerical floor. */
-  noveltyPeak: number;
+  /** Maximum of the raw novelty response. Absent when the curve has no normalizable peak. */
+  noveltyPeak?: number;
   /** The rate the ANALYSIS ran at, not the input's. */
   sampleRate: number;
   /** The hop length the analysis ran at. */

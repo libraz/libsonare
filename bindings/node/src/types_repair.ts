@@ -100,9 +100,9 @@ export interface ClipDetection {
   flatSampleCount: number;
   /**
    * Magnitude the counted flat-top runs sit at: the largest run level once the two
-   * highest runs are set aside; 0 when there are none.
+   * highest runs are set aside. Absent when no flat run was measured.
    */
-  flatLevel: number;
+  flatLevel?: number;
 }
 
 /**

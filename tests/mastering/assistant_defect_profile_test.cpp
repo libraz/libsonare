@@ -551,6 +551,7 @@ TEST_CASE("the audio profile schema list matches what the writer emits",
   const auto& listed = assistant::audio_profile_schema_paths();
   std::set<std::string> expected(listed.begin(), listed.end());
   // A level that was not measured is an absent member; every other listed path is written.
+  if (profile.defects.clip.flat_run_count == 0) expected.erase("defects.clip.flatLevel");
   const auto& spectral = profile.spectral;
   const std::pair<const char*, float> levels[] = {
       {"defects.noise.floorDbfs", profile.defects.noise.floor_dbfs},

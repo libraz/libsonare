@@ -553,6 +553,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonarePercussiveEvent.percussive_ratio` | NaN (not measured) for an event over a silent span, instead of 0; such an event is kept only when min_percussive_ratio is 0 |
+| `sonare_mastering_repair_analyze` | In the result JSON, read defects.clip.flatLevel and channels[].clip.flatLevel when present. The field is absent when no flat-top run was measured. v1.10.0 returned 0 at defects.clipFlatLevel and channels[].clipFlatLevel. |
 
 #### A number outside its domain is refused, never passed through
 
@@ -720,7 +721,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_mastering_repair_apply` | a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Both the caller's audio planes and the owned report are written only on success. An allocation failure leaves the planes untouched and the report pointer null. |
+| `sonare_mastering_repair_apply` | a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT. Both the caller's audio planes and the owned report are written only on success. An allocation failure leaves the planes untouched and the report pointer null. The returned declip report omits detected.flatLevel when no flat-top run was measured. v1.10.0 returned 0. |
 | `sonare_realtime_voice_changer_validate_preset_json(json)` | `sonare_realtime_voice_changer_validate_preset_json(document)` |
 
 #### An argument that would size a result past the library's limit is refused by name
@@ -824,6 +825,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonarePhaseScopeResult.average_abs_angle_rad` | the mean over the non-silent points; NaN (not measured) when every point is silent instead of 0 |
 | `SonareStreamingLoudnessGain.loudness_static_gain_db` | NaN for a silent or below-gate stage input instead of 0; sonare_streaming_mastering_chain_create reads a NaN static gain as no gain |
 | `SonareStreamingLoudnessGain.true_peak_db` | `SonareStreamingLoudnessGain.true_peak_dbtp`: -inf for digital silence instead of -120 |
+| `sonare_mastering_audio_profile_stereo` | In the result JSON, read defects.clip.flatLevel when present. The field is absent when no flat-top run was measured. v1.10.0 returned 0 at defects.clipFlatLevel. |
+| `sonare_mastering_audio_profile` | In the result JSON, read defects.clip.flatLevel when present. The field is absent when no flat-top run was measured. v1.10.0 returned 0 at defects.clipFlatLevel. |
 
 #### A number outside its domain is refused, never passed through
 
@@ -8912,6 +8915,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `AnalysisResult` | Check dynamics.dynamicRangeDb and dynamics.crestFactor for absence before numeric use and read loudness range from its renamed field. Read meanFrequencyHz and vibratoRateHz and allow unmeasured melody fields to be absent. |
+| `BoundaryResult.noveltyPeak` (`./analysis`) | Absent when the raw novelty curve has no normalizable peak. v1.10.0 returned 0. Check for absence before recovering the raw response. |
+| `BoundaryResult.noveltyPeak` | Absent when the raw novelty curve has no normalizable peak. v1.10.0 returned 0. Check for absence before recovering the raw response. |
 | `DynamicsResult` | Handle undefined in crestFactor, dynamicRangeDb. |
 | `LufsResult` | Handle undefined in maxMomentaryLufs, maxShortTermLufs, momentaryLufs, shortTermLufs. |
 | `SilenceCommonReport.silenceCeilingDb` | optional: a signal with no peak constrains nothing (was 0 for the whole report); Infinity when every signal that has a level holds an exactly zero frame (was 120); absent when every signal is silent |
@@ -10745,6 +10750,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
 | `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: always full length, NaN for each band not fitted, even when no band was |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
+| `ClipDetection.flatLevel` (`./analysis`) | Absent when no flat-top run was measured. v1.10.0 returned 0. Check for absence before reading the level. |
+| `ClipDetection.flatLevel` | Absent when no flat-top run was measured. v1.10.0 returned 0. Check for absence before reading the level. |
 | `MasteringRepairAnalysis` | Check channels for absence and read structured defect records in each channel. Check defects for absence and read its click, clip, crackle and noise records. |
 | `NoiseDetection` | Handle undefined in floorDbfs. |
 | `ReverbDetection` | Handle undefined in latePredictability. |
@@ -11645,7 +11652,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringAudioProfileDefects.clickLongestRunSamples` | removed: read defects.click.longestRunSamples |
 | `MasteringAudioProfileDefects.clickPerSecond` | removed: read defects.click.perSecond |
 | `MasteringAudioProfileDefects.clickRejected` | removed: read defects.click.rejected |
-| `MasteringAudioProfileDefects.clipFlatLevel` | removed: read defects.clip.flatLevel |
+| `MasteringAudioProfileDefects.clipFlatLevel` | removed: read defects.clip.flatLevel when present. The key is absent when no flat-top run was measured. v1.10.0 returned 0. |
 | `MasteringAudioProfileDefects.clipFlatRunCount` | removed: read defects.clip.flatRunCount |
 | `MasteringAudioProfileDefects.clipFlatSampleCount` | removed: read defects.clip.flatSampleCount |
 | `MasteringAudioProfileDefects.clipLongestFlatRunSamples` | removed: read defects.clip.longestFlatRunSamples |
@@ -11669,8 +11676,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringChainConfigDocument` (`./analysis`) | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringInsertParamUnit` | Handle the added dBTP, midiNote and bpm units in exhaustive switches over catalog units. |
-| `MasteringResult.latencySamples` (`./analysis`) | optional -> required |
-| `MasteringResult.latencySamples` | optional -> required |
+| `MasteringResult.latencySamples` (`./analysis`) | Optional -> required. The v1.10.0 normalization result could omit latencySamples. Normalization now reports the compensated true-peak limiter look-ahead in samples. Do not trim the returned audio by this amount. |
+| `MasteringResult.latencySamples` | Optional -> required. The v1.10.0 normalization result could omit latencySamples. Normalization now reports the compensated true-peak limiter look-ahead in samples. Do not trim the returned audio by this amount. |
 | `MixAssistantTrackProfile.exclusionReason` | optional: absent on usable tracks, which previously returned an empty string. Excluded tracks still carry their reason. |
 | `TypedJson` (`./analysis`) | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
 | `TypedJson` | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
@@ -14313,7 +14320,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `mastering-profile` | In --json output bpm and defects may be absent when unmeasured. When present, defects groups measurements under click, clip, crackle, hum, noise and reverb instead of the old flat keys. For example, read defects.clip.clipped_samples in place of the flat clipping count. |
+| `mastering-profile` | In --json output bpm and defects may be absent when unmeasured. When present, defects groups measurements under click, clip, crackle, hum, noise and reverb instead of the old flat keys. For example, read defects.clip.clipped_samples in place of the flat clipping count. Read defects.clip.flat_level when a flat-top run was measured. The key is absent otherwise. v1.10.0 returned 0 in the flat clip_flat_level field. |
 
 ### Command line: Realtime engine, synthesis, MIDI and playback
 

@@ -456,8 +456,8 @@ export interface WasmClipDetection {
   flatRunCount: number;
   longestFlatRunSamples: number;
   flatSampleCount: number;
-  /** Largest run level once the two highest runs are set aside; 0 when there are none. */
-  flatLevel: number;
+  /** Largest run level once the two highest runs are set aside. Absent when none were measured. */
+  flatLevel?: number;
 }
 
 /** What a declip pass found in one channel of a stereo declip and what it did to it. */
@@ -806,7 +806,7 @@ export interface WasmBoundary {
 export interface WasmBoundaryResult {
   boundaries: WasmBoundary[];
   noveltyCurve: Float32Array;
-  noveltyPeak: number;
+  noveltyPeak?: number;
   sampleRate: number;
   hopLength: number;
   nFrames: number;

@@ -2622,7 +2622,7 @@ test = "bindings/python/tests/test_cli_sections_stems_transcribe_mix.py::test_tr
 [[entry]]
 kind = "command"
 old = "mastering-profile"
-changed = "In --json output bpm and defects may be absent when unmeasured. When present, defects groups measurements under click, clip, crackle, hum, noise and reverb instead of the old flat keys. For example, read defects.clip.clipped_samples in place of the flat clipping count."
+changed = "In --json output bpm and defects may be absent when unmeasured. When present, defects groups measurements under click, clip, crackle, hum, noise and reverb instead of the old flat keys. For example, read defects.clip.clipped_samples in place of the flat clipping count. Read defects.clip.flat_level when a flat-top run was measured. The key is absent otherwise. v1.10.0 returned 0 in the flat clip_flat_level field."
 domain = "mastering"
 rule = "individual"
 test = "bindings/python/tests/test_cli_feature_commands.py::test_mastering_profile_omits_unmeasured_fields_and_nests_defects"

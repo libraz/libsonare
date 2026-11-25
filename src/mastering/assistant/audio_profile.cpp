@@ -628,7 +628,7 @@ util::json::Object detection_to_json(const repair::ClipDetection& detected) {
   util::json::put(out, "flatRunCount", json_count(detected.flat_run_count));
   util::json::put(out, "longestFlatRunSamples", json_count(detected.longest_flat_run_samples));
   util::json::put(out, "flatSampleCount", json_count(detected.flat_sample_count));
-  util::json::put(out, "flatLevel", detected.flat_level);
+  if (detected.flat_run_count != 0) util::json::put(out, "flatLevel", detected.flat_level);
   return out;
 }
 

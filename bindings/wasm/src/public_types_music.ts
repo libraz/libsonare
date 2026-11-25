@@ -523,15 +523,15 @@ export interface BoundaryResult {
   /**
    * Novelty curve scaled by its own maximum, one value per analysis frame. A
    * peak of 1 means "the most novel frame here", not "a large change"; multiply
-   * by {@link noveltyPeak} to recover the raw response
-   * {@link BoundaryOptions.absoluteThreshold} is compared against.
+   * by {@link noveltyPeak}, if present, to recover the raw response compared
+   * with {@link BoundaryOptions.absoluteThreshold}.
    */
   noveltyCurve: Float32Array;
   /**
-   * The largest raw checkerboard response, before normalization. Zero when the
-   * curve was left unnormalized because nothing rose above the numerical floor.
+   * Largest raw checkerboard response before normalization. Absent when the
+   * curve has no normalizable peak.
    */
-  noveltyPeak: number;
+  noveltyPeak?: number;
   /**
    * The rate the analysis ran at, not the input's: a source above 22050 Hz is
    * resampled to 22050 Hz before any feature is computed, which is what makes

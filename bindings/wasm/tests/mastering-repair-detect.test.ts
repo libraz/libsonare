@@ -19,6 +19,7 @@ import {
   init,
   masteringAudioProfile,
   masteringRepairDetectClicks,
+  masteringRepairAnalyze,
   masteringRepairDetectClipping,
   masteringRepairDetectCrackle,
   masteringRepairDetectHum,
@@ -381,7 +382,7 @@ describe('repair detection (WASM)', () => {
       expect(detected.flatRunCount).toBe(0);
       expect(detected.flatSampleCount).toBe(0);
       expect(detected.longestFlatRunSamples).toBe(0);
-      expect(detected.flatLevel).toBe(0);
+      expect(detected).not.toHaveProperty('flatLevel');
     });
   });
 
@@ -751,4 +752,24 @@ describe('the profile and the detectors measure one take alike', () => {
       masteringRepairDetectHum({ samples: take, sampleRate: SR_EQ, fundamentalHz: 60 }),
     );
   });
+});
+
+it('omits unmeasured flat levels in the profile and repair analysis', () => {
+  const sampleRate = 48000;
+  const samples = new Float32Array(sampleRate);
+  for (let i = 0; i < samples.length; i++) {
+    samples[i] = 0.1 * Math.sin((2 * Math.PI * 433 * i) / sampleRate);
+  }
+  const profile = masteringAudioProfile({ samples, sampleRate, detectDefects: true });
+  expect(profile.defects?.clip.flatRunCount).toBe(0);
+  expect(profile.defects?.clip).not.toHaveProperty('flatLevel');
+  const repair = masteringRepairAnalyze({ channels: [samples], sampleRate });
+  expect(repair.channels[0]?.clip.flatRunCount).toBe(0);
+  expect(repair.channels[0]?.clip).not.toHaveProperty('flatLevel');
+  expect(repair.defects.clip).not.toHaveProperty('flatLevel');
+
+  samples.fill(0.25, 400, 440);
+  const measured = masteringRepairAnalyze({ channels: [samples], sampleRate });
+  expect(measured.channels[0]?.clip.flatRunCount).toBeGreaterThan(0);
+  expect(measured.defects.clip.flatLevel).toBeCloseTo(0.25, 5);
 });
