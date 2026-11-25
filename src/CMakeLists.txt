@@ -1236,7 +1236,7 @@ if(BUILD_SHARED)
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION 2
     POSITION_INDEPENDENT_CODE ON
   )
   target_include_directories(sonare_shared PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
