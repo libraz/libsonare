@@ -163,6 +163,19 @@ void each_match(const std::string& text, const std::regex& expression, Collect c
   }
 }
 
+// Spans run to several kilobytes, which a regex repetition walks one recursion level per character.
+template <typename Collect>
+void each_between(const std::string& text, const std::string& open, const std::string& close,
+                  Collect collect) {
+  for (auto at = text.find(open); at != std::string::npos;) {
+    const auto body = at + open.size();
+    const auto stop = text.find(close, body);
+    if (stop == std::string::npos) return;
+    collect(text.substr(body, stop - body));
+    at = text.find(open, stop + close.size());
+  }
+}
+
 std::set<std::string> reader_keys() {
   const std::string source = mastering_source("chain_params.cpp");
   const auto begin = source.find("bool apply_repair_param(");
@@ -185,16 +198,19 @@ std::set<std::string> reader_keys() {
 
   const auto field_source =
       std::regex_replace(mastering_source("param_field_tables.h"), std::regex("\\\\\n"), " ");
-  const std::regex table(R"(#define (SONARE_FIELDS_\w+)\(X\)[ \t]+([^\n]+))");
   std::map<std::string, std::string> tables;
-  each_match(field_source, table, [&](const auto& match) { tables.emplace(match[1], match[2]); });
+  each_between(field_source, "#define SONARE_FIELDS_", "\n", [&](const std::string& line) {
+    const auto name_end = line.find("(X)");
+    if (name_end == std::string::npos) return;
+    const auto value = line.find_first_not_of(" \t", name_end + 3);
+    if (value == name_end + 3 || value == std::string::npos) return;
+    tables.emplace("SONARE_FIELDS_" + line.substr(0, name_end), line.substr(value));
+  });
 
-  const std::regex block(R"(#define X\(jkey, member, meta\)([\s\S]*?)#undef X)");
   const std::regex prefixed(R"rx(if \(key == "([^"]+)" jkey\))rx");
   const std::regex invocation(R"((SONARE_FIELDS_\w+)\(X\))");
   const std::regex field(R"rx(\bX\("([^"]+)")rx");
-  each_match(branches, block, [&](const auto& match) {
-    const auto body = match[1].str();
+  each_between(branches, "#define X(jkey, member, meta)", "#undef X", [&](const std::string& body) {
     std::smatch prefix;
     const bool stage_field = std::regex_search(body, prefix, prefixed);
     REQUIRE((stage_field || body.find("if (field == jkey)") != std::string::npos));
