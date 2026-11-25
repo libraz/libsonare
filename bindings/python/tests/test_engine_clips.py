@@ -339,7 +339,7 @@ def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
             expected = ValueError if isinstance(mode, str) else TypeError
             with pytest.raises(
                 expected,
-                match="^RealtimeEngine.set_clips: clip.warp_mode must be one of "
+                match=r"^RealtimeEngine\.set_clips: clips\[0\]\.warp_mode must be one of "
                 "off, repitch, tempoSync, timeStretch$",
             ):
                 engine.set_clips(

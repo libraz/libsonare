@@ -142,6 +142,7 @@ void MixerWasm::checkStripError(SonareError err) {
 
 void MixerWasm::checkStripValueError(SonareError err) {
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    rethrowLastCRefusal();
     throw WasmRangeError(cErrorMessage(err));
   }
   checkStripError(err);
@@ -293,10 +294,17 @@ int panModeOrdinalFromVal(val value) {
 }
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
-void checkOneShotSetter(SonareError err) {
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err));
+void checkOneShotSetter(SonareError err, int index, const char* field) {
+  if (err == SONARE_OK) return;
+  if (const auto refusal = sonare_field_spelling::wasm::SpelledLastRefusal()) {
+    const std::string path = "strips[" + std::to_string(index) + "].";
+    const auto shown = refusal->respelled(
+        refusal->code(), [&](const std::string& subject) {
+          return path + (subject == "db" ? field : subject);
+        }, true);
+    throwCEntryRefusal(shown);
   }
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err));
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
@@ -383,10 +391,10 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       strips.push_back(strip);
 
       if (auto v = optionalNumberAt(options, "inputTrimDb", index)) {
-        checkOneShotSetter(sonare_strip_set_input_trim_db(strip, *v));
+        checkOneShotSetter(sonare_strip_set_input_trim_db(strip, *v), index, "inputTrimDb");
       }
       if (auto v = optionalNumberAt(options, "faderDb", index)) {
-        checkOneShotSetter(sonare_strip_set_fader_db(strip, *v));
+        checkOneShotSetter(sonare_strip_set_fader_db(strip, *v), index, "faderDb");
       }
       // pan and panMode are independent fields: either one alone must apply.
       // The C ABI takes them together, so the missing half comes from the strip
@@ -398,13 +406,13 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       if (pan || has_pan_mode) {
         checkOneShotSetter(sonare_strip_set_pan(
             strip, pan.value_or(0.0f),
-            has_pan_mode ? panModeOrdinalFromVal(pan_mode) : SONARE_PAN_MODE_KEEP));
+            has_pan_mode ? panModeOrdinalFromVal(pan_mode) : SONARE_PAN_MODE_KEEP), index, "pan");
       }
       if (auto v = optionalNumberAt(options, "width", index)) {
-        checkOneShotSetter(sonare_strip_set_width(strip, *v));
+        checkOneShotSetter(sonare_strip_set_width(strip, *v), index, "width");
       }
       if (auto v = optionalBool(optionAt(options, "muted", index), "muted")) {
-        checkOneShotSetter(sonare_strip_set_muted(strip, *v ? 1 : 0));
+        checkOneShotSetter(sonare_strip_set_muted(strip, *v ? 1 : 0), index, "muted");
       }
 
       left_ptrs[static_cast<size_t>(index)] = left_inputs[static_cast<size_t>(index)].data();

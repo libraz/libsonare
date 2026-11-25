@@ -597,3 +597,20 @@ def test_a_note_carries_its_pitch_fields_only_when_pitch_was_measured(pitched: b
     assert not hasattr(note, "has_pitch")
     expected = (440.0, 69.0, 0.9) if pitched else (None, None, None)
     assert (note.median_hz, note.center_midi, note.f0_stability) == expected
+
+
+def test_reversed_vocal_range_names_the_supplied_bounds() -> None:
+    source, analysis = _source_and_analysis()
+    with (
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
+        session.capture_render_snapshot() as snapshot,
+    ):
+        for render in (session.render, snapshot.render, snapshot.begin_render_job):
+            with pytest.raises(SonareValueError, match="start_sec must not exceed end_sec"):
+                render(start_sec=0.2, end_sec=0.1)
+            with pytest.raises(
+                SonareValueError, match=r"range\.start_sample must not exceed range\.end_sample"
+            ):
+                render(range=(200, 100))
+            with pytest.raises(SonareValueError, match="start_sec must not exceed the output end"):
+                render(start_sec=2.0)

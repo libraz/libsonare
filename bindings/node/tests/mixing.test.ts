@@ -10,6 +10,18 @@ import {
 } from '../src/index.js';
 
 describe('mixing native binding', () => {
+  it('names the refused strip member in a one-shot mix', () => {
+    const channel = new Float32Array(64).fill(0.1);
+    const strip = { left: channel, right: channel };
+    const call = () =>
+      mixStereo({
+        strips: [strip, { ...strip, pan: 2 }],
+        sampleRate: 48000,
+      });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/^mixStereo: strips\[1\]\.pan must be finite and in \[-1, 1\]$/);
+  });
+
   it('exposes scene presets and renders a stereo mix with input trim', () => {
     expect(mixingScenePresetNames()).toContain('vocalReverbSend');
     expect(JSON.stringify(mixingScenePreset('vocalReverbSend'))).toContain('"vocal"');

@@ -60,6 +60,49 @@ describe('Mixer runtime controls (WASM)', () => {
     await init();
   });
 
+  it('names the refused strip member in a one-shot mix', () => {
+    const channel = new Float32Array(64).fill(0.1);
+    const strip = { left: channel, right: channel };
+    const call = () =>
+      mixStereo({
+        strips: [strip, { ...strip, pan: 2 }],
+        sampleRate: 48000,
+      });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/^mixStereo: strips\[1\]\.pan must be finite and in \[-1, 1\]$/);
+  });
+
+  it('keeps refused strip fields from the C record', () => {
+    using mixer = new Mixer({ sampleRate: SR, maxBlockSize: BLOCK });
+    mixer.addStrip('source');
+    const cases = [
+      ['strip_set_width', 'width', () => mixer.setWidth('source', 3)],
+      ['strip_set_dual_pan', 'leftPan', () => mixer.setDualPan('source', 2, 0)],
+      [
+        'strip_schedule_pan_automation',
+        'pan',
+        () => mixer.schedulePanAutomation('source', { samplePos: 0, pan: -2, curve: 'linear' }),
+      ],
+      [
+        'strip_schedule_width_automation',
+        'width',
+        () => mixer.scheduleWidthAutomation('source', { samplePos: 0, width: 3, curve: 'linear' }),
+      ],
+    ] as const;
+    for (const [cEntry, subject, call] of cases) {
+      let failure: unknown;
+      try {
+        call();
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(RangeError);
+      expect(
+        Object.getOwnPropertyDescriptor(failure, Symbol.for('libsonare.refusal'))?.value,
+      ).toMatchObject({ cEntry, subjects: [subject] });
+    }
+  });
+
   describe('type contracts of readers and setters', () => {
     it('forwards asymmetric dual-pan and polarity fields through scene JSON', () => {
       const mixer = Mixer.fromJson(

@@ -310,9 +310,16 @@ def _range(
         )
     start = 0 if start_i.value is None else start_i.value
     end = output_length if end_i.value is None else end_i.value
+    respelled = _respellings(start_i, end_i)
     if end < start:
-        raise _refuse("render range must satisfy 0 <= start_sample <= end_sample")
-    return SonareVocalRange(start, end), _respellings(start_i, end_i)
+        start_name = _as_given(_RANGE_BOUND_NAMES[0], None, respelled)
+        end_name = (
+            "the output end"
+            if end_i.value is None
+            else _as_given(_RANGE_BOUND_NAMES[1], None, respelled)
+        )
+        raise _refuse(f"{start_name} must not exceed {end_name}")
+    return SonareVocalRange(start, end), respelled
 
 
 def _analysis_to_c(

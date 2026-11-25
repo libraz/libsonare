@@ -449,9 +449,20 @@ describe('bounce with instruments', () => {
         ],
         { ...OPTIONS, totalFrames: undefined },
       );
-    expect(bounce).toThrow(
-      "Project.bounce: totalFrames must be positive when a hosted instrument's tail is unbounded",
-    );
+    let failure: unknown;
+    try {
+      bounce();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(RangeError);
+    expect(failure).toMatchObject({
+      message:
+        "Project.bounce: totalFrames must be positive when a hosted instrument's tail is unbounded",
+    });
+    expect(
+      Object.getOwnPropertyDescriptor(failure, Symbol.for('libsonare.refusal'))?.value,
+    ).toMatchObject({ cEntry: 'project_bounce', subjects: ['totalFrames'] });
     // The control: the callback did run and throw before the native failure.
     expect(prepared).toBe(true);
   });

@@ -370,6 +370,8 @@ struct BounceJob {
   std::string detail;
   std::optional<std::string> reason;
   bool shape_refusal = false;
+  std::optional<sonare::SonareParameterRefusal> refusal;
+  std::string refusal_entry;
 
   BounceJob(JsThreadBridge* bridge_in, SonareProject* project_in,
             const SonareProjectBounceOptions* options_in)
@@ -403,6 +405,8 @@ void RunBounceJob(void* arg) {
   if (job->error != SONARE_OK) {
     job->detail = sonare_node::ErrorMessageForCode(job->error);
     job->shape_refusal = sonare_node::LastRefusalIsShape();
+    job->refusal = sonare_node::ShownLastRefusal();
+    if (job->refusal) job->refusal_entry = sonare_node::LastRefusalEntry();
     if (const char* reason = sonare_last_error_reason()) job->reason = reason;
   }
   job->bridge->Finish();
@@ -781,9 +785,13 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   // the callback's pending exception is dropped to report it.
   if (job.error != SONARE_OK) {
     if (env.IsExceptionPending()) (void)env.GetAndClearPendingException();
-    sonare_node::MakeSonareError(env, job.error, job.detail, job.shape_refusal,
-                                 job.reason ? job.reason->c_str() : nullptr)
-        .ThrowAsJavaScriptException();
+    Napi::Error error = sonare_node::MakeSonareError(
+        env, job.error, job.detail, job.shape_refusal, job.reason ? job.reason->c_str() : nullptr);
+    if (job.refusal) {
+      sonare_node::AttachRefusal(env, error.Value().As<Napi::Object>(), *job.refusal,
+                                 job.refusal_entry);
+    }
+    error.ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (env.IsExceptionPending()) return env.Undefined();

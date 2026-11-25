@@ -646,3 +646,27 @@ def test_sidechain_check_is_a_frozen_value() -> None:
     assert SidechainCheck(True).reason is None
     with pytest.raises(AttributeError):
         check.ok = True  # type: ignore[misc]
+
+
+def test_clip_validation_names_the_argument_and_list_index() -> None:
+    cases = (
+        (EngineClip(1, [], 0.0), SonareValueError, "channels must not be empty"),
+        (
+            EngineClip(1, None, 0.0, page_provider=object()),
+            TypeError,
+            "page_provider must be a ClipPageProvider",
+        ),
+        (
+            EngineClip(1, [[0.0]], 0.0, track_id=0),
+            SonareValueError,
+            "track_id must",
+        ),
+    )
+    with RealtimeEngine(48000) as engine:
+        for clip, error_type, message in cases:
+            with pytest.raises(error_type) as listed:
+                engine.set_clips([EngineClip(2, [[0.0]], 0.0), clip])
+            assert f"clips[1].{message}" in str(listed.value)
+            with pytest.raises(error_type) as single:
+                engine.upsert_clip(clip)
+            assert f"clip.{message}" in str(single.value)

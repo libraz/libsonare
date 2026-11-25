@@ -65,7 +65,7 @@ def test_engine_clip_track_is_none_when_unset_and_zero_is_refused() -> None:
         engine.set_clips([clip])
         with pytest.raises(
             SonareValueError,
-            match=r"^RealtimeEngine\.set_clips: clip\.track_id must be an integer in \[1, ",
+            match=r"^RealtimeEngine\.set_clips: clips\[0\]\.track_id must be an integer in \[1, ",
         ):
             engine.set_clips([EngineClip(id=1, channels=[[0.5] * 128], start_ppq=0.0, track_id=0)])
 

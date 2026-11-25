@@ -637,14 +637,14 @@ def _process_channels(channels: Any) -> None:
 
 
 def _set_clip_channels(channels: Any) -> None:
-    """Drive the public clip path, whose subject is ``clip channels``."""
+    """Drive the public clip path, whose subject is ``clips[0].channels``."""
     with libsonare.RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_clips([libsonare.EngineClip(id=1, channels=channels, start_ppq=0.0)])
 
 
 _PLANAR_ENTRY_POINTS = [
     pytest.param(_process_channels, "RealtimeEngine.process: channels", id="process"),
-    pytest.param(_set_clip_channels, "RealtimeEngine.set_clips: clip channels", id="set_clips"),
+    pytest.param(_set_clip_channels, "RealtimeEngine.set_clips: clips[0].channels", id="set_clips"),
 ]
 
 

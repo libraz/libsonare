@@ -412,6 +412,34 @@ describe('OfflineWorkerClient', () => {
     ).rejects.toSatisfy((e: unknown) => isSonareError(e) && e.code === ErrorCode.InvalidState);
   });
 
+  it('keeps the native refusal when a worker rejects an unknown override key', async () => {
+    const client = clientWith(new LoopbackWorker());
+    try {
+      const error = await client
+        .masterAudio(
+          {
+            samples: new Float32Array(64).fill(0.25),
+            sampleRate: 48000,
+            overrides: { loudness: { bogus: 1 } } as never,
+          },
+          { copy: true },
+        )
+        .catch((failure: unknown) => failure);
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error).toHaveProperty(
+        'message',
+        expect.stringMatching(
+          /^OfflineWorkerClient\.masterAudio: unknown key overrides\.loudness\.bogus /,
+        ),
+      );
+      expect(Object.getOwnPropertyDescriptor(error, Symbol.for('libsonare.refusal'))).toMatchObject(
+        { enumerable: false, value: { subjects: ['overrides.loudness.bogus'] } },
+      );
+    } finally {
+      await client.destroy();
+    }
+  });
+
   it('keeps the SonareError code and the argument-refusal class a worker reports', async () => {
     let worker!: ThrowingWorker;
     const responses: OfflineWorkerResponseMessage[] = [

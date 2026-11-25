@@ -40,6 +40,22 @@ using namespace sonare_node;
 
 namespace {
 
+void CheckOneShotSetter(Napi::Env env, SonareError err, size_t index, const char* field) {
+  if (err == SONARE_OK) return;
+  if (const auto refusal = ShownLastRefusal()) {
+    const std::string path = "strips[" + std::to_string(index) + "].";
+    const auto shown = refusal->respelled(
+        refusal->code(), [&](const std::string& subject) {
+          return path + (subject == "db" ? field : subject);
+        }, true);
+    Napi::Error error = MakeSonareError(env, err, RefusalText(shown), shown.shape_error(),
+                                        sonare_last_error_reason());
+    AttachRefusal(env, error.Value(), shown, LastRefusalEntry());
+    throw error;
+  }
+  throw sonare::SonareException(CodeFromCError(err), ErrorMessageForCode(err));
+}
+
 int PanModeValue(const Napi::Value& value) {
   Napi::Env env = value.Env();
   if (value.IsNumber()) {
@@ -228,15 +244,13 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     if (inputTrim.IsNumber()) {
       SonareError err =
           sonare_strip_set_input_trim_db(strip, node_narrow_float(env, inputTrim, "inputTrimDb"));
-      if (err != SONARE_OK)
-        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+      CheckOneShotSetter(env, err, index, "inputTrimDb");
     }
     Napi::Value fader = OptionAt(env, options, "faderDb", index);
     RequireOptionType(env, fader, fader.IsNumber(), "faderDb", "a number");
     if (fader.IsNumber()) {
       SonareError err = sonare_strip_set_fader_db(strip, node_narrow_float(env, fader, "faderDb"));
-      if (err != SONARE_OK)
-        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+      CheckOneShotSetter(env, err, index, "faderDb");
     }
     // pan and panMode are independent fields: either one alone must apply. The
     // C ABI takes them together, so the missing half comes from the strip the
@@ -252,22 +266,19 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
       const float pan_value = pan.IsNumber() ? node_narrow_float(env, pan, "pan") : 0.0f;
       const int mode_value = has_mode ? PanModeValue(mode) : SONARE_PAN_MODE_KEEP;
       SonareError err = sonare_strip_set_pan(strip, pan_value, mode_value);
-      if (err != SONARE_OK)
-        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+      CheckOneShotSetter(env, err, index, "pan");
     }
     Napi::Value width = OptionAt(env, options, "width", index);
     RequireOptionType(env, width, width.IsNumber(), "width", "a number");
     if (width.IsNumber()) {
       SonareError err = sonare_strip_set_width(strip, node_narrow_float(env, width, "width"));
-      if (err != SONARE_OK)
-        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+      CheckOneShotSetter(env, err, index, "width");
     }
     Napi::Value muted = OptionAt(env, options, "muted", index);
     RequireOptionType(env, muted, muted.IsBoolean(), "muted", "a boolean");
     if (muted.IsBoolean()) {
       SonareError err = sonare_strip_set_muted(strip, muted.As<Napi::Boolean>().Value() ? 1 : 0);
-      if (err != SONARE_OK)
-        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+      CheckOneShotSetter(env, err, index, "muted");
     }
   }
 

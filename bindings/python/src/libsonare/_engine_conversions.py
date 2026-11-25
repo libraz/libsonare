@@ -283,20 +283,20 @@ def _clips_to_c(
     warp_arrays: list[ctypes.Array[SonareEngineWarpAnchor]] = []
     raw_items: list[SonareEngineClip] = []
     for index, clip in enumerate(clips):
-        _require_instance(clip, EngineClip, "clip")
         # The C ABI's subject: clips[i]. for a set, clip. for a single upsert.
         where = f"clips[{index}]" if indexed else "clip"
-        length_name = f"clips[{index}].length_samples" if indexed else "clip.length_samples"
+        _require_instance(clip, EngineClip, where)
+        length_name = f"{where}.length_samples"
         page_provider = getattr(clip, "page_provider", None)
         if page_provider is not None and not isinstance(page_provider, ClipPageProvider):
-            raise _refuse_type("clip page_provider must be a ClipPageProvider")
+            raise _refuse_type(f"{where}.page_provider must be a ClipPageProvider")
         if page_provider is not None:
             raw = SonareEngineClip()
             # Assigned unconverted so the struct's own narrowing sees each
             # caller value; int() would truncate a fraction past it. loop is the
             # one exception -- it is a documented bool, spelled 0/1 here.
             raw.id = clip.id
-            raw.track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
+            raw.track_id = _optional_positive_int(clip.track_id, f"{where}.track_id", _UINT32_MAX)
             raw.channels = None
             raw.num_channels = 0
             raw.num_samples = 0
@@ -310,7 +310,7 @@ def _clips_to_c(
             raw.gain = _narrow_double(clip.gain, f"{where}.gain")
             raw.fade_in_samples = clip.fade_in_samples
             raw.fade_out_samples = clip.fade_out_samples
-            raw.warp_mode = _warp_mode_value(clip.warp_mode, "clip.warp_mode")
+            raw.warp_mode = _warp_mode_value(clip.warp_mode, f"{where}.warp_mode")
             raw.page_provider = page_provider._require_handle()
             if clip.warp_anchors:
                 anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
@@ -326,11 +326,13 @@ def _clips_to_c(
             raw_items.append(raw)
             channel_arrays.append([])
             continue
-        arrays, ptrs, num_samples = _planar_channel_arrays(clip.channels, subject="clip channels")
+        arrays, ptrs, num_samples = _planar_channel_arrays(
+            clip.channels, subject=f"{where}.channels"
+        )
         raw = SonareEngineClip()
         # As above: unconverted so the struct narrows, loop spelled 0/1.
         raw.id = clip.id
-        raw.track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
+        raw.track_id = _optional_positive_int(clip.track_id, f"{where}.track_id", _UINT32_MAX)
         raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
         raw.num_channels = len(arrays)
         raw.num_samples = num_samples
@@ -343,7 +345,7 @@ def _clips_to_c(
         raw.gain = _narrow_double(clip.gain, f"{where}.gain")
         raw.fade_in_samples = clip.fade_in_samples
         raw.fade_out_samples = clip.fade_out_samples
-        raw.warp_mode = _warp_mode_value(clip.warp_mode, "clip.warp_mode")
+        raw.warp_mode = _warp_mode_value(clip.warp_mode, f"{where}.warp_mode")
         if clip.warp_anchors:
             anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
             for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
