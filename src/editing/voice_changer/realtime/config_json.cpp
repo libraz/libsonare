@@ -554,6 +554,18 @@ struct FieldSpec {
   bool required;
 };
 
+struct FieldSpecRange {
+  const FieldSpec* first;
+  const FieldSpec* last;
+
+  template <std::size_t N>
+  constexpr FieldSpecRange(const FieldSpec (&fields)[N]) noexcept
+      : first(fields), last(fields + N) {}
+
+  constexpr const FieldSpec* begin() const noexcept { return first; }
+  constexpr const FieldSpec* end() const noexcept { return last; }
+};
+
 constexpr FieldSpec range_field(const char* key, Range range, bool integer = false,
                                 bool required = true) {
   return {key, nullptr, range, integer, required};
@@ -585,8 +597,7 @@ bool require_formant_mode(const sonare::util::json::Value& object, const char* k
   return true;
 }
 
-template <std::size_t N>
-bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec (&fields)[N],
+bool has_allowed_fields(const sonare::util::json::Value& object, FieldSpecRange fields,
                         std::string_view path, ConfigErrorSink& sink) {
   if (!object.is_object()) {
     sink.refuse(SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, std::string(path),
@@ -614,9 +625,9 @@ bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec
 }
 
 // Allowed keys, then required keys, then each present key's check, in table order.
-template <std::size_t N>
-bool validate_range_section(const sonare::util::json::Value& section, const char* path,
-                            const FieldSpec (&fields)[N], ConfigErrorSink& sink) {
+[[gnu::noinline]] bool validate_range_section(const sonare::util::json::Value& section,
+                                              const char* path, FieldSpecRange fields,
+                                              ConfigErrorSink& sink) {
   if (!has_allowed_fields(section, fields, path, sink)) return false;
   for (const FieldSpec& field : fields) {
     if (field.required && !require_key(section, field.key, path, sink)) return false;
@@ -632,10 +643,8 @@ bool validate_range_section(const sonare::util::json::Value& section, const char
 }
 
 // A section checked only when present.
-template <std::size_t N>
 bool validate_optional_section(const sonare::util::json::Value& parent, const char* key,
-                               const char* path, const FieldSpec (&fields)[N],
-                               ConfigErrorSink& sink) {
+                               const char* path, FieldSpecRange fields, ConfigErrorSink& sink) {
   const auto* section = parent.find(key);
   return section == nullptr || validate_range_section(*section, path, fields, sink);
 }
