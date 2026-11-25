@@ -575,7 +575,8 @@ TEST_CASE("the audio profile schema list matches what the writer emits",
   for (const auto& [path, level] : levels) {
     if (std::isnan(level)) expected.erase(path);
   }
-  if (!profile.defects.reverb.late_decay_ratio_db) expected.erase("defects.reverb.lateDecayRatioDb");
+  if (!profile.defects.reverb.late_decay_ratio_db)
+    expected.erase("defects.reverb.lateDecayRatioDb");
   REQUIRE_FALSE(actual.empty());
   REQUIRE(actual == expected);
 }
