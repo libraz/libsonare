@@ -14839,17 +14839,9 @@ rule = "construction"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setParameterSmoothed"
-removed = "Call setParameter(paramId, value, renderFrame, { smoothed: true })."
+removed = "Call setParameter(paramId, value, renderFrame, { smoothed: true }). A smoothed set ramps every target over the engine smoothing time (20 ms by default), reserved fader, pan, width, insert and instrument targets included; 1.x stepped a reserved target onto its 5 ms click guard. A track, bus or master fader ramps its linear gain while its value stays in dB; every other target ramps in its own unit. A first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step."
 domain = "engine"
 rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "option"
-old = "RealtimeEngine.setParameter(options.smoothed)"
-changed = "a smoothed set ramps every target over the engine smoothing time (20 ms by default), reserved fader, pan, width, insert and instrument targets included; 1.x stepped a reserved target onto its 5 ms click guard. A track, bus or master fader ramps its linear gain while its value stays in dB; every other target ramps in its own unit. A first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step."
-domain = "engine"
-rule = "individual"
-test = "tests/engine/instrument_automation_test.cpp::A first smoothed set on each mixer target ramps from the value its owner holds"
 
 [[entry]]
 kind = "method"
