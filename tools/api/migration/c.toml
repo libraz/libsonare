@@ -603,10 +603,10 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_detect_bpm"
 [[entry]]
 kind = "function"
 old = "sonare_detect_beats"
-changed = "takes bpm_min and bpm_max before out_times; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER"
+changed = "takes bpm_min and bpm_max before out_times; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
 domain = "analysis"
 rule = "tempo-range"
-test = "tests/api/sonare_c_core_test.cpp::sonare_detect_beats"
+test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of silence sit on the clicks"
 
 [[entry]]
 kind = "function"
@@ -619,10 +619,10 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_audio_detect_bpm and sonare_aud
 [[entry]]
 kind = "function"
 old = "sonare_audio_detect_beats"
-changed = "takes bpm_min and bpm_max before out_times, as sonare_detect_beats does"
+changed = "takes bpm_min and bpm_max before out_times, as sonare_detect_beats does; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
 domain = "analysis"
 rule = "tempo-range"
-test = "tests/api/sonare_c_core_test.cpp::sonare_audio_detect_bpm and sonare_audio_detect_beats take the search range"
+test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of silence sit on the clicks"
 
 [[entry]]
 kind = "field"
@@ -1846,10 +1846,10 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_retune_cre
 [[entry]]
 kind = "function"
 old = "sonare_analyze_sections"
-changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold"
+changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections threshold reaches the boundary picker"
+test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections reports each section's material group"
 
 [[entry]]
 kind = "option"
@@ -4365,10 +4365,10 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_detect_key"
 [[entry]]
 kind = "function"
 old = "sonare_detect_onsets"
-changed = "takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate"
+changed = "takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time"
 domain = "analysis"
 rule = "options-struct"
-test = "tests/api/sonare_c_core_test.cpp::sonare_detect_onsets with a configuration"
+test = "tests/analysis/beat_event_time_test.cpp::onset times sit on the attacks, backtracked onsets at their frame"
 
 [[entry]]
 kind = "function"
@@ -5118,7 +5118,7 @@ test = "tests/api/sonare_c_project_timeline_test.cpp::project count readers clea
 [[entry]]
 kind = "function"
 old = "sonare_project_export_smf"
-changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field."
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. It also writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event)."
 domain = "project"
 rule = "individual"
 test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
@@ -5126,7 +5126,7 @@ test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear
 [[entry]]
 kind = "function"
 old = "sonare_project_export_clip_file"
-changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field."
+changed = "If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. It also writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event)."
 domain = "project"
 rule = "individual"
 test = "tests/bindings/binding_project_midi_test.cpp::project MIDI exports clear outputs on output-allocation failure"
@@ -5263,10 +5263,10 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_voice_change"
-changed = "takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor; with the voice changer compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call)"
+changed = "takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor; with the voice changer compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); an absolute formant factor must itself be in [0.55, 1.65] as well as reachable at the selected pitch shift. For example, 1.x accepted a factor of 1.9 at +5 semitones; this now refuses the factor"
 domain = "effects"
 rule = "options-struct"
-test = "tests/editing/voice_changer_formant_mode_test.cpp::sonare_voice_change selects the formant mode"
+test = "tests/editing/voice_changer_formant_mode_test.cpp::Both formant modes refuse a factor outside the warp's range"
 
 [[entry]]
 kind = "function"
@@ -7489,3 +7489,43 @@ changed = "A failed call leaves all provided outputs cleared, including out_n_fr
 domain = "analysis"
 rule = "c-error-path"
 test = "tests/api/c_bare_refusal_compat_test.cpp::sonare_frame_signal publishes its frame count after copying the output"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_import_smf"
+changed = "a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both)."
+domain = "project"
+rule = "individual"
+test = "tests/midi/smf_roundtrip_test.cpp::SMF import reads the format's 4/4 before a late first time signature"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_import_clip_file"
+changed = "keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event."
+domain = "project"
+rule = "individual"
+test = "tests/api/sonare_c_project_midi_meter_test.cpp::an exported project's meter map imports back unchanged"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_capture_punch"
+changed = "turning punch on while capture is armed with an enabled loop refuses a record offset longer than the loop with SONARE_ERROR_INVALID_PARAMETER and preserves the punch setting; 1.x accepted it. Use sonare_engine_set_capture_timing to change the offset and punch together."
+domain = "engine"
+rule = "individual"
+test = "tests/api/sonare_c_engine_contract_test.cpp::a setup valid as a whole is accepted whatever the separate setters would refuse"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_create"
+changed = "with a NULL config, the default uses PSOLA instead of the 1.x grain engine; select grain explicitly to retain the grain algorithm. At 48 kHz the default handle reports 717 instead of 2263 samples of latency."
+domain = "effects"
+rule = "individual"
+test = "tests/api/sonare_c_voice_transform_test.cpp::The default config reports a latency of 717 samples at 48 kHz"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_downbeats"
+changed = "downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio"
+domain = "analysis"
+rule = "individual"
+test = "tests/analysis/downbeat_phase_test.cpp::every analyzer reports one bar phase for the same beats"

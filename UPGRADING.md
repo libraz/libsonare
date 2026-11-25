@@ -202,9 +202,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_audio_detect_beats` | takes bpm_min and bpm_max before out_times, as sonare_detect_beats does |
+| `sonare_audio_detect_beats` | takes bpm_min and bpm_max before out_times, as sonare_detect_beats does; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `sonare_audio_detect_bpm` | takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
-| `sonare_detect_beats` | takes bpm_min and bpm_max before out_times; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER |
+| `sonare_detect_beats` | takes bpm_min and bpm_max before out_times; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER; audio-derived beat timestamps compensate the onset window's centering and follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `sonare_detect_bpm` | takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
 
 #### C extends an operation through an Options struct
@@ -234,7 +234,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_analyze_sections(hop_length)` | removed: set SonareSectionOptions.hop_length on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections(min_section_sec)` | removed: set SonareSectionOptions.min_section_sec on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections(n_fft)` | removed: set SonareSectionOptions.n_fft on the options passed to sonare_analyze_sections |
-| `sonare_analyze_sections` | takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold |
+| `sonare_analyze_sections` | takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold; boundaries use the beat grid and labels use repeated material, so boundaries, labels and confidence can differ on the same audio |
 | `sonare_boundary_options_default` | removed: call sonare_boundary_options_init(&config) on a caller-owned struct instead |
 | `sonare_chroma_cens_ex` | removed: call sonare_chroma_cens with SonareChromaCensOptions bins_per_octave set |
 | `sonare_chroma_cens` | takes const SonareChromaCensOptions* options (NULL = defaults; sonare_chroma_cens_options_init) before out; bins_per_octave moved into the struct |
@@ -253,7 +253,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_detect_key_with_tuning` | removed: call sonare_detect_key with SonareDetectKeyOptions tuning_cents and tuning_auto set, and out_tuning_cents |
 | `sonare_detect_key` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct |
 | `sonare_detect_onsets_ex` | removed: call sonare_detect_onsets, which takes the SonareOnsetDetectConfig |
-| `sonare_detect_onsets` | takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate |
+| `sonare_detect_onsets` | takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate; non-backtracked onset timestamps follow the fine-envelope rise instead of reporting the uncorrected analysis frame time |
 | `sonare_downmix_ex` | removed: call sonare_downmix with a SonareDownmixOptions filled by sonare_downmix_options_init, setting include_lfe and normalize there |
 | `sonare_downmix` | takes num_channels as size_t and a const SonareDownmixOptions* (NULL for defaults) before out_samples; initialise the options with sonare_downmix_options_init |
 | `sonare_mel_spectrogram_ex` | removed: call sonare_mel_spectrogram with SonareMelSpectrogramOptions fmin_hz, fmax_hz and htk set |
@@ -502,6 +502,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_chirp` | fmin_hz and fmax_hz must be finite; a linear sweep refuses a negative fmin_hz and an fmax_hz at or below 0, and an exponential sweep refuses either at or below 0, as SONARE_ERROR_INVALID_PARAMETER '<name> must be finite and greater than 0' (or 'at least 0' for a linear fmin_hz) with the outputs cleared (1.x accepted any linear value that survived the float cast) |
 | `sonare_decode_channels` | a recognized codec missing from the build returns SONARE_ERROR_NOT_SUPPORTED with reason notCompiledIn. An unrecognized container still returns SONARE_ERROR_INVALID_FORMAT. |
+| `sonare_detect_downbeats` | downbeat positions follow the corrected beat timestamps; phase uses low-frequency energy and harmonic change, so the reported bar starts may differ for the same audio |
 | `sonare_pitch_tuning` | NaN frequencies still represent unvoiced pitches and are ignored; infinities, which were ignored in 1.x, are refused with SONARE_ERROR_INVALID_PARAMETER and an indexed frequencies diagnostic |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
 | `sonare_polyphonic_set_note_edit(envelope)` | `sonare_polyphonic_set_note_edit(amplitude_envelope)` |
@@ -611,7 +612,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_trim_ex` | removed: call sonare_trim with SonareTrimOptions frame_length and hop_length set |
 | `sonare_trim` | takes const SonareTrimOptions* options (NULL = defaults; sonare_trim_options_init) before out |
 | `sonare_voice_change_ex` | removed: call sonare_voice_change, which takes the SonareVoiceChangeConfig |
-| `sonare_voice_change` | takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor; with the voice changer compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call) |
+| `sonare_voice_change` | takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor; with the voice changer compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); an absolute formant factor must itself be in [0.55, 1.65] as well as reachable at the selected pitch shift. For example, 1.x accepted a factor of 1.9 at +5 semitones; this now refuses the factor |
 
 #### C constructors return SonareError and an out pointer
 
@@ -767,6 +768,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareRoomMorphConfig.source_y` | removed: read and write the config.source.y; source and listener are SonareRoomPlacement members {x, y, z} |
 | `SonareRoomMorphConfig.source_z` | removed: read and write the config.source.z; source and listener are SonareRoomPlacement members {x, y, z} |
 | `sonare_mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); config.link_channels = 1 restores the union |
+| `sonare_realtime_voice_changer_create` | with a NULL config, the default uses PSOLA instead of the 1.x grain engine; select grain explicitly to retain the grain algorithm. At 48 kHz the default handle reports 717 instead of 2263 samples of latency. |
 | `sonare_room_morph(config)` | a config.receiver_spacing_m other than NaN is SONARE_ERROR_INVALID_PARAMETER 'config.receiver_spacing_m must be omitted for a mono layout' with the outputs cleared (1.x ignored it on the mono entry); leave it NaN, as sonare_room_morph_config_default does, a zero-initialised config included |
 | `sonare_scale_correction_semitones(reference_midi)` | `sonare_scale_correction_semitones(scale_reference_midi)` |
 | `sonare_scale_quantize_midi(reference_midi)` | `sonare_scale_quantize_midi(scale_reference_midi)` |
@@ -1245,6 +1247,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_capture_status` | takes const SonareEngine* because it only reads capture state |
 | `sonare_engine_clip_page_request_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_engine_external_midi_dropped_count` | takes const SonareEngine* because it only reads engine state |
+| `sonare_engine_set_capture_punch` | turning punch on while capture is armed with an enabled loop refuses a record offset longer than the loop with SONARE_ERROR_INVALID_PARAMETER and preserves the punch setting; 1.x accepted it. Use sonare_engine_set_capture_timing to change the offset and punch together. |
 | `sonare_engine_set_markers` | a key-signature marker with key_fifths outside [-7, 7] returns SONARE_ERROR_INVALID_PARAMETER and leaves the previous markers unchanged (1.x stored it) |
 | `sonare_engine_set_midi_clips` | a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period) |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
@@ -1493,8 +1496,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareProjectMarker.key_fifths` | a nonzero key_fifths on a marker whose kind is not key signature is refused by sonare_project_set_marker with SONARE_ERROR_INVALID_PARAMETER (1.x stored it through sonare_project_set_marker_ex); leave it 0 on other kinds |
 | `SonareProjectMarker.key_minor` | a nonzero key_minor on a marker whose kind is not key signature is refused by sonare_project_set_marker with SONARE_ERROR_INVALID_PARAMETER (1.x stored it through sonare_project_set_marker_ex); leave it 0 on other kinds |
 | `SonareSf2InstrumentBinding` | adds const char* sound_font_uri at the tail. Set it to NULL for the default font. Recompile code passing an array of these records. |
-| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. |
-| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. |
+| `sonare_project_export_clip_file` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. It also writes no signature message for an empty stored list (1.x wrote a 4/4 message at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `sonare_project_export_smf` | If allocating the exported bytes fails, out_bytes stays NULL and out_len stays 0 (1.x left out_len at the exported byte count). Export uses the stored tempo map. Set tempo endpoints at or above 1e-6 BPM. A smaller endpoint is refused by sonare_project_set_tempo_segments with SONARE_ERROR_INVALID_PARAMETER or by sonare_project_deserialize with SONARE_ERROR_INVALID_FORMAT naming the authored field. It also writes no signature event for an empty stored list (1.x wrote 4/4 at tick 0) and writes a copy at tick 0 of a late first signature, retaining the late event (1.x wrote only the late event). |
+| `sonare_project_import_clip_file` | keeps the stored time-signature list empty for a file without signature events and preserves a late first signature at its original position (1.x inserted 4/4 at tick 0 in both cases). An opening signature identical to the next event, including the MIDI click fields, folds into that later event. |
+| `sonare_project_import_smf` | a file without time-signature events leaves the stored list empty (1.x inserted 4/4 at tick 0); the project still plays in effective 4/4. An opening signature identical to the next event, including the MIDI click fields, is folded into that later event (1.x kept both). |
 | `sonare_project_set_max_undo_depth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now returns SONARE_ERROR_INVALID_PARAMETER. Use sonare_project_set_max_history_bytes(project, 0) to disable undo retention. |
 | `sonare_vocal_draft_apply` | a NULL result is refused naming result and an undersized one naming result.struct_size, where 1.x named both result header; a stale generation reports its conflict with the field expected_generation, where 1.x reported generation, with the same code, reason, message and values |
 | `sonare_vocal_draft_capture_snapshot` | a NULL snapshot output is refused naming snapshot, where 1.x named snapshot output |
