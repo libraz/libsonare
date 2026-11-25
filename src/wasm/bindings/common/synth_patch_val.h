@@ -141,13 +141,14 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
 }
 
 // An empty name is never the init patch (omission is), and a name is refused rather than cut.
-inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
+inline void setPresetName(SonareSynthPatch* patch, const std::string& name,
+                          const std::string& label) {
   const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
   if (bare.empty()) {
-    throw WasmRangeError("synth patch preset must not be empty; omit it for the init patch");
+    throw WasmRangeError(label + " must not be empty; omit it for the init patch");
   }
   if (bare.size() >= SONARE_SYNTH_PRESET_NAME_MAX) {
-    throw WasmRangeError("synth patch preset must be at most " +
+    throw WasmRangeError(label + " must be at most " +
                          std::to_string(SONARE_SYNTH_PRESET_NAME_MAX - 1) + " bytes");
   }
   const char* text = wasmCString(bare, "preset");
@@ -208,14 +209,16 @@ inline void readEngineParams(emscripten::val desc, SynthPatchStorage* storage) {
 /// present_fields bit, so `stereoSpread: 0` reaches the core as an explicit
 /// zero rather than the "keep base" sentinel a bare zero would be. Throws on
 /// unknown enum names; unknown PRESET names and refused `engineParams` keys or
-/// values are validated downstream by the C ABI.
-inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
+/// values are validated downstream by the C ABI. @p root is the caller's path to the patch, which
+/// names a refused preset; empty reads it as a bare synth patch.
+inline SynthPatchStorage synthPatchFromVal(emscripten::val desc, const std::string& root = {}) {
+  const std::string preset_label = root.empty() ? "synth patch preset" : root + ".preset";
   SynthPatchStorage storage;
   SonareSynthPatch& patch = storage.patch;
   sonare_synth_patch_init(&patch);
   if (desc.isUndefined() || desc.isNull()) return storage;
   if (desc.typeOf().as<std::string>() == "string") {
-    setPresetName(&patch, desc.as<std::string>());
+    setPresetName(&patch, desc.as<std::string>(), preset_label);
     return storage;
   }
   if (desc.typeOf().as<std::string>() != "object") {
@@ -224,9 +227,9 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   if (hasProperty(desc, "preset")) {
     emscripten::val preset = desc["preset"];
     if (preset.typeOf().as<std::string>() != "string") {
-      throw WasmTypeError("synth patch preset must be a string");
+      throw WasmTypeError(preset_label + " must be a string");
     }
-    setPresetName(&patch, preset.as<std::string>());
+    setPresetName(&patch, preset.as<std::string>(), preset_label);
   }
   enumProperty(desc, "engineMode", kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
                "synth engine mode", &patch.engine_mode);

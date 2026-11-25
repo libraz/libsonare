@@ -594,6 +594,12 @@ describe('Project.bounce refusal subjects', () => {
       'synthInstruments[0].instrument.preset must name a synth catalog preset',
     ],
     [
+      'a synth preset longer than the field holds',
+      { synthInstruments: [{ instrument: { preset: 'x'.repeat(32) } }] },
+      RangeError,
+      'synthInstruments[0].instrument.preset must be at most 31 bytes',
+    ],
+    [
       'a synth field out of range',
       { synthInstruments: [{ instrument: { polyphony: 999 } }] },
       RangeError,
@@ -666,5 +672,17 @@ describe('Project.bounce refusal subjects', () => {
     const call = () => project.bounce({ ...OPTIONS, ...(bindings as ProjectBounceOptions) });
     expect(call).toThrow(cls);
     expect(call).toThrow(`Project.bounce: ${text}`);
+  });
+
+  // RED WHEN: the preset-length refusal falls back to the bare `synth patch` label on a patch the
+  // caller placed at a path.
+  it('names a preset longer than the field at the destination instrument', () => {
+    using project = midiProject();
+    const call = () =>
+      project.setDestinationInstrument(0, { kind: 'synth', patch: { preset: 'x'.repeat(32) } });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(
+      'Project.setDestinationInstrument: instrument.patch.preset must be at most 31 bytes',
+    );
   });
 });

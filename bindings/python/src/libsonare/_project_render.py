@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, SupportsIndex, TypeVar, cast
 import numpy as np
 
 from ._engine_conversions import _POSITIVE_COUNT, _POSITIVE_INT, _given_positive
-from ._errors import _entry, _malformed_output, _refuse, _refuse_type
+from ._errors import _entry, _malformed_output, _refusals_under, _refuse, _refuse_type
 from ._field_spelling import surface_spelling
 from ._narrowing import _is_number
 from ._project_model import *  # noqa: F403
@@ -493,7 +493,8 @@ class _ProjectRenderMixin:
                     _binding_destination(builtin_binding),
                     f"builtin_instruments[{i}].destination_id",
                 )
-                c_builtin[i].config = config._to_c()
+                with _refusals_under(f"builtin_instruments[{i}].instrument"):
+                    c_builtin[i].config = config._to_c()
             options.builtin_instruments = c_builtin
             options.builtin_instrument_count = _to_c_size_t(len(builtin_bindings), "count")
         # Each converted patch borrows its engine params; copying it into the
@@ -506,7 +507,8 @@ class _ProjectRenderMixin:
                 c_synth[i].destination_id = _to_c_uint32(
                     _binding_destination(synth_binding), f"synth_instruments[{i}].destination_id"
                 )
-                c_patch = synth_patch._to_c()
+                with _refusals_under(f"synth_instruments[{i}].instrument"):
+                    c_patch = synth_patch._to_c()
                 c_patches.append(c_patch)
                 c_synth[i].patch = c_patch
                 c_synth[i].use_gm_programs = 1 if synth_patch.use_gm_programs else 0
@@ -523,7 +525,8 @@ class _ProjectRenderMixin:
                 c_sf2[i].destination_id = _to_c_uint32(
                     _binding_destination(sf2_binding), f"sf2_instruments[{i}].destination_id"
                 )
-                c_sf2[i].config = sf2_config._to_c()
+                with _refusals_under(f"sf2_instruments[{i}].instrument"):
+                    c_sf2[i].config = sf2_config._to_c()
                 encoded_uri = _sound_font_uri(
                     sf2_binding.sound_font_uri, f"sf2_instruments[{i}].sound_font_uri"
                 )

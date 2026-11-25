@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <string>
 #include <unordered_map>
 
 #include "c_api/daw_config_domains.h"
@@ -493,7 +494,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   // Owns the keys behind each binding's engine_params; alive across the C call.
   std::vector<sonare_wasm_synth::SynthPatchStorage> patch_storage;
   if (!synth_bindings.isUndefined() && !synth_bindings.isNull()) {
-    auto bindingFromVal = [&patch_storage](val desc) {
+    auto bindingFromVal = [&patch_storage](val desc, size_t index) {
       SonareSynthInstrumentBinding binding{};
       if (desc.typeOf().as<std::string>() == "object") {
         binding.destination_id = uintProperty(desc, "destinationId", binding.destination_id);
@@ -503,16 +504,17 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
         }
         binding.sample_bank = SampleBankWasm::fromDescriptor(desc);
       }
-      patch_storage.push_back(sonare_wasm_synth::synthPatchFromVal(desc));
+      patch_storage.push_back(sonare_wasm_synth::synthPatchFromVal(
+          desc, "synthInstruments[" + std::to_string(index) + "].instrument"));
       binding.patch = patch_storage.back().patch;
       return binding;
     };
     if (val::global("Array").call<bool>("isArray", synth_bindings)) {
       const size_t count = wasmArrayLength(synth_bindings, "bindings");
       synths.reserve(count);
-      for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(synth_bindings[i]));
+      for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(synth_bindings[i], i));
     } else {
-      synths.push_back(bindingFromVal(synth_bindings));
+      synths.push_back(bindingFromVal(synth_bindings, 0));
     }
   }
 

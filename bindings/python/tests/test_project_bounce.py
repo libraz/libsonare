@@ -20,6 +20,7 @@ from libsonare import (
     ProjectBounceResult,
     ProjectCompileResult,
     ProjectControllerProfileBinding,
+    ProjectInstrument,
     ProjectInstrumentBinding,
     ProjectSf2InstrumentBinding,
     Sf2InstrumentConfig,
@@ -837,6 +838,16 @@ def test_control_last_bounce_compile_result_survives_a_later_compile_failure() -
             r"synth_instruments\[0\]\.instrument\.cutoff_hz must be finite and in \[10, 22000\]$",
         ),
         (
+            "synth_instruments",
+            ProjectInstrumentBinding(instrument=SynthPatch(preset="x" * 32)),
+            r"synth_instruments\[0\]\.instrument\.preset must be at most 31 bytes$",
+        ),
+        (
+            "synth_instruments",
+            ProjectInstrumentBinding(instrument=SynthPatch(sample_loop="zz")),
+            r"synth_instruments\[0\]\.instrument\.sample_loop must be one of ",
+        ),
+        (
             "builtin_instruments",
             ProjectInstrumentBinding(instrument=BuiltinSynthConfig(polyphony=999)),
             r"builtin_instruments\[0\]\.instrument\.polyphony must be an integer in \[1, 64\]$",
@@ -857,3 +868,28 @@ def test_bounce_names_an_instrument_field_where_the_caller_wrote_it(
             project.bounce(total_frames=128, **{option: [binding]})
     finally:
         project.close()
+
+
+# RED WHEN: a type refusal the patch's own reader raises loses the caller's path to the patch.
+def test_bounce_names_a_wrongly_typed_instrument_field_where_the_caller_wrote_it() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(
+            TypeError, match=r"synth_instruments\[0\]\.instrument\.one_shot must be a bool$"
+        ):
+            project.bounce(
+                total_frames=128,
+                synth_instruments=[ProjectInstrumentBinding(instrument=SynthPatch(one_shot=1))],
+            )
+    finally:
+        project.close()
+
+
+# RED WHEN: a refusal from the destination patch's own reader drops the instrument.patch path.
+def test_destination_instrument_names_a_patch_field_under_instrument_patch() -> None:
+    with Project() as project, pytest.raises(
+        SonareValueError, match=r"instrument\.patch\.preset must be at most 31 bytes$"
+    ):
+        project.set_destination_instrument(
+            0, ProjectInstrument(kind="synth", patch=SynthPatch(preset="x" * 32))
+        )

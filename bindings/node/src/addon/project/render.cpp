@@ -465,7 +465,8 @@ bool ReadSynthBindings(Napi::Env env, const Napi::Value& value,
       }
     }
     storages->emplace_back();
-    if (!sonare_node::ReadSynthPatch(env, element, &storages->back())) {
+    if (!sonare_node::ReadSynthPatch(env, element, &storages->back(),
+                                     "synthInstruments[" + std::to_string(i) + "].instrument")) {
       return false;  // exception already pending
     }
     binding.patch = storages->back().patch;

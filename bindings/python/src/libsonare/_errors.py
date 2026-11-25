@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from enum import IntEnum
 from typing import Literal, ParamSpec, TypeVar, cast
 
@@ -180,6 +181,28 @@ def _refuse_type(message: str) -> TypeError:
     exc = TypeError(message)
     setattr(exc, _BARE_TEXT, message)
     return exc
+
+
+@contextlib.contextmanager
+def _refusals_under(root: str) -> Iterator[None]:
+    """Name a refusal a nested value's own reader raised at ``root``, the caller's path to it.
+
+    Only refusals built by :func:`_refuse`, :func:`_refuse_type` and :func:`_refuse_integer` are
+    touched. A reader's ``synth patch`` label, its name for a value read with no path, gives way to
+    the path.
+    """
+    try:
+        yield
+    except (SonareError, TypeError) as exc:
+        bare = getattr(exc, _BARE_TEXT, None)
+        if bare is not None:
+            rooted = f"{root}.{bare.removeprefix('synth patch ')}"
+            setattr(exc, _BARE_TEXT, rooted)
+            exc.args = (rooted,)
+            name = getattr(exc, _INTEGER_SUBJECT, None)
+            if name is not None:
+                setattr(exc, _INTEGER_SUBJECT, f"{root}.{name}")
+        raise
 
 
 def _entry(name: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:

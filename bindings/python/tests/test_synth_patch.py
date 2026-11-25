@@ -1184,7 +1184,7 @@ def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
         cases = [
             ("bowedString", {"noSuchKey": 1.0}, rf"unknown key {at}noSuchKey \(expected "),
             ("bowedString", {"bowForce": 7.0}, rf"{at}bowForce must be finite and in \["),
-            ("bowedString", {"bowForce": float("nan")}, r"engine_params\.bowForce must be finite"),
+            ("bowedString", {"bowForce": float("nan")}, rf"{at}bowForce must be finite$"),
             ("fm", {"bowForce": 0.5}, rf"unknown key {at}bowForce \(expected "),
             ("percussion", {"numModes": 2.5}, rf"{at}numModes must be an integer in \["),
         ]

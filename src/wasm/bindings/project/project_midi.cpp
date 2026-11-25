@@ -354,7 +354,7 @@ void ProjectWasm::setDestinationInstrument(const val& destination_id_val, val in
             "sample-bank patches cannot be stored as destination instruments",
             sonare::ErrorReason::NotPersistable);
       }
-      synth_patch = sonare_wasm_synth::synthPatchFromVal(patch);
+      synth_patch = sonare_wasm_synth::synthPatchFromVal(patch, "instrument.patch");
       stored.kind = SONARE_PROJECT_INSTRUMENT_SYNTH;
       stored.synth = &synth_patch.patch;
       val patch_use_gm = patch["useGmPrograms"];

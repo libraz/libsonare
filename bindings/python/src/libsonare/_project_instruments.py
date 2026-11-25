@@ -10,7 +10,7 @@ from typing import Any, Generic, Literal, Protocol, TypeAlias, TypeVar, cast, ge
 
 import numpy as np
 
-from ._errors import _entry, _malformed_output, _refuse, _refuse_type
+from ._errors import _entry, _malformed_output, _refusals_under, _refuse, _refuse_type
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
     SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
@@ -656,7 +656,7 @@ class SynthPatch:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
         if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
             raise _refuse(
-                f"a synth patch supports at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} mod routings"
+                f"synth patch mod_routings must contain at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} entries"
             )
         c.num_mod_routings = len(routings)
         for i, routing in enumerate(routings):
@@ -1118,7 +1118,8 @@ class ProjectInstrument:
                         "instrument.use_gm_programs conflicts with instrument.patch.use_gm_programs"
                     )
                 use_gm_programs = self.patch.use_gm_programs
-            patch = self.patch._to_c()
+            with _refusals_under("instrument.patch"):
+                patch = self.patch._to_c()
             c.synth = ctypes.pointer(patch)
             keepalive.append(patch)
             if hasattr(patch, "_keepalive"):
@@ -1130,7 +1131,8 @@ class ProjectInstrument:
                 raise _refuse_type(
                     "instrument.config must be a BuiltinSynthConfig for kind 'builtin'"
                 )
-            builtin_config = self.config._to_c()
+            with _refusals_under("instrument.config"):
+                builtin_config = self.config._to_c()
             c.builtin = ctypes.pointer(builtin_config)
             keepalive.append(builtin_config)
         else:
@@ -1141,7 +1143,8 @@ class ProjectInstrument:
             for field in ("prefer_model_for_modeled_families", "clear_bank_rig"):
                 if not isinstance(getattr(self.config, field), bool):
                     raise _refuse_type(f"instrument.config.{field} must be a bool")
-            sf2_config = self.config._to_c()
+            with _refusals_under("instrument.config"):
+                sf2_config = self.config._to_c()
             c.sf2 = ctypes.pointer(sf2_config)
             keepalive.append(sf2_config)
             if self.sound_font_uri is not None:
