@@ -196,6 +196,8 @@ Before merging, the maintainer brings a change here to the following:
 - A cause two parameters share names both (`left and right have no measurable level`); `make test-python` fails on a refusal whose subject is no parameter of its entry.
 - Run `make surface-snapshot` and review the diff when a public name, signature, default, or result field changes. Commit the generated snapshots with the change so `make lint` can check them.
 - `make surface-check` returns rc=0 on a change that touches a public name, token, default or flag; CI runs it too.
+- Each covered one-shot call checks its result against C in the facade test run, including defaults, result keys and refusal classes. An intentional result change carries the matching corpus diff.
+- Emitted refusal subjects match the public arguments in the Node and WASM refusal spelling target and in the Python test run.
 - A renamed, removed or reshaped public name has its row in the surface's ledger under `tools/api/migration/`, rendered by `make upgrade-notes`.
 - `UPGRADING.md` is generated from the ledgers, and `make lint` (through `make lint-static`, which CI runs) fails while the tracked file differs from the render, so a ledger edit and `make upgrade-notes` land in one commit. A row that quotes the member's new signature (`arm(id, state?)`) matches its declaration on Node, WASM and Python.
 - A shipped struct, signature, constant or enumerator that changes bumps its owning ABI counter, measured against the last release tag with `python3 tools/abi/check_abi_bumps.py --tag <last release tag>`.
