@@ -122,10 +122,11 @@ void refuse_unknown_keys(const Value& object, const std::string& path, KeyList k
   }
 }
 
+using RecordCheck = void (*)(const Value&, const std::string&);
+
 // Calls @p check on each object element of the array at @p key. A container or element of
 // the wrong type is left to the decoder, which refuses it with its own message.
-template <typename Check>
-void each_record(const Value& parent, const char* key, const std::string& path, Check check) {
+void each_record(const Value& parent, const char* key, const std::string& path, RecordCheck check) {
   const Value* array = parent.find(key);
   if (array == nullptr || !array->is_array()) return;
   const auto& elements = array->as_array();
@@ -135,8 +136,7 @@ void each_record(const Value& parent, const char* key, const std::string& path, 
   }
 }
 
-template <typename Check>
-void with_object(const Value& parent, const char* key, const std::string& path, Check check) {
+void with_object(const Value& parent, const char* key, const std::string& path, RecordCheck check) {
   const Value* object = parent.find(key);
   if (object != nullptr && object->is_object()) check(*object, schema::child_path(path, key));
 }
