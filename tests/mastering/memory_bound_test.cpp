@@ -103,9 +103,8 @@ double preset_slope_bound(const std::string& name) {
 /// A preset with a stage of its own, measured at three lengths. The chain's fixed state and a
 /// whole-input stage peak at different times, so where the fixed part is the larger the slope reads
 /// the wrong line and a regression in the stage passes; the lengths start past that crossover and
-/// the case checks the line is straight across them. The mastering chain carries about 10 MB of
-/// fixed state, which a preset holding nothing beyond the chain's copies passes after about 23 s
-/// in stereo and between 24 and 30 s in mono.
+/// the case checks the line is straight across them. The mastering chain carries about 2 MB of
+/// fixed state (pop's measured intercept), so every first length below sits past that crossover.
 struct LinedPreset {
   const char* name;
   double slope_bound;  // measured plus headroom
