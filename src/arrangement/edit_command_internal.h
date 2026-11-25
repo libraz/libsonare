@@ -429,13 +429,7 @@ class RestoreClip final : public EditCommand {
   }
 
   EditCommandPtr invert(const Project& before,
-                        const MidiContentStore& /*store_before*/) const override {
-    const EditClip* clip = before.find_clip(clip_.id);
-    if (clip == nullptr) {
-      return nullptr;
-    }
-    return std::make_unique<RestoreClip>(*clip);
-  }
+                        const MidiContentStore& /*store_before*/) const override;
 
   const char* type_name() const noexcept override { return "RestoreClip"; }
   std::size_t retained_bytes() const noexcept override;

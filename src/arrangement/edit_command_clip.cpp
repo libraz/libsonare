@@ -29,7 +29,22 @@ void clamp_fades_to_length(EditClip* clip) {
   clip->fade_out.length_ppq = std::clamp(clip->fade_out.length_ppq, 0.0, max_fade_ppq);
 }
 
+/// The inverse that restores clip @p id as it stood in @p before; a clip already gone inverts
+/// to nothing.
+[[gnu::noinline]] EditCommandPtr restore_clip_inverse(const Project& before, ClipId id) {
+  const EditClip* clip = before.find_clip(id);
+  if (clip == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<detail::RestoreClip>(*clip);
+}
+
 }  // namespace
+
+EditCommandPtr detail::RestoreClip::invert(const Project& before,
+                                           const MidiContentStore& /*store_before*/) const {
+  return restore_clip_inverse(before, clip_.id);
+}
 
 // ===========================================================================
 // Clip commands
@@ -347,11 +362,7 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr TrimClip::invert(const Project& before,
                                 const MidiContentStore& /*store_before*/) const {
-  const EditClip* c = before.find_clip(id_);
-  if (c == nullptr) {
-    return nullptr;
-  }
-  return std::make_unique<detail::RestoreClip>(*c);
+  return restore_clip_inverse(before, id_);
 }
 
 bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
@@ -392,11 +403,7 @@ bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr MoveClip::invert(const Project& before,
                                 const MidiContentStore& /*store_before*/) const {
-  const EditClip* c = before.find_clip(id_);
-  if (c == nullptr) {
-    return nullptr;
-  }
-  return std::make_unique<detail::RestoreClip>(*c);
+  return restore_clip_inverse(before, id_);
 }
 
 bool DuplicateClip::apply(Project& project, MidiContentStore& store) {
@@ -510,11 +517,7 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr SetClipLoop::invert(const Project& before,
                                    const MidiContentStore& /*store_before*/) const {
-  const EditClip* c = before.find_clip(id_);
-  if (c == nullptr) {
-    return nullptr;
-  }
-  return std::make_unique<detail::RestoreClip>(*c);
+  return restore_clip_inverse(before, id_);
 }
 
 bool SetClipWarpRef::apply(Project& project, MidiContentStore& /*store*/) {
@@ -576,11 +579,11 @@ bool SetClipTakes::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr SetClipTakes::invert(const Project& before,
                                     const MidiContentStore& /*store_before*/) const {
-  const EditClip* c = before.find_clip(id_);
-  if (c == nullptr) {
+  EditCommandPtr inverse = restore_clip_inverse(before, id_);
+  if (!inverse) {
     return nullptr;
   }
-  return vocal_sidecar::wrap_inverse(std::make_unique<detail::RestoreClip>(*c), before, {id_});
+  return vocal_sidecar::wrap_inverse(std::move(inverse), before, {id_});
 }
 
 bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
@@ -600,11 +603,7 @@ bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr SetClipCompSegments::invert(const Project& before,
                                            const MidiContentStore& /*store_before*/) const {
-  const EditClip* c = before.find_clip(id_);
-  if (c == nullptr) {
-    return nullptr;
-  }
-  return std::make_unique<detail::RestoreClip>(*c);
+  return restore_clip_inverse(before, id_);
 }
 
 bool SetWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
