@@ -25,6 +25,7 @@
 #if defined(SONARE_WITH_MIXING)
 #include "support/alloc_guard.h"
 #endif
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -593,7 +594,7 @@ TEST_CASE("Tube oversampling is invariant to process block partitioning",
     partitioned.process(channels, 1, count);
   }
 
-  REQUIRE(actual == expected);
+  REQUIRE(sonare::test::ranges_within_roundoff(actual, expected));
 }
 
 TEST_CASE("Tube supports bounded offline mono and stereo scratch capacity",

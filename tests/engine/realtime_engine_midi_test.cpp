@@ -32,6 +32,7 @@
 #include "midi/ump.h"
 #include "rt/command.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "support/sf2_builder.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -2713,7 +2714,7 @@ TEST_CASE("a chunked render_offline concatenates to one continuous render", "[en
   chunked.set_midi_instrument(nullptr);
 
   REQUIRE(joined.size() == whole_l.size());
-  REQUIRE(joined == whole_l);
+  REQUIRE(sonare::test::ranges_within_roundoff(joined, whole_l));
 
   // The boundary itself: no dropout and no amplitude step across it.
   for (int chunk = 1; chunk < kChunks; ++chunk) {

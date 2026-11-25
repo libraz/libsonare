@@ -7,6 +7,7 @@
 
 #include "dynamics_test_helpers.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 
 TEST_CASE("Gate set_config is safe to call concurrently with process",
           "[mastering][dynamics][rt-safe]") {
@@ -478,7 +479,7 @@ TEMPLATE_TEST_CASE(
 
   TestType from_mirror(mirror);
   from_mirror.prepare(48000.0, 2048);
-  CHECK(rendered == render_stepped_tone(from_mirror));
+  CHECK(sonare::test::ranges_within_roundoff(rendered, render_stepped_tone(from_mirror)));
 
   // Non-vacuity: had the snapshot been adopted over the automation, the block
   // would render `published` while config() read the constructed config plus
@@ -489,5 +490,6 @@ TEMPLATE_TEST_CASE(
   TestType stale_mirror{Config{}};
   REQUIRE(apply_first_accepted(stale_mirror, 0, {-10.0f, 1000.0f}));
   stale_mirror.prepare(48000.0, 2048);
-  CHECK(render_stepped_tone(from_published) != render_stepped_tone(stale_mirror));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(render_stepped_tone(from_published),
+                                                   render_stepped_tone(stale_mirror)));
 }

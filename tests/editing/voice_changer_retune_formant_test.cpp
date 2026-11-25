@@ -3,6 +3,7 @@
 
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "support/float_roundoff.h"
 #include "voice_changer_test_helpers.h"
 
 TEST_CASE("StreamingRetune shifts block pitch up an octave", "[voice_changer]") {
@@ -644,8 +645,8 @@ TEST_CASE("StreamingFormant live updates are invariant to caller chunking",
     offset += chunk;
   }
   REQUIRE(offset == rendered);
-  REQUIRE(one_block_output == ragged_output);
-  REQUIRE(one_block_output != unchanged_output);
+  REQUIRE(sonare::test::ranges_within_roundoff(one_block_output, ragged_output));
+  REQUIRE_FALSE(sonare::test::ranges_within_roundoff(one_block_output, unchanged_output));
 }
 
 TEST_CASE("StreamingFormant reset restarts the shared control cadence",

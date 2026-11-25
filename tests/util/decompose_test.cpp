@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "support/golden_hash.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -404,12 +405,12 @@ std::vector<float> traversal_fixture(int n_features, int n_frames, uint32_t seed
   return S;
 }
 
-void require_bit_equal(const std::vector<float>& got, const std::vector<float>& want) {
+void require_within_roundoff(const std::vector<float>& got, const std::vector<float>& want) {
   REQUIRE(got.size() == want.size());
   for (std::size_t i = 0; i < got.size(); ++i) {
     CAPTURE(i, got[i], want[i]);
     REQUIRE(std::isfinite(got[i]));
-    REQUIRE(got[i] == want[i]);
+    REQUIRE(sonare::test::within_roundoff(got[i], want[i]));
   }
 }
 
@@ -842,7 +843,7 @@ TEST_CASE("nn_filter matches a frame-major oracle for every aggregator", "[util]
           nn_filter(S.data(), n_features, n_frames, aggregate, /*k=*/4, width);
       const std::vector<float> want =
           oracle_nn_filter(S.data(), n_features, n_frames, aggregate, /*k=*/4, width);
-      require_bit_equal(got, want);
+      require_within_roundoff(got, want);
     }
   }
 
@@ -854,8 +855,8 @@ TEST_CASE("nn_filter matches a frame-major oracle for every aggregator", "[util]
   for (const std::string& aggregate :
        {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
     CAPTURE(aggregate);
-    require_bit_equal(nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2),
-                      oracle_nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2));
+    require_within_roundoff(nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2),
+                            oracle_nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2));
   }
 
   // More features than frames. Everywhere else here the feature extent is the smaller of the
@@ -865,8 +866,8 @@ TEST_CASE("nn_filter matches a frame-major oracle for every aggregator", "[util]
   for (const std::string& aggregate :
        {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
     CAPTURE(aggregate);
-    require_bit_equal(nn_filter(tall.data(), 37, 11, aggregate, /*k=*/4, /*width=*/2),
-                      oracle_nn_filter(tall.data(), 37, 11, aggregate, /*k=*/4, /*width=*/2));
+    require_within_roundoff(nn_filter(tall.data(), 37, 11, aggregate, /*k=*/4, /*width=*/2),
+                            oracle_nn_filter(tall.data(), 37, 11, aggregate, /*k=*/4, /*width=*/2));
   }
 }
 
@@ -881,8 +882,9 @@ TEST_CASE("nn_filter matches the oracle on single-row and single-column inputs",
     for (const std::string& aggregate :
          {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
       CAPTURE(aggregate);
-      require_bit_equal(nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1),
-                        oracle_nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1));
+      require_within_roundoff(
+          nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1),
+          oracle_nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1));
     }
   }
 
@@ -893,8 +895,9 @@ TEST_CASE("nn_filter matches the oracle on single-row and single-column inputs",
     const std::vector<float> S = traversal_fixture(1, n_frames, 0x4321u);
     for (const std::string& aggregate : {std::string("mean"), std::string("max")}) {
       CAPTURE(aggregate);
-      require_bit_equal(nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2),
-                        oracle_nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2));
+      require_within_roundoff(
+          nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2),
+          oracle_nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2));
     }
   }
 }

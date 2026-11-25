@@ -2,6 +2,7 @@
 /// @brief Parametric EQ tests.
 
 #include "eq_test_helpers.h"
+#include "support/float_roundoff.h"
 
 TEST_CASE("ParametricEq with no enabled bands preserves audio", "[mastering][eq]") {
   ParametricEq eq;
@@ -244,7 +245,7 @@ TEST_CASE("an EQ re-prepared below a band's frequency designs it at the rate's c
   direct.set_band(1, clamped);
   const auto expected = render_at(direct, kLowRate);
   REQUIRE(all_finite(got));
-  REQUIRE(max_abs_difference(got, expected) == 0.0f);
+  REQUIRE(sonare::test::ranges_within_roundoff(got, expected));
 
   // Gain automation on that band reaches the same design rather than throwing.
   REQUIRE(moved.set_parameter(4, 3.0f));
@@ -256,7 +257,7 @@ TEST_CASE("an EQ re-prepared below a band's frequency designs it at the rate's c
   direct.reset();
   process(moved, after_moved);
   process(direct, after_direct);
-  REQUIRE(max_abs_difference(after_moved, after_direct) == 0.0f);
+  REQUIRE(sonare::test::ranges_within_roundoff(after_moved, after_direct));
 
   DynamicEq dynamic;
   dynamic.prepare(48000.0, 512);

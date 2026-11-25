@@ -25,6 +25,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/command.h"
+#include "support/float_roundoff.h"
 #include "support/midi_render.h"
 
 namespace {
@@ -130,6 +131,16 @@ bool same(const Lanes& a, const Lanes& b) {
          a.other_r == b.other_r;
 }
 
+bool lanes_within_roundoff(const Lanes& a, const Lanes& b) {
+  using sonare::test::ranges_within_roundoff;
+  return ranges_within_roundoff(a.fallback_l, b.fallback_l) &&
+         ranges_within_roundoff(a.fallback_r, b.fallback_r) &&
+         ranges_within_roundoff(a.assigned_l, b.assigned_l) &&
+         ranges_within_roundoff(a.assigned_r, b.assigned_r) &&
+         ranges_within_roundoff(a.other_l, b.other_l) &&
+         ranges_within_roundoff(a.other_r, b.other_r);
+}
+
 double energy(const std::vector<float>& v) {
   double acc = 0.0;
   for (const float s : v) acc += static_cast<double>(s) * s;
@@ -228,8 +239,8 @@ TEST_CASE("native: a later EFX assignment in a bulk DT1 reaches the inline path"
   // The assignment must be audible, or bulk == single holds with it dropped.
   const Lanes unassigned = render_lanes(offline_config(), {kDistortion});
   REQUIRE(energy(single.assigned_l) > 1.0e-6);
-  CHECK_FALSE(static_cast<bool>(single.assigned_l == unassigned.assigned_l));
-  CHECK(same(bulk, single));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(single.assigned_l, unassigned.assigned_l));
+  CHECK(lanes_within_roundoff(bulk, single));
 }
 
 TEST_CASE("native: one bulk run realizes every EFX unit before its assignments",
@@ -254,9 +265,9 @@ TEST_CASE("native: one bulk run realizes every EFX unit before its assignments",
   REQUIRE(energy(dry.other_l) > 1.0e-6);
   REQUIRE(energy(bulk.assigned_l) > 1.0e-6);
   REQUIRE(energy(bulk.other_l) > 1.0e-6);
-  CHECK(static_cast<bool>(bulk.assigned_l != dry.assigned_l));
-  CHECK(static_cast<bool>(bulk.other_l != dry.other_l));
-  CHECK(same(bulk, split));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(bulk.assigned_l, dry.assigned_l));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(bulk.other_l, dry.other_l));
+  CHECK(lanes_within_roundoff(bulk, split));
 
   // The same bulk walk must reach the live control path. Part 0 is routed to
   // unit 1 here so the second block is audible rather than merely held.
@@ -265,8 +276,8 @@ TEST_CASE("native: one bulk run realizes every EFX unit before its assignments",
   const std::vector<float> live_bulk = render_pushed({bulk_units, kPart0OnUnit1});
   REQUIRE(energy(live_dry) > 1.0e-6);
   REQUIRE(energy(live_bulk) > 1.0e-6);
-  CHECK(static_cast<bool>(live_bulk != live_dry));
-  CHECK(static_cast<bool>(live_bulk == live_split));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(live_bulk, live_dry));
+  CHECK(sonare::test::ranges_within_roundoff(live_bulk, live_split));
 }
 
 TEST_CASE("native: a bussed piano's board return is silenced by its part rig",

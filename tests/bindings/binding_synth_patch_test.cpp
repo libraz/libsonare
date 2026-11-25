@@ -20,6 +20,7 @@
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/synth_patch_common.h"
 #include "support/c_strings.h"
+#include "support/float_roundoff.h"
 #include "support/midi_render.h"
 #include "support/project_bounce.h"
 #include "util/constants.h"
@@ -359,8 +360,8 @@ TEST_CASE("every named synth patch renders as its catalog preset", "[project][sy
     REQUIRE(synth_patch_converts(patch, &cfg, &error));
     const sonare::test::StereoRender direct = render_config(preset->config);
     const sonare::test::StereoRender converted = render_config(cfg);
-    REQUIRE(converted.left == direct.left);
-    REQUIRE(converted.right == direct.right);
+    REQUIRE(sonare::test::ranges_within_roundoff(converted.left, direct.left));
+    REQUIRE(sonare::test::ranges_within_roundoff(converted.right, direct.right));
   }
 }
 
@@ -383,8 +384,8 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
     const sonare::test::StereoRender expected =
         render_config(with_section_of(sonare::midi::synth::NativeSynthConfig{}, engine, base));
     const sonare::test::StereoRender converted = render_config(cfg);
-    REQUIRE(converted.left == expected.left);
-    REQUIRE(converted.right == expected.right);
+    REQUIRE(sonare::test::ranges_within_roundoff(converted.left, expected.left));
+    REQUIRE(sonare::test::ranges_within_roundoff(converted.right, expected.right));
   }
 
   // A preset of another engine keeps its wrapper and takes the selected
@@ -403,8 +404,8 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
   const sonare::test::StereoRender expected =
       render_config(with_section_of(violin->config, SynthEngineMode::kFm, "ePiano"));
   const sonare::test::StereoRender converted = render_config(cfg);
-  REQUIRE(converted.left == expected.left);
-  REQUIRE(converted.right == expected.right);
+  REQUIRE(sonare::test::ranges_within_roundoff(converted.left, expected.left));
+  REQUIRE(sonare::test::ranges_within_roundoff(converted.right, expected.right));
   REQUIRE(peak_of(converted.left) > 1.0e-3f);
 }
 

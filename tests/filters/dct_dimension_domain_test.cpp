@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "filters/dct.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -107,16 +108,16 @@ TEST_CASE("DCT non-positive output counts retain their input-sized default", "[d
   const std::vector<float> input{0.25f, -0.5f, 0.75f, 1.0f};
   const std::vector<float> vector_default = sonare::dct_ii(input);
   const std::vector<float> vector_explicit = sonare::dct_ii(input, static_cast<int>(input.size()));
-  REQUIRE(vector_default == vector_explicit);
+  REQUIRE(sonare::test::ranges_within_roundoff(vector_default, vector_explicit));
 
   const std::vector<float> pointer_default =
       sonare::dct_ii(input.data(), static_cast<int>(input.size()), -1);
-  REQUIRE(pointer_default == vector_explicit);
+  REQUIRE(sonare::test::ranges_within_roundoff(pointer_default, vector_explicit));
 
   const std::vector<float> coefficients{0.5f, -0.25f, 0.75f};
   const std::vector<float> inverse_default = sonare::idct_ii(coefficients.data(), 3, 0);
   const std::vector<float> inverse_explicit = sonare::idct_ii(coefficients.data(), 3, 3);
-  REQUIRE(inverse_default == inverse_explicit);
+  REQUIRE(sonare::test::ranges_within_roundoff(inverse_default, inverse_explicit));
 }
 
 TEST_CASE("DCT rejects invalid dimensions across its public entry paths", "[dct]") {

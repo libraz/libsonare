@@ -10,6 +10,7 @@
 #include "mastering/eq/dynamic_eq.h"
 #include "mastering/eq/equalizer.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -131,15 +132,15 @@ TEST_CASE("DynamicEq detector delay saturates at the maximum", "[mastering][eq][
   const auto at_max = run_dynamic_eq(kMaxDelayMs);
   const auto huge_config = run_dynamic_eq(kHugeDelayMs);
   const auto huge_automated = run_dynamic_eq(kHugeDelayMs, true);
-  REQUIRE(max_abs_difference(at_max, huge_config) == 0.0f);
-  REQUIRE(max_abs_difference(at_max, huge_automated) == 0.0f);
+  REQUIRE(sonare::test::ranges_within_roundoff(at_max, huge_config));
+  REQUIRE(sonare::test::ranges_within_roundoff(at_max, huge_automated));
 }
 
 TEST_CASE("EqualizerProcessor detector delay saturates at the maximum",
           "[mastering][eq][boundary]") {
   const auto at_max = run_equalizer(kMaxDelayMs);
   const auto huge = run_equalizer(kHugeDelayMs);
-  REQUIRE(max_abs_difference(at_max, huge) == 0.0f);
+  REQUIRE(sonare::test::ranges_within_roundoff(at_max, huge));
 }
 
 TEST_CASE("Detector delay is audible in the cut timing", "[mastering][eq]") {

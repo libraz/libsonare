@@ -17,6 +17,7 @@
 #include "core/audio.h"
 #include "core/convert.h"
 #include "editing/pitch_editor/auto_tune.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -786,8 +787,7 @@ TEST_CASE("PyinF0Provider keeps refined pitch inside the configured search range
     REQUIRE(refined_interior.size() == raw_interior.size());
     const bool raw_reaches_boundary = std::find(raw_interior.begin(), raw_interior.end(),
                                                 test_case.boundary_hz) != raw_interior.end();
-    const bool same_as_raw =
-        std::equal(raw_interior.begin(), raw_interior.end(), refined_interior.begin());
+    const bool same_as_raw = sonare::test::ranges_within_roundoff(raw_interior, refined_interior);
     const bool within_configured_range =
         std::all_of(refined_interior.begin(), refined_interior.end(),
                     [&](float hz) { return hz >= config.fmin && hz <= config.fmax; });

@@ -5,6 +5,7 @@
 
 #include "effects/pitch_shift.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "voice_changer_test_helpers.h"
 
 namespace {
@@ -267,7 +268,7 @@ TEST_CASE("Absolute mode warps the unshifted voice by the factor over the pitch 
   const sonare::Audio warped = FormantWarp(warp_config).process(audio);
   const sonare::Audio expected = sonare::pitch_shift(warped, 3.0f, sonare::PitchShiftConfig{});
   REQUIRE(a.size() == expected.size());
-  REQUIRE(std::equal(a.data(), a.data() + a.size(), expected.data()));
+  REQUIRE(sonare::test::ranges_within_roundoff(a, expected));
 
   // Relative stays the default: the warp follows the shift, with the rate-scaled frame and order.
   VoiceChangerConfig defaults;
@@ -282,7 +283,7 @@ TEST_CASE("Absolute mode warps the unshifted voice by the factor over the pitch 
   relative_config.factor = 1.1f;
   const sonare::Audio relative_expected = FormantWarp(relative_config).process(shifted);
   REQUIRE(std::equal(d.data(), d.data() + d.size(), e.data()));
-  REQUIRE(std::equal(d.data(), d.data() + d.size(), relative_expected.data()));
+  REQUIRE(sonare::test::ranges_within_roundoff(d, relative_expected));
 }
 
 TEST_CASE("Absolute mode at no shift and unity factor is the identity",

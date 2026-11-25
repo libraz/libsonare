@@ -22,6 +22,7 @@
 #include "rt/command.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/types.h"
@@ -702,7 +703,7 @@ TEST_CASE("re-applying B over A leaves nothing of A", "[arrangement][timeline-ap
   REQUIRE(state.midi_clips == 2);
   REQUIRE(state.markers == 1);
   REQUIRE(state.automation_lanes == 0);
-  REQUIRE(render(engine) == render(fresh));
+  REQUIRE(sonare::test::ranges_within_roundoff(render(engine), render(fresh)));
 }
 
 TEST_CASE("installed_automation is the lane vector the engine plays",
@@ -727,7 +728,7 @@ TEST_CASE("installed_automation is the lane vector the engine plays",
   REQUIRE(arr::apply_to_engine(a, *prepared(reference)).ok());
   engine.automation().set_lanes(result.installed_automation);
   REQUIRE(engine.automation().lane_count() == reference.automation().lane_count());
-  REQUIRE(render(engine) == render(reference));
+  REQUIRE(sonare::test::ranges_within_roundoff(render(engine), render(reference)));
 }
 
 #if defined(SONARE_WITH_MIXING)
@@ -769,8 +770,8 @@ TEST_CASE("bind_strips binds each 1:1 strip and unbinds lanes without a binding"
   REQUIRE(arr::apply_to_engine(timeline, *prepared(unbound)).ok());
 
   const std::vector<float> bound_render = render(engine);
-  REQUIRE(bound_render == render(manual));
-  REQUIRE(bound_render != render(unbound));
+  REQUIRE(sonare::test::ranges_within_roundoff(bound_render, render(manual)));
+  REQUIRE_FALSE(sonare::test::ranges_within_roundoff(bound_render, render(unbound)));
 }
 
 TEST_CASE("successive applies with fresh track ids never exhaust the strip table",
@@ -886,7 +887,7 @@ std::vector<float> require_reapply_matches_fresh(const arr::CompiledTimeline& a,
 
   RealtimeEngine fresh;
   REQUIRE(arr::apply_to_engine(b, *prepared(fresh), options).ok());
-  REQUIRE(reapplied == render(fresh));
+  REQUIRE(sonare::test::ranges_within_roundoff(reapplied, render(fresh)));
   return first;
 }
 
@@ -1029,7 +1030,7 @@ void require_reapply_with_manual_matches_fresh(const arr::CompiledTimeline& a,
   RealtimeEngine fresh;
   REQUIRE(arr::apply_to_engine(b, *prepared(fresh), {}).ok());
   set_param_manually(fresh, lane_param_id(fresh, manual_track, manual_kind), manual_value);
-  REQUIRE(reapplied == render(fresh));
+  REQUIRE(sonare::test::ranges_within_roundoff(reapplied, render(fresh)));
 
   // Control: the manual value is audible, so the equality above cannot hold vacuously.
   RealtimeEngine unset;

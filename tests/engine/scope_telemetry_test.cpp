@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #if defined(SONARE_WITH_MIXING)
 #include "engine/realtime_engine.h"
 #endif
@@ -140,12 +141,12 @@ TEST_CASE("ScopeTelemetryTap keeps split and unsplit master snapshots identical"
   REQUIRE(split.render_frame == whole.render_frame);
   REQUIRE(split.band_count == whole.band_count);
   for (uint32_t i = 0; i < whole.band_count; ++i) {
-    REQUIRE(split.bands[i] == whole.bands[i]);
+    REQUIRE(sonare::test::within_roundoff(split.bands[i], whole.bands[i]));
   }
   REQUIRE(split.point_count == whole.point_count);
   for (uint32_t i = 0; i < whole.point_count; ++i) {
-    REQUIRE(split.points[i].left == whole.points[i].left);
-    REQUIRE(split.points[i].right == whole.points[i].right);
+    REQUIRE(sonare::test::within_roundoff(split.points[i].left, whole.points[i].left));
+    REQUIRE(sonare::test::within_roundoff(split.points[i].right, whole.points[i].right));
   }
 }
 

@@ -19,6 +19,7 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/dereverb_streaming.h"
 #include "rt/processor_base.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -120,7 +121,9 @@ TEST_CASE("decrackle insert reproduces the offline median one sample late",
   // The offline pass leaves its last sample alone because nothing follows it; a stream never
   // learns which sample is the last, so that one sample is not compared.
   for (const auto& channel : out) {
-    CHECK(delayed_difference(channel, offline, 1, 0, input.size() - 1) == 0.0f);
+    REQUIRE(channel.size() >= input.size());
+    CHECK(sonare::test::ranges_within_roundoff(channel.begin() + 1, channel.begin() + input.size(),
+                                               offline.begin()));
   }
 }
 

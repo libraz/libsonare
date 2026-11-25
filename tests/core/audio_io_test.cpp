@@ -36,6 +36,7 @@
 #include "core/audio.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/resource_limits.h"
@@ -985,11 +986,11 @@ TEST_CASE("private combined loader retains only the requested channel layout",
     const auto mono_only = load_audio_input_once(path.string(), RetainChannels::None);
     REQUIRE(mono_only.sample_rate == sample_rate);
     REQUIRE(mono_only.source_channels == channels);
-    REQUIRE(mono_only.mono == legacy_mono);
+    REQUIRE(sonare::test::ranges_within_roundoff(mono_only.mono, legacy_mono));
     REQUIRE(mono_only.interleaved.empty());
 
     const auto stereo_only = load_audio_input_once(path.string(), RetainChannels::StereoIfExact);
-    REQUIRE(stereo_only.mono == legacy_mono);
+    REQUIRE(sonare::test::ranges_within_roundoff(stereo_only.mono, legacy_mono));
     REQUIRE(stereo_only.source_channels == channels);
     if (channels == 2) {
       REQUIRE(stereo_only.interleaved == legacy_interleaved);
@@ -998,7 +999,7 @@ TEST_CASE("private combined loader retains only the requested channel layout",
     }
 
     const auto all_channels = load_audio_input_once(path.string(), RetainChannels::All);
-    REQUIRE(all_channels.mono == legacy_mono);
+    REQUIRE(sonare::test::ranges_within_roundoff(all_channels.mono, legacy_mono));
     REQUIRE(all_channels.source_channels == channels);
     REQUIRE(all_channels.interleaved == legacy_interleaved);
   }

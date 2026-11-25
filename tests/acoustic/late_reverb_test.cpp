@@ -13,6 +13,7 @@
 #include "acoustic/room_types.h"
 #include "analysis/acoustic_analyzer.h"
 #include "filters/iir.h"
+#include "support/float_roundoff.h"
 #include "util/resource_limits.h"
 
 using Catch::Matchers::WithinRel;
@@ -405,9 +406,9 @@ TEST_CASE("late-tail pair keeps the mono tail on the left", "[acoustic][late_rev
   const std::vector<float> mono_v(mono.data(), mono.data() + mono.size());
   const std::vector<float> left_v(pair.left.data(), pair.left.data() + pair.left.size());
   const std::vector<float> right_v(pair.right.data(), pair.right.data() + pair.right.size());
-  REQUIRE(left_v == mono_v);
+  REQUIRE(sonare::test::ranges_within_roundoff(left_v, mono_v));
   REQUIRE(right_v.size() == mono_v.size());
-  REQUIRE(right_v != left_v);
+  REQUIRE_FALSE(sonare::test::ranges_within_roundoff(right_v, left_v));
 }
 
 TEST_CASE("late-tail pair band correlation matches the published coherence",

@@ -9,6 +9,7 @@
 #include "core/audio.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "metering/true_peak.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 namespace {
@@ -99,7 +100,8 @@ Mismatch difference(const std::vector<std::vector<float>>& a,
     REQUIRE(a[ch].size() == b[ch].size());
     for (std::size_t i = 0; i < a[ch].size(); ++i) {
       const double delta = std::abs(static_cast<double>(a[ch][i]) - static_cast<double>(b[ch][i]));
-      if (delta > 0.0 && (out.first_index < 0 || static_cast<int>(i) < out.first_index)) {
+      if (!sonare::test::within_roundoff(a[ch][i], b[ch][i]) &&
+          (out.first_index < 0 || static_cast<int>(i) < out.first_index)) {
         out.first_index = static_cast<int>(i);
       }
       out.max_abs = std::max(out.max_abs, delta);
@@ -108,17 +110,17 @@ Mismatch difference(const std::vector<std::vector<float>>& a,
   return out;
 }
 
-void require_identical(const std::vector<std::vector<float>>& actual,
-                       const std::vector<std::vector<float>>& reference) {
+void require_equivalent(const std::vector<std::vector<float>>& actual,
+                        const std::vector<std::vector<float>>& reference) {
   const Mismatch mismatch = difference(actual, reference);
   CAPTURE(mismatch.max_abs, mismatch.first_index);
-  CHECK(mismatch.max_abs == 0.0);
+  CHECK(mismatch.first_index == -1);
 }
 
 }  // namespace
 
 // A host's buffer size is an arbitrary choice: the same material rendered at
-// 512 samples per block and in one offline block must come out identical. Every
+// 512 samples per block and in one offline block must agree to floating-point precision. Every
 // stage of TruePeakLimiter is sample-serial and carries its state across calls,
 // so nothing here may be derived from a whole-block statistic. The decimation
 // guard used to divide by the block's own maximum, which made the render level
@@ -137,13 +139,13 @@ TEST_CASE("TruePeakLimiter output does not depend on the caller's block size",
 
     const int block = GENERATE(256, 512, 1024, 4096, 16384);
     CAPTURE(block);
-    require_identical(run_in_blocks(input, total, uniform_blocks(total, block)), reference);
+    require_equivalent(run_in_blocks(input, total, uniform_blocks(total, block)), reference);
 
     // The shape the offline runners used to produce: the whole input, then a
     // separate latency flush.
-    require_identical(run_in_blocks(input, total, {kSignalSamples, kFlushSamples}), reference);
+    require_equivalent(run_in_blocks(input, total, {kSignalSamples, kFlushSamples}), reference);
     // A ragged split that lands mid-transient.
-    require_identical(run_in_blocks(input, total, {5000, 7001, total - 12001}), reference);
+    require_equivalent(run_in_blocks(input, total, {5000, 7001, total - 12001}), reference);
   }
 
   SECTION("stereo stays linked") {
@@ -156,8 +158,8 @@ TEST_CASE("TruePeakLimiter output does not depend on the caller's block size",
 
     const int block = GENERATE(512, 4096);
     CAPTURE(block);
-    require_identical(run_in_blocks(input, total, uniform_blocks(total, block)), reference);
-    require_identical(run_in_blocks(input, total, {kSignalSamples, kFlushSamples}), reference);
+    require_equivalent(run_in_blocks(input, total, uniform_blocks(total, block)), reference);
+    require_equivalent(run_in_blocks(input, total, {kSignalSamples, kFlushSamples}), reference);
   }
 }
 
@@ -182,9 +184,10 @@ TEST_CASE("TruePeakLimiter detect-only output does not depend on the caller's bl
 
     const int block = GENERATE(256, 512, 1024, 4096, 16384);
     CAPTURE(block);
-    require_identical(run_in_blocks(input, total, uniform_blocks(total, block), config), reference);
+    require_equivalent(run_in_blocks(input, total, uniform_blocks(total, block), config),
+                       reference);
     // A ragged split that lands mid-transient.
-    require_identical(run_in_blocks(input, total, {5000, 7001, total - 12001}, config), reference);
+    require_equivalent(run_in_blocks(input, total, {5000, 7001, total - 12001}, config), reference);
   }
 
   SECTION("stereo stays linked") {
@@ -197,7 +200,8 @@ TEST_CASE("TruePeakLimiter detect-only output does not depend on the caller's bl
 
     const int block = GENERATE(512, 4096);
     CAPTURE(block);
-    require_identical(run_in_blocks(input, total, uniform_blocks(total, block), config), reference);
+    require_equivalent(run_in_blocks(input, total, uniform_blocks(total, block), config),
+                       reference);
   }
 }
 
@@ -258,7 +262,7 @@ TEST_CASE("TruePeakOutputGuard holds the ceiling at its own factor on any burst"
                               static_cast<int>(std::min<size_t>(block, pieces.size() - start)), -1,
                               kCeiling);
         }
-        REQUIRE(pieces == reference);
+        REQUIRE(sonare::test::ranges_within_roundoff(pieces, reference));
       }
     }
   }

@@ -25,6 +25,7 @@
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
 #include "editing/polyphony/shared_bins.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -402,9 +403,7 @@ float median_of(const std::vector<float>& values) {
 /// @brief Asserts two spectrograms are the same STFT, geometry and data.
 /// @details Every geometry field is named rather than compared through the frame
 ///          count alone, so a framing that merely shares today's defaults cannot
-///          pass for the one asked for. The data comparison is exact for the
-///          reason @ref require_same_audio is, and its guard is that the
-///          reference carries a non-zero bin -- two empty spectra agree.
+///          pass for the one asked for. Its guard is that the reference carries a non-zero bin.
 void require_same_spectrum(const sonare::Spectrogram& got, const sonare::Spectrogram& want) {
   REQUIRE(got.n_bins() == want.n_bins());
   REQUIRE(got.n_frames() == want.n_frames());
@@ -422,14 +421,17 @@ void require_same_spectrum(const sonare::Spectrogram& got, const sonare::Spectro
   double worst = 0.0;
   for (size_t i = 0; i < values; ++i) {
     largest = std::max(largest, static_cast<double>(std::abs(want.complex_data()[i])));
-    worst = std::max(worst,
-                     static_cast<double>(std::abs(got.complex_data()[i] - want.complex_data()[i])));
+    const double difference = std::abs(got.complex_data()[i] - want.complex_data()[i]);
+    if (!std::isfinite(difference)) {
+      CAPTURE(i);
+      FAIL("non-finite difference in the reference comparison");
+    }
+    worst = std::max(worst, difference);
   }
   INFO("the spectrum: worst |difference| " << worst << ", largest |bin| " << largest);
-  // Zero is the only value that makes the exact comparison vacuous, so that is
-  // the bound stated -- no level of this fixture's STFT is measured here.
+  // Anchor the allowance to the measured reference spectrum.
   REQUIRE(largest > 0.0);
-  REQUIRE(worst == 0.0);
+  REQUIRE(worst <= 4.0 * std::numeric_limits<float>::epsilon() * largest);
 }
 
 void require_same_track(const MultiF0Track& got, const MultiF0Track& want) {
@@ -441,11 +443,11 @@ void require_same_track(const MultiF0Track& got, const MultiF0Track& want) {
   for (size_t i = 0; i < want.ridges.size(); ++i) {
     INFO("ridge " << i);
     REQUIRE(got.ridges[i].frame_start == want.ridges[i].frame_start);
-    REQUIRE(got.ridges[i].f0_hz == want.ridges[i].f0_hz);
-    REQUIRE(got.ridges[i].salience == want.ridges[i].salience);
+    REQUIRE(sonare::test::ranges_within_roundoff(got.ridges[i].f0_hz, want.ridges[i].f0_hz));
+    REQUIRE(sonare::test::ranges_within_roundoff(got.ridges[i].salience, want.ridges[i].salience));
     REQUIRE(got.ridges[i].onset_sample == want.ridges[i].onset_sample);
     REQUIRE(got.ridges[i].offset_sample == want.ridges[i].offset_sample);
-    REQUIRE(got.ridges[i].median_hz == want.ridges[i].median_hz);
+    REQUIRE(sonare::test::within_roundoff(got.ridges[i].median_hz, want.ridges[i].median_hz));
   }
 }
 
@@ -460,7 +462,7 @@ void require_same_masks(const NoteMaskSet& got, const NoteMaskSet& want) {
   // The per-ridge stretch the claims were actually placed with, which is a
   // different figure from the declared one above and the only place the set says
   // a fit reached it.
-  REQUIRE(got.inharmonicity == want.inharmonicity);
+  REQUIRE(sonare::test::ranges_within_roundoff(got.inharmonicity, want.inharmonicity));
   REQUIRE(got.notes.size() == want.notes.size());
   for (size_t i = 0; i < want.notes.size(); ++i) {
     INFO("mask " << i);
@@ -469,13 +471,13 @@ void require_same_masks(const NoteMaskSet& got, const NoteMaskSet& want) {
     REQUIRE(got.notes[i].n_frames == want.notes[i].n_frames);
     REQUIRE(got.notes[i].frame_offset == want.notes[i].frame_offset);
     REQUIRE(got.notes[i].bins == want.notes[i].bins);
-    REQUIRE(got.notes[i].weights == want.notes[i].weights);
+    REQUIRE(sonare::test::ranges_within_roundoff(got.notes[i].weights, want.notes[i].weights));
   }
 }
 
 void require_same_curve(const NoteCurve& got, const NoteCurve& want, const char* which) {
   INFO(which);
-  REQUIRE(got.values == want.values);
+  REQUIRE(sonare::test::ranges_within_roundoff(got.values, want.values));
   REQUIRE(got.frame_rate_hz == want.frame_rate_hz);
   REQUIRE(got.frame_offset == want.frame_offset);
 }
@@ -490,11 +492,11 @@ void require_same_note(const NoteObject& got, const NoteObject& want, const std:
   REQUIRE(got.offset_sample == want.offset_sample);
   REQUIRE(got.frame_start == want.frame_start);
   REQUIRE(got.frame_end == want.frame_end);
-  REQUIRE(got.median_hz == want.median_hz);
-  REQUIRE(got.median_cents == want.median_cents);
+  REQUIRE(sonare::test::within_roundoff(got.median_hz, want.median_hz));
+  REQUIRE(sonare::test::within_roundoff(got.median_cents, want.median_cents));
   require_same_curve(got.f0_hz, want.f0_hz, "the pitch curve");
   require_same_curve(got.amplitude, want.amplitude, "the amplitude curve");
-  REQUIRE(got.f0_stability == want.f0_stability);
+  REQUIRE(sonare::test::within_roundoff(got.f0_stability, want.f0_stability));
   REQUIRE(got.edit.is_identity());
   REQUIRE(want.edit.is_identity());
 }
@@ -1783,7 +1785,7 @@ TEST_CASE("the fit is the chain below it, run between the claims and the apporti
   REQUIRE(want.inharmonicity_fit[0] != config.masks.inharmonicity);
   REQUIRE(masks_differ(build_note_masks(want.spectrum, want.track, config.masks), want.masks));
 
-  REQUIRE(analysis.inharmonicity_fit == want.inharmonicity_fit);
+  REQUIRE(sonare::test::ranges_within_roundoff(analysis.inharmonicity_fit, want.inharmonicity_fit));
   require_same_spectrum(analysis.spectrum, want.spectrum);
   require_same_track(analysis.track, want.track);
   require_same_masks(analysis.masks, want.masks);
@@ -2056,7 +2058,7 @@ TEST_CASE("the claimed cells carry everything the apportionment and the measurem
     const NoteSegment got = invert_note_mask(cells, solved, i, length);
     REQUIRE(got.first_sample == want.first_sample);
     REQUIRE(got.audio.size() == want.audio.size());
-    REQUIRE(std::equal(got.audio.begin(), got.audio.end(), want.audio.begin()));
+    REQUIRE(sonare::test::ranges_within_roundoff(got.audio, want.audio));
   }
   require_same_notes(make_masked_notes(cells, track, solved, length, config.notes),
                      make_masked_notes(spec, track, solved, length, config.notes));

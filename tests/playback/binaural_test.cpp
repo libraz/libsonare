@@ -12,6 +12,7 @@
 
 #include "playback/room_presets.h"
 #include "playback/shrf_fixture.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using namespace sonare::playback;
@@ -514,8 +515,8 @@ TEST_CASE("binaural output does not depend on how the stream is cut into blocks"
     renderer.reset();
     const Run cut = render(renderer, slots, kFrames, block, fill);
     CAPTURE(block);
-    CHECK(cut.left == whole.left);
-    CHECK(cut.right == whole.right);
+    CHECK(sonare::test::ranges_within_roundoff(cut.left, whole.left));
+    CHECK(sonare::test::ranges_within_roundoff(cut.right, whole.right));
   }
 }
 

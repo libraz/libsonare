@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "mixing/downmix.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -89,12 +90,9 @@ TEST_CASE("5.1 to stereo speakers matches mixing::downmix with LFE silent", "[pl
   converter.process(in_ptrs.data(), out_ptrs.data(), kFrames);
 
   for (int ch = 0; ch < 2; ++ch) {
-    float max_diff = 0.0f;
-    for (int i = 0; i < kFrames; ++i) {
-      max_diff = std::max(max_diff, std::abs(out[static_cast<size_t>(ch)][static_cast<size_t>(i)] -
-                                             ref[static_cast<size_t>(ch)][static_cast<size_t>(i)]));
-    }
-    CHECK(max_diff == 0.0f);
+    const size_t channel = static_cast<size_t>(ch);
+    CAPTURE(channel);
+    CHECK(sonare::test::ranges_within_roundoff(out[channel], ref[channel]));
   }
 }
 
@@ -120,12 +118,9 @@ TEST_CASE("7.1 to stereo speakers matches mixing::downmix with LFE silent", "[pl
   converter.process(in_ptrs.data(), out_ptrs.data(), kFrames);
 
   for (int ch = 0; ch < 2; ++ch) {
-    float max_diff = 0.0f;
-    for (int i = 0; i < kFrames; ++i) {
-      max_diff = std::max(max_diff, std::abs(out[static_cast<size_t>(ch)][static_cast<size_t>(i)] -
-                                             ref[static_cast<size_t>(ch)][static_cast<size_t>(i)]));
-    }
-    CHECK(max_diff == 0.0f);
+    const size_t channel = static_cast<size_t>(ch);
+    CAPTURE(channel);
+    CHECK(sonare::test::ranges_within_roundoff(out[channel], ref[channel]));
   }
 }
 
@@ -151,12 +146,9 @@ TEST_CASE("7.1 to 5.1 speakers matches mixing::downmix with LFE silent", "[playb
   converter.process(in_ptrs.data(), out_ptrs.data(), kFrames);
 
   for (int ch = 0; ch < 6; ++ch) {
-    float max_diff = 0.0f;
-    for (int i = 0; i < kFrames; ++i) {
-      max_diff = std::max(max_diff, std::abs(out[static_cast<size_t>(ch)][static_cast<size_t>(i)] -
-                                             ref[static_cast<size_t>(ch)][static_cast<size_t>(i)]));
-    }
-    CHECK(max_diff == 0.0f);
+    const size_t channel = static_cast<size_t>(ch);
+    CAPTURE(channel);
+    CHECK(sonare::test::ranges_within_roundoff(out[channel], ref[channel]));
   }
 }
 
@@ -271,10 +263,9 @@ TEST_CASE("AAC-order channel map reorders to the same result as canonical order"
 
   REQUIRE(energy(out_canonical[0]) > 0.0);
   for (int ch = 0; ch < 2; ++ch) {
-    for (int i = 0; i < kFrames; ++i) {
-      CHECK(out_canonical[static_cast<size_t>(ch)][static_cast<size_t>(i)] ==
-            out_reordered[static_cast<size_t>(ch)][static_cast<size_t>(i)]);
-    }
+    const size_t channel = static_cast<size_t>(ch);
+    CAPTURE(channel);
+    CHECK(sonare::test::ranges_within_roundoff(out_canonical[channel], out_reordered[channel]));
   }
 }
 

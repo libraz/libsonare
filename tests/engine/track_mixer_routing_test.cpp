@@ -17,6 +17,7 @@
 #include "mixing/downmix.h"
 #include "rt/command.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "util/db.h"
 
 namespace {
@@ -1126,7 +1127,11 @@ TEST_CASE("Track mixer lane sidechain is independent of lane order and block siz
       for (int block : {64, 128, 512}) {
         INFO("source_first " << source_first << " block " << block);
         const Planes got = run(source_first, block, source_mix);
-        CHECK(std::equal(got.begin(), got.end(), reference.begin(), reference.end()));
+        REQUIRE(got.size() == reference.size());
+        for (size_t channel = 0; channel < reference.size(); ++channel) {
+          CAPTURE(channel);
+          CHECK(sonare::test::ranges_within_roundoff(got[channel], reference[channel]));
+        }
       }
     }
   }

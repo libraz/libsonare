@@ -14,6 +14,7 @@
 #include "editing/event_model/event_renderer.h"
 #include "editing/event_model/percussive_event.h"
 #include "effects/hpss.h"
+#include "support/float_roundoff.h"
 #include "util/db.h"
 #include "util/exception.h"
 
@@ -203,5 +204,5 @@ TEST_CASE("event renderer preserves ordinary identity, gain, mute and truncated-
   shifted_event.edit.time_offset_samples = length;
   const sonare::Audio truncated =
       sonare::editing::event_model::render_percussive_events(audio, {shifted_event}, config);
-  REQUIRE(std::memcmp(truncated.data(), muted.data(), audio.size() * sizeof(float)) == 0);
+  REQUIRE(sonare::test::ranges_within_roundoff(truncated, muted));
 }

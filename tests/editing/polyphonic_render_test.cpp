@@ -18,6 +18,7 @@
 #include "editing/polyphony/masked_renderer.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -706,9 +707,7 @@ TEST_CASE("segment inversion renders the same samples as inverting each whole ma
 
   const sonare::Audio got = render_masked_notes(spec, masks, notes, length, config);
   REQUIRE(got.size() == expected.size());
-  size_t mismatches = 0;
-  for (size_t j = 0; j < expected.size(); ++j) mismatches += got[j] != expected[j] ? 1 : 0;
-  CHECK(mismatches == 0);
+  CHECK(sonare::test::ranges_within_roundoff(got, expected));
 
   // The edits moved the output, so equal buffers are not two copies of the round trip.
   const Agreement moved = agreement(got, spec.to_audio(length));

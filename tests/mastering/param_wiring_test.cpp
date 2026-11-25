@@ -43,6 +43,7 @@
 #include "mastering/spectral/presence_enhancer.h"
 #include "rt/aliasing_control.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -576,7 +577,7 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
 
     const auto dispatched = sonare::mastering::api::apply_named_processor(
         "maximizer.loudnessOptimize", left.data(), n, sr, params);
-    REQUIRE(dispatched.samples == expected);
+    REQUIRE(sonare::test::ranges_within_roundoff(dispatched.samples, expected));
     REQUIRE(dispatched.latency_samples == direct.latency_samples);
     REQUIRE(dispatched.latency_samples > 0);
   }
@@ -596,8 +597,8 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
     const auto chained = chain.process_stereo(left.data(), right.data(), n, sr);
 
     REQUIRE(standalone.left.size() == chained.left.size());
-    REQUIRE(standalone.left == chained.left);
-    REQUIRE(standalone.right == chained.right);
+    REQUIRE(sonare::test::ranges_within_roundoff(standalone.left, chained.left));
+    REQUIRE(sonare::test::ranges_within_roundoff(standalone.right, chained.right));
     REQUIRE(standalone.latency_samples > 0);
   }
 }

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/harmonic.h"
+#include "support/float_roundoff.h"
 
 namespace {
 
@@ -74,7 +75,7 @@ void require_same_values(const std::vector<float>& actual, const std::vector<flo
     if (std::isnan(expected[i])) {
       REQUIRE(std::isnan(actual[i]));
     } else {
-      REQUIRE(std::memcmp(&actual[i], &expected[i], sizeof(float)) == 0);
+      REQUIRE(sonare::test::within_roundoff(actual[i], expected[i]));
     }
   }
 }

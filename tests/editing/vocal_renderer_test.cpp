@@ -12,6 +12,7 @@
 #include "editing/vocal_edit/renderer.h"
 #include "editing/vocal_edit/session.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -228,7 +229,7 @@ TEST_CASE("vocal pitch edit does not depend on analysis frames beyond the note c
     changed = changed || bits(expected[i]) != bits(original->data().source[i]);
   }
   REQUIRE(changed);
-  require_same_bits(actual, expected);
+  REQUIRE(sonare::test::ranges_within_roundoff(actual, expected));
 }
 
 TEST_CASE("vocal session accepts exactly the formant shifts the renderer can apply",

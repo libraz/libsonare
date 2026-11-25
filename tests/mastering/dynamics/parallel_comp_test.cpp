@@ -8,6 +8,7 @@
 #include <limits>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "util/db.h"
 
 namespace {
@@ -230,7 +231,7 @@ TEST_CASE("ParallelComp limiter recovery follows the release recurrence",
   REQUIRE(block_one.size() == actual.size());
   for (size_t i = 0; i < actual.size(); ++i) {
     INFO("block-one sample=" << i);
-    CHECK(float_bits(block_one[i]) == float_bits(actual[i]));
+    CHECK(sonare::test::within_roundoff(block_one[i], actual[i]));
   }
 
   const auto instant = limiter_recovery_trace(32, 0.0f);

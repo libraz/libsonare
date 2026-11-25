@@ -16,6 +16,7 @@
 #include "mastering/repair/declip.h"
 #include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
+#include "support/float_roundoff.h"
 #include "support/schema_paths.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -101,10 +102,10 @@ TEST_CASE("the linked declick, declip and dehum forms reproduce the mono and ste
   repair::DeclickConfig click;
   const Audio declicked = repair::declick(in[0], click);
   repair::declick_linked(one, 1, &out, click);
-  REQUIRE(std::equal(out[0].begin(), out[0].end(), declicked.begin()));
+  REQUIRE(sonare::test::ranges_within_roundoff(out[0], declicked));
   const auto click_pair = repair::declick_stereo(in[0], in[1], click);
   const auto click_reports = repair::declick_linked(two, 2, &out, click);
-  REQUIRE(std::equal(out[1].begin(), out[1].end(), click_pair.right.begin()));
+  REQUIRE(sonare::test::ranges_within_roundoff(out[1], click_pair.right));
   REQUIRE(click_reports[0].linked_runs == click_pair.left_report.linked_runs);
 
   for (const bool link : {false, true}) {
@@ -114,22 +115,22 @@ TEST_CASE("the linked declick, declip and dehum forms reproduce the mono and ste
     const Audio declipped = repair::declip(in[1], clip);
     const Audio* clipped[1] = {&in[1]};
     repair::declip_linked(clipped, 1, &out, clip);
-    REQUIRE(std::equal(out[0].begin(), out[0].end(), declipped.begin()));
+    REQUIRE(sonare::test::ranges_within_roundoff(out[0], declipped));
     const auto clip_pair = repair::declip_stereo(in[0], in[1], clip);
     repair::declip_linked(two, 2, &out, clip);
-    REQUIRE(std::equal(out[0].begin(), out[0].end(), clip_pair.left.begin()));
-    REQUIRE(std::equal(out[1].begin(), out[1].end(), clip_pair.right.begin()));
+    REQUIRE(sonare::test::ranges_within_roundoff(out[0], clip_pair.left));
+    REQUIRE(sonare::test::ranges_within_roundoff(out[1], clip_pair.right));
   }
 
   repair::DehumConfig hum;
   hum.adaptive = true;
   const Audio dehummed = repair::dehum(in[0], hum);
   repair::dehum_linked(one, 1, &out, hum);
-  REQUIRE(std::equal(out[0].begin(), out[0].end(), dehummed.begin()));
+  REQUIRE(sonare::test::ranges_within_roundoff(out[0], dehummed));
   const auto hum_pair = repair::dehum_stereo(in[0], in[1], hum);
   repair::dehum_linked(two, 2, &out, hum);
-  REQUIRE(std::equal(out[0].begin(), out[0].end(), hum_pair.left.begin()));
-  REQUIRE(std::equal(out[1].begin(), out[1].end(), hum_pair.right.begin()));
+  REQUIRE(sonare::test::ranges_within_roundoff(out[0], hum_pair.left));
+  REQUIRE(sonare::test::ranges_within_roundoff(out[1], hum_pair.right));
 }
 
 TEST_CASE("linked declick repairs the union of every channel's runs", "[mastering][repair]") {

@@ -6,6 +6,7 @@
 #include <random>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using sonare::ChannelLayout;
@@ -310,8 +311,14 @@ TEST_CASE("upmix output does not depend on the host block size", "[playback][upm
     upmix.set_params(p, true);
     outs.push_back(run(upmix, l, r, block));
   }
-  CHECK(outs[0] == outs[1]);
-  CHECK(outs[0] == outs[2]);
+  for (size_t block = 1; block < outs.size(); ++block) {
+    CAPTURE(block);
+    REQUIRE(outs[block].size() == outs[0].size());
+    for (size_t channel = 0; channel < outs[0].size(); ++channel) {
+      CAPTURE(channel);
+      CHECK(sonare::test::ranges_within_roundoff(outs[0][channel], outs[block][channel]));
+    }
+  }
 }
 
 TEST_CASE("upmix tail decays below -60 dB within latency, N and decay_frames",

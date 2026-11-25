@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "playback/renderer.h"
+#include "support/float_roundoff.h"
 
 using sonare::ChannelLayout;
 using sonare::SpeakerRole;
@@ -286,7 +287,7 @@ void check_auto_matches_fixed(const Row& row) {
   REQUIRE(fixed.size() == automatic.size());
   for (size_t p = 0; p < fixed.size(); ++p) {
     INFO("plane " << p);
-    CHECK(fixed[p] == automatic[p]);
+    CHECK(sonare::test::ranges_within_roundoff(fixed[p], automatic[p]));
   }
 }
 

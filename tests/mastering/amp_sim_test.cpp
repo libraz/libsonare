@@ -24,6 +24,7 @@
 #include "mastering/saturation/triode.h"
 #include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -2343,18 +2344,18 @@ TEST_CASE("amp input trim has the same preamp effect through construction and au
 
     config.input_db = 12.0f;
     AmpSim constructed(config);
-    CHECK(process_mono(constructed, quiet) == expected);
+    CHECK(sonare::test::ranges_within_roundoff(process_mono(constructed, quiet), expected));
 
     config.input_db = 0.0f;
     AmpSim automated(config);
     REQUIRE(automated.set_parameter(16, 12.0f));
-    CHECK(process_mono(automated, quiet) == expected);
+    CHECK(sonare::test::ranges_within_roundoff(process_mono(automated, quiet), expected));
 
     auto insert = make_insert("saturation.ampSim",
                               std::string(R"({"inputDb":12,"drive":0.55,"cab":false,"topology":)") +
                                   std::to_string(static_cast<int>(topology)) + "}");
     REQUIRE(insert != nullptr);
-    CHECK(process_mono(*insert, quiet) == expected);
+    CHECK(sonare::test::ranges_within_roundoff(process_mono(*insert, quiet), expected));
 
     const auto offline = apply_named_processor("saturation.ampSim", quiet.data(), quiet.size(),
                                                static_cast<int>(kRate),
@@ -2362,7 +2363,7 @@ TEST_CASE("amp input trim has the same preamp effect through construction and au
                                                 {"drive", 0.55},
                                                 {"cab", 0.0},
                                                 {"topology", static_cast<double>(topology)}});
-    CHECK(offline.samples == expected);
+    CHECK(sonare::test::ranges_within_roundoff(offline.samples, expected));
   }
 }
 

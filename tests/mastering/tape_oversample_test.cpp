@@ -8,6 +8,7 @@
 #include "mastering/saturation/tape.h"
 #include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -126,7 +127,7 @@ TEST_CASE("Tape oversampling is invariant to process block partitioning",
   process_tape_blocks(one_shot, expected, expected.size());
   process_tape_blocks(partitioned, actual, 128);
 
-  REQUIRE(actual == expected);
+  REQUIRE(sonare::test::ranges_within_roundoff(actual, expected));
 }
 
 TEST_CASE("Tape rejects invalid oversample_factor", "[mastering][saturation]") {

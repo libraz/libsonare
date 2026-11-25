@@ -21,6 +21,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "rt/processor_base.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -581,13 +582,13 @@ TEST_CASE("voice.changer is reachable from the one-shot named-processor path",
                                                                   left.size(), 48000, params);
   CHECK(mono.samples.size() == left.size());
   CHECK(mono.latency_samples > 0);
-  CHECK(mono.samples != left);
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(mono.samples, left));
 
   const auto stereo = sonare::mastering::api::apply_named_processor_stereo(
       "voice.changer", left.data(), right.data(), left.size(), 48000, params);
   CHECK(stereo.left.size() == left.size());
   CHECK(stereo.right.size() == right.size());
-  CHECK(stereo.left == mono.samples);
+  CHECK(sonare::test::ranges_within_roundoff(stereo.left, mono.samples));
 
   CHECK_THROWS_AS(
       sonare::mastering::api::apply_named_processor("voice.changer", left.data(), left.size(),

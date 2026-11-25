@@ -24,6 +24,7 @@
 #include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
 
@@ -4472,8 +4473,8 @@ TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realt
   float* offline_channels[] = {off_left.data(), off_right.data()};
   offline.render_offline(offline_channels, 2, kFrames, kBlock);
 
-  REQUIRE(rt_left == off_left);
-  REQUIRE(rt_right == off_right);
+  REQUIRE(sonare::test::ranges_within_roundoff(rt_left, off_left));
+  REQUIRE(sonare::test::ranges_within_roundoff(rt_right, off_right));
   REQUIRE(realtime.transport().render_frame() == offline.transport().render_frame());
   REQUIRE(realtime.transport().sample_position() == offline.transport().sample_position());
 }

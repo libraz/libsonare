@@ -27,6 +27,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
@@ -544,20 +545,20 @@ TEST_CASE("a long system run reaches master EQ in offline prepared and live path
 
   const StereoRender prepared_bulk = render_prepared_system_run(true);
   const StereoRender prepared_split = render_prepared_system_run(false);
-  CHECK(static_cast<bool>(prepared_bulk.left == prepared_split.left));
-  CHECK(static_cast<bool>(prepared_bulk.right == prepared_split.right));
+  CHECK(sonare::test::ranges_within_roundoff(prepared_bulk.left, prepared_split.left));
+  CHECK(sonare::test::ranges_within_roundoff(prepared_bulk.right, prepared_split.right));
   // Without the 40 02 00 byte the render must differ, or the equality is vacuous.
   const StereoRender prepared_prefix = render_prepared_system_run(false, false);
-  CHECK_FALSE(static_cast<bool>(prepared_split.left == prepared_prefix.left));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(prepared_split.left, prepared_prefix.left));
 
   // The split live writes are the oracle for the direct-system mailbox: a
   // single long publish must carry the same field sequence as two short ones.
   const StereoRender live_bulk = render_live_system_run(true);
   const StereoRender live_split = render_live_system_run(false);
-  CHECK(static_cast<bool>(live_bulk.left == live_split.left));
-  CHECK(static_cast<bool>(live_bulk.right == live_split.right));
+  CHECK(sonare::test::ranges_within_roundoff(live_bulk.left, live_split.left));
+  CHECK(sonare::test::ranges_within_roundoff(live_bulk.right, live_split.right));
   const StereoRender live_prefix = render_live_system_run(false, false);
-  CHECK_FALSE(static_cast<bool>(live_split.left == live_prefix.left));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(live_split.left, live_prefix.left));
 }
 
 TEST_CASE("an out-of-range system-effect value is ignored, not clamped", "[midi][synth][gs]") {

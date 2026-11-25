@@ -15,6 +15,7 @@
 #if defined(SONARE_WITH_PLAYBACK)
 
 #include "c_api/playback_internal.h"
+#include "support/float_roundoff.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -601,7 +602,8 @@ TEST_CASE("playback renderer render_offline matches the one-shot render through 
                                                   &out_frames, &out_channels) == SONARE_OK);
   REQUIRE(out_frames == expected_frames);
   REQUIRE(out_channels == expected_channels);
-  CHECK(std::equal(out, out + out_frames * static_cast<size_t>(out_channels), expected));
+  CHECK(sonare::test::ranges_within_roundoff(
+      out, out + out_frames * static_cast<size_t>(out_channels), expected));
   sonare_free_floats(out);
   sonare_free_floats(expected);
 

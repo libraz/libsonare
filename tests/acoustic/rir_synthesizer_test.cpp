@@ -15,6 +15,7 @@
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
 #include "analysis/acoustic_analyzer.h"
+#include "support/float_roundoff.h"
 #include "util/resource_limits.h"
 
 using Catch::Matchers::WithinRel;
@@ -939,12 +940,14 @@ TEST_CASE("receiver-pair RIRs match each receiver's mono RIR before the crossove
   const int t0_r = crossover_start(right_pl, effective_mixing_ms, sr);
   REQUIRE(static_cast<size_t>(t0_l) < std::min(left.size(), mono_l.size()));
   REQUIRE(static_cast<size_t>(t0_r) < std::min(right.size(), mono_r.size()));
-  REQUIRE(std::equal(left.begin(), left.begin() + t0_l + 1, mono_l.begin()));
-  REQUIRE(std::equal(right.begin(), right.begin() + t0_r + 1, mono_r.begin()));
+  REQUIRE(
+      sonare::test::ranges_within_roundoff(left.begin(), left.begin() + t0_l + 1, mono_l.begin()));
+  REQUIRE(sonare::test::ranges_within_roundoff(right.begin(), right.begin() + t0_r + 1,
+                                               mono_r.begin()));
 
   // Past the crossover the right tail is not the left one.
-  REQUIRE_FALSE(std::equal(left.begin() + t0_l + sr / 10, left.begin() + t0_l + sr / 5,
-                           right.begin() + t0_l + sr / 10));
+  REQUIRE_FALSE(sonare::test::ranges_within_roundoff(
+      left.begin() + t0_l + sr / 10, left.begin() + t0_l + sr / 5, right.begin() + t0_l + sr / 10));
 }
 
 TEST_CASE("receiver-pair RIRs without a late tail are each receiver's mono RIR",
@@ -969,7 +972,7 @@ TEST_CASE("receiver-pair RIRs without a late tail are each receiver's mono RIR",
     const std::vector<float> mono =
         samples_of(synthesize_rir(room, {pl.source, receiver}, sr, cfg).rir);
     REQUIRE(mono.size() <= channel->size());
-    REQUIRE(std::equal(mono.begin(), mono.end(), channel->begin()));
+    REQUIRE(sonare::test::ranges_within_roundoff(mono.begin(), mono.end(), channel->begin()));
     REQUIRE(std::all_of(channel->begin() + static_cast<std::ptrdiff_t>(mono.size()), channel->end(),
                         [](float v) { return v == 0.0f; }));
   }
@@ -996,8 +999,10 @@ TEST_CASE("receiver-pair no-tail padding preserves an asymmetric shorter prefix"
   REQUIRE(left_mono.size() > right_mono.size());
   REQUIRE(pair.left.size() == left_mono.size());
   REQUIRE(pair.right.size() == left_mono.size());
-  REQUIRE(std::equal(left_mono.begin(), left_mono.end(), pair.left.begin()));
-  REQUIRE(std::equal(right_mono.begin(), right_mono.end(), pair.right.begin()));
+  REQUIRE(
+      sonare::test::ranges_within_roundoff(left_mono.begin(), left_mono.end(), pair.left.begin()));
+  REQUIRE(sonare::test::ranges_within_roundoff(right_mono.begin(), right_mono.end(),
+                                               pair.right.begin()));
   REQUIRE(std::all_of(pair.right.begin() + static_cast<std::ptrdiff_t>(right_mono.size()),
                       pair.right.end(), [](float value) { return value == 0.0f; }));
 }

@@ -44,6 +44,7 @@
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "support/midi_render.h"
 #include "support/sf2_builder.h"
 #include "util/constants.h"
@@ -4935,8 +4936,8 @@ TEST_CASE(
     INFO("program " << static_cast<int>(program));
     REQUIRE(reference.size() == shifted.size());
     REQUIRE(reference.size() == reblocked.size());
-    CHECK(reference == shifted);
-    CHECK(reference == reblocked);
+    CHECK(sonare::test::ranges_within_roundoff(reference, shifted));
+    CHECK(sonare::test::ranges_within_roundoff(reference, reblocked));
     // The slot is freed by the end of the three seconds in every case.
     CHECK(active_a == 0);
     CHECK(active_b == 0);

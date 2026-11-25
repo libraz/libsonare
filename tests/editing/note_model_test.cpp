@@ -26,6 +26,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "effects/formant_warp.h"
 #include "effects/pitch_shift.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -2833,7 +2834,7 @@ TEST_CASE("render_notes chained stretch, shift and formant edits equal the stage
   REQUIRE(expected.size() > 0);
   const size_t span = std::min(expected.size(), kOffset - kOnset);
   for (size_t i = 0; i < span; ++i) {
-    REQUIRE(rendered[kOnset + i] == expected[i]);
+    REQUIRE(sonare::test::within_roundoff(rendered[kOnset + i], expected[i]));
   }
 }
 

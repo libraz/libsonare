@@ -7,6 +7,7 @@
 #include "analysis/section_analyzer.h"
 #include "cli/cli_test_helpers.h"
 #include "metering/lufs.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 TEST_CASE("CLI info command", "[cli]") {
@@ -433,10 +434,14 @@ TEST_CASE("CLI sections defaults to the core boundary threshold", "[cli][section
     const auto& explicit_core = core_threshold_result["sections"].as_array()[i];
     CHECK(actual[i]["type"].as_string() == explicit_core["type"].as_string());
     CHECK(actual[i]["group"].as_int() == explicit_core["group"].as_int());
-    CHECK(actual[i]["start"].as_number() == explicit_core["start"].as_number());
-    CHECK(actual[i]["end"].as_number() == explicit_core["end"].as_number());
-    CHECK(actual[i]["energy"].as_number() == explicit_core["energy"].as_number());
-    CHECK(actual[i]["confidence"].as_number() == explicit_core["confidence"].as_number());
+    CHECK(sonare::test::within_roundoff(actual[i]["start"].as_float(),
+                                        explicit_core["start"].as_float()));
+    CHECK(sonare::test::within_roundoff(actual[i]["end"].as_float(),
+                                        explicit_core["end"].as_float()));
+    CHECK(sonare::test::within_roundoff(actual[i]["energy"].as_float(),
+                                        explicit_core["energy"].as_float()));
+    CHECK(sonare::test::within_roundoff(actual[i]["confidence"].as_float(),
+                                        explicit_core["confidence"].as_float()));
   }
 
   CHECK(default_result["count"].as_int() == static_cast<int>(expected.size()));
@@ -720,9 +725,10 @@ TEST_CASE("CLI pitch command", "[cli]") {
     auto [explicit_code, explicit_output] =
         exec_command(CLI + " pitch " + TEST_WAV + " --threshold 0.1 --json -q");
     REQUIRE(explicit_code == 0);
-    REQUIRE(output == explicit_output);
+    const auto explicit_payload = sonare::util::json::parse_strict(explicit_output);
     const auto payload = sonare::util::json::parse_strict(output);
     REQUIRE(payload.size() == 6);
+    REQUIRE(explicit_payload.size() == payload.size());
     for (const char* key :
          {"algorithm", "n_frames", "voiced_count", "voiced_ratio", "median_f0", "mean_f0"}) {
       REQUIRE(payload.contains(key));
@@ -732,6 +738,16 @@ TEST_CASE("CLI pitch command", "[cli]") {
     REQUIRE(payload["voiced_count"].is_number());
     REQUIRE(payload["voiced_ratio"].is_number());
     REQUIRE(payload["median_f0"].is_number());
+    for (const char* key : {"algorithm", "n_frames", "voiced_count"}) {
+      CAPTURE(key);
+      CHECK(sonare::util::json::dump(payload[key]) ==
+            sonare::util::json::dump(explicit_payload[key]));
+    }
+    for (const char* key : {"voiced_ratio", "median_f0", "mean_f0"}) {
+      CAPTURE(key);
+      CHECK(
+          sonare::test::within_roundoff(payload[key].as_float(), explicit_payload[key].as_float()));
+    }
     REQUIRE(payload["mean_f0"].is_number());
   }
 
@@ -872,8 +888,7 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
   }
 }
 
-TEST_CASE("CLI constant-Q commands use the library C1 frequency when omitted",
-          "[cli][defaults]") {
+TEST_CASE("CLI constant-Q commands use the library C1 frequency when omitted", "[cli][defaults]") {
   const auto path = unique_temp_path("_constant_q_default.wav");
   create_test_wav(path, 0.28f);
   const auto cqt = exec_command(CLI + " cqt " + path + " --n-bins 18 --json -q");

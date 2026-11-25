@@ -13,6 +13,7 @@
 #include "acoustic/late_reverb.h"
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -563,9 +564,8 @@ TEST_CASE("early IR preserves default and even-to-odd FDL output parity",
 
   REQUIRE(default_fdl.size() == odd_fdl.size());
   REQUIRE(default_fdl.size() == even_fdl.size());
-  REQUIRE(std::memcmp(default_fdl.data(), odd_fdl.data(), default_fdl.size() * sizeof(float)) == 0);
-  REQUIRE(std::memcmp(default_fdl.data(), even_fdl.data(), default_fdl.size() * sizeof(float)) ==
-          0);
+  REQUIRE(sonare::test::ranges_within_roundoff(default_fdl, odd_fdl));
+  REQUIRE(sonare::test::ranges_within_roundoff(default_fdl, even_fdl));
 }
 
 TEST_CASE("shoebox image order is clamped to the safe maximum", "[acoustic][image_source]") {

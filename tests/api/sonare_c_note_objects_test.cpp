@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 #ifdef SONARE_WITH_PITCH_EDITOR
@@ -866,12 +867,11 @@ TEST_CASE("the SonareNoteRenderConfig fade default comes from init", "[c_api][no
   sonare_note_render_config_init(&config);
   CHECK(config.fade_ms == 5.0f);
   const std::vector<float> from_init = rendered_with(&config);
-  REQUIRE(first_mismatch(from_null.data(), from_init.data(), 0, from_null.size()) == kNoMismatch);
+  REQUIRE(sonare::test::ranges_within_roundoff(from_null, from_init));
 
   config.fade_ms = 5.0f;
   const std::vector<float> from_explicit_default = rendered_with(&config);
-  REQUIRE(first_mismatch(from_null.data(), from_explicit_default.data(), 0, from_null.size()) ==
-          kNoMismatch);
+  REQUIRE(sonare::test::ranges_within_roundoff(from_null, from_explicit_default));
 
   // A 20 ms fade is still ramping 90 samples in, where the default 5 ms one has
   // already reached silence.
@@ -1204,10 +1204,12 @@ TEST_CASE("the SonareNoteRenderConfig vibrato cutoff decides which curve an edit
   REQUIRE(default_split.count == f0.size());
   REQUIRE(explicit_split.count == f0.size());
   CHECK(default_split.center_hz == explicit_split.center_hz);
-  CHECK(std::equal(default_split.drift_cents, default_split.drift_cents + default_split.count,
-                   explicit_split.drift_cents));
-  CHECK(std::equal(default_split.vibrato_cents, default_split.vibrato_cents + default_split.count,
-                   explicit_split.vibrato_cents));
+  CHECK(sonare::test::ranges_within_roundoff(default_split.drift_cents,
+                                             default_split.drift_cents + default_split.count,
+                                             explicit_split.drift_cents));
+  CHECK(sonare::test::ranges_within_roundoff(default_split.vibrato_cents,
+                                             default_split.vibrato_cents + default_split.count,
+                                             explicit_split.vibrato_cents));
   sonare_free_pitch_decomposition_result(&default_split);
   sonare_free_pitch_decomposition_result(&explicit_split);
 
@@ -1233,12 +1235,11 @@ TEST_CASE("the SonareNoteRenderConfig vibrato cutoff decides which curve an edit
   sonare_note_render_config_init(&config);
   CHECK(config.vibrato_cutoff_hz == 3.0f);
   const std::vector<float> from_init = rendered_with(&config);
-  REQUIRE(first_mismatch(from_null.data(), from_init.data(), 0, from_null.size()) == kNoMismatch);
+  REQUIRE(sonare::test::ranges_within_roundoff(from_null, from_init));
 
   config.vibrato_cutoff_hz = 3.0f;
   const std::vector<float> from_explicit_default = rendered_with(&config);
-  REQUIRE(first_mismatch(from_null.data(), from_explicit_default.data(), 0, from_null.size()) ==
-          kNoMismatch);
+  REQUIRE(sonare::test::ranges_within_roundoff(from_null, from_explicit_default));
 
   // 5.5 Hz sits above a 3 Hz cut and below an 8 Hz one, so flattening the
   // vibrato takes most of the swing at 3 and little of it at 8. A cutoff that

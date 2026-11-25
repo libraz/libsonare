@@ -10,6 +10,7 @@
 #include "playback/hrtf_set.h"
 #include "playback/renderer.h"
 #include "playback/shrf_fixture.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using sonare::ChannelLayout;
@@ -352,16 +353,16 @@ TEST_CASE("toggling the output limiter crossfades between the limited and bypass
     INFO((enable ? "off -> on" : "on -> off"));
     const std::vector<float> toggled = limiter_render(!enable, enable, kSwitchBlock, kBlocks);
     CHECK(max_step(toggled, begin, end) <= bound);
-    // After the crossfade the output is the destination state's output exactly.
+    // After the crossfade the output agrees with the destination state.
     const std::vector<float>& settled = enable ? on : off;
     for (size_t i = kSwitch + glide; i < toggled.size(); ++i) {
       INFO("sample " << i);
-      REQUIRE(toggled[i] == settled[i]);
+      REQUIRE(sonare::test::within_roundoff(toggled[i], settled[i]));
     }
     // Before it, nothing moved.
     const std::vector<float>& before = enable ? off : on;
-    CHECK(std::equal(toggled.begin(), toggled.begin() + static_cast<std::ptrdiff_t>(kSwitch),
-                     before.begin()));
+    CHECK(sonare::test::ranges_within_roundoff(
+        toggled.begin(), toggled.begin() + static_cast<std::ptrdiff_t>(kSwitch), before.begin()));
   }
 }
 

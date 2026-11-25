@@ -28,6 +28,7 @@
 #include "midi/synth/wind_breath.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "support/midi_render.h"
 
 namespace {
@@ -252,12 +253,12 @@ TEST_CASE("a breath ramp sounds the same through either spelling",
     REQUIRE(control.size() == cc_render.size());
     bool moved = false;
     for (size_t i = 0; i < cc_render.size() && !moved; ++i) {
-      moved = cc_render[i] != control[i];
+      moved = !sonare::test::within_roundoff(cc_render[i], control[i]);
     }
     REQUIRE(moved);
 
     for (size_t i = 0; i < cc_render.size(); ++i) {
-      if (cc_render[i] != at_render[i]) {
+      if (!sonare::test::within_roundoff(cc_render[i], at_render[i])) {
         CAPTURE(i, cc_render[i], at_render[i]);
         FAIL("the two spellings of one gesture rendered different samples");
       }

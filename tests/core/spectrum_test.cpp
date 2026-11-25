@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "core/window.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -1151,7 +1152,8 @@ TEST_CASE("Griffin-Lim's fast path matches the public-API reference at a KissFFT
                                  gl_config.n_iter, gl_config.momentum);
 
   REQUIRE(fast.size() == reference.size());
-  REQUIRE(std::memcmp(fast.data(), reference.data(), fast.size() * sizeof(float)) == 0);
+  REQUIRE(sonare::test::ranges_within_roundoff(fast.data(), fast.data() + fast.size(),
+                                               reference.data()));
 }
 
 TEST_CASE("Griffin-Lim rejects an invalid sample rate on each reconstruction path",

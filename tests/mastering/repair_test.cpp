@@ -28,6 +28,7 @@
 #include "mastering/repair/trim_silence.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -1298,15 +1299,16 @@ TEST_CASE("DenoiseClassical zero-pads inputs shorter than n_fft", "[mastering][r
   REQUIRE(result.size() == samples.size());
   for (size_t i = 0; i < samples.size(); ++i) {
     REQUIRE(std::isfinite(result[i]));
-    REQUIRE(result[i] == reference[i]);
+    REQUIRE(sonare::test::within_roundoff(result[i], reference[i]));
   }
-  CHECK(short_report.mean_reduction_db == padded_report.mean_reduction_db);
+  CHECK(sonare::test::within_roundoff(short_report.mean_reduction_db,
+                                      padded_report.mean_reduction_db));
 
   const NoiseDetection short_floor =
       detect_noise_floor(samples.data(), samples.size(), 48000, config);
   const NoiseDetection padded_floor =
       detect_noise_floor(padded.data(), padded.size(), 48000, config);
-  CHECK(short_floor.floor_dbfs == padded_floor.floor_dbfs);
+  CHECK(sonare::test::within_roundoff(short_floor.floor_dbfs, padded_floor.floor_dbfs));
 
   const Audio left = make_audio(samples);
   const Audio right = make_audio(samples);

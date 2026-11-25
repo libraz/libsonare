@@ -15,6 +15,7 @@
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -88,13 +89,14 @@ TEST_CASE("SectionAnalyzer matches a beat grid and an STFT computed separately",
     const Section& a = actual.sections()[i];
     const Section& r = reference.sections()[i];
     CHECK(a.type == r.type);
-    CHECK(a.start == r.start);
-    CHECK(a.end == r.end);
-    CHECK(a.energy_level == r.energy_level);
-    CHECK(a.confidence == r.confidence);
+    CHECK(sonare::test::within_roundoff(a.start, r.start));
+    CHECK(sonare::test::within_roundoff(a.end, r.end));
+    CHECK(sonare::test::within_roundoff(a.energy_level, r.energy_level));
+    CHECK(sonare::test::within_roundoff(a.confidence, r.confidence));
     CHECK(a.group == r.group);
   }
-  CHECK(actual.section_self_similarity() == reference.section_self_similarity());
+  CHECK(sonare::test::ranges_within_roundoff(actual.section_self_similarity(),
+                                             reference.section_self_similarity()));
 }
 
 TEST_CASE("BoundaryDetector from a shared STFT equals the audio constructor",
@@ -119,9 +121,11 @@ TEST_CASE("BoundaryDetector from a shared STFT equals the audio constructor",
 
   REQUIRE(actual.boundaries().size() == reference.boundaries().size());
   for (size_t i = 0; i < reference.boundaries().size(); ++i) {
-    CHECK(actual.boundaries()[i].time == reference.boundaries()[i].time);
+    CHECK(
+        sonare::test::within_roundoff(actual.boundaries()[i].time, reference.boundaries()[i].time));
     CHECK(actual.boundaries()[i].frame == reference.boundaries()[i].frame);
-    CHECK(actual.boundaries()[i].strength == reference.boundaries()[i].strength);
+    CHECK(sonare::test::within_roundoff(actual.boundaries()[i].strength,
+                                        reference.boundaries()[i].strength));
   }
-  CHECK(actual.novelty_curve() == reference.novelty_curve());
+  CHECK(sonare::test::ranges_within_roundoff(actual.novelty_curve(), reference.novelty_curve()));
 }

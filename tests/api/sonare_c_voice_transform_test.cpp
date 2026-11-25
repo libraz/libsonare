@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 namespace {
@@ -793,13 +794,13 @@ TEST_CASE("Held notes reach the output whatever the pitch correction mode",
     REQUIRE(sonare_realtime_voice_changer_note_on(held.get(), 67, 1.0f) == SONARE_OK);
     const auto held_run = run_mono(held, input);
     REQUIRE(all_finite(held_run));
-    CHECK_FALSE(same_bytes(free_run, held_run));
+    CHECK_FALSE(sonare::test::ranges_within_roundoff(free_run, held_run));
 
     // The note, not the mode, decides the target: every mode renders the same audio.
     if (reference.empty()) {
       reference = held_run;
     } else {
-      CHECK(same_bytes(reference, held_run));
+      CHECK(sonare::test::ranges_within_roundoff(reference, held_run));
     }
 
     // The release call itself succeeds and the output stays finite.

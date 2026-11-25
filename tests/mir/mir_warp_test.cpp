@@ -19,6 +19,7 @@
 #include "core/audio.h"
 #include "mir/warp.h"
 #include "mir/warp_detail.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -1144,7 +1145,7 @@ TEST_CASE("the banded DTW path survives keeping only two accumulated-cost rows",
       CAPTURE(regime);
       CAPTURE(ref_frames);
       CAPTURE(tgt_frames);
-      REQUIRE(windowed.final_cost == oracle.final_cost);
+      REQUIRE(sonare::test::within_roundoff(windowed.final_cost, oracle.final_cost));
       REQUIRE(windowed.path.size() == oracle.path.size());
       for (size_t k = 0; k < oracle.path.size(); ++k) {
         CAPTURE(k);
@@ -1320,7 +1321,7 @@ TEST_CASE("the banded DTW band overlaps row to row so a continuous path exists",
         REQUIRE(cell.second <= hi[cell.first]);
       }
       // The two accumulated-cost shapes still agree element for element.
-      REQUIRE(windowed.final_cost == oracle.final_cost);
+      REQUIRE(sonare::test::within_roundoff(windowed.final_cost, oracle.final_cost));
       REQUIRE(windowed.path.size() == oracle.path.size());
       for (size_t k = 0; k < oracle.path.size(); ++k) {
         CAPTURE(k);

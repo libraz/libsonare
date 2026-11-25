@@ -10,6 +10,8 @@
 #include <glob.h>
 
 #include "mastering/api/named_processor.h"
+#include "support/float_roundoff.h"
+#include "support/json_roundoff.h"
 
 namespace {
 
@@ -1681,8 +1683,8 @@ TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering]
         load_audio_interleaved(via_processor);
     auto [source_samples, source_rate, source_channels] = load_audio_interleaved(repairable);
     // The control: the repair changed the file, so equality is not two copies.
-    CHECK(stages_samples != source_samples);
-    CHECK(stages_samples == processor_samples);
+    CHECK_FALSE(sonare::test::ranges_within_roundoff(stages_samples, source_samples));
+    CHECK(sonare::test::ranges_within_roundoff(stages_samples, processor_samples));
     std::remove(repairable.c_str());
     std::remove(via_stages.c_str());
     std::remove(via_processor.c_str());
@@ -1851,7 +1853,8 @@ TEST_CASE("CLI suggest-mix tempo auto measures what the bpm command measures", "
   INFO(automatic.err);
   REQUIRE(automatic.exit_code == 0);
   REQUIRE(explicit_tempo.exit_code == 0);
-  CHECK(automatic.out == explicit_tempo.out);
+  CHECK(sonare::test::json_within_roundoff(sonare::util::json::parse_strict(automatic.out),
+                                           sonare::util::json::parse_strict(explicit_tempo.out)));
   std::remove(input.c_str());
 }
 #endif

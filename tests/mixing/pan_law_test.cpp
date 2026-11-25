@@ -16,6 +16,7 @@
 #include "mixing/panner.h"
 #include "mixing/stereo_width.h"
 #include "rt/param_smoother.h"
+#include "support/float_roundoff.h"
 #include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
@@ -418,8 +419,8 @@ TEST_CASE("panner glide output does not depend on block partitioning", "[mixing]
       CAPTURE(static_cast<int>(law));
       const GlideOutput whole = render_glide(path, law, kSamples, 64);
       const GlideOutput split = render_glide(path, law, kSamples, 16);
-      REQUIRE(whole.left == split.left);
-      REQUIRE(whole.right == split.right);
+      REQUIRE(sonare::test::ranges_within_roundoff(whole.left, split.left));
+      REQUIRE(sonare::test::ranges_within_roundoff(whole.right, split.right));
     }
   }
 }

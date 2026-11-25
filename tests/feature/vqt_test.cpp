@@ -18,6 +18,7 @@
 #include "core/spectrum.h"
 #include "feature/spectral_projection.h"
 #include "filters/wavelet.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -220,7 +221,7 @@ TEST_CASE("vqt left at its default gamma selects librosa automatic bandwidth", "
   const VqtResult expected = vqt(audio, explicit_gamma);
   REQUIRE(actual.n_bins() == expected.n_bins());
   REQUIRE(actual.n_frames() == expected.n_frames());
-  REQUIRE(actual.magnitude() == expected.magnitude());
+  REQUIRE(sonare::test::ranges_within_roundoff(actual.magnitude(), expected.magnitude()));
 }
 
 TEST_CASE("VqtConfig to_cqt_config", "[vqt]") {

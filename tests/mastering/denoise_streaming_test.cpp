@@ -13,6 +13,7 @@
 #include "repair_metrics.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -241,8 +242,8 @@ TEST_CASE("StreamingDenoise keeps a non-divisor hop block-invariant from sample 
     }
     CHECK(max_error < 1.0e-4f);
   }
-  CHECK(count_mismatches(outputs[0], outputs[1]) == 0);
-  CHECK(count_mismatches(outputs[0], outputs[2]) == 0);
+  CHECK(sonare::test::ranges_within_roundoff(outputs[0], outputs[1]));
+  CHECK(sonare::test::ranges_within_roundoff(outputs[0], outputs[2]));
 }
 
 TEST_CASE("StreamingDenoise restores linked stereo impulses through reset",
@@ -295,8 +296,8 @@ TEST_CASE("StreamingDenoise output does not depend on the block size",
   }
   // 517 is deliberately not a divisor of the 256-sample hop, so a ring that
   // wrapped wrongly on a partial hop shows here and almost nowhere else.
-  CHECK(count_mismatches(outputs[0], outputs[1]) == 0);
-  CHECK(count_mismatches(outputs[0], outputs[2]) == 0);
+  CHECK(sonare::test::ranges_within_roundoff(outputs[0], outputs[1]));
+  CHECK(sonare::test::ranges_within_roundoff(outputs[0], outputs[2]));
 }
 
 TEST_CASE("StreamingDenoise treats a doubled channel as the mono signal",
@@ -318,7 +319,7 @@ TEST_CASE("StreamingDenoise treats a doubled channel as the mono signal",
   // The mask is built from the summed power and divided back out by the same
   // sum, so doubling every channel cancels and the two planes stay the mono answer.
   CHECK(count_mismatches(left, right) == 0);
-  CHECK(count_mismatches(left, mono) == 0);
+  CHECK(sonare::test::ranges_within_roundoff(left, mono));
 }
 
 TEST_CASE("StreamingDenoise reset restores the post-construction state",

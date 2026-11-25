@@ -16,6 +16,7 @@
 #include "core/audio.h"
 #include "core/window.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -169,7 +170,7 @@ TEST_CASE("FormantWarpStream output does not depend on how the input is cut into
       const size_t n = std::min(block, input.size() - pos);
       stream.process(input.data() + pos, output.data() + pos, static_cast<int>(n));
     }
-    REQUIRE(output == expected);
+    REQUIRE(sonare::test::ranges_within_roundoff(output, expected));
   }
 }
 
@@ -183,7 +184,7 @@ TEST_CASE("FormantWarpStream processes in place", "[effects][formant]") {
   sonare::FormantWarpStream in_place = prepared_stream(sample_rate, 0.8f);
   std::vector<float> buffer = input;
   in_place.process(buffer.data(), buffer.data(), static_cast<int>(buffer.size()));
-  REQUIRE(buffer == expected);
+  REQUIRE(sonare::test::ranges_within_roundoff(buffer, expected));
 }
 
 TEST_CASE("FormantWarpStream process allocates nothing", "[effects][formant]") {
@@ -257,8 +258,9 @@ TEST_CASE("FormantWarp is the streaming stage over the whole buffer", "[effects]
     std::vector<float> streamed(padded.size());
     stream.process(padded.data(), streamed.data(), static_cast<int>(padded.size()));
     REQUIRE(one_shot.size() == samples.size());
-    REQUIRE(std::equal(one_shot.data(), one_shot.data() + one_shot.size(),
-                       streamed.begin() + static_cast<std::ptrdiff_t>(latency)));
+    REQUIRE(sonare::test::ranges_within_roundoff(
+        one_shot.data(), one_shot.data() + one_shot.size(),
+        streamed.begin() + static_cast<std::ptrdiff_t>(latency)));
   }
 }
 

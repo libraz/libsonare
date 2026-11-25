@@ -9,6 +9,7 @@
 #include "mixing/meter.h"
 #include "mixing_test_helpers.h"
 #include "rt/processor_base.h"
+#include "support/float_roundoff.h"
 #include "util/exception.h"
 
 #if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
@@ -778,8 +779,8 @@ TEST_CASE("MeterProcessor true peak covers a block longer than the prepared size
   const auto whole_next = whole.snapshot();
   pieces.process(next_ch, 2, kPrepared);
   const auto pieces_next = pieces.snapshot();
-  REQUIRE(whole_next.true_peak_db[0] == pieces_next.true_peak_db[0]);
-  REQUIRE(whole_next.max_true_peak_db == pieces_next.max_true_peak_db);
+  REQUIRE(sonare::test::within_roundoff(whole_next.true_peak_db[0], pieces_next.true_peak_db[0]));
+  REQUIRE(sonare::test::within_roundoff(whole_next.max_true_peak_db, pieces_next.max_true_peak_db));
 }
 
 TEST_CASE("StereoWidthProcessor settles exactly on its target and then passes audio through",

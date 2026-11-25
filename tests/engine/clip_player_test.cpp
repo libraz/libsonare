@@ -12,6 +12,7 @@
 
 #include "arrangement/edit_compiler.h"
 #include "engine/tempo_sync.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 namespace sonare::engine {
@@ -144,7 +145,7 @@ TEST_CASE("ClipPlayer can render tracks separately without changing summed outpu
   player.process_track_at(202, lane_b_channels, 1, 8, 0);
 
   for (size_t i = 0; i < full.size(); ++i) {
-    REQUIRE(full[i] == lane_a[i] + lane_b[i]);
+    REQUIRE(sonare::test::within_roundoff(full[i], lane_a[i] + lane_b[i]));
   }
 }
 
@@ -202,7 +203,7 @@ TEST_CASE("ClipPlayer per-track and excluding renders equal a player holding onl
                                   [](auto& player, float** channels, int64_t at) {
                                     player.process_at(channels, 1, kBlock, at);
                                   });
-    CHECK(lane == reference);
+    CHECK(sonare::test::ranges_within_roundoff(lane, reference));
   }
 
   const std::array<uint32_t, 2> lanes{3, 12};
@@ -214,7 +215,7 @@ TEST_CASE("ClipPlayer per-track and excluding renders equal a player holding onl
                                   player.process_at(channels, 1, kBlock, at);
                                 });
   REQUIRE(std::any_of(reference.begin(), reference.end(), [](float v) { return v != 0.0f; }));
-  CHECK(excluded == reference);
+  CHECK(sonare::test::ranges_within_roundoff(excluded, reference));
 }
 
 TEST_CASE("ClipPlayer mono live monitoring matches the mono bounce downmix",

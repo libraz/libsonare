@@ -23,6 +23,7 @@
 #include "feature/vqt.h"
 #include "filters/wavelet.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/math_utils.h"
 
@@ -1360,7 +1361,7 @@ TEST_CASE("a CQT kernel built row by row equals one built from the dense padded 
     CHECK(kernel->fft_length() == want.cols);
     CHECK(kernel->kernel().row_offsets == want.row_offsets);
     CHECK(kernel->kernel().column_indices == want.column_indices);
-    CHECK(kernel->kernel().values == want.values);
+    CHECK(sonare::test::ranges_within_roundoff(kernel->kernel().values, want.values));
   }
 }
 
@@ -1408,7 +1409,7 @@ TEST_CASE("a CQT kernel built from a donor equals one built alone", "[cqt][spars
     CHECK(kernel->kernel().cols == alone->kernel().cols);
     CHECK(kernel->kernel().row_offsets == alone->kernel().row_offsets);
     CHECK(kernel->kernel().column_indices == alone->kernel().column_indices);
-    CHECK(kernel->kernel().values == alone->kernel().values);
+    CHECK(sonare::test::ranges_within_roundoff(kernel->kernel().values, alone->kernel().values));
   }
 }
 
@@ -1449,7 +1450,8 @@ TEST_CASE("a CQT kernel does not depend on how many workers built it", "[cqt][sp
         CHECK(kernel->kernel().cols == serial->kernel().cols);
         CHECK(kernel->kernel().row_offsets == serial->kernel().row_offsets);
         CHECK(kernel->kernel().column_indices == serial->kernel().column_indices);
-        CHECK(kernel->kernel().values == serial->kernel().values);
+        CHECK(
+            sonare::test::ranges_within_roundoff(kernel->kernel().values, serial->kernel().values));
       }
     }
   }

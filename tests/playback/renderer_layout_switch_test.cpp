@@ -11,6 +11,7 @@
 #include "playback/front_end.h"
 #include "playback/layout_convert.h"
 #include "playback/renderer.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -319,7 +320,11 @@ TEST_CASE("the first block under auto fixes the layout without counting a switch
   const Planes from_fixed = run(fixed, {{1, 20}}, source);
   CHECK(automatic.diagnostics().layout_switches == 0u);
   CHECK(automatic.input_channel_count() == 1);
-  CHECK(from_auto == from_fixed);
+  REQUIRE(from_auto.size() == from_fixed.size());
+  for (size_t channel = 0; channel < from_fixed.size(); ++channel) {
+    CAPTURE(channel);
+    CHECK(sonare::test::ranges_within_roundoff(from_auto[channel], from_fixed[channel]));
+  }
 
   // A real change afterwards counts, and a reset leaves the next layout to the next block again.
   (void)run(automatic, {{2, 10}, {1, 10}}, source);

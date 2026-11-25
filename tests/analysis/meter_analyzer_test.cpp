@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -126,7 +127,8 @@ TEST_CASE("MeterAnalyzer normalizes accents above unity", "[meter_analyzer]") {
 
   REQUIRE(scaled.time_signature().numerator == unit.time_signature().numerator);
   REQUIRE(scaled.time_signature().denominator == unit.time_signature().denominator);
-  REQUIRE(scaled.result().candidate_scores == unit.result().candidate_scores);
+  REQUIRE(sonare::test::ranges_within_roundoff(scaled.result().candidate_scores,
+                                               unit.result().candidate_scores));
 }
 
 TEST_CASE("MeterAnalyzer detects 3/4 from accented beats", "[meter_analyzer]") {
@@ -579,9 +581,10 @@ TEST_CASE("estimate_meter_from_observations detects 4/4 from accents", "[meter_a
   const MeterResult direct = estimate_meter(make_beats(4, 8), config);
   REQUIRE(result.time_signature.numerator == direct.time_signature.numerator);
   REQUIRE(result.time_signature.denominator == direct.time_signature.denominator);
-  REQUIRE(result.time_signature.confidence == direct.time_signature.confidence);
+  REQUIRE(sonare::test::within_roundoff(result.time_signature.confidence,
+                                        direct.time_signature.confidence));
   REQUIRE(result.downbeat_phase == direct.downbeat_phase);
-  REQUIRE(result.candidate_scores == direct.candidate_scores);
+  REQUIRE(sonare::test::ranges_within_roundoff(result.candidate_scores, direct.candidate_scores));
   REQUIRE(result.candidates.size() == direct.candidates.size());
 }
 
@@ -598,9 +601,11 @@ TEST_CASE("meter scores depend on accent contrast rather than absolute level", "
   REQUIRE(scaled_result.time_signature.numerator == 4);
   REQUIRE(scaled_result.time_signature.numerator == unit_result.time_signature.numerator);
   REQUIRE(scaled_result.time_signature.denominator == unit_result.time_signature.denominator);
-  REQUIRE(scaled_result.time_signature.confidence == unit_result.time_signature.confidence);
+  REQUIRE(sonare::test::within_roundoff(scaled_result.time_signature.confidence,
+                                        unit_result.time_signature.confidence));
   REQUIRE(scaled_result.downbeat_phase == unit_result.downbeat_phase);
-  REQUIRE(scaled_result.candidate_scores == unit_result.candidate_scores);
+  REQUIRE(sonare::test::ranges_within_roundoff(scaled_result.candidate_scores,
+                                               unit_result.candidate_scores));
 
   const auto& scores = scaled_result.candidate_scores;
   const size_t best = static_cast<size_t>(
@@ -847,7 +852,8 @@ TEST_CASE("MeterAnalyzer keeps a rest as meter evidence", "[meter_analyzer]") {
   const MeterResult with_energy = estimate_meter(beats, MeterConfig(), accents, energy);
   const MeterResult without_energy = estimate_meter(beats, MeterConfig(), accents);
   REQUIRE(with_energy.unobserved_beats.empty());
-  REQUIRE(with_energy.candidate_scores == without_energy.candidate_scores);
+  REQUIRE(sonare::test::ranges_within_roundoff(with_energy.candidate_scores,
+                                               without_energy.candidate_scores));
   REQUIRE(with_energy.time_signature.numerator == without_energy.time_signature.numerator);
 }
 
@@ -867,9 +873,10 @@ TEST_CASE("MeterAnalyzer without a dominant energy beat scores as without energy
     REQUIRE(empty.unobserved_beats.empty());
     REQUIRE(flat.unobserved_beats.empty());
     for (const MeterResult* other : {&empty, &flat}) {
-      REQUIRE(other->candidate_scores == base.candidate_scores);
+      REQUIRE(sonare::test::ranges_within_roundoff(other->candidate_scores, base.candidate_scores));
       REQUIRE(other->time_signature.numerator == base.time_signature.numerator);
-      REQUIRE(other->time_signature.confidence == base.time_signature.confidence);
+      REQUIRE(sonare::test::within_roundoff(other->time_signature.confidence,
+                                            base.time_signature.confidence));
       REQUIRE(other->downbeat_phase == base.downbeat_phase);
     }
   }

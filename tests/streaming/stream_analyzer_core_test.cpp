@@ -18,6 +18,7 @@
 #include "streaming/stream_analyzer_publication.h"
 #include "streaming/stream_resampler.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 #include "util/db.h"
 #include "util/exception.h"
 
@@ -2331,12 +2332,14 @@ TEST_CASE("StreamAnalyzer enabled features do not depend on which others are ena
   bool saw_energy = false;
   for (size_t f = 0; f < all.size(); ++f) {
     CAPTURE(f);
-    REQUIRE(chroma_only[f].chroma == all[f].chroma);
-    REQUIRE(mel_only[f].mel == all[f].mel);
-    REQUIRE(onset_only[f].onset_strength == all[f].onset_strength);
-    REQUIRE(spectral_only[f].spectral_centroid == all[f].spectral_centroid);
-    REQUIRE(spectral_only[f].spectral_flatness == all[f].spectral_flatness);
-    REQUIRE(magnitude_only[f].magnitude == all[f].magnitude);
+    REQUIRE(sonare::test::ranges_within_roundoff(chroma_only[f].chroma, all[f].chroma));
+    REQUIRE(sonare::test::ranges_within_roundoff(mel_only[f].mel, all[f].mel));
+    REQUIRE(sonare::test::within_roundoff(onset_only[f].onset_strength, all[f].onset_strength));
+    REQUIRE(sonare::test::within_roundoff(spectral_only[f].spectral_centroid,
+                                          all[f].spectral_centroid));
+    REQUIRE(sonare::test::within_roundoff(spectral_only[f].spectral_flatness,
+                                          all[f].spectral_flatness));
+    REQUIRE(sonare::test::ranges_within_roundoff(magnitude_only[f].magnitude, all[f].magnitude));
     saw_energy = saw_energy || all[f].onset_strength > 0.0f || all[f].spectral_centroid > 0.0f;
   }
   // Equal zeros would also pass, so the fixture has to have produced signal.

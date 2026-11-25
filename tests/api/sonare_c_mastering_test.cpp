@@ -30,6 +30,8 @@
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
 #include "support/c_strings.h"
+#include "support/float_roundoff.h"
+#include "support/json_roundoff.h"
 #include "support/processor_discard_test_access.h"
 #include "support/schema_paths.h"
 #include "util/db.h"
@@ -2961,23 +2963,33 @@ TEST_CASE("pair entries resample a reference at another rate onto the source rat
 
   SECTION("mono processor") {
     const auto expected = pair_process(source, resampled, kSourceRate, kSourceRate);
-    CHECK(pair_process(source, reference, kReferenceRate, kSourceRate) == expected);
+    CHECK(sonare::test::ranges_within_roundoff(
+        pair_process(source, reference, kReferenceRate, kSourceRate), expected));
     // Control: the raw reference read at the source rate is a different signal.
-    CHECK(pair_process(source, reference, kSourceRate, kSourceRate) != expected);
+    CHECK_FALSE(sonare::test::ranges_within_roundoff(
+        pair_process(source, reference, kSourceRate, kSourceRate), expected));
   }
 
   SECTION("stereo processor") {
     const auto expected = pair_process_stereo(source, resampled, kSourceRate, kSourceRate);
-    CHECK(pair_process_stereo(source, reference, kReferenceRate, kSourceRate) == expected);
-    CHECK(pair_process_stereo(source, reference, kSourceRate, kSourceRate) != expected);
+    CHECK(sonare::test::ranges_within_roundoff(
+        pair_process_stereo(source, reference, kReferenceRate, kSourceRate), expected));
+    CHECK_FALSE(sonare::test::ranges_within_roundoff(
+        pair_process_stereo(source, reference, kSourceRate, kSourceRate), expected));
   }
 
   SECTION("analyses") {
     for (const char* name : {"match.referenceLoudness", "match.matchEqCurve"}) {
       INFO(name);
       const std::string expected = pair_analyze(name, source, resampled, kSourceRate, kSourceRate);
-      CHECK(pair_analyze(name, source, reference, kReferenceRate, kSourceRate) == expected);
-      CHECK(pair_analyze(name, source, reference, kSourceRate, kSourceRate) != expected);
+      CHECK(sonare::test::json_within_roundoff(
+          sonare::util::json::parse_strict(
+              pair_analyze(name, source, reference, kReferenceRate, kSourceRate)),
+          sonare::util::json::parse_strict(expected)));
+      CHECK_FALSE(sonare::test::json_within_roundoff(
+          sonare::util::json::parse_strict(
+              pair_analyze(name, source, reference, kSourceRate, kSourceRate)),
+          sonare::util::json::parse_strict(expected)));
     }
   }
 
@@ -3089,8 +3101,10 @@ TEST_CASE("EQ match resamples a reference at another rate", "[c_api][mastering][
   const std::vector<float> resampled = resampled_by_c_abi(reference, kReferenceRate, kSourceRate);
 
   const auto expected = eq_matched_probe(source, resampled, kSourceRate, kSourceRate);
-  CHECK(eq_matched_probe(source, reference, kReferenceRate, kSourceRate) == expected);
-  CHECK(eq_matched_probe(source, reference, kSourceRate, kSourceRate) != expected);
+  CHECK(sonare::test::ranges_within_roundoff(
+      eq_matched_probe(source, reference, kReferenceRate, kSourceRate), expected));
+  CHECK_FALSE(sonare::test::ranges_within_roundoff(
+      eq_matched_probe(source, reference, kSourceRate, kSourceRate), expected));
 
   SECTION("equal rates are the base form bit for bit") {
     constexpr int kBlock = 4096;

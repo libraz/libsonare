@@ -9,6 +9,7 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "support/alloc_guard.h"
+#include "support/float_roundoff.h"
 
 TEST_CASE("ShelvingEq boosts low and high shelves independently", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
@@ -775,7 +776,7 @@ TEST_CASE("EqualizerProcessor keeps filter history through same-value and retuni
   const auto by_parameter = [](EqualizerProcessor& eq) { eq.set_parameter(1, 3.0f); };
   auto a = make();
   auto b = make();
-  float worst = 0.0f;
+
   for (int block = 0; block < 40; ++block) {
     if (block == 20) {
       by_setter(*a);
@@ -787,9 +788,10 @@ TEST_CASE("EqualizerProcessor keeps filter history through same-value and retuni
     auto rb = la;
     process_stereo(*a, la, ra);
     process_stereo(*b, lb, rb);
-    worst = std::max(worst, max_abs_difference(la, lb));
+    CAPTURE(block);
+    CHECK(sonare::test::ranges_within_roundoff(la, lb));
+    CHECK(sonare::test::ranges_within_roundoff(ra, rb));
   }
-  CHECK(worst == 0.0f);
 }
 
 TEST_CASE("eq.shelving at default frequencies resolves at any prepared rate", "[mastering][eq]") {

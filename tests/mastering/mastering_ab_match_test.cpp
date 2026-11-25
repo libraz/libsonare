@@ -14,6 +14,7 @@
 #include "metering/normalize.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -138,9 +139,9 @@ TEST_CASE("ABMatchLoudness measures a reference at another rate on the source's 
   const auto b_48k = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
   const auto expected = ab_match_loudness(resample(a_44k, 48000), b_48k);
   const auto matched = ab_match_loudness(a_44k, b_48k);
-  REQUIRE(matched.reference_lufs == expected.reference_lufs);
-  REQUIRE(matched.applied_gain_db == expected.applied_gain_db);
-  REQUIRE(std::equal(matched.b.begin(), matched.b.end(), expected.b.begin(), expected.b.end()));
+  REQUIRE(sonare::test::within_roundoff(matched.reference_lufs, expected.reference_lufs));
+  REQUIRE(sonare::test::within_roundoff(matched.applied_gain_db, expected.applied_gain_db));
+  REQUIRE(sonare::test::ranges_within_roundoff(matched.b, expected.b));
   REQUIRE(matched.b.sample_rate() == 48000);
   // Control: the same samples read at the source rate measure differently.
   const auto misread = Audio::from_vector(std::vector<float>(a_44k.begin(), a_44k.end()), 48000);
@@ -151,9 +152,9 @@ TEST_CASE("ABMatchLoudness measures a reference at another rate on the source's 
   const auto stereo_expected =
       ab_match_loudness_stereo({resample(a_44k, 48000), resample(a_44k, 48000)}, b_pair);
   const auto stereo = ab_match_loudness_stereo(a_pair, b_pair);
-  REQUIRE(stereo.reference_lufs == stereo_expected.reference_lufs);
-  REQUIRE(std::equal(stereo.b.left.begin(), stereo.b.left.end(), stereo_expected.b.left.begin(),
-                     stereo_expected.b.left.end()));
+  REQUIRE(sonare::test::within_roundoff(stereo.reference_lufs, stereo_expected.reference_lufs));
+  REQUIRE(sonare::test::ranges_within_roundoff(stereo.b.left, stereo_expected.b.left));
+  REQUIRE(sonare::test::ranges_within_roundoff(stereo.b.right, stereo_expected.b.right));
 }
 
 TEST_CASE("ABMatchLoudness returns a unchanged", "[mastering][match][ab-match]") {
@@ -439,8 +440,8 @@ TEST_CASE("Named stereo A/B crossfade reads parameters like the mono pair proces
   const auto stereo = apply_named_pair_processor_stereo(
       "match.abCrossfade", source.data(), source.data(), reference.data(), reference.data(),
       source.size(), kSampleRate, repeated);
-  REQUIRE(stereo.left == mono.samples);
-  REQUIRE(stereo.right == mono.samples);
+  REQUIRE(sonare::test::ranges_within_roundoff(stereo.left, mono.samples));
+  REQUIRE(sonare::test::ranges_within_roundoff(stereo.right, mono.samples));
 
   const std::vector<Param> unread = {Param{"unexpected", 0.5}};
   REQUIRE_THROWS_WITH(

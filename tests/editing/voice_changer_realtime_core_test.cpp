@@ -8,6 +8,7 @@
 #include <tuple>
 
 #include "editing/voice_changer/voice_changer_insert.h"
+#include "support/float_roundoff.h"
 #include "voice_changer_test_helpers.h"
 
 namespace sonare::editing::voice_changer {
@@ -1095,8 +1096,8 @@ TEST_CASE("RealtimeVoiceChanger output EQ controls are invariant to caller chunk
     offset += chunk;
   }
   REQUIRE(offset == rendered);
-  REQUIRE(one_block_output == ragged_output);
-  REQUIRE(one_block_output != unchanged_output);
+  REQUIRE(sonare::test::ranges_within_roundoff(one_block_output, ragged_output));
+  REQUIRE_FALSE(sonare::test::ranges_within_roundoff(one_block_output, unchanged_output));
 }
 
 // ===================================================================

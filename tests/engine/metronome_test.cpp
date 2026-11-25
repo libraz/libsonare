@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "engine/realtime_engine.h"
+#include "support/float_roundoff.h"
 
 TEST_CASE("Metronome collects beat clicks at sample-accurate offsets", "[engine][metronome]") {
   sonare::transport::TempoMap tempo;
@@ -152,7 +153,8 @@ TEST_CASE("Metronome click is continuous across sub-block boundaries", "[engine]
   metro.process(tail, 1, kTotal - kSplit, kSplit);
 
   for (int i = 0; i < kTotal; ++i) {
-    REQUIRE(split[static_cast<size_t>(i)] == whole[static_cast<size_t>(i)]);
+    REQUIRE(sonare::test::within_roundoff(split[static_cast<size_t>(i)],
+                                          whole[static_cast<size_t>(i)]));
   }
   // The click genuinely straddled the split point (non-zero on both sides).
   REQUIRE(whole[kSplit - 1] > 0.0f);

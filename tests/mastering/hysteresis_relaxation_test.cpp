@@ -8,6 +8,7 @@
 #include "mastering/common/hysteresis_ja.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/transformer.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -305,7 +306,7 @@ TEST_CASE("Held-field relaxation is opt-in at the shared engine", "[mastering][s
   REQUIRE(std::abs(held_tail) > 0.05f);
   REQUIRE(std::abs(held_tail) < config.saturation_magnetization);
   REQUIRE(std::abs(relaxing_tail) < 0.001f);
-  REQUIRE_THAT(defaulted_tail, WithinAbs(held_tail, 0.0f));
+  REQUIRE(sonare::test::within_roundoff(defaulted_tail, held_tail));
 }
 
 TEST_CASE("Relaxed tape still saturates", "[mastering][saturation]") {

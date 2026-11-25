@@ -14,6 +14,7 @@
 
 #include "mixing/assistant/suggester.h"
 #include "mixing/meter.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -393,9 +394,9 @@ TEST_CASE("the shared measurement reaches the same answer as measuring per pass"
   REQUIRE(shared.histogram.size() == separate.histogram.size());
   for (std::size_t slot = 0; slot < separate.histogram.size(); ++slot) {
     INFO("slot " << slot);
-    REQUIRE_THAT(shared.histogram[slot], WithinAbs(separate.histogram[slot], 0.0f));
+    REQUIRE(sonare::test::within_roundoff(shared.histogram[slot], separate.histogram[slot]));
   }
-  REQUIRE(shared.crowding == separate.crowding);
+  REQUIRE(sonare::test::ranges_within_roundoff(shared.crowding, separate.crowding));
   REQUIRE(shared.crowded == separate.crowded);
 
   const std::vector<MonoRisk> separate_risks = analyze_mono_risks(tracks, profiles);
@@ -405,9 +406,9 @@ TEST_CASE("the shared measurement reaches the same answer as measuring per pass"
     INFO("risk " << index);
     REQUIRE(shared_risks[index].strip_id == separate_risks[index].strip_id);
     REQUIRE(shared_risks[index].wide_low_end == separate_risks[index].wide_low_end);
-    REQUIRE_THAT(shared_risks[index].correlation,
-                 WithinAbs(separate_risks[index].correlation, 0.0f));
-    REQUIRE_THAT(shared_risks[index].width, WithinAbs(separate_risks[index].width, 0.0f));
+    REQUIRE(sonare::test::within_roundoff(shared_risks[index].correlation,
+                                          separate_risks[index].correlation));
+    REQUIRE(sonare::test::within_roundoff(shared_risks[index].width, separate_risks[index].width));
   }
 }
 

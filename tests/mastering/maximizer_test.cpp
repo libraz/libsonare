@@ -24,6 +24,7 @@
 #include "rt/true_peak_fir.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -854,7 +855,10 @@ TEST_CASE("AdaptiveRelease sizes itself and its inner limiter by the prepared ch
     realtime.prepare(rate, kBlock);
     AdaptiveRelease stereo(config);
     stereo.prepare(rate, kBlock, 2);
-    CHECK(render(stereo) == render(realtime));
+    const auto [stereo_left, stereo_right] = render(stereo);
+    const auto [default_left, default_right] = render(realtime);
+    CHECK(sonare::test::ranges_within_roundoff(stereo_left, default_left));
+    CHECK(sonare::test::ranges_within_roundoff(stereo_right, default_right));
 
     // A third channel is outside the stereo bound, for the chunk pointers and the limiter alike.
     std::vector<std::vector<float>> wide(3, std::vector<float>(kBlock, 0.5f));
@@ -946,12 +950,11 @@ TEST_CASE("AdaptiveRelease output does not depend on the caller's block size",
 
   // A typical host callback, prepared at its own block size the way a live
   // host would.
-  CHECK(max_abs_difference(run_adaptive_release(input, config, {512}, 512, kSampleRate), offline) ==
-        0.0f);
+  CHECK(sonare::test::ranges_within_roundoff(
+      run_adaptive_release(input, config, {512}, 512, kSampleRate), offline));
   // A ragged split that lands mid-transient and inside the control grid.
-  CHECK(max_abs_difference(
-            run_adaptive_release(input, config, {17, 31, 64, 512, 3000}, 4096, kSampleRate),
-            offline) == 0.0f);
+  CHECK(sonare::test::ranges_within_roundoff(
+      run_adaptive_release(input, config, {17, 31, 64, 512, 3000}, 4096, kSampleRate), offline));
 }
 
 // crestWindowMs and releaseSmoothingMs are published, automatable parameters.

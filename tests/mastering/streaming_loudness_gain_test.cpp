@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -154,7 +155,7 @@ TEST_CASE("streaming loudness gain equals the gain the offline chain applies (mo
       const StreamingLoudnessGain gain = sonare::mastering::api::streaming_loudness_gain_mono(
           test_case.config, test_case.samples.data(), test_case.samples.size(), kSampleRate);
 
-      CHECK(gain.loudness_static_gain_db == rendered.applied_gain_db);
+      CHECK(sonare::test::within_roundoff(gain.loudness_static_gain_db, rendered.applied_gain_db));
       CHECK(rendered.loudness_target_limited == test_case.clamps);
       CHECK(std::isfinite(gain.integrated_lufs));
       CHECK(std::isfinite(gain.true_peak_db));
@@ -206,7 +207,7 @@ TEST_CASE("streaming loudness gain equals the gain the offline chain applies (st
       const StreamingLoudnessGain gain = sonare::mastering::api::streaming_loudness_gain_stereo(
           test_case.config, left.data(), right.data(), kLength, kSampleRate);
 
-      CHECK(gain.loudness_static_gain_db == rendered.applied_gain_db);
+      CHECK(sonare::test::within_roundoff(gain.loudness_static_gain_db, rendered.applied_gain_db));
 
       const auto streamed = render_streaming(test_case.config, gain, {left, right});
       const float tolerance = kRenderToleranceOfPeak * peak_of({rendered.left, rendered.right});

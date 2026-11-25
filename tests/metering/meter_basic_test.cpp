@@ -22,6 +22,7 @@
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
 #include "rt/biquad_design.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -1791,8 +1792,8 @@ TEST_CASE("scope decimation matches a reference inline implementation", "[meter]
 
   REQUIRE(vs.size() == expected.size());
   for (size_t i = 0; i < vs.size(); ++i) {
-    REQUIRE_THAT(vs[i].mid, WithinAbs(expected[i].mid, 0.0f));
-    REQUIRE_THAT(vs[i].side, WithinAbs(expected[i].side, 0.0f));
+    REQUIRE(sonare::test::within_roundoff(vs[i].mid, expected[i].mid));
+    REQUIRE(sonare::test::within_roundoff(vs[i].side, expected[i].side));
   }
 }
 

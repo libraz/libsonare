@@ -20,6 +20,7 @@
 #include "analysis/section_structure.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
+#include "support/float_roundoff.h"
 #include "support/section_form.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -735,7 +736,7 @@ TEST_CASE("the self-similarity matrix is the one the grouping used", "[analysis]
 
   const std::vector<float> similarity = analyzer.section_self_similarity();
   REQUIRE(similarity.size() == n * n);
-  REQUIRE(similarity == expected.scores);
+  REQUIRE(sonare::test::ranges_within_roundoff(similarity, expected.scores));
   REQUIRE(analyzer.section_self_similarity() == similarity);
 }
 

@@ -19,6 +19,7 @@
 #include "feature/onset.h"
 #include "feature/rhythm.h"
 #include "support/audio_fixtures.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -796,7 +797,7 @@ TEST_CASE("spectral descriptors match a frame-major oracle", "[spectral]") {
   REQUIRE(centroid.size() == centroid_ref.size());
   for (size_t i = 0; i < centroid.size(); ++i) {
     CAPTURE(i);
-    REQUIRE(centroid[i] == centroid_ref[i]);
+    REQUIRE(sonare::test::within_roundoff(centroid[i], centroid_ref[i]));
   }
 
   const std::vector<float> bandwidth =

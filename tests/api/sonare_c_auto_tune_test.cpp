@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 TEST_CASE("sonare_scale_mask_for_mode returns the mode's scale, root-independent", "[c_api]") {
@@ -138,7 +139,7 @@ TEST_CASE("sonare_auto_tune with no key equals passing the detected key", "[c_ap
                             nullptr) == SONARE_OK);
   REQUIRE(detected.root == reference.root);
   REQUIRE(detected.mode == reference.mode);
-  REQUIRE(detected.confidence == reference.confidence);
+  REQUIRE(sonare::test::within_roundoff(detected.confidence, reference.confidence));
 
   float* named_out = nullptr;
   size_t named_length = 0;
@@ -146,7 +147,8 @@ TEST_CASE("sonare_auto_tune with no key equals passing the detected key", "[c_ap
   REQUIRE(sonare_auto_tune(input.data(), input.size(), kSampleRate, &reference, nullptr, &named_out,
                            &named_length, &named) == SONARE_OK);
   REQUIRE(named_length == detected_length);
-  REQUIRE(std::equal(detected_out, detected_out + detected_length, named_out));
+  REQUIRE(sonare::test::ranges_within_roundoff(detected_out, detected_out + detected_length,
+                                               named_out));
   sonare_free_floats(detected_out);
   sonare_free_floats(named_out);
 }

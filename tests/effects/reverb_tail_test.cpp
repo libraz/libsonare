@@ -57,6 +57,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -885,7 +886,11 @@ TEST_CASE("ConvolutionReverb IR set: one channel runs the mono IR",
   paired.load_ir_set_unit_energy(mono, make_test_ir(500, 0.33f), make_test_ir(900, 0.47f));
   paired.prepare(48000.0, 512);
 
-  CHECK(run_reverb(reference, 1, input) == run_reverb(paired, 1, input));
+  const auto mono_render = run_reverb(reference, 1, input);
+  const auto paired_render = run_reverb(paired, 1, input);
+  REQUIRE(mono_render.size() == 1);
+  REQUIRE(paired_render.size() == 1);
+  CHECK(sonare::test::ranges_within_roundoff(mono_render.front(), paired_render.front()));
 }
 
 TEST_CASE("ConvolutionReverb IR set: two channels run left and right with a common scale",

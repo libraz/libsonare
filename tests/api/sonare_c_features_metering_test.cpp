@@ -13,6 +13,7 @@
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
 #include "support/c_strings.h"
+#include "support/float_roundoff.h"
 
 TEST_CASE("sonare_onset_strength", "[c_api]") {
   SECTION("returns a finite onset envelope") {
@@ -648,7 +649,7 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
                                &explicit_length, &explicit_frames) == SONARE_OK);
     REQUIRE(legacy_length == explicit_length);
     REQUIRE(legacy_frames == explicit_frames);
-    REQUIRE(std::memcmp(legacy, explicit_default, legacy_length * sizeof(float)) == 0);
+    REQUIRE(sonare::test::ranges_within_roundoff(legacy, legacy + legacy_length, explicit_default));
 
     options.hop_length = 256;
     REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &custom,

@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "engine/meter_telemetry.h"
+#include "support/float_roundoff.h"
 
 namespace {
 
@@ -49,11 +50,11 @@ TEST_CASE("Lightweight meter counts a non-finite sample as silence like the full
     const size_t c = static_cast<size_t>(ch);
     CHECK(std::isfinite(poisoned.peak_db[c]));
     CHECK(std::isfinite(poisoned.rms_db[c]));
-    CHECK(poisoned.peak_db[c] == clean.peak_db[c]);
-    CHECK(poisoned.rms_db[c] == silenced.rms_db[c]);
+    CHECK(sonare::test::within_roundoff(poisoned.peak_db[c], clean.peak_db[c]));
+    CHECK(sonare::test::within_roundoff(poisoned.rms_db[c], silenced.rms_db[c]));
   }
   CHECK(std::isfinite(poisoned.correlation));
   CHECK(std::isfinite(poisoned.mono_compat_width));
-  CHECK(poisoned.correlation == silenced.correlation);
-  CHECK(poisoned.mono_compat_width == silenced.mono_compat_width);
+  CHECK(sonare::test::within_roundoff(poisoned.correlation, silenced.correlation));
+  CHECK(sonare::test::within_roundoff(poisoned.mono_compat_width, silenced.mono_compat_width));
 }

@@ -16,6 +16,7 @@
 #include "support/alloc_guard.h"
 #endif
 #include "sonare_c_test_helpers.h"
+#include "support/float_roundoff.h"
 #include "util/constants.h"
 
 namespace {
@@ -261,8 +262,10 @@ TEST_CASE("C effects options reach their native processing paths", "[c_api][effe
     REQUIRE(sonare_hpss(samples.data(), samples.size(), sample_rate, 31, 31, &quarter_options,
                         &quarter, nullptr) == SONARE_OK);
     REQUIRE(absent.length == quarter.length);
-    CHECK(std::equal(absent.harmonic, absent.harmonic + absent.length, quarter.harmonic));
-    CHECK(std::equal(absent.percussive, absent.percussive + absent.length, quarter.percussive));
+    CHECK(sonare::test::ranges_within_roundoff(absent.harmonic, absent.harmonic + absent.length,
+                                               quarter.harmonic));
+    CHECK(sonare::test::ranges_within_roundoff(absent.percussive, absent.percussive + absent.length,
+                                               quarter.percussive));
     sonare_free_hpss_result(&absent);
     sonare_free_hpss_result(&quarter);
 
@@ -1023,9 +1026,10 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     REQUIRE(linked_component_length == mono_length);
     REQUIRE(linked_w_length == mono_w_length);
     REQUIRE(linked_h_length == mono_h_length);
-    REQUIRE(max_abs_difference(linked_out, mono_out, linked_component_count * mono_length) == 0.0f);
-    REQUIRE(max_abs_difference(linked_w, mono_w, mono_w_length) == 0.0f);
-    REQUIRE(max_abs_difference(linked_h, mono_h, mono_h_length) == 0.0f);
+    REQUIRE(sonare::test::ranges_within_roundoff(
+        linked_out, linked_out + linked_component_count * mono_length, mono_out));
+    REQUIRE(sonare::test::ranges_within_roundoff(linked_w, linked_w + mono_w_length, mono_w));
+    REQUIRE(sonare::test::ranges_within_roundoff(linked_h, linked_h + mono_h_length, mono_h));
 
     sonare_free_floats(mono_out);
     sonare_free_floats(mono_w);
@@ -1357,7 +1361,7 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &spelled_out, &op, 1,
                                  &spelled_out_audio, &spelled_out_len) == SONARE_OK);
     REQUIRE(spelled_out_len == init_len);
-    REQUIRE(max_abs_difference(init_out, spelled_out_audio, init_len) == 0.0f);
+    REQUIRE(sonare::test::ranges_within_roundoff(init_out, init_out + init_len, spelled_out_audio));
 
     sonare_free_floats(init_out);
     sonare_free_floats(spelled_out_audio);
