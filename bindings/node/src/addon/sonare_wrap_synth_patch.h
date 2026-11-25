@@ -264,10 +264,9 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
     const std::string subject = node_element_field(root, "modRoutings");
     const uint32_t count = node_list_length(arr, subject);
     if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
-      const std::string message =
-          root.empty() ? "a synth patch supports at most 8 mod routings"
-                       : subject + " must contain at most " +
-                             std::to_string(SONARE_SYNTH_PATCH_MOD_ROUTINGS) + " entries";
+      const std::string message = (root.empty() ? "synth patch modRoutings" : subject) +
+                                  " must contain at most " +
+                                  std::to_string(SONARE_SYNTH_PATCH_MOD_ROUTINGS) + " entries";
       Napi::RangeError::New(env, message).ThrowAsJavaScriptException();
       return false;
     }

@@ -1325,3 +1325,18 @@ def test_engine_params_reach_the_live_engine_binding() -> None:
             )
     finally:
         engine.close()
+
+
+# RED WHEN: a patch with no caller path refuses its routing count under a subject other than the
+# one the JS surfaces name (`synth patch modRoutings`), in this surface's spelling.
+def test_a_root_less_patch_names_its_routing_list() -> None:
+    routings = tuple(SynthModRouting("lfo1", "pitchCents", 1.0) for _ in range(9))
+    with (
+        ls.RealtimeEngine(sample_rate=48000, max_block_size=256) as engine,
+        pytest.raises(
+            ls.SonareValueError,
+            match=r"^RealtimeEngine\.set_synth_instrument: synth patch mod_routings must contain at "
+            r"most 8 entries$",
+        ),
+    ):
+        engine.set_synth_instrument(SynthPatch(mod_routings=routings))

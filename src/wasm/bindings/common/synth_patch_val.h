@@ -313,7 +313,10 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc, const std::stri
     if (emscripten::val::global("Array").call<bool>("isArray", routings)) {
       const size_t count = wasmArrayLength(routings, "modRoutings");
       if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
-        throw WasmRangeError("a synth patch supports at most 8 mod routings");
+        throw WasmRangeError(
+            (root.empty() ? std::string("synth patch modRoutings") : root + ".modRoutings") +
+            " must contain at most " + std::to_string(SONARE_SYNTH_PATCH_MOD_ROUTINGS) +
+            " entries");
       }
       patch.num_mod_routings = static_cast<int>(count);
       // An explicitly supplied array — including an empty one — replaces the

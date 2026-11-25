@@ -272,3 +272,22 @@ describe('setMarkers refuses a marker id outside the uint32 ids from 1', () => {
     });
   });
 });
+
+// RED WHEN: a patch with no caller path refuses its routing count without naming the field, or
+// under a different subject than the patch's other root-less refusals.
+describe('a root-less synth patch names its routing list', () => {
+  it('refuses more mod routings than the matrix holds as synth patch modRoutings', () => {
+    withEngine((engine) => {
+      const route = { source: 'lfo1', destination: 'pitchCents', depth: 1 };
+      expect(() =>
+        engine.setSynthInstrument(0, {
+          modRoutings: Array.from({ length: 9 }, () => route),
+        } as never),
+      ).toThrow(
+        new RangeError(
+          'RealtimeEngine.setSynthInstrument: synth patch modRoutings must contain at most 8 entries',
+        ),
+      );
+    });
+  });
+});
