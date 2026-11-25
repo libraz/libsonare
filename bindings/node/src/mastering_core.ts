@@ -227,11 +227,11 @@ export function masteringNormalizeLoudness(...args: unknown[]): MasteringNormali
   return withEntry('masteringNormalizeLoudness', () => {
     const r = sampleOneShot<MasteringNormalizeLoudnessRequest>('masteringNormalizeLoudness', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const result = addon.mastering(r.samples, r.sampleRate, ...nativeLoudnessArgs(r));
-    return {
-      ...result,
-      latencySamples: result.latencySamples ?? 0,
-    } as MasteringNormalizeLoudnessResult;
+    return addon.mastering(
+      r.samples,
+      r.sampleRate,
+      ...nativeLoudnessArgs(r),
+    ) as MasteringNormalizeLoudnessResult;
   });
 }
 

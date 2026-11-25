@@ -2664,7 +2664,7 @@ export interface SonareModule {
     truePeakOversample: number,
     releaseMs: number,
     applyGainAtInputRate: boolean,
-  ) => WasmMasteringResult;
+  ) => WasmMasteringResult & { latencySamples: number };
   masteringProcessorNames: () => string[];
   masteringPairProcessorNames: () => string[];
   masteringRequireStereoPairProcessor: (processorName: string) => void;

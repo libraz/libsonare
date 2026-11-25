@@ -219,6 +219,7 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
+  out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, result.non_finite_substitution_count));
   return out;

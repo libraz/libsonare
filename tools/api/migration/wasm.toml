@@ -23827,19 +23827,19 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringResult.latencySamples"
-changed = "optional -> required"
+changed = "Optional -> required. The v1.10.0 normalization result could omit latencySamples. Normalization now reports the compensated true-peak limiter look-ahead in samples. Do not trim the returned audio by this amount."
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+test = "bindings/wasm/tests/mastering-result-types.test.ts::reports the C-backed limiter latency on normalized audio"
 
 [[entry]]
 kind = "field"
 old = "MasteringResult.latencySamples"
-changed = "optional -> required"
+changed = "Optional -> required. The v1.10.0 normalization result could omit latencySamples. Normalization now reports the compensated true-peak limiter look-ahead in samples. Do not trim the returned audio by this amount."
 domain = "mastering"
 rule = "typed-results"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+test = "bindings/wasm/tests/mastering-result-types.test.ts::reports the C-backed limiter latency on normalized audio"
 
 [[entry]]
 kind = "field"
