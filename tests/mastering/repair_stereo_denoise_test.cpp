@@ -14,6 +14,7 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -533,7 +534,8 @@ TEST_CASE("asking for a report does not move a sample", "[repair][stereo][denois
     CHECK(identical(repair::dereverb_classical(audio, config, nullptr), plain));
     CHECK(report.suppressed_fraction > 0.0f);
     CHECK(report.mean_reduction_db > 0.0f);
-    CHECK(report.detected.late_decay_ratio_db < 0.0f);
+    REQUIRE(report.detected.late_decay_ratio_db.has_value());
+    CHECK(*report.detected.late_decay_ratio_db < 0.0f);
     // The WPE fields are the pair that shows the 0.98 clamp acting; the
     // predictability is absent exactly when the stage did not run.
     if (config.wpe_enabled) {
@@ -797,12 +799,15 @@ TEST_CASE("the reverb detector separates a tail from a dry offset", "[repair][st
   const std::vector<float> short_tail = reverberate(0.35);
   const std::vector<float> long_tail = reverberate(1.2);
 
-  const float dry_decay =
-      repair::detect_reverb(dry.data(), dry.size(), kSampleRate).late_decay_ratio_db;
-  const float short_decay =
-      repair::detect_reverb(short_tail.data(), short_tail.size(), kSampleRate).late_decay_ratio_db;
-  const float long_decay =
-      repair::detect_reverb(long_tail.data(), long_tail.size(), kSampleRate).late_decay_ratio_db;
+  const auto decay_of = [](const std::vector<float>& signal) {
+    const std::optional<float> decay =
+        repair::detect_reverb(signal.data(), signal.size(), kSampleRate).late_decay_ratio_db;
+    REQUIRE(decay.has_value());
+    return *decay;
+  };
+  const float dry_decay = decay_of(dry);
+  const float short_decay = decay_of(short_tail);
+  const float long_decay = decay_of(long_tail);
 
   INFO("dry " << dry_decay << " short " << short_decay << " long " << long_decay);
   // A tail sustains across the module's lag and a dry offset does not, so the

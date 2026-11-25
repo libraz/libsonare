@@ -73,10 +73,11 @@ void append_defect_profile_json(JsonBuilder& json,
     json.value(defects.hum.harmonic_dbfs[static_cast<size_t>(k)]);
   }
   json.end_array().end_object();
-  json.key("reverb")
-      .begin_object()
-      .kv("late_decay_ratio_db", defects.reverb.late_decay_ratio_db)
-      .end_object();
+  json.key("reverb").begin_object();
+  if (defects.reverb.late_decay_ratio_db) {
+    json.kv("late_decay_ratio_db", *defects.reverb.late_decay_ratio_db);
+  }
+  json.end_object();
   json.end_object();
 }
 
@@ -138,9 +139,14 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
     std::cout << "  Hum:             no fundamental peak found at 50 or 60 Hz (inconclusive, not "
                  "the same as no hum)\n";
   }
-  std::cout << "  Late decay:      " << defects.reverb.late_decay_ratio_db
-            << " dB (dereverb-window decay ratio, not RT60 -- less negative means more "
-               "reverberant)\n\n";
+  if (defects.reverb.late_decay_ratio_db) {
+    std::cout << "  Late decay:      " << *defects.reverb.late_decay_ratio_db
+              << " dB (dereverb-window decay ratio, not RT60 -- less negative means more "
+                 "reverberant)\n\n";
+  } else {
+    std::cout
+        << "  Late decay:      not measured (silence, or input shorter than the late lag)\n\n";
+  }
 }
 
 /// The suggester explains its whole suggestion, mastering stages included; a

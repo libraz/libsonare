@@ -611,7 +611,19 @@ TEST_CASE("sonare_mastering_repair_detect_reverb", "[c_api][mastering]") {
     // The decay statistic is the same measurement either way: WPE adds a term,
     // it does not change what the late-lag ratio reads.
     REQUIRE(from_off.late_decay_ratio_db == from_on.late_decay_ratio_db);
+    REQUIRE(from_off.has_late_decay_ratio_db == 1u);
     REQUIRE(std::isfinite(from_off.late_decay_ratio_db));
+  }
+
+  SECTION("leaves the decay unmeasured on silence") {
+    const std::vector<float> silence(samples.size(), 0.0f);
+    SonareReverbDetection detection{};
+    detection.late_decay_ratio_db = 1.0f;
+    detection.has_late_decay_ratio_db = 1u;
+    REQUIRE(sonare_mastering_repair_detect_reverb(silence.data(), silence.size(), kSr, nullptr,
+                                                  &detection) == SONARE_OK);
+    CHECK(detection.has_late_decay_ratio_db == 0u);
+    CHECK(detection.late_decay_ratio_db == 0.0f);
   }
 
   SECTION("rejects bad inputs and clears the result it was handed") {

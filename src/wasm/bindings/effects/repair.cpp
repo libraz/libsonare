@@ -651,7 +651,7 @@ namespace {
 
 val reverbDetectionToVal(const mastering::repair::ReverbDetection& detected) {
   val out = val::object();
-  out.set("lateDecayRatioDb", detected.late_decay_ratio_db);
+  if (detected.late_decay_ratio_db) out.set("lateDecayRatioDb", *detected.late_decay_ratio_db);
   if (detected.late_predictability) out.set("latePredictability", *detected.late_predictability);
   return out;
 }

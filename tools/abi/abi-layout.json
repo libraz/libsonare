@@ -2154,10 +2154,10 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 24,
-        "size": 24
+        "size": 28
       }
     ],
-    "size": 48
+    "size": 56
   },
   "SonareDereverbReport": {
     "align": 4,
@@ -2166,28 +2166,28 @@
         "kind": "aggregate",
         "name": "detected",
         "offset": 0,
-        "size": 12
+        "size": 16
       },
       {
         "kind": "float",
         "name": "mean_reduction_db",
-        "offset": 12,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "suppressed_fraction",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "wpe_predictor_norm",
+        "name": "suppressed_fraction",
         "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "wpe_predictor_norm",
+        "offset": 24,
         "size": 4
       }
     ],
-    "size": 24
+    "size": 28
   },
   "SonareDereverbResult": {
     "align": 8,
@@ -2208,10 +2208,10 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 16,
-        "size": 24
+        "size": 28
       }
     ],
-    "size": 40
+    "size": 48
   },
   "SonareDereverbStereoResult": {
     "align": 8,
@@ -2238,10 +2238,10 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 24,
-        "size": 24
+        "size": 28
       }
     ],
-    "size": 48
+    "size": 56
   },
   "SonareDetectKeyOptions": {
     "align": 8,
@@ -9597,19 +9597,25 @@
         "size": 4
       },
       {
+        "kind": "unsigned",
+        "name": "has_late_decay_ratio_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
         "kind": "float",
         "name": "late_predictability",
-        "offset": 4,
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "has_late_predictability",
-        "offset": 8,
+        "offset": 12,
         "size": 4
       }
     ],
-    "size": 12
+    "size": 16
   },
   "SonareRhythmResult": {
     "align": 8,

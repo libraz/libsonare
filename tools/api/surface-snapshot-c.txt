@@ -2038,9 +2038,10 @@ SonareReassignedSpectrogramResult.n_bins field required : int (member 1)
 SonareReassignedSpectrogramResult.n_frames field required : int (member 2)
 SonareReassignedSpectrogramResult.times field required : float* (member 4)
 SonareReverbDetection type
-SonareReverbDetection.has_late_predictability field required : uint32_t (member 3)
+SonareReverbDetection.has_late_decay_ratio_db field required : uint32_t (member 2)
+SonareReverbDetection.has_late_predictability field required : uint32_t (member 4)
 SonareReverbDetection.late_decay_ratio_db field required : float (member 1)
-SonareReverbDetection.late_predictability field required : float (member 2)
+SonareReverbDetection.late_predictability field required : float (member 3)
 SonareReverbVariation type
 SonareReverbVariation.SONARE_REVERB_VARIATION_DUB_ECHO value : 3 (member 4)
 SonareReverbVariation.SONARE_REVERB_VARIATION_ECHO value : 1 (member 2)

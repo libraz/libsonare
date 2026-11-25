@@ -235,8 +235,9 @@ float float_from_order_key(uint32_t key) {
 /// @brief Lower-quartile decay across the module's own late-reverb lag, in dB.
 /// @details The order statistic is selected by its key, high half then low half, over two counting
 ///   passes, so no ratio is stored; the result is the element a full sort would put at the rank.
-float late_decay_ratio_db(const float* power, int bins, int frames, int delay_frames) {
-  if (frames <= delay_frames) return 0.0f;
+std::optional<float> late_decay_ratio_db(const float* power, int bins, int frames,
+                                         int delay_frames) {
+  if (frames <= delay_frames) return std::nullopt;
   constexpr size_t kHalfKeyValues = size_t{1} << 16;
   std::vector<size_t> counts(kHalfKeyValues, 0);
   size_t total = 0;
@@ -244,7 +245,7 @@ float late_decay_ratio_db(const float* power, int bins, int frames, int delay_fr
     ++counts[float_order_key(ratio) >> 16];
     ++total;
   });
-  if (total == 0) return 0.0f;
+  if (total == 0) return std::nullopt;
   const size_t rank =
       std::min(total - 1, static_cast<size_t>(kLateDecayPercentile * static_cast<double>(total)));
   size_t below = 0;

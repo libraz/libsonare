@@ -2627,7 +2627,6 @@
           "durationSec": 0.5,
           "dynamics": {
             "attackPerSecond": 2,
-            "shortTermLufsStd": 0,
             "sustainRatio": 1
           },
           "loudness": {
@@ -2657,9 +2656,7 @@
           "bpmConfidence": 0,
           "durationSec": 0.5,
           "dynamics": {
-            "attackPerSecond": 0,
-            "shortTermLufsStd": 0,
-            "sustainRatio": 0
+            "attackPerSecond": 0
           },
           "loudness": {
             "integratedLufs": "-Infinity",
@@ -2667,14 +2664,11 @@
           },
           "spectral": {
             "airRmsDb": "-Infinity",
-            "centroidHz": 0,
-            "flatness": 1,
             "highMidRmsDb": "-Infinity",
             "highRmsDb": "-Infinity",
             "lowMidRmsDb": "-Infinity",
             "lowRmsDb": "-Infinity",
             "midRmsDb": "-Infinity",
-            "rolloffHz": 0,
             "subRmsDb": "-Infinity"
           }
         }
@@ -6725,7 +6719,6 @@
           "durationSec": 0.5,
           "dynamics": {
             "attackPerSecond": 8,
-            "shortTermLufsStd": 0,
             "sustainRatio": 0.70212763547897339
           },
           "loudness": {
@@ -6758,9 +6751,7 @@
           "bpmConfidence": 0,
           "durationSec": 0.5,
           "dynamics": {
-            "attackPerSecond": 0,
-            "shortTermLufsStd": 0,
-            "sustainRatio": 0
+            "attackPerSecond": 0
           },
           "loudness": {
             "integratedLufs": "-Infinity",
@@ -6768,14 +6759,11 @@
           },
           "spectral": {
             "airRmsDb": "-Infinity",
-            "centroidHz": 0,
-            "flatness": 1,
             "highMidRmsDb": "-Infinity",
             "highRmsDb": "-Infinity",
             "lowMidRmsDb": "-Infinity",
             "lowRmsDb": "-Infinity",
             "midRmsDb": "-Infinity",
-            "rolloffHz": 0,
             "subRmsDb": "-Infinity"
           }
         },
@@ -7345,10 +7333,7 @@
               "numChannels": 1,
               "source": "unknown",
               "sourceConfidence": 0,
-              "spectralCentroidHz": 0,
-              "spectralFlatness": 1,
               "stripId": "silent",
-              "sustainRatio": 0,
               "truePeakDbtp": "-Infinity",
               "usable": false
             }
@@ -270448,15 +270433,11 @@
               ],
               "floorDbfs": "-Infinity"
             },
-            "reverb": {
-              "lateDecayRatioDb": 0
-            }
+            "reverb": {}
           },
           "durationSec": 0.5,
           "dynamics": {
-            "attackPerSecond": 0,
-            "shortTermLufsStd": 0,
-            "sustainRatio": 0
+            "attackPerSecond": 0
           },
           "loudness": {
             "integratedLufs": "-Infinity",
@@ -270464,14 +270445,11 @@
           },
           "spectral": {
             "airRmsDb": "-Infinity",
-            "centroidHz": 0,
-            "flatness": 1,
             "highMidRmsDb": "-Infinity",
             "highRmsDb": "-Infinity",
             "lowMidRmsDb": "-Infinity",
             "lowRmsDb": "-Infinity",
             "midRmsDb": "-Infinity",
-            "rolloffHz": 0,
             "subRmsDb": "-Infinity"
           }
         }
@@ -270594,7 +270572,6 @@
           "durationSec": 0.5,
           "dynamics": {
             "attackPerSecond": 0,
-            "shortTermLufsStd": 0,
             "sustainRatio": 1
           },
           "loudness": {
@@ -367278,7 +367255,6 @@
           "durationSec": 0.5,
           "dynamics": {
             "attackPerSecond": 0,
-            "shortTermLufsStd": 0,
             "sustainRatio": 1
           },
           "loudness": {
@@ -728998,9 +728974,7 @@
                 ],
                 "floorDbfs": "-Infinity"
               },
-              "reverb": {
-                "lateDecayRatioDb": 0
-              }
+              "reverb": {}
             },
             {
               "click": {
@@ -729217,7 +729191,7 @@
               "floorDbfs": "-Infinity"
             },
             "reverb": {
-              "lateDecayRatioDb": 0
+              "lateDecayRatioDb": -7.0667004585266113
             }
           },
           "explanation": [
@@ -729364,9 +729338,7 @@
                 ],
                 "floorDbfs": "-Infinity"
               },
-              "reverb": {
-                "lateDecayRatioDb": 0
-              }
+              "reverb": {}
             },
             {
               "click": {
@@ -729471,9 +729443,7 @@
                 ],
                 "floorDbfs": "-Infinity"
               },
-              "reverb": {
-                "lateDecayRatioDb": 0
-              }
+              "reverb": {}
             }
           ],
           "declipThresholdSafe": true,
@@ -729580,9 +729550,7 @@
               ],
               "floorDbfs": "-Infinity"
             },
-            "reverb": {
-              "lateDecayRatioDb": 0
-            }
+            "reverb": {}
           },
           "explanation": [],
           "integratedLufs": "-Infinity",
@@ -919238,9 +919206,7 @@
         "id": "mastering_repair_dereverb_classical_silence_excerpt",
         "result": {
           "report": {
-            "detected": {
-              "lateDecayRatioDb": 0
-            },
+            "detected": {},
             "meanReductionDb": 0,
             "suppressedFraction": 0,
             "wpePredictorNorm": 0
@@ -943838,9 +943804,7 @@
           ],
           "reports": [
             {
-              "detected": {
-                "lateDecayRatioDb": 0
-              },
+              "detected": {},
               "meanReductionDb": 0,
               "suppressedFraction": 0,
               "wpePredictorNorm": 0
@@ -960245,9 +960209,7 @@
           ],
           "reports": [
             {
-              "detected": {
-                "lateDecayRatioDb": 0
-              },
+              "detected": {},
               "meanReductionDb": 0,
               "suppressedFraction": 0,
               "wpePredictorNorm": 0
@@ -960708,9 +960670,6 @@
             "bpmConfidence": 0,
             "durationSec": 0.17066666483879089,
             "integratedLufs": "-Infinity",
-            "spectralCentroidHz": 0,
-            "spectralFlatness": 1,
-            "sustainRatio": 0,
             "truePeakDbtp": "-Infinity"
           }
         }
@@ -960910,9 +960869,6 @@
             "bpmConfidence": 0,
             "durationSec": 0.17066666483879089,
             "integratedLufs": "-Infinity",
-            "spectralCentroidHz": 0,
-            "spectralFlatness": 1,
-            "sustainRatio": 0,
             "truePeakDbtp": "-Infinity"
           }
         }

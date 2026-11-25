@@ -61,6 +61,17 @@ float mean_finite(const std::vector<float>& values) {
   return count > 0 ? static_cast<float>(sum / count) : 0.0f;
 }
 
+/// Whether any bin's power clears the kEpsilon floor spectral_flatness() applies, below which a
+/// frame reads as silence. Without one the shape statistics have no energy to describe.
+bool any_bin_sounds(const std::vector<float>& mag) {
+  const double floor = static_cast<double>(sonare::constants::kEpsilon);
+  return std::any_of(mag.begin(), mag.end(), [floor](float value) {
+    const double magnitude = static_cast<double>(value);
+    return magnitude * magnitude > floor;
+  });
+}
+
+/// Spread of the finite values; not measured with fewer than two.
 float stddev_finite(const std::vector<float>& values) {
   const float mean = mean_finite(values);
   double sum = 0.0;
@@ -72,7 +83,7 @@ float stddev_finite(const std::vector<float>& values) {
       ++count;
     }
   }
-  return count > 1 ? static_cast<float>(std::sqrt(sum / count)) : 0.0f;
+  return count > 1 ? static_cast<float>(std::sqrt(sum / count)) : kNotMeasured;
 }
 
 // The band's share of the signal's mean square in dBFS, the noise fields' convention (a full-scale
@@ -121,12 +132,13 @@ float attack_density(const std::vector<float>& onset, float duration_sec) {
   return static_cast<float>(peaks) / duration_sec;
 }
 
+/// Not measured when the signal has no level for the share to be relative to.
 float sustain_ratio(const std::vector<float>& rms, float duration_sec, int lookback) {
-  if (rms.empty()) return 0.0f;
+  if (rms.empty()) return kNotMeasured;
   const float max_value = *std::max_element(rms.begin(), rms.end());
   const float reference = summary_reference(rising_peak_heights(rms, lookback, kSustainEventRise),
                                             duration_sec, max_value);
-  if (reference <= sonare::constants::kSpectrumEpsilon) return 0.0f;
+  if (reference <= sonare::constants::kSpectrumEpsilon) return kNotMeasured;
   int sustained = 0;
   for (float value : rms) {
     if (value >= reference * 0.35f) ++sustained;
@@ -300,12 +312,9 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
         hum_candidate_better(channel.hum, index, per_channel[hum_index].profile.hum, hum_index)) {
       hum_index = index;
     }
-    if (index == 0) {
-      defects.reverb.late_decay_ratio_db = channel.reverb.late_decay_ratio_db;
-    } else {
-      defects.reverb.late_decay_ratio_db =
-          std::max(defects.reverb.late_decay_ratio_db, channel.reverb.late_decay_ratio_db);
-    }
+    const std::optional<float>& decay = channel.reverb.late_decay_ratio_db;
+    std::optional<float>& kept = defects.reverb.late_decay_ratio_db;
+    if (decay && (!kept || *decay > *kept)) kept = decay;
   }
 
   const float channel_count = static_cast<float>(per_channel.size());
@@ -418,11 +427,18 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
   profile.spectral.high_rms_db = band_db(6000, 12000);
   profile.spectral.air_rms_db =
       band_db(12000, static_cast<float>(audio.sample_rate()) * 0.5f + 1.0f);
-  profile.spectral.centroid_hz = mean_finite(
-      spectral_centroid(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
-  profile.spectral.flatness = mean_finite(spectral_flatness(mag.data(), n_bins, n_frames));
-  profile.spectral.rolloff_hz = mean_finite(
-      spectral_rolloff(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
+  // Total silence leaves the shape statistics unmeasured; otherwise every frame is averaged.
+  if (any_bin_sounds(mag)) {
+    profile.spectral.centroid_hz = mean_finite(
+        spectral_centroid(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
+    profile.spectral.flatness = mean_finite(spectral_flatness(mag.data(), n_bins, n_frames));
+    profile.spectral.rolloff_hz = mean_finite(
+        spectral_rolloff(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
+  } else {
+    profile.spectral.centroid_hz = kNotMeasured;
+    profile.spectral.flatness = kNotMeasured;
+    profile.spectral.rolloff_hz = kNotMeasured;
+  }
 
   // Measured here only when the caller has no series to hand down: the stereo
   // entry point's loudness runs on the channel-summed program rather than on this
@@ -671,7 +687,9 @@ util::json::Object detection_to_json(const repair::HumDetection& detected) {
 
 util::json::Object detection_to_json(const repair::ReverbDetection& detected) {
   util::json::Object out;
-  util::json::put(out, "lateDecayRatioDb", detected.late_decay_ratio_db);
+  if (detected.late_decay_ratio_db) {
+    util::json::put(out, "lateDecayRatioDb", *detected.late_decay_ratio_db);
+  }
   if (detected.late_predictability) {
     util::json::put(out, "latePredictability", *detected.late_predictability);
   }
@@ -706,14 +724,14 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   put_level(spectral, "highMidRmsDb", profile.spectral.high_mid_rms_db);
   put_level(spectral, "highRmsDb", profile.spectral.high_rms_db);
   put_level(spectral, "airRmsDb", profile.spectral.air_rms_db);
-  util::json::put(spectral, "centroidHz", profile.spectral.centroid_hz);
-  util::json::put(spectral, "flatness", profile.spectral.flatness);
-  util::json::put(spectral, "rolloffHz", profile.spectral.rolloff_hz);
+  put_level(spectral, "centroidHz", profile.spectral.centroid_hz);
+  put_level(spectral, "flatness", profile.spectral.flatness);
+  put_level(spectral, "rolloffHz", profile.spectral.rolloff_hz);
 
   json::Object dynamics;
-  util::json::put(dynamics, "shortTermLufsStd", profile.dynamics.short_term_lufs_std);
+  put_level(dynamics, "shortTermLufsStd", profile.dynamics.short_term_lufs_std);
   util::json::put(dynamics, "attackPerSecond", profile.dynamics.attack_density);
-  util::json::put(dynamics, "sustainRatio", profile.dynamics.sustain_ratio);
+  put_level(dynamics, "sustainRatio", profile.dynamics.sustain_ratio);
 
   json::Object root;
   util::json::put(root, "durationSec", profile.duration_sec);

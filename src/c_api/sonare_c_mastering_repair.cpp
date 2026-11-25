@@ -333,7 +333,8 @@ SonareDenoiseReport to_c_denoise_report(const sonare::mastering::repair::Denoise
 
 SonareReverbDetection to_c_reverb_detection(const sonare::mastering::repair::ReverbDetection& cpp) {
   SonareReverbDetection c{};
-  c.late_decay_ratio_db = cpp.late_decay_ratio_db;
+  c.has_late_decay_ratio_db = cpp.late_decay_ratio_db.has_value() ? 1u : 0u;
+  c.late_decay_ratio_db = cpp.late_decay_ratio_db.value_or(0.0f);
   c.has_late_predictability = cpp.late_predictability.has_value() ? 1u : 0u;
   c.late_predictability = cpp.late_predictability.value_or(0.0f);
   return c;

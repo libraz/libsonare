@@ -547,6 +547,8 @@ TEST_CASE("sonare_free_dereverb_result leaves the result zeroed", "[c_api][c_fre
   r.length = static_cast<decltype(r.length)>(1);
   r.report.detected.late_decay_ratio_db =
       static_cast<decltype(r.report.detected.late_decay_ratio_db)>(1);
+  r.report.detected.has_late_decay_ratio_db =
+      static_cast<decltype(r.report.detected.has_late_decay_ratio_db)>(1);
   r.report.detected.late_predictability =
       static_cast<decltype(r.report.detected.late_predictability)>(1);
   r.report.detected.has_late_predictability =
@@ -559,6 +561,8 @@ TEST_CASE("sonare_free_dereverb_result leaves the result zeroed", "[c_api][c_fre
   CHECK(r.length == static_cast<decltype(r.length)>(0));
   CHECK(r.report.detected.late_decay_ratio_db ==
         static_cast<decltype(r.report.detected.late_decay_ratio_db)>(0));
+  CHECK(r.report.detected.has_late_decay_ratio_db ==
+        static_cast<decltype(r.report.detected.has_late_decay_ratio_db)>(0));
   CHECK(r.report.detected.late_predictability ==
         static_cast<decltype(r.report.detected.late_predictability)>(0));
   CHECK(r.report.detected.has_late_predictability ==
@@ -573,6 +577,8 @@ TEST_CASE("sonare_free_dereverb_stereo_result leaves the result zeroed", "[c_api
   r.length = static_cast<decltype(r.length)>(1);
   r.report.detected.late_decay_ratio_db =
       static_cast<decltype(r.report.detected.late_decay_ratio_db)>(1);
+  r.report.detected.has_late_decay_ratio_db =
+      static_cast<decltype(r.report.detected.has_late_decay_ratio_db)>(1);
   r.report.detected.late_predictability =
       static_cast<decltype(r.report.detected.late_predictability)>(1);
   r.report.detected.has_late_predictability =
@@ -586,6 +592,8 @@ TEST_CASE("sonare_free_dereverb_stereo_result leaves the result zeroed", "[c_api
   CHECK(r.length == static_cast<decltype(r.length)>(0));
   CHECK(r.report.detected.late_decay_ratio_db ==
         static_cast<decltype(r.report.detected.late_decay_ratio_db)>(0));
+  CHECK(r.report.detected.has_late_decay_ratio_db ==
+        static_cast<decltype(r.report.detected.has_late_decay_ratio_db)>(0));
   CHECK(r.report.detected.late_predictability ==
         static_cast<decltype(r.report.detected.late_predictability)>(0));
   CHECK(r.report.detected.has_late_predictability ==

@@ -245,10 +245,10 @@ std::string assistant_result_to_json(const AssistantResult& result) {
   put_level(profile, "loudnessRangeLu", result.profile.loudness.lra_lu);
   put_level(profile, "truePeakDbtp", result.profile.loudness.true_peak_db);
   put_level(profile, "crestFactorDb", result.profile.loudness.crest_factor_db);
-  util::json::put(profile, "spectralCentroidHz", result.profile.spectral.centroid_hz);
-  util::json::put(profile, "spectralFlatness", result.profile.spectral.flatness);
+  put_level(profile, "spectralCentroidHz", result.profile.spectral.centroid_hz);
+  put_level(profile, "spectralFlatness", result.profile.spectral.flatness);
   util::json::put(profile, "attackPerSecond", result.profile.dynamics.attack_density);
-  util::json::put(profile, "sustainRatio", result.profile.dynamics.sustain_ratio);
+  put_level(profile, "sustainRatio", result.profile.dynamics.sustain_ratio);
 
   json::Object root;
   util::json::put(root, "chainConfig", std::move(chain_config));

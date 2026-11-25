@@ -912,7 +912,9 @@ CorpusJson repair_result_report(const SonareDenoiseReport& report) {
 CorpusJson repair_result_report(const SonareDereverbReport& report) {
   const auto& detection = report.detected;
   CorpusJsonObject detected;
-  detected.emplace("lateDecayRatioDb", corpus_float_value(detection.late_decay_ratio_db));
+  if (detection.has_late_decay_ratio_db != 0) {
+    detected.emplace("lateDecayRatioDb", corpus_float_value(detection.late_decay_ratio_db));
+  }
   if (detection.has_late_predictability != 0) {
     detected.emplace("latePredictability", corpus_float_value(detection.late_predictability));
   }
@@ -1411,7 +1413,9 @@ std::optional<CorpusCallResult> run_master_corpus(const std::string& entry,
     const SonareError error =
         sonare_mastering_repair_detect_reverb(data, length, sample_rate, nullptr, &detection);
     CorpusJsonObject result;
-    result.emplace("lateDecayRatioDb", corpus_float_value(detection.late_decay_ratio_db));
+    if (detection.has_late_decay_ratio_db != 0) {
+      result.emplace("lateDecayRatioDb", corpus_float_value(detection.late_decay_ratio_db));
+    }
     if (detection.has_late_predictability != 0) {
       result.emplace("latePredictability", corpus_float_value(detection.late_predictability));
     }

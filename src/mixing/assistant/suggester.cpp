@@ -203,10 +203,10 @@ util::json::Value track_to_value(const TrackProfile& profile) {
   put_level(object, "integratedLufs", profile.base.loudness.integrated_lufs);
   put_level(object, "truePeakDbtp", profile.base.loudness.true_peak_db);
   put_level(object, "crestFactorDb", profile.base.loudness.crest_factor_db);
-  util::json::put(object, "spectralCentroidHz", profile.base.spectral.centroid_hz);
-  util::json::put(object, "spectralFlatness", profile.base.spectral.flatness);
+  put_level(object, "spectralCentroidHz", profile.base.spectral.centroid_hz);
+  put_level(object, "spectralFlatness", profile.base.spectral.flatness);
   util::json::put(object, "attackPerSecond", profile.base.dynamics.attack_density);
-  util::json::put(object, "sustainRatio", profile.base.dynamics.sustain_ratio);
+  put_level(object, "sustainRatio", profile.base.dynamics.sustain_ratio);
   util::json::put(object, "bandOccupancy", band_array(profile.band_occupancy));
   return util::json::Value(std::move(object));
 }

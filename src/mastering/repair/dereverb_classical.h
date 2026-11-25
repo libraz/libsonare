@@ -79,11 +79,11 @@ void validate_config(const DereverbClassicalConfig& config);
 ///   deciding how much to subtract.
 struct ReverbDetection {
   /// Decay across the module's own late-reverb lag, in dB: the low percentile
-  /// of power[b][t] / power[b][t - delay_frames]. Zero means no decay measured.
-  /// Less negative means the material sustains across the lag, which a late tail
-  /// does and a dry offset does not -- so a reverberant input reads *higher*
-  /// here than the same material dry.
-  float late_decay_ratio_db = 0.0f;
+  /// of power[b][t] / power[b][t - delay_frames]. Less negative means the
+  /// material sustains across the lag, which a late tail does and a dry offset
+  /// does not -- so a reverberant input reads *higher* here than the same
+  /// material dry. Empty when no cell pair above the power floor spans the lag.
+  std::optional<float> late_decay_ratio_db;
   /// Mean WPE predictor norm, recorded BEFORE the 0.98 clamp. Higher means the
   /// frame is more predictable from the lagged one, which is what a late tail
   /// is. Empty when the WPE stage did not run.

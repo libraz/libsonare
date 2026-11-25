@@ -1965,7 +1965,11 @@ typedef struct {
                                      ///< negative means the material sustains across it,
                                      ///< which a late tail does and a dry offset does not,
                                      ///< so a reverberant input reads HIGHER here than the
-                                     ///< same material dry
+                                     ///< same material dry; read it only when
+                                     ///< has_late_decay_ratio_db is set
+  uint32_t has_late_decay_ratio_db;  ///< 1 when a cell pair above the power floor spanned
+                                     ///< the lag; 0 (and the value 0) on silence or input
+                                     ///< shorter than the lag
   float late_predictability;         ///< mean WPE predictor norm before the clamp; read it
                                      ///< only when has_late_predictability is set
   uint32_t has_late_predictability;  ///< 1 when the WPE stage ran and measured

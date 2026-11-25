@@ -288,7 +288,9 @@ TEST_CASE("Defect profile late decay separates a reverberant copy from the dry b
   const auto clean = profile_of(dry);
   const auto planted = profile_of(with_tail(dry, 0.05f, 0.7f));
 
-  CAPTURE(clean.reverb.late_decay_ratio_db, planted.reverb.late_decay_ratio_db);
+  REQUIRE(clean.reverb.late_decay_ratio_db.has_value());
+  REQUIRE(planted.reverb.late_decay_ratio_db.has_value());
+  CAPTURE(*clean.reverb.late_decay_ratio_db, *planted.reverb.late_decay_ratio_db);
   // Less negative means the material sustains across the module's late lag, so
   // the reverberant copy reads HIGHER here. This is not an RT60 and does not
   // invert like one.
@@ -564,10 +566,16 @@ TEST_CASE("the audio profile schema list matches what the writer emits",
       {"spectral.midRmsDb", spectral.mid_rms_db},
       {"spectral.highMidRmsDb", spectral.high_mid_rms_db},
       {"spectral.highRmsDb", spectral.high_rms_db},
-      {"spectral.airRmsDb", spectral.air_rms_db}};
+      {"spectral.airRmsDb", spectral.air_rms_db},
+      {"spectral.centroidHz", spectral.centroid_hz},
+      {"spectral.flatness", spectral.flatness},
+      {"spectral.rolloffHz", spectral.rolloff_hz},
+      {"dynamics.shortTermLufsStd", profile.dynamics.short_term_lufs_std},
+      {"dynamics.sustainRatio", profile.dynamics.sustain_ratio}};
   for (const auto& [path, level] : levels) {
     if (std::isnan(level)) expected.erase(path);
   }
+  if (!profile.defects.reverb.late_decay_ratio_db) expected.erase("defects.reverb.lateDecayRatioDb");
   REQUIRE_FALSE(actual.empty());
   REQUIRE(actual == expected);
 }

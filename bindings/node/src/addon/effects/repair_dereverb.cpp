@@ -51,13 +51,20 @@ SonareDereverbClassicalConfig DefaultDereverbConfig() {
 template <typename T>
 Napi::Object EmitReverbDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("lateDecayRatioDb", Napi::Number::New(env, detection.late_decay_ratio_db));
   if constexpr (std::is_same_v<T, SonareReverbDetection>) {
+    if (detection.has_late_decay_ratio_db != 0) {
+      out.Set("lateDecayRatioDb", Napi::Number::New(env, detection.late_decay_ratio_db));
+    }
     if (detection.has_late_predictability != 0) {
       out.Set("latePredictability", Napi::Number::New(env, detection.late_predictability));
     }
-  } else if (detection.late_predictability) {
-    out.Set("latePredictability", Napi::Number::New(env, *detection.late_predictability));
+  } else {
+    if (detection.late_decay_ratio_db) {
+      out.Set("lateDecayRatioDb", Napi::Number::New(env, *detection.late_decay_ratio_db));
+    }
+    if (detection.late_predictability) {
+      out.Set("latePredictability", Napi::Number::New(env, *detection.late_predictability));
+    }
   }
   return out;
 }

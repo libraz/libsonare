@@ -456,6 +456,7 @@ class SonareReverbDetection(CStruct):
 
     _fields_ = [
         ("late_decay_ratio_db", ctypes.c_float),
+        ("has_late_decay_ratio_db", ctypes.c_uint32),
         ("late_predictability", ctypes.c_float),
         ("has_late_predictability", ctypes.c_uint32),
     ]

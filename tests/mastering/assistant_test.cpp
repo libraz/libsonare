@@ -1049,6 +1049,32 @@ TEST_CASE("Assistant AudioProfile reads quiet bands at their computed level, sil
   CHECK(json["spectral"]["midRmsDb"].is_null());
 }
 
+TEST_CASE("Assistant AudioProfile leaves energy-relative fields unmeasured on silence",
+          "[mastering][assistant]") {
+  constexpr int sr = 22050;
+  const std::vector<float> silence(static_cast<size_t>(sr) * 4, 0.0f);
+  assistant::AudioProfileConfig cfg;
+  cfg.detect_defects = true;
+  const auto silent = assistant::analyze_audio_profile(silence.data(), silence.size(), sr, cfg);
+  CHECK(std::isnan(silent.spectral.centroid_hz));
+  CHECK(std::isnan(silent.spectral.flatness));
+  CHECK(std::isnan(silent.spectral.rolloff_hz));
+  CHECK(std::isnan(silent.dynamics.short_term_lufs_std));
+  CHECK(std::isnan(silent.dynamics.sustain_ratio));
+  CHECK_FALSE(silent.defects.reverb.late_decay_ratio_db.has_value());
+  // A rate of events is a true zero on silence.
+  CHECK(silent.dynamics.attack_density == 0.0f);
+
+  const auto json = sonare::util::json::parse_strict(assistant::audio_profile_to_json(silent));
+  for (const char* key : {"centroidHz", "flatness", "rolloffHz"}) {
+    CHECK_FALSE(json["spectral"].contains(key));
+  }
+  CHECK_FALSE(json["dynamics"].contains("shortTermLufsStd"));
+  CHECK_FALSE(json["dynamics"].contains("sustainRatio"));
+  CHECK(json["dynamics"]["attackPerSecond"].as_number() == 0.0);
+  CHECK_FALSE(json["defects"]["reverb"].contains("lateDecayRatioDb"));
+}
+
 TEST_CASE("Assistant AudioProfile band holding no bin is not measured", "[mastering][assistant]") {
   // At 16 kHz Nyquist is 8 kHz, so the 12 kHz-Nyquist band has nothing to measure.
   constexpr int sr = 16000;
