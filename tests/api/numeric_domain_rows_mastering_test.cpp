@@ -8,7 +8,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstring>
+#include <iomanip>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -911,6 +913,20 @@ SonareError probe_apply_processor_stereo(const std::string& param, double value)
   return err;
 }
 
+SonareError probe_apply_pair_processor_stereo(const std::string& param, double value) {
+  int sample_rate = kAnalysisRate;
+  int reference_sample_rate = kAnalysisRate;
+  if (is_param(param, "sample_rate")) sample_rate = as_int(value);
+  if (is_param(param, "reference_sample_rate")) reference_sample_rate = as_int(value);
+  const auto samples = analysis_samples();
+  SonareMasteringStereoResult out{};
+  const SonareError err = sonare_mastering_apply_pair_processor_stereo(
+      "match.abCrossfade", samples.data(), samples.data(), samples.size(), samples.data(),
+      samples.data(), samples.size(), reference_sample_rate, sample_rate, nullptr, 0, &out);
+  if (err == SONARE_OK) sonare_free_mastering_stereo_result(&out);
+  return err;
+}
+
 SonareMasteringParam profile_param(const std::string& param, double value) {
   if (is_param(param, "params.hopLength")) return {"hopLength", value};
   return {"nFft", value};
@@ -935,11 +951,53 @@ SonareError probe_audio_profile_stereo(const std::string& param, double value) {
   return err;
 }
 
+SonareError probe_eq_magnitude_response(const std::string&, double value) {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
+  const float frequency = 1000.0f;
+  float out = 0.0f;
+  const auto err = sonare_eq_magnitude_response(eq, as_int(value), &frequency, 1, &out);
+  sonare_eq_destroy(eq);
+  return err;
+}
+
+SonareError probe_eq_set_phase_mode(const std::string&, double value) {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
+  const auto err = sonare_eq_set_phase_mode(eq, as_int(value));
+  sonare_eq_destroy(eq);
+  return err;
+}
+
 SonareError probe_eq_set_band(const std::string& param, double value) {
   SonareEq* eq = nullptr;
   REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   const int index = is_param(param, "index") ? as_int(value) : 0;
-  const SonareError err = sonare_eq_set_band(eq, index, "{}");
+  std::string json = "{}";
+  if (!is_param(param, "index")) {
+    const std::string key = param.rfind("band.", 0) == 0 ? param.substr(5) : param;
+    std::ostringstream payload;
+    payload << std::setprecision(17) << "{\"type\":\"peak\",\"enabled\":true,\"dynamic\":true,\""
+            << key << "\":" << value << "}";
+    json = payload.str();
+  }
+  const SonareError err = sonare_eq_set_band(eq, index, json.c_str());
+  sonare_eq_destroy(eq);
+  return err;
+}
+
+SonareError probe_eq_set_gain_scale(const std::string&, double value) {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
+  const SonareError err = sonare_eq_set_gain_scale(eq, static_cast<float>(value));
+  sonare_eq_destroy(eq);
+  return err;
+}
+
+SonareError probe_eq_set_output_pan(const std::string&, double value) {
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
+  const SonareError err = sonare_eq_set_output_pan(eq, static_cast<float>(value));
   sonare_eq_destroy(eq);
   return err;
 }
@@ -1006,6 +1064,11 @@ const std::map<std::string, Probe>& probes() {
       {"mfcc_to_audio", probe_mfcc_to_audio},
       {"mfcc_to_mel", probe_mfcc_to_mel},
       {"pcen", probe_pcen},
+      {"eq_magnitude_response", probe_eq_magnitude_response},
+      {"eq_set_gain_scale", probe_eq_set_gain_scale},
+      {"eq_set_output_pan", probe_eq_set_output_pan},
+      {"eq_set_phase_mode", probe_eq_set_phase_mode},
+      {"mastering_apply_pair_processor_stereo", probe_apply_pair_processor_stereo},
       {"eq_set_output_gain_db", probe_eq_set_output_gain_db},
       {"playback_loudness_meter_create", probe_playback_loudness_meter_create},
       {"segment_agglomerative", probe_segment_agglomerative},

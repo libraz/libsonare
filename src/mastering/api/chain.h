@@ -30,6 +30,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "streaming/realtime_limits.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"

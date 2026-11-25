@@ -197,11 +197,20 @@ def derive(
         for s in SURFACES
     }
     resolvers = {s: dict(renames.get(s, {}).get("resolver_of", {})) for s in SURFACES}
+    scoped = {s: dict(renames.get(s, {}).get("constructor_renames", {})) for s in SURFACES}
     renames = {
         s: {
             k: v
             for k, v in table.items()
-            if k not in ("length_of", "members_of", "quotient_of", "document_roots", "resolver_of")
+            if k
+            not in (
+                "length_of",
+                "members_of",
+                "quotient_of",
+                "document_roots",
+                "resolver_of",
+                "constructor_renames",
+            )
         }
         for s, table in renames.items()
         if s != "document_roots"
@@ -293,6 +302,20 @@ def derive(
             ):
                 rows[surface].add(Row(key, subject, argument))
                 used.add((surface, f"resolver_of.{name}", argument))
+    # Constructors are lifecycle entries and have no positional parity pairing.
+    for surface, table in scoped.items():
+        for name, spelling in table.items():
+            key, _, subject = name.partition(".")
+            owner = _handle_class(key)
+            if (
+                (surface, key, subject) not in paired
+                and key.endswith("_create")
+                and owner is not None
+                and subject in c_params.get(key, set())
+                and spelling in names[(surface, entry_key(owner))]
+            ):
+                bind(surface, key, subject, spelling)
+                used.add((surface, f"constructor_renames.{name}", spelling))
     for surface, table in document_roots.items():
         for key, (prefix, root) in table.items():
             if root.endswith(".") and root[:-1] in names[(surface, key)]:
@@ -330,6 +353,12 @@ def derive(
             for surface, table in resolvers.items()
             for name, argument in table.items()
             if (surface, f"resolver_of.{name}", argument) not in used
+        )
+        + sorted(
+            (surface, f"constructor_renames.{name}", spelling)
+            for surface, table in scoped.items()
+            for name, spelling in table.items()
+            if (surface, f"constructor_renames.{name}", spelling) not in used
         )
         + sorted(
             (surface, f"document_roots.{key}", f"{prefix} -> {root}")

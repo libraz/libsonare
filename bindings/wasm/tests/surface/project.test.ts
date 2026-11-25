@@ -409,6 +409,38 @@ describe('compile and bounce', () => {
     });
   });
 
+  it('control: keeps the last successful bounce diagnostics after a compile failure', () => {
+    withProject((project) => {
+      project.addMidiClip(0, 4);
+      expect(project.lastBounceCompileResult()).toBeUndefined();
+      project.bounce({ totalFrames: 128 });
+      const successful = project.lastBounceCompileResult();
+      expect(successful?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+        'midiClipNoInstrument',
+      ]);
+
+      const trackId = project.addTrack({ kind: 'audio' });
+      project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
+      expect(() => project.bounce({ totalFrames: 128 })).toThrow(
+        /^Project\.bounce: the project does not compile: /,
+      );
+      expect(project.lastBounceCompileResult()).toEqual(successful);
+    });
+  });
+
+  it('control: keeps the last successful bounce diagnostics after a later argument refusal', () => {
+    withProject((project) => {
+      project.addMidiClip(0, 4);
+      project.bounce({ totalFrames: 128 });
+      const successful = project.lastBounceCompileResult();
+      expect(successful).toBeDefined();
+      expect(() => project.bounce({ totalFrames: 128, countInBars: 17 })).toThrow(
+        new RangeError('Project.bounce: countInBars must be an integer in [0, 16]'),
+      );
+      expect(project.lastBounceCompileResult()).toEqual(successful);
+    });
+  });
+
   it('compile carries the timeline only when withTimeline is set', () => {
     withProject((project) => {
       project.addMidiClip(0, 4);

@@ -291,6 +291,10 @@ val js_mastering_pair_processor_names() {
   return stringVectorToVal(mastering::api::pair_processor_names());
 }
 
+void js_mastering_require_stereo_pair_processor(const std::string& processor_name) {
+  mastering::api::require_stereo_pair_processor(processor_name);
+}
+
 val js_mastering_pair_analysis_names() {
   return stringVectorToVal(mastering::api::pair_analysis_names());
 }
@@ -387,34 +391,65 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
                                      val source_right_samples, val reference_left_samples,
                                      val reference_right_samples, const val& sample_rate_val,
                                      const val& reference_sample_rate_val, val params) {
-  wasmRefuseEmbeddedNul(processor_name, "processorName");
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int reference_sample_rate =
-      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
-  validateWasmFloat32ArrayPair(source_left_samples, "sourceLeft", source_right_samples,
-                               "sourceRight", true);
-  validateWasmFloat32ArrayPair(reference_left_samples, "referenceLeft", reference_right_samples,
-                               "referenceRight", true);
-  validatePlainElementBudget({{&source_left_samples, "sourceLeft"},
-                              {&source_right_samples, "sourceRight"},
-                              {&reference_left_samples, "referenceLeft"},
-                              {&reference_right_samples, "referenceRight"}});
+  std::size_t budget = 0;
+  const std::size_t source_left_count =
+      accumulateWasmFloat32ArrayLength(source_left_samples, "sourceLeft", &budget);
+  const std::size_t source_right_count =
+      accumulateWasmFloat32ArrayLength(source_right_samples, "sourceRight", &budget);
+  const std::size_t reference_left_count =
+      accumulateWasmFloat32ArrayLength(reference_left_samples, "referenceLeft", &budget);
+  const std::size_t reference_right_count =
+      accumulateWasmFloat32ArrayLength(reference_right_samples, "referenceRight", &budget);
+  (void)numberFromVal(sample_rate_val, "sampleRate");
+  (void)numberFromVal(reference_sample_rate_val, "referenceSampleRate");
+  if (!params.isNull() && !params.isUndefined() &&
+      (params.typeOf().as<std::string>() != "object" ||
+       val::global("Array").call<bool>("isArray", params))) {
+    throw WasmTypeError("params must be an object");
+  }
+  auto parsed_params = masteringParamsFromObject(params);
+
+  mastering::api::require_stereo_pair_processor(processor_name);
+  if (source_left_count != source_right_count) {
+    throw WasmRangeError("sourceLeft and sourceRight must have the same length");
+  }
+  if (reference_left_count != reference_right_count) {
+    throw WasmRangeError("referenceLeft and referenceRight must have the same length");
+  }
+  if (source_left_count == 0) {
+    sonare::validate_offline_audio_extent("sourceLeft", 0, 0);
+  }
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", sonare::kAudioSampleRateDomain);
   std::vector<float> source_left = float32ArrayToVector(source_left_samples, "sourceLeft");
-  std::vector<float> source_right = float32ArrayToVector(source_right_samples, "sourceRight");
-  std::vector<float> reference_left = float32ArrayToVector(reference_left_samples, "referenceLeft");
-  std::vector<float> reference_right =
-      float32ArrayToVector(reference_right_samples, "referenceRight");
   validate_offline_audio_input("sourceLeft", source_left.data(), source_left.size(), sample_rate);
+  std::vector<float> source_right = float32ArrayToVector(source_right_samples, "sourceRight");
   validate_offline_audio_input("sourceRight", source_right.data(), source_right.size(),
                                sample_rate);
-  validate_offline_audio_input("referenceLeft", reference_left.data(), reference_left.size(),
-                               reference_sample_rate);
-  validate_offline_audio_input("referenceRight", reference_right.data(), reference_right.size(),
-                               reference_sample_rate);
+
+  if (reference_left_count == 0) {
+    sonare::validate_offline_audio_extent("referenceLeft", 0, 0);
+  }
+  const int reference_sample_rate = domainNumberFromVal<int>(
+      reference_sample_rate_val, "referenceSampleRate", sonare::kAudioSampleRateDomain);
+  std::vector<float> reference_left = float32ArrayToVector(reference_left_samples, "referenceLeft");
+  constexpr std::array<sonare_c_detail::CName, 1> kReferenceRateName{{
+      {"sample_rate", "referenceSampleRate"},
+  }};
+  sonare_c_detail::with_c_names(kReferenceRateName, [&] {
+    sonare::validate_offline_audio_input("referenceLeft", reference_left.data(),
+                                         reference_left.size(), reference_sample_rate);
+  });
+  std::vector<float> reference_right =
+      float32ArrayToVector(reference_right_samples, "referenceRight");
+  sonare_c_detail::with_c_names(kReferenceRateName, [&] {
+    sonare::validate_offline_audio_input("referenceRight", reference_right.data(),
+                                         reference_right.size(), reference_sample_rate);
+  });
   auto result = mastering::api::apply_named_pair_processor_stereo(
       processor_name, source_left.data(), source_right.data(), source_left.size(),
       reference_left.data(), reference_right.data(), reference_left.size(), sample_rate,
-      reference_sample_rate, masteringParamsFromObject(params));
+      reference_sample_rate, parsed_params);
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left));
   out.set("right", vectorToFloat32Array(result.right));
@@ -755,6 +790,7 @@ void registerMasteringApiBindings() {
   function("masteringProcessorCatalog", &js_mastering_processor_catalog);
   function("capabilityCatalog", &js_capability_catalog);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);
+  function("masteringRequireStereoPairProcessor", &js_mastering_require_stereo_pair_processor);
   function("masteringPairAnalysisNames", &js_mastering_pair_analysis_names);
   function("masteringStereoAnalysisNames", &js_mastering_stereo_analysis_names);
   function("masteringProcess", &js_mastering_process);

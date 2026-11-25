@@ -314,6 +314,29 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(module.surface_spelling("resample", "sr"), "sample_rate")
         self.assertEqual(module.surface_spelling("resample", "n_fft"), "n_fft")
 
+    def test_a_constructor_rename_is_scoped_to_its_c_entry(self) -> None:
+        facts = [
+            Fact("engine_capture", "channels", "param", "node", None),
+            Fact("engine_capture", None, "param", "node", "numChannels"),
+        ]
+        request = {
+            "node": [
+                {"entry": "PlaybackLoudnessMeter", "param": "options", "fields": ["numChannels"]}
+            ]
+        }
+        rule = {
+            "node": {
+                "constructor_renames": {"playback_loudness_meter_create.channels": "numChannels"}
+            }
+        }
+        c_params = {"playback_loudness_meter_create": {"channels"}}
+        rows, unbound, idle = gen.derive(facts, request, rule, c_params)
+        self.assertEqual(
+            rows["node"], [gen.Row("playback_loudness_meter_create", "channels", "numChannels")]
+        )
+        self.assertEqual([row.c_key for row in unbound], ["engine_capture"])
+        self.assertEqual(idle, [])
+
     def test_a_length_of_row_binds_a_count_to_the_array_the_entry_takes(self) -> None:
         facts = [
             Fact("apply", "rendered_mono", "param", "python", "rendered_mono"),

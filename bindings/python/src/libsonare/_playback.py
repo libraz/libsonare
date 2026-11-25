@@ -20,9 +20,10 @@ import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type, _require_open
 from ._field_spelling import surface_spelling
-from ._narrowing import _resolve_zero_default
+from ._narrowing import _resolve_zero_default, _Respelling
 from ._runtime import (
     _C_INT_MAX,
+    _as_float32_buffer,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -92,7 +93,7 @@ class HrtfSet:
     @classmethod
     @_entry("HrtfSet.from_bytes")
     def from_bytes(cls, data: bytes) -> HrtfSet:
-        """Parse SHRF v1 bytes into an HRTF set; malformed data raises :class:`SonareError`."""
+        """Parse SHRF v1 bytes; malformed data raises :class:`SonareError` with `InvalidFormat`."""
         lib = _get_lib()
         buf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
         handle = ctypes.c_void_p()
@@ -521,7 +522,8 @@ class PlaybackLoudnessMeter:
                 _to_c_int(self._channels, "num_channels"),
                 _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(self._handle),
-            )
+            ),
+            respelled={"channels": _Respelling("num_channels")},
         )
 
     @_entry("PlaybackLoudnessMeter.close")
@@ -551,8 +553,7 @@ class PlaybackLoudnessMeter:
     def push_interleaved(self, samples: Sequence[float] | list[float] | np.ndarray) -> None:
         """Feed interleaved frames of any length."""
         handle = self._require_handle()
-        validated = _validate_samples(samples)
-        c_array, total = _to_c_float_array(validated)
+        c_array, total = _to_c_float_array(_as_float32_buffer(samples))
         if total % self._channels != 0:
             raise _refuse("interleaved samples length must be divisible by num_channels")
         frames = total // self._channels

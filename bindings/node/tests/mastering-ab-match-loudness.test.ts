@@ -5,6 +5,7 @@ import {
   masteringAbMatchLoudnessStereo,
   meteringTruePeakDbtp,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 44100;
 
@@ -73,16 +74,16 @@ describe('masteringAbMatchLoudness', () => {
   it.each([
     ['source', 'reference'],
     ['reference', 'source'],
-  ] as const)('refuses a silent %s, naming it', (silentRole, otherRole) => {
+  ] as const)('control: refuses a silent %s, naming it', (silentRole, otherRole) => {
     const silent = new Float32Array(SR);
     const request = { [silentRole]: silent, [otherRole]: TAKES[otherRole], sampleRate: SR } as {
       source: Float32Array;
       reference: Float32Array;
       sampleRate: number;
     };
-    const call = () => masteringAbMatchLoudness(request);
-    expect(call).toThrow(RangeError);
-    expect(call).toThrow(
+    expectRefusal(
+      () => masteringAbMatchLoudness(request),
+      RangeError,
       new RegExp(`^masteringAbMatchLoudness: ${silentRole} has no measurable loudness$`),
     );
   });
@@ -90,24 +91,27 @@ describe('masteringAbMatchLoudness', () => {
   it.each([
     ['source', 'reference'],
     ['reference', 'source'],
-  ] as const)('refuses a silent stereo %s, naming both its channels', (silentRole, otherRole) => {
-    const silent = new Float32Array(SR);
-    const take = TAKES[otherRole];
-    const request = {
-      [`${silentRole}Left`]: silent,
-      [`${silentRole}Right`]: silent,
-      [`${otherRole}Left`]: take,
-      [`${otherRole}Right`]: take,
-      sampleRate: SR,
-    } as unknown as Parameters<typeof masteringAbMatchLoudnessStereo>[0];
-    const call = () => masteringAbMatchLoudnessStereo(request);
-    expect(call).toThrow(RangeError);
-    expect(call).toThrow(
-      new RegExp(
-        `^masteringAbMatchLoudnessStereo: ${silentRole}Left and ${silentRole}Right have no measurable loudness$`,
-      ),
-    );
-  });
+  ] as const)(
+    'control: refuses a silent stereo %s, naming both its channels',
+    (silentRole, otherRole) => {
+      const silent = new Float32Array(SR);
+      const take = TAKES[otherRole];
+      const request = {
+        [`${silentRole}Left`]: silent,
+        [`${silentRole}Right`]: silent,
+        [`${otherRole}Left`]: take,
+        [`${otherRole}Right`]: take,
+        sampleRate: SR,
+      } as unknown as Parameters<typeof masteringAbMatchLoudnessStereo>[0];
+      expectRefusal(
+        () => masteringAbMatchLoudnessStereo(request),
+        RangeError,
+        new RegExp(
+          `^masteringAbMatchLoudnessStereo: ${silentRole}Left and ${silentRole}Right have no measurable loudness$`,
+        ),
+      );
+    },
+  );
 
   it('refuses a request that omits sampleRate', () => {
     // biome-ignore lint/suspicious/noExplicitAny: the call drops a required field.

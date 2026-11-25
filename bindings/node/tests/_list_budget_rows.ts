@@ -414,6 +414,7 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
     (api, l) =>
       new api.StreamingMasteringChain({
         sampleRate: 48000,
+        numChannels: 1,
         dynamics: { multibandComp: { bands: l } },
       } as never),
     'StreamingMasteringChain',

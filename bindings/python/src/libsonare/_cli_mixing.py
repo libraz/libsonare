@@ -73,7 +73,7 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
         name = _json_key_to_snake_case(key)
         if name.startswith("enable_"):
             options[name] = value != 0.0
-        elif name == "tempo_bpm" and ctypes.c_float(value).value == 0.0:
+        elif name == "tempo_bpm" and value == 0.0:
             continue
         elif name in _INTEGER_PARAMS and value.is_integer():
             options[name] = int(value)

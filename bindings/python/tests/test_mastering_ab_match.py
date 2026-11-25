@@ -20,7 +20,7 @@ from libsonare import (
     mastering_ab_match_loudness_stereo,
 )
 
-from ._helpers import LIB_AVAILABLE, sine
+from ._helpers import LIB_AVAILABLE, raises_coded, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -61,25 +61,25 @@ def test_reported_peak_is_the_matched_take_not_the_source() -> None:
 
 
 @pytest.mark.parametrize("silent_role", ["source", "reference"])
-def test_a_silent_take_is_refused_naming_it(silent_role: str) -> None:
+def test_control_a_silent_take_is_refused_naming_it(silent_role: str) -> None:
     silent = np.zeros(SR // 2, dtype=np.float32)
     takes = {"source": SOURCE, "reference": REFERENCE, silent_role: silent}
-    with pytest.raises(
-        SonareValueError,
-        match=rf"^mastering_ab_match_loudness: {silent_role} has no measurable loudness$",
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER,
+        match=rf"mastering_ab_match_loudness: {silent_role} has no measurable loudness",
     ):
         mastering_ab_match_loudness(takes["source"], takes["reference"], SR)
 
 
 @pytest.mark.parametrize("silent_role", ["source", "reference"])
-def test_a_silent_stereo_take_is_refused_naming_both_its_channels(silent_role: str) -> None:
+def test_control_a_silent_stereo_take_is_refused_naming_both_its_channels(silent_role: str) -> None:
     silent = np.zeros(SR // 2, dtype=np.float32)
     takes = {"source": SOURCE, "reference": REFERENCE, silent_role: silent}
-    with pytest.raises(
-        SonareValueError,
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER,
         match=(
-            rf"^mastering_ab_match_loudness_stereo: {silent_role}_left and {silent_role}_right "
-            r"have no measurable loudness$"
+            rf"mastering_ab_match_loudness_stereo: {silent_role}_left and {silent_role}_right "
+            r"have no measurable loudness"
         ),
     ):
         mastering_ab_match_loudness_stereo(

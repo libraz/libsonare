@@ -639,10 +639,10 @@ val ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& can
 
 double ProjectWasm::snapToGrid(const val& ppq_val, const val& strength_val,
                                const val& division_val) {
-  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
-  const double strength = checkedDoubleFromVal(strength_val, "strength");
-  const int division =
-      domainNumberFromVal<int>(division_val, "division", sonare_c_detail::kSnapDivisionDomain);
+  const double ppq = numberFromVal(ppq_val, "ppq");
+  const double strength = numberFromVal(strength_val, "strength");
+  const double division_value = numberFromVal(division_val, "division");
+  const int division = sonare_c_detail::narrow_snap_division(ppq, strength, division_value);
   double out = 0.0;
   SonareProjectSnapToGridOptions options;
   sonare_project_snap_to_grid_options_init(&options);

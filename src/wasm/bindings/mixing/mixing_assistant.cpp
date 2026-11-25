@@ -40,16 +40,6 @@ namespace {
 
 namespace assistant = sonare::mixing::assistant;
 
-// Planar per-track input copied out of JS. The core reads the sample pointers
-// during the analysis call, so the copies have to outlive it; they are held here
-// alongside the TrackInput views that point into them.
-struct AssistantInput {
-  std::vector<std::vector<float>> left;
-  // One entry per track; empty for a mono track (no right plane).
-  std::vector<std::vector<float>> right;
-  std::vector<assistant::TrackInput> tracks;
-};
-
 bool isJsArray(const val& value) { return val::global("Array").call<bool>("isArray", value); }
 
 bool isAbsent(const val& value) { return value.isUndefined() || value.isNull(); }
@@ -86,107 +76,192 @@ std::string optionalTrackName(const val& names, std::size_t index) {
   return value.as<std::string>();
 }
 
-AssistantInput buildAssistantInput(val left_channels, val right_channels, val track_ids,
-                                   val track_names, val track_sample_rates,
-                                   const val& sample_rate_value) {
-  const std::size_t count = wasmPlaneListLength(left_channels, "leftChannels");
+// Native input shape captured before any numeric domain is admitted. Keeping the handles and
+// names here also means the data copied after admission is the data whose shape was checked.
+struct AssistantInputShape {
+  std::size_t count = 0;
+  std::vector<val> left_planes;
+  std::vector<val> right_planes;
+  std::vector<bool> has_right;
+  std::vector<std::size_t> left_lengths;
+  std::vector<std::size_t> right_lengths;
+  std::vector<std::string> ids;
+  std::vector<std::string> names;
+  std::vector<val> track_sample_rates;
+  std::vector<bool> has_track_sample_rate;
+};
+
+struct AssistantRates {
+  int sample_rate = 0;
+  std::vector<int> track_sample_rates;
+};
+
+struct AssistantInput {
+  std::vector<std::vector<float>> left;
+  // One entry per track; empty for a mono track (no right plane).
+  std::vector<std::vector<float>> right;
+  std::vector<assistant::TrackInput> tracks;
+};
+
+AssistantInputShape inspectAssistantInput(val left_channels, val right_channels, val track_ids,
+                                          val track_names, val track_sample_rates,
+                                          const val& sample_rate_value) {
+  AssistantInputShape shape;
+  shape.count = wasmPlaneListLength(left_channels, "leftChannels");
   requireJsArray(track_ids, "trackIds");
   if (!isAbsent(track_names)) requireJsArray(track_names, "trackNames");
   if (!isAbsent(track_sample_rates)) requireJsArray(track_sample_rates, "trackSampleRates");
+  (void)numberFromVal(sample_rate_value, "sampleRate");
 
-  if (wasmArrayLength(track_ids, "trackIds") != count) {
+  if (wasmArrayLength(track_ids, "trackIds") != shape.count) {
     throw WasmRangeError("trackIds must have one entry per track");
   }
-  if (!isAbsent(right_channels) && wasmPlaneListLength(right_channels, "rightChannels") != count) {
+  if (!isAbsent(right_channels) &&
+      wasmPlaneListLength(right_channels, "rightChannels") != shape.count) {
     throw WasmRangeError("rightChannels must have one entry per track");
   }
-  if (!isAbsent(track_names) && wasmArrayLength(track_names, "trackNames") != count) {
+  if (!isAbsent(track_names) && wasmArrayLength(track_names, "trackNames") != shape.count) {
     throw WasmRangeError("trackNames must have one entry per track");
   }
   if (!isAbsent(track_sample_rates) &&
-      wasmArrayLength(track_sample_rates, "trackSampleRates") != count) {
+      wasmArrayLength(track_sample_rates, "trackSampleRates") != shape.count) {
     throw WasmRangeError("trackSampleRates must have one entry per track");
   }
 
-  AssistantInput input;
-  // Zero tracks is a valid degenerate call that yields an empty suggestion, and
-  // the sample rate is never read on that path, so it is checked only once there
-  // is audio for it to describe.
-  if (count == 0) {
-    // Type-only: the domain is read once there is audio for the rate to describe.
-    (void)checkedIntFromVal(sample_rate_value, "sampleRate");
-    return input;
-  }
-  const int sample_rate = domainNumberFromVal<int>(
-      sample_rate_value, "sampleRate", sonare_c_detail::kMixingAssistantSampleRateDomain);
+  shape.left_planes.reserve(shape.count);
+  shape.right_planes.resize(shape.count, val::undefined());
+  shape.has_right.assign(shape.count, false);
+  shape.left_lengths.reserve(shape.count);
+  shape.right_lengths.assign(shape.count, 0);
+  shape.ids.reserve(shape.count);
+  shape.names.reserve(shape.count);
+  std::size_t plain_count = 0;
 
-  input.left.resize(count);
-  input.right.resize(count);
-  std::vector<std::string> ids(count);
-  std::vector<std::string> names(count);
-  std::size_t budget = 0;
-  for (std::size_t index = 0; index < count; ++index) {
-    ids[index] = requireTrackId(track_ids, index);
-    names[index] = optionalTrackName(track_names, index);
+  // Read every track's channel, identity and name shapes before considering any rate.
+  for (std::size_t index = 0; index < shape.count; ++index) {
+    shape.ids.push_back(requireTrackId(track_ids, index));
+    shape.names.push_back(optionalTrackName(track_names, index));
 
     const std::string at = "[" + std::to_string(index) + "]";
-    const std::string left_subject = "leftChannels" + at;
-    const std::string right_subject = "rightChannels" + at;
     const val left = left_channels[index];
-    const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(left, left_subject.c_str(), &budget);
-    input.left[index] = float32ArrayToVector(left, left_subject.c_str());
+    const std::string left_path = "leftChannels" + at;
+    const char* const left_subject = wasmCString(left_path, "leftChannels");
+    shape.left_lengths.push_back(
+        accumulateWasmFloat32ArrayLength(left, left_subject, &plain_count));
+    shape.left_planes.push_back(left);
 
     const val right = isAbsent(right_channels) ? val::undefined() : right_channels[index];
     if (!isAbsent(right)) {
-      // The core carries one frame count per track and reads both planes with
-      // it, so a shorter right plane would be read past its end.
-      const std::size_t right_frames =
-          accumulateWasmFloat32ArrayLength(right, right_subject.c_str(), &budget);
-      if (right_frames != frames) {
-        const std::string track = "tracks" + at;
-        throw WasmRangeError(track + ".left and " + track + ".right must have the same length");
-      }
-      input.right[index] = float32ArrayToVector(right, right_subject.c_str());
+      const std::string right_path = "rightChannels" + at;
+      const char* const right_subject = wasmCString(right_path, "rightChannels");
+      shape.right_lengths[index] =
+          accumulateWasmFloat32ArrayLength(right, right_subject, &plain_count);
+      shape.right_planes[index] = right;
+      shape.has_right[index] = true;
     }
+  }
 
-    if (!isAbsent(track_sample_rates)) {
-      const std::string subject = "tracks[" + std::to_string(index) + "].sampleRate";
-      const int track_rate =
-          domainNumberFromVal<int>(track_sample_rates[index], subject.c_str(),
-                                   sonare_c_detail::kMixingAssistantTrackSampleRateDomain);
-      if (track_rate != sample_rate && !input.left[index].empty()) {
-        input.left[index] = sonare::resample(input.left[index].data(), input.left[index].size(),
-                                             track_rate, sample_rate);
-        if (!input.right[index].empty()) {
-          input.right[index] = sonare::resample(input.right[index].data(),
-                                                input.right[index].size(), track_rate, sample_rate);
-        }
+  // A per-track rate's type is shape; integrality and its range are its domain.
+  shape.track_sample_rates.resize(shape.count, val::undefined());
+  shape.has_track_sample_rate.assign(shape.count, false);
+  if (!isAbsent(track_sample_rates)) {
+    for (std::size_t index = 0; index < shape.count; ++index) {
+      const val rate = track_sample_rates[index];
+      if (!isAbsent(rate) && !rate.isNumber()) {
+        throw WasmTypeError("tracks[" + std::to_string(index) + "].sampleRate must be an integer");
+      }
+      shape.track_sample_rates[index] = rate;
+      shape.has_track_sample_rate[index] = rate.isNumber();
+    }
+  }
+  return shape;
+}
+
+void validateAssistantTrackLengths(const AssistantInputShape& shape) {
+  for (std::size_t index = 0; index < shape.count; ++index) {
+    if (shape.has_right[index] && shape.left_lengths[index] != shape.right_lengths[index]) {
+      const std::string track = "tracks[" + std::to_string(index) + "]";
+      throw WasmRangeError(track + ".left and " + track + ".right must have the same length");
+    }
+  }
+}
+
+AssistantRates validateAssistantRates(const AssistantInputShape& shape,
+                                      const val& sample_rate_value) {
+  AssistantRates rates;
+  rates.track_sample_rates.resize(shape.count);
+  for (std::size_t index = 0; index < shape.count; ++index) {
+    if (!shape.has_track_sample_rate[index]) continue;
+    const std::string subject = "tracks[" + std::to_string(index) + "].sampleRate";
+    rates.track_sample_rates[index] =
+        domainNumberFromVal<int>(shape.track_sample_rates[index], subject.c_str(),
+                                 sonare_c_detail::kMixingAssistantTrackSampleRateDomain);
+  }
+  rates.sample_rate = domainNumberFromVal<int>(sample_rate_value, "sampleRate",
+                                               sonare_c_detail::kMixingAssistantSampleRateDomain);
+  for (std::size_t index = 0; index < shape.count; ++index) {
+    if (!shape.has_track_sample_rate[index]) {
+      rates.track_sample_rates[index] = rates.sample_rate;
+    }
+  }
+  return rates;
+}
+
+std::vector<mastering::api::Param> assistantParamsFromObject(val params_obj) {
+  if (!isAbsent(params_obj) && params_obj.typeOf().as<std::string>() != "object") {
+    throw WasmTypeError("params must be an object");
+  }
+  return masteringParamsFromObject(params_obj);
+}
+
+assistant::MixAssistantConfig assistantConfigFromParams(
+    const std::vector<mastering::api::Param>& params) {
+  for (const auto& param : params) {
+    if (param.key == "tempoBpm" && param.value == 0.0) {
+      throw WasmRangeError("tempoBpm must be in [20, 400] BPM");
+    }
+  }
+  return assistant::mix_assistant_config_from_params(params.data(), params.size());
+}
+
+AssistantInput buildAssistantInput(const AssistantInputShape& shape, const AssistantRates& rates) {
+  AssistantInput input;
+  input.left.resize(shape.count);
+  input.right.resize(shape.count);
+  for (std::size_t index = 0; index < shape.count; ++index) {
+    const std::string left_path = "leftChannels[" + std::to_string(index) + "]";
+    const char* const left_subject = wasmCString(left_path, "leftChannels");
+    input.left[index] = float32ArrayToVector(shape.left_planes[index], left_subject);
+    if (shape.has_right[index]) {
+      const std::string right_path = "rightChannels[" + std::to_string(index) + "]";
+      const char* const right_subject = wasmCString(right_path, "rightChannels");
+      input.right[index] = float32ArrayToVector(shape.right_planes[index], right_subject);
+    }
+    const int track_rate = rates.track_sample_rates[index];
+    if (track_rate != rates.sample_rate && !input.left[index].empty()) {
+      input.left[index] = sonare::resample(input.left[index].data(), input.left[index].size(),
+                                           track_rate, rates.sample_rate);
+      if (!input.right[index].empty()) {
+        input.right[index] = sonare::resample(input.right[index].data(), input.right[index].size(),
+                                              track_rate, rates.sample_rate);
       }
     }
   }
 
   // Pointers are taken only after every buffer is in place, so no later resize
   // can invalidate one.
-  input.tracks.reserve(count);
-  for (std::size_t index = 0; index < count; ++index) {
+  input.tracks.reserve(shape.count);
+  for (std::size_t index = 0; index < shape.count; ++index) {
     assistant::TrackInput track;
-    track.id = std::move(ids[index]);
-    track.name = std::move(names[index]);
+    track.id = shape.ids[index];
+    track.name = shape.names[index];
     track.left = input.left[index].empty() ? nullptr : input.left[index].data();
     track.right = input.right[index].empty() ? nullptr : input.right[index].data();
     track.frame_count = input.left[index].size();
-    track.sample_rate = sample_rate;
+    track.sample_rate = rates.sample_rate;
     input.tracks.push_back(std::move(track));
   }
   return input;
-}
-
-assistant::MixAssistantConfig assistantConfigFromParams(val params_obj) {
-  // The same flat param list the C and Python paths build, so a JS options bag
-  // and a C param array resolve to one config parser.
-  const std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
-  return assistant::mix_assistant_config_from_params(params.data(), params.size());
 }
 
 #else
@@ -211,9 +286,13 @@ std::string js_mixing_assistant_suggest(val left_channels, val right_channels, v
                                         val track_names, val track_sample_rates,
                                         const val& sample_rate, val params_obj) {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
-  const AssistantInput input = buildAssistantInput(left_channels, right_channels, track_ids,
-                                                   track_names, track_sample_rates, sample_rate);
+  const AssistantInputShape shape = inspectAssistantInput(
+      left_channels, right_channels, track_ids, track_names, track_sample_rates, sample_rate);
+  const std::vector<mastering::api::Param> params = assistantParamsFromObject(params_obj);
+  validateAssistantTrackLengths(shape);
+  const AssistantRates rates = validateAssistantRates(shape, sample_rate);
+  const assistant::MixAssistantConfig config = assistantConfigFromParams(params);
+  const AssistantInput input = buildAssistantInput(shape, rates);
   return assistant::mix_assistant_result_to_json(assistant::suggest_scene(input.tracks, config));
 #else
   (void)left_channels;

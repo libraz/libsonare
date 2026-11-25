@@ -780,3 +780,42 @@ def test_a_failed_bounce_refuses_and_leaves_the_compile_result_empty() -> None:
         assert project.last_bounce_compile_result() is None
     finally:
         project.close()
+
+
+def test_control_last_bounce_compile_result_survives_a_later_argument_refusal() -> None:
+    project = Project()
+    try:
+        track = project.add_track("audio", "a")
+        project.add_clip(
+            track, 0.0, 1.0, audio=[0.1] * 480, audio_channels=1, audio_sample_rate=48000
+        )
+        project.bounce(total_frames=480, num_channels=2)
+        successful = project.last_bounce_compile_result()
+        assert isinstance(successful, ProjectCompileResult)
+
+        with raises_coded(ErrorCode.INVALID_PARAMETER, match="count_in_bars"):
+            project.bounce(total_frames=480, num_channels=2, count_in_bars=17)
+        assert project.last_bounce_compile_result() == successful
+    finally:
+        project.close()
+
+
+def test_control_last_bounce_compile_result_survives_a_later_compile_failure() -> None:
+    project = Project()
+    try:
+        track = project.add_track("audio", "a")
+        project.add_clip(
+            track, 0.0, 1.0, audio=[0.1] * 480, audio_channels=1, audio_sample_rate=48000
+        )
+        project.bounce(total_frames=480, num_channels=2)
+        successful = project.last_bounce_compile_result()
+        assert isinstance(successful, ProjectCompileResult)
+
+        # One track more than the realtime track mixer holds is a compile failure.
+        for index in range(32):
+            project.add_track("audio", f"overflow{index}")
+        with raises_coded(ErrorCode.INVALID_STATE):
+            project.bounce(total_frames=480, num_channels=2)
+        assert project.last_bounce_compile_result() == successful
+    finally:
+        project.close()

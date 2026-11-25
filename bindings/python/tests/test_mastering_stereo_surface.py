@@ -94,6 +94,146 @@ def test_stereo_pair_uses_independent_lengths_and_shared_crossfade() -> None:
     assert at_reference.left[0] == pytest.approx(reference_left[0], abs=1e-6)
 
 
+def test_stereo_pair_control_rejects_unsupported_processor_before_audio_domains() -> None:
+    import libsonare
+
+    with raises_coded(
+        ErrorCode.NOT_SUPPORTED,
+        match=r": processor does not support planar stereo pairs",
+    ):
+        libsonare.mastering_apply_pair_processor_stereo(
+            "match.abSwitch",
+            [0.1, 0.2],
+            [-0.1, -0.2],
+            [0.4, 0.5],
+            [-0.4, -0.5],
+            sample_rate=0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("call_kwargs", "error_type", "message", "exact"),
+    [
+        pytest.param(
+            {
+                "processor": "match.unknown",
+                "source_left": [0.1, 0.2],
+                "source_right": [-0.1],
+                "reference_left": [0.2, -0.2],
+                "reference_right": [0.2, -0.2],
+                "sample_rate": 0,
+            },
+            SonareValueError,
+            "mastering_apply_pair_processor_stereo: processor must be one of ",
+            False,
+            id="processor membership precedes unequal plane lengths",
+        ),
+        pytest.param(
+            {
+                "processor": "match.unknown",
+                "source_left": [math.nan, 0.2],
+                "source_right": [0.1, -0.1],
+                "reference_left": [0.2, -0.2],
+                "reference_right": [0.2, -0.2],
+                "sample_rate": 0,
+                "params": 1,
+            },
+            TypeError,
+            "mastering_apply_pair_processor_stereo: params must be an object",
+            True,
+            id="params bag shape precedes processor membership and domains",
+        ),
+        pytest.param(
+            {
+                "processor": "match.unknown",
+                "source_left": [math.nan, 0.2],
+                "source_right": [0.1, -0.1],
+                "reference_left": [0.2, -0.2],
+                "reference_right": [0.2, -0.2],
+                "sample_rate": 0,
+                "params": {"mix": "bad"},
+            },
+            TypeError,
+            "mastering_apply_pair_processor_stereo: Parameter 'mix' must be a number or boolean "
+            "(got an unsupported type)",
+            True,
+            id="parameter value shape precedes processor membership and domains",
+        ),
+        pytest.param(
+            {
+                "processor": "match.abCrossfade",
+                "source_left": [math.nan, 0.2],
+                "source_right": [0.1, -0.1],
+                "reference_left": [0.2, -0.2],
+                "reference_right": [0.2, -0.2],
+                "sample_rate": 48_000.5,
+                "reference_sample_rate": 0,
+            },
+            SonareValueError,
+            (
+                "mastering_apply_pair_processor_stereo: sample_rate must be an integer in "
+                "[8000, 384000]"
+            ),
+            True,
+            id="sampleRate domain precedes source samples",
+        ),
+        pytest.param(
+            {
+                "processor": "match.abCrossfade",
+                "source_left": [0.1, -0.1],
+                "source_right": [0.1, -0.1],
+                "reference_left": [0.2, -0.2],
+                "reference_right": [0.2, -0.2],
+                "sample_rate": 48_000,
+                "reference_sample_rate": 0,
+                "params": {"mix": 2},
+            },
+            SonareValueError,
+            (
+                "mastering_apply_pair_processor_stereo: reference_sample_rate must be an integer "
+                "in [8000, 384000]"
+            ),
+            True,
+            id="control: referenceSampleRate domain precedes parameter domain",
+        ),
+        pytest.param(
+            {
+                "processor": "match.abCrossfade",
+                "source_left": [math.nan, 0.2],
+                "source_right": [0.1, -0.1],
+                "reference_left": [0.2, -0.2],
+                "reference_right": [0.2, -0.2],
+                "sample_rate": 48_000,
+                "reference_sample_rate": 48_000.5,
+            },
+            SonareValueError,
+            (
+                "mastering_apply_pair_processor_stereo: source_left contains a non-finite "
+                "sample at index 0"
+            ),
+            True,
+            id="control: source samples precede referenceSampleRate domain",
+        ),
+    ],
+)
+def test_stereo_pair_uses_shape_first_and_c_field_order_for_compound_refusals(
+    call_kwargs: dict[str, object],
+    error_type: type[BaseException],
+    message: str,
+    exact: bool,
+) -> None:
+    import libsonare
+
+    with pytest.raises(error_type) as excinfo:
+        libsonare.mastering_apply_pair_processor_stereo(**call_kwargs)
+    if exact:
+        assert str(excinfo.value) == message
+    else:
+        assert str(excinfo.value).startswith(message)
+    if error_type is SonareValueError:
+        assert excinfo.value.code == ErrorCode.INVALID_PARAMETER
+
+
 def test_stereo_pair_rejects_bad_plane_shape_and_nonfinite_audio() -> None:
     import libsonare
 
@@ -101,6 +241,16 @@ def test_stereo_pair_rejects_bad_plane_shape_and_nonfinite_audio() -> None:
         libsonare.mastering_apply_pair_processor_stereo(
             "match.abCrossfade",
             [0.1, 0.2],
+            [-0.1],
+            [0.4],
+            [-0.4],
+            sample_rate=48000,
+            params={"mix": 0.5},
+        )
+    with pytest.raises(SonareValueError, match="source_left and source_right"):
+        libsonare.mastering_apply_pair_processor_stereo(
+            "match.abCrossfade",
+            [math.nan, 0.2],
             [-0.1],
             [0.4],
             [-0.4],

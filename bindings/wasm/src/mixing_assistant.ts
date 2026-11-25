@@ -5,7 +5,7 @@ import { parseRecordJson } from './internal/record_json.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
-import { assertClosedToken, requestOnly } from './validation.js';
+import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional and falls back to the core
@@ -51,8 +51,7 @@ export interface MixingAssistantSuggestRequest {
    * bare stems and cannot measure a tempo the set as a whole agrees on. Pass the
    * song's tempo and the delay lands on the beat.
    *
-   * Zero or a negative value is refused, and a value outside 20–400 BPM is
-   * rejected rather than clamped.
+   * A supplied tempo must be finite and in [20, 400] BPM; zero is refused.
    */
   tempoBpm?: number;
   /** Evaluate the structure domain. Defaults to true. */
@@ -91,7 +90,7 @@ interface PlanarTracks {
   right: (Float32Array | null)[];
   ids: string[];
   names: (string | null)[];
-  sampleRates: number[] | null;
+  sampleRates: (number | null)[] | null;
 }
 
 /** A track's one or two planes; a stereo pair must agree in length. */
@@ -111,9 +110,6 @@ function trackChannels(
     }
   });
   const [first, second] = channels as Float32Array[];
-  if (second !== undefined && second.length !== first.length) {
-    throw refuse(`${prefix}.channels must have equal lengths`);
-  }
   return [first, second];
 }
 
@@ -122,7 +118,7 @@ function trackChannels(
  * takes, rejecting the shapes that would otherwise reach the analysis as a
  * missing buffer or a nameless strip.
  */
-function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTracks {
+function planarTracks(tracks: MixAssistantTrack[], _sampleRate: number): PlanarTracks {
   if (!Array.isArray(tracks)) {
     throw refuseType(`tracks must be an array`);
   }
@@ -131,7 +127,7 @@ function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTr
   const right: (Float32Array | null)[] = [];
   const ids: string[] = [];
   const names: (string | null)[] = [];
-  const sampleRates: number[] = [];
+  const sampleRates: (number | null)[] = [];
   let anySampleRate = false;
   for (let index = 0; index < tracks.length; index++) {
     const track = tracks[index];
@@ -144,6 +140,9 @@ function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTr
     // An empty or non-finite track is not refused: the core reports it as an excluded track so a
     // batch needs no per-track error handling.
     const [first, second] = trackChannels(`tracks[${index}]`, track.channels);
+    if (track.name !== undefined && typeof track.name !== 'string') {
+      throw refuseType(`tracks[${index}].name must be a string when present`);
+    }
     if (track.sampleRate !== undefined && typeof track.sampleRate !== 'number') {
       throw refuseType(`tracks[${index}].sampleRate must be an integer`);
     }
@@ -151,11 +150,35 @@ function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTr
     right.push(second ?? null);
     ids.push(track.id);
     names.push(track.name ?? null);
-    sampleRates.push(track.sampleRate ?? sampleRate);
+    sampleRates.push(track.sampleRate ?? null);
     anySampleRate ||= track.sampleRate !== undefined;
   }
   // null when no track states its own rate: every track is at `sampleRate`.
   return { left, right, ids, names, sampleRates: anySampleRate ? sampleRates : null };
+}
+
+function assertAssistantTrackLengths(tracks: PlanarTracks): void {
+  for (let index = 0; index < tracks.left.length; index++) {
+    const right = tracks.right[index];
+    if (right !== null && right !== undefined && right.length !== tracks.left[index]?.length) {
+      throw refuse(`tracks[${index}].channels must have equal lengths`);
+    }
+  }
+}
+
+function assertTempoDomain(value: unknown): void {
+  if (value === 0) {
+    throw refuse('tempoBpm must be in [20, 400] BPM');
+  }
+}
+
+function assertAssistantRateDomains(tracks: PlanarTracks, sampleRate: number): void {
+  for (const [index, rate] of (tracks.sampleRates ?? []).entries()) {
+    if (rate !== null) {
+      assertSampleRate(rate, `tracks[${index}].sampleRate`);
+    }
+  }
+  assertSampleRate(sampleRate, 'sampleRate');
 }
 
 const OPTION_KEYS = [
@@ -174,15 +197,6 @@ const OPTION_KEYS = [
   'nFft',
   'hopLength',
 ] as const;
-
-/** Absence is the transport fallback; the C entry's `0` for it is not a value a caller may pass. */
-function assertTempo(value: unknown): void {
-  if (typeof value === 'number' && !(Number.isFinite(value) && value > 0)) {
-    throw refuse(
-      `tempoBpm must be finite and greater than 0; omit it to use the transport's fallback tempo`,
-    );
-  }
-}
 
 /**
  * Analyze a set of tracks and suggest a mixer scene.
@@ -219,13 +233,22 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
       throw refuseType('sampleRate must be an integer');
     }
     const { left, right, ids, names, sampleRates } = planarTracks(req.tracks, req.sampleRate);
-    assertTempo(req.tempoBpm);
     const params: Record<string, number | boolean> = {};
     for (const key of OPTION_KEYS) {
-      if (!isAbsent(req[key])) {
-        params[key] = req[key] as number | boolean;
+      const value = req[key];
+      if (isAbsent(value)) {
+        continue;
       }
+      const expectsBoolean = key.startsWith('enable');
+      if (expectsBoolean ? typeof value !== 'boolean' : typeof value !== 'number') {
+        throw refuseType(`${key} must be a ${expectsBoolean ? 'boolean' : 'number'}`);
+      }
+      params[key] = value;
     }
+    const tracks = { left, right, ids, names, sampleRates };
+    assertAssistantTrackLengths(tracks);
+    assertAssistantRateDomains(tracks, req.sampleRate);
+    assertTempoDomain(req.tempoBpm);
     const call = (): string =>
       getSonareModule().mixingAssistantSuggest(
         left,

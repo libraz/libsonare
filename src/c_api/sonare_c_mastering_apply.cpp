@@ -590,12 +590,10 @@ SonareError sonare_mastering_apply_pair_processor_stereo(
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(processor);
-  if (const SonareError empty_err = run_validation([&] {
-        util::check::non_empty(processor, "processor");
-        sonare::mastering::api::require_stereo_pair_processor(processor);
-      });
-      empty_err != SONARE_OK) {
-    return empty_err;
+  if (const SonareError err =
+          run_validation([&] { sonare::mastering::api::require_stereo_pair_processor(processor); });
+      err != SONARE_OK) {
+    return err;
   }
 
   SonareError err = validate_stereo_audio_params("source_left", "source_right", source_left,

@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_internal.h"
 #include "playback/renderer.h"
 #include "wasm/bindings/common/common.h"
 
@@ -44,12 +45,12 @@ void checkPlayback(SonareError err) {
 
 // The realtime entry points leave the thread-local message alone, so a rejected
 // block is described here rather than read back.
-[[noreturn]] void throwRejectedBlock(int in_channels, int frames) {
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "the renderer rejected " + std::to_string(in_channels) +
-                            " input channels x " + std::to_string(frames) +
-                            " frames (a fixed input layout takes its own channel count, "
-                            "\"auto\" takes 1, 2, 6 or 8; at most maxBlockSize frames)");
+[[noreturn]] void refusePlaybackPlanes(const char* predicate) {
+  util::check::refuse("planes", predicate);
+}
+
+[[noreturn]] void refusePlaybackInterleaved(const char* subject, const char* predicate) {
+  util::check::refuse(subject, predicate);
 }
 
 // The renderer's own documented contract is looser than
@@ -130,15 +131,18 @@ class PlaybackRendererWasm {
     const std::vector<Audio> channels = loadPlaybackChannelSet(planes, sample_rate_);
     const int in_channels = static_cast<int>(channels.size());
     const int frames = static_cast<int>(channels.front().size());
-    if (in_channels > kMaxInputChannels || frames > max_block_) {
-      throwRejectedBlock(in_channels, frames);
+    if (in_channels > kMaxInputChannels) {
+      refusePlaybackPlanes("must contain at most 8 input channels");
+    }
+    if (frames > max_block_) {
+      refusePlaybackPlanes("must not exceed maxBlockSize frames per channel");
     }
     std::vector<const float*> in(channels.size());
     for (size_t ch = 0; ch < channels.size(); ++ch) in[ch] = channels[ch].data();
     if (sonare_playback_renderer_process_planar(renderer_.get(), elementData(in), in_channels,
                                                 elementData(out_ptrs_), out_channels_,
                                                 frames) != SONARE_OK) {
-      throwRejectedBlock(in_channels, frames);
+      refusePlaybackPlanes("channel count does not match the renderer's input layout");
     }
     return planesToVal(frames);
   }
@@ -165,17 +169,17 @@ class PlaybackRendererWasm {
     wasmFloat32ArrayLength(samples, "samples");
     const std::vector<float> input = float32ArrayToVector(samples, "samples");
     if (input.size() % static_cast<size_t>(in_channels) != 0) {
-      throw WasmRangeError("interleaved sample count must be a whole number of frames");
+      throw WasmRangeError("samples.length must be a whole number of inChannels");
     }
     const size_t frames = input.size() / static_cast<size_t>(in_channels);
     if (frames > static_cast<size_t>(max_block_)) {
-      throwRejectedBlock(in_channels, static_cast<int>(std::min<size_t>(frames, INT32_MAX)));
+      refusePlaybackInterleaved("samples.length", "must not exceed maxBlockSize frames");
     }
     std::vector<float> output(frames * static_cast<size_t>(out_channels_));
     if (sonare_playback_renderer_process_interleaved(
             renderer_.get(), elementData(input), in_channels, elementData(output), out_channels_,
             static_cast<int>(frames)) != SONARE_OK) {
-      throwRejectedBlock(in_channels, static_cast<int>(frames));
+      refusePlaybackInterleaved("inChannels", "does not match the renderer's input layout");
     }
     return vectorToFloat32Array(output);
   }
@@ -324,7 +328,7 @@ class PlaybackRendererWasm {
 class PlaybackLoudnessMeterWasm {
  public:
   PlaybackLoudnessMeterWasm(const val& channels_val, const val& sample_rate_val) {
-    channels_ = checkedIntFromVal(channels_val, "channels");
+    channels_ = checkedIntFromVal(channels_val, "numChannels");
     const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
     checkPlayback(sonare_playback_loudness_meter_create(channels_, sample_rate, &meter_));
   }

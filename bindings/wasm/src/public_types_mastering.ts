@@ -13543,8 +13543,8 @@ export interface LoudnessMatchResult {
    * The match does not cap the gain, so this can sit above 0 dBTP: clamping to
    * headroom would leave a near-full-scale source at its own loudness, which is
    * the one thing a loudness match must not do. Limit downstream if the peak
-   * matters more than the match. `-Infinity` for silence.
-   * Never absent: every input sample measures it.
+   * matters more than the match. The call refuses a silent or below-gate take
+   * before returning this result.
    */
   matchedTruePeakDbtp: number;
 }
@@ -13558,20 +13558,20 @@ export interface LoudnessMatchStereoResult {
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
   /**
-   * The reference program's BS.1770 integrated loudness.
-   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   * The reference program's BS.1770 integrated loudness. A silent or below-gate
+   * take on either side is refused with `RangeError` before this result is returned.
    */
   referenceLufs: number;
   /**
-   * The stereo source program's loudness before the gain.
-   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   * The stereo source program's loudness before the gain. A silent or below-gate
+   * take on either side is refused with `RangeError` before this result is returned.
    */
   sourceLufs: number;
   /** One gain applied to both source channels, in dB. */
   appliedGainDb: number;
   /**
-   * Maximum true peak across the matched left and right channels, in dBTP. `-Infinity` for silence.
-   * Never absent: every input sample measures it.
+   * Maximum true peak across the matched left and right channels, in dBTP. A silent or below-gate
+   * take on either side is refused with `RangeError` before this result is returned.
    */
   matchedTruePeakDbtp: number;
 }

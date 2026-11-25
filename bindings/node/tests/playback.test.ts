@@ -28,8 +28,8 @@ describe('HrtfSet', () => {
     expect(() => hrtf.destroy()).not.toThrow();
   });
 
-  it('fromBytes() rejects malformed SHRF data', () => {
-    expect(() => HrtfSet.fromBytes(new Uint8Array([1, 2, 3, 4]))).toThrow();
+  it('control: fromBytes() rejects malformed SHRF data', () => {
+    expectRefusal(() => HrtfSet.fromBytes(new Uint8Array([1, 2, 3, 4])), ErrorCode.InvalidFormat);
   });
 });
 
@@ -431,6 +431,23 @@ describe('PlaybackLoudnessMeter', () => {
     );
   });
 
+  it('control: names a non-finite interleaved input by its samples argument', () => {
+    using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
+    expectRefusal(
+      () => meter.pushInterleaved(new Float32Array([0, Number.NaN])),
+      RangeError,
+      /^PlaybackLoudnessMeter\.pushInterleaved: samples must contain only finite samples$/,
+    );
+  });
+
+  it('names an invalid numChannels from the constructor', () => {
+    expectRefusal(
+      () => new PlaybackLoudnessMeter({ numChannels: 3, sampleRate: 48000 }),
+      RangeError,
+      /^PlaybackLoudnessMeter: numChannels must be one of 1, 2, 6, 8$/,
+    );
+  });
+
   it('rejects a non-number numChannels or sampleRate argument', () => {
     expect(
       () =>
@@ -574,6 +591,18 @@ describe('PlaybackRenderer.renderOffline', () => {
     }
     // Non-finite samples are an argument refusal, not a library failure.
     expect(caught).toBeInstanceOf(RangeError);
+  });
+
+  it('control: keeps renderer state after a refused render', () => {
+    using renderer = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
+    using control = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
+    const prefix = interleavedStereo(256);
+    renderer.processInterleaved(prefix, 2);
+    control.processInterleaved(prefix, 2);
+    expect(() => renderer.renderOffline(new Float32Array(12), 3)).toThrow(RangeError);
+
+    const next = interleavedStereo(64);
+    expect(renderer.processInterleaved(next, 2)).toEqual(control.processInterleaved(next, 2));
   });
 
   it('reports a destroyed handle as InvalidState', () => {

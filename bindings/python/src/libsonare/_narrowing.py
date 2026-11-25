@@ -127,6 +127,18 @@ def _float_narrowing_error(name: str) -> str:
     return f"{name} must be finite and in [-3.4028235e38, 3.4028235e38]"
 
 
+def _domain_double(value: object, name: str) -> float:
+    """Carry a number to C for the receiving entry to validate."""
+    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
+        try:
+            return float(value)
+        except OverflowError:
+            return math.inf if isinstance(value, int) and value > 0 else -math.inf
+        except (TypeError, ValueError):
+            pass
+    raise _refuse_type(f"{name} must be a number")
+
+
 def _domain_float(value: object, name: str, *, preserve_negative: bool = False) -> ctypes.c_float:
     """Carry ``value`` to a C ``float`` argument whose domain the core refuses by name.
 
@@ -135,20 +147,11 @@ def _domain_float(value: object, name: str, *, preserve_negative: bool = False) 
     refuses each with the argument's whole domain and no bound is copied here.
     preserve_negative keeps a negative that rounds to zero outside a nonnegative C domain.
     """
-    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
-        try:
-            number = float(value)
-            negative = preserve_negative and number < 0
-            narrowed = ctypes.c_float(number)
-            if negative and narrowed.value == 0:
-                return ctypes.c_float(-math.inf)
-            return narrowed
-        except OverflowError:
-            # Only an int too wide for a double overflows; its sign survives.
-            return ctypes.c_float(math.inf if isinstance(value, int) and value > 0 else -math.inf)
-        except (TypeError, ValueError):
-            pass
-    raise _refuse_type(f"{name} must be a number")
+    number = _domain_double(value, name)
+    narrowed = ctypes.c_float(number)
+    if preserve_negative and number < 0 and narrowed.value == 0:
+        return ctypes.c_float(-math.inf)
+    return narrowed
 
 
 def _optional_nonzero_domain_float(value: object, name: str) -> ctypes.c_float:

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <limits>
 
+#include "mastering/eq/eq_band.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
@@ -16,6 +17,13 @@ namespace sonare_c_detail {
 /// @brief What the band index of an equalizer edit accepts.
 inline constexpr sonare::util::check::NumericDomain kEqBandIndexDomain =
     sonare::util::check::integer_domain(0, static_cast<long long>(SONARE_EQ_MAX_BANDS) - 1);
+/// @brief What the global equalizer phase mode accepts.
+inline constexpr auto kEqPhaseModeDomain =
+    sonare::util::check::integer_domain(SONARE_EQ_PHASE_ZERO_LATENCY, SONARE_EQ_PHASE_LINEAR);
+/// @brief What the equalizer magnitude-response signal placement accepts.
+inline constexpr auto kEqPlacementDomain = sonare::util::check::integer_domain(
+    static_cast<int>(sonare::mastering::eq::StereoPlacement::Stereo),
+    static_cast<int>(sonare::mastering::eq::StereoPlacement::Side));
 /// @brief What the band count of a matching equalizer accepts.
 inline constexpr sonare::util::check::NumericDomain kEqMatchMaxBandsDomain =
     sonare::util::check::integer_domain(1, static_cast<long long>(SONARE_EQ_MAX_BANDS));

@@ -613,7 +613,7 @@ export interface EqBandInput {
   detectorDelayMs?: number;
   /** Drive the detector from the external sidechain input. Default `false`. */
   externalSidechain?: boolean;
-  /** Detector centre frequency in Hz; a non-positive value uses the band frequency. Default `-1`. */
+  /** Detector centre frequency in Hz; exactly `-1` follows the band frequency. Default `-1`. */
   sidechainFreqHz?: number;
   /** Detector band-pass Q. Default `1`. */
   sidechainQ?: number;

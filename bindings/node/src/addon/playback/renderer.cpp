@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -235,15 +236,18 @@ Napi::Value PlaybackRendererWrap::RenderOffline(const Napi::CallbackInfo& info) 
   float* out = nullptr;
   size_t out_frames = 0;
   int out_channels = 0;
-  sonare_node::ThrowIfError(env, sonare_playback_renderer_render_offline(
-                                     renderer_, sonare_node::ElementData(input), frames,
-                                     in_channels, &out, &out_frames, &out_channels));
+  const SonareError err =
+      sonare_playback_renderer_render_offline(renderer_, sonare_node::ElementData(input), frames,
+                                              in_channels, &out, &out_frames, &out_channels);
+  std::unique_ptr<float, decltype(&sonare_free_floats)> owned_output(out, &sonare_free_floats);
+  sonare_node::ThrowIfError(env, err);
   if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Float32Array samples =
       Napi::Float32Array::New(env, out_frames * static_cast<size_t>(out_channels));
-  std::memcpy(sonare_node::ElementData(samples), out, samples.ElementLength() * sizeof(float));
-  sonare_free_floats(out);
+  if (env.IsExceptionPending()) return env.Undefined();
+  std::memcpy(sonare_node::ElementData(samples), owned_output.get(),
+              samples.ElementLength() * sizeof(float));
   return samples;
   SONARE_NODE_CATCH(env)
 }

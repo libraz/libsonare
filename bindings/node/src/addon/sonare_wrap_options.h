@@ -686,10 +686,10 @@ inline const char* node_domain_type_text(const sonare::util::check::NumericDomai
 }
 
 /// @brief Narrow a JS number onto @p T after checking it against the core's statement of its
-///        domain, so a fraction, a NaN, an infinity or a value @p T cannot hold is refused in the
-///        domain's own text rather than in a reader text or a facade copy of the bound.
-/// @details @p domain must lie inside @p T. The refusal unwinds as the core's, with @p name taken
-///   as already in the caller's spelling.
+///        domain, so a domain-invalid or unrepresentable value is refused in that domain's own
+///        text rather than in a reader text or a transport-width range.
+/// @details A value @p T cannot hold is refused using @p domain's predicate. The refusal unwinds
+///   as the core's, with @p name taken as already in the caller's spelling.
 template <typename T>
 inline T node_domain_number(const Napi::Value& value, const char* name,
                             const sonare::util::check::NumericDomain& domain) {
@@ -697,9 +697,12 @@ inline T node_domain_number(const Napi::Value& value, const char* name,
   try {
     // A written value never means "not given", so the domain's sentinel is refused here.
     sonare::util::check::within(number, sonare::util::check::given_domain(domain), name);
-    // A value inside an open-ended real domain can still be one a float cannot hold.
+    // An unrepresentable value is still refused by the field's domain, never a transport range.
     if constexpr (std::is_floating_point_v<T> && sizeof(T) < sizeof(double)) {
-      sonare::util::check::within(number, sonare::util::check::float_domain(), name);
+      const double maximum = static_cast<double>(std::numeric_limits<T>::max());
+      if (number < -maximum || number > maximum) {
+        sonare::util::check::refuse_outside(domain, name);
+      }
     }
   } catch (const sonare::SonareParameterRefusal& refusal) {
     throw refusal.as_caller_spelled();
@@ -709,13 +712,17 @@ inline T node_domain_number(const Napi::Value& value, const char* name,
 
 /// @brief Read a number property checked against @p domain (@ref node_domain_number).
 /// @details Absent returns @p fallback; a present value that is not a number is refused by name.
+/// @param at Parent path for the property, empty when @p key is a top-level field.
 template <typename T>
 inline T DomainProperty(const Napi::Object& obj, const char* key, T fallback,
-                        const sonare::util::check::NumericDomain& domain) {
+                        const sonare::util::check::NumericDomain& domain,
+                        const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, node_domain_type_text(domain));
-  return node_domain_number<T>(value, key, domain);
+  const std::string name = node_element_field(at, key);
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(),
+                             node_domain_type_text(domain));
+  return node_domain_number<T>(value, name.c_str(), domain);
 }
 
 /// @brief Read a dBFS level property as the linear amplitude a core config holds.

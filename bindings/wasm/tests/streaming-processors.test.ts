@@ -41,6 +41,163 @@ describe('Sonare WASM Module', () => {
       }
     });
 
+    it.each([
+      {
+        label: 'wrong-typed field wins over an unsupported config',
+        config: {
+          sampleRate: 48000,
+          numChannels: '1',
+          repair: { declick: { enabled: true } },
+        },
+        errorClass: TypeError,
+        message: 'StreamingMasteringChain: numChannels must be an integer',
+      },
+      {
+        label: 'control: wrong-typed option precedes unsupported config',
+        config: {
+          sampleRate: 48000,
+          numChannels: 1,
+          loudnessStaticGainDb: '0',
+          repair: { declick: { enabled: true } },
+        },
+        errorClass: TypeError,
+        message: 'StreamingMasteringChain: loudnessStaticGainDb must be a number',
+      },
+      {
+        label: 'sampleRate wins before block and channel domains',
+        config: { sampleRate: 7999, maxBlockSize: 0, numChannels: 3 },
+        errorClass: RangeError,
+        message: 'StreamingMasteringChain: sampleRate must be an integer in [8000, 384000]',
+      },
+      {
+        label: 'fractional sampleRate uses its field domain',
+        config: { sampleRate: 48000.5, maxBlockSize: 0, numChannels: 3 },
+        errorClass: RangeError,
+        message: 'StreamingMasteringChain: sampleRate must be an integer in [8000, 384000]',
+      },
+      {
+        label: 'maxBlockSize wins before the channel domain',
+        config: { sampleRate: 48000, maxBlockSize: 0, numChannels: 3 },
+        errorClass: RangeError,
+        message: 'StreamingMasteringChain: maxBlockSize must be an integer in [1, 1048576]',
+      },
+      {
+        label: 'control: numChannels-only domain refusal',
+        config: { sampleRate: 48000, maxBlockSize: 512, numChannels: 3 },
+        errorClass: RangeError,
+        message: 'StreamingMasteringChain: numChannels must be an integer in [1, 2]',
+      },
+    ])('reads prepare fields in contract order: $label', ({ config, errorClass, message }) => {
+      let caught: unknown;
+      try {
+        new StreamingMasteringChain(config as never);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(errorClass);
+      expect((caught as Error).message).toBe(message);
+    });
+
+    it('unsupported config precedes non-finite option transport', () => {
+      expect(
+        () =>
+          new StreamingMasteringChain({
+            sampleRate: 48000,
+            numChannels: 1,
+            repair: { declick: { enabled: true } },
+            loudnessStaticGainDb: Number.POSITIVE_INFINITY,
+          }),
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.NotSupported,
+          message: expect.stringContaining('repair.declick'),
+        }),
+      );
+    });
+
+    it.each([
+      ['gain NaN', { loudnessStaticGainDb: Number.NaN }, 'loudnessStaticGainDb'],
+      [
+        'peak NaN without gain',
+        { loudnessStaticGainPeakDbtp: Number.NaN },
+        'loudnessStaticGainPeakDbtp',
+      ],
+      [
+        'peak beyond float32 without gain',
+        { loudnessStaticGainPeakDbtp: 1e100 },
+        'loudnessStaticGainPeakDbtp',
+      ],
+    ])('control: checks every written loudness option transport: %s', (_label, options, field) => {
+      let caught: unknown;
+      try {
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          ...(options as object),
+        } as never);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(RangeError);
+      expect((caught as Error).message).toBe(
+        `StreamingMasteringChain: ${field} must be finite and in [-3.4028235e38, 3.4028235e38]`,
+      );
+    });
+
+    it('accepts absence and the documented silent peak', () => {
+      const absent = new StreamingMasteringChain({
+        sampleRate: 48000,
+        numChannels: 1,
+        loudnessStaticGainDb: undefined,
+        loudnessStaticGainPeakDbtp: undefined,
+      });
+      const silent = new StreamingMasteringChain({
+        sampleRate: 48000,
+        numChannels: 1,
+        loudnessStaticGainDb: 0,
+        loudnessStaticGainPeakDbtp: Number.NEGATIVE_INFINITY,
+      });
+      absent.destroy();
+      silent.destroy();
+    });
+
+    it('checks prepared channel mode before non-finite block samples', () => {
+      const chain = new StreamingMasteringChain({
+        sampleRate: 48000,
+        numChannels: 2,
+        maxBlockSize: 64,
+      });
+      try {
+        const input = new Float32Array(64);
+        input[3] = Number.NaN;
+        expect(() => chain.processMono(input)).toThrow(
+          new RangeError(
+            'StreamingMasteringChain.processMono: numChannels must match the prepared channel count',
+          ),
+        );
+      } finally {
+        chain.destroy();
+      }
+
+      const stereo = new StreamingMasteringChain({
+        sampleRate: 48000,
+        numChannels: 1,
+        maxBlockSize: 64,
+      });
+      try {
+        const left = new Float32Array(64);
+        left[3] = Number.NaN;
+        const right = new Float32Array(64);
+        expect(() => stereo.processStereo(left, right)).toThrow(
+          new RangeError(
+            'StreamingMasteringChain.processStereo: numChannels must match the prepared channel count',
+          ),
+        );
+      } finally {
+        stereo.destroy();
+      }
+    });
+
     it('flushes delayed StreamingMasteringChain output once', () => {
       const chain = new StreamingMasteringChain({
         sampleRate: 48000,

@@ -25,31 +25,14 @@ static_assert(SONARE_EQ_MAX_BANDS == sonare::mastering::eq::EqualizerProcessor::
 namespace {
 
 sonare::mastering::eq::PhaseMode parse_phase(int mode) {
-  util::check::integer_in_range(mode, SONARE_EQ_PHASE_ZERO_LATENCY, SONARE_EQ_PHASE_LINEAR, "mode");
+  util::check::integer_within(mode, kEqPhaseModeDomain, "mode");
   return *sonare::mastering::eq::phase_mode_from_int(mode);
 }
 
 sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
-  using sonare::mastering::eq::StereoPlacement;
-  util::check::integer_in_range(placement, static_cast<int>(StereoPlacement::Stereo),
-                                static_cast<int>(StereoPlacement::Side), "placement");
+  util::check::integer_within(placement, kEqPlacementDomain, "placement");
   return *sonare::mastering::eq::placement_from_int(placement);
 }
-
-constexpr std::array<CName, 12> kBandNames{{
-    {"frequency_hz", "band.frequencyHz"},
-    {"gain_db", "band.gainDb"},
-    {"slope_db_oct", "band.slopeDbOct"},
-    {"dyn.ratio", "band.ratio"},
-    {"dyn.threshold_db", "band.thresholdDb"},
-    {"dyn.range_db", "band.rangeDb"},
-    {"dyn.sidechain_q", "band.sidechainQ"},
-    {"dyn.attack_ms", "band.attackMs"},
-    {"dyn.release_ms", "band.releaseMs"},
-    {"dyn.detector_delay_ms", "band.detectorDelayMs"},
-    {"dyn.sidechain_freq_hz", "band.sidechainFreqHz"},
-    {"q", "band.q"},
-}};
 
 }  // namespace
 
@@ -83,8 +66,9 @@ SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
   }
   SONARE_C_REQUIRE_NONNULL(band_json);
   SONARE_C_TRY
-  const auto band = sonare::c_api::parse_eq_band_json(band_json);
-  with_c_names(kBandNames, [&] { eq->processor.set_band(static_cast<size_t>(index), band); });
+  const auto band = sonare::c_api::parse_eq_band_json(band_json, eq->sample_rate);
+  with_c_names(sonare::c_api::kEqBandRefusalNames,
+               [&] { eq->processor.set_band(static_cast<size_t>(index), band); });
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -146,8 +130,7 @@ SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
-  constexpr std::array<CName, 1> kNames{{{"gain_scale", "scale"}}};
-  with_c_names(kNames, [&] { eq->processor.set_gain_scale(scale); });
+  eq->processor.set_gain_scale(scale);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -166,8 +149,7 @@ SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
-  constexpr std::array<CName, 1> kNames{{{"output_pan", "pan"}}};
-  with_c_names(kNames, [&] { eq->processor.set_output_pan(pan); });
+  eq->processor.set_output_pan(pan);
   return SONARE_OK;
   SONARE_C_CATCH
 }

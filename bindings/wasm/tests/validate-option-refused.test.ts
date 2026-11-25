@@ -67,7 +67,7 @@ const RECIPES = {
     ...RECIPES.pair(),
   }),
   applyPairStereo: (): Record<string, unknown> => ({
-    processor: 'match.applyMatchEq',
+    processor: 'match.abCrossfade',
     ...RECIPES.pairStereo(),
   }),
   applyProcessor: (): Record<string, unknown> => ({

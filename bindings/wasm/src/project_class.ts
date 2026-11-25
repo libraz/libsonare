@@ -1886,11 +1886,11 @@ export class Project {
   }
 
   /**
-   * Compile diagnostics produced by the most recent bounce on this project
-   * (e.g. MIDI clips rendering silently without a bound instrument).
+   * Compile diagnostics produced by the most recent successful bounce on this
+   * project (e.g. MIDI clips rendering silently without a bound instrument).
    *
-   * `undefined` when no bounce has run on this project. A clean bounce returns a
-   * result with empty diagnostics; a failed one carries at least one error.
+   * `undefined` before any bounce succeeds. A clean bounce returns a result
+   * with empty diagnostics; a compile failure leaves the last successful result.
    */
   lastBounceCompileResult(): ProjectCompileResult | undefined {
     const raw = this.native.lastBounceCompileResult();

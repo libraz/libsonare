@@ -22,9 +22,22 @@
 namespace sonare::mixing::assistant {
 namespace detail {
 
+// Check the source double before lowering it into the C transport sentinel.
+inline void validate_assistant_tempo(double value) {
+  if (value == 0.0 ||
+      (std::isfinite(value) && value >= kMinAssistantTempoBpm && value <= kMaxAssistantTempoBpm)) {
+    return;
+  }
+  throw SonareParameterRefusal::predicate(
+      ErrorCode::InvalidParameter, "tempoBpm",
+      "must be 0 or a tempo between " + std::to_string(static_cast<int>(kMinAssistantTempoBpm)) +
+          " and " + std::to_string(static_cast<int>(kMaxAssistantTempoBpm)) + " BPM")
+      .as_caller_spelled();
+}
+
 // Validate flat values before narrowing the STFT sizes to their config fields.
 inline void read_profile_geometry(const mastering::api::Param* params, std::size_t count,
-                                  int& n_fft, int& hop_length) {
+                                  int& n_fft, int& hop_length, bool has_tempo = false) {
   if (params == nullptr) {
     mastering::api::validate_params(params, count);
     return;
@@ -33,7 +46,13 @@ inline void read_profile_geometry(const mastering::api::Param* params, std::size
     const auto& param = params[index];
     const bool fft = param.key == "nFft";
     if (!fft && param.key != "hopLength") {
-      mastering::api::validate_params(&param, 1);
+      if (has_tempo && param.key == "tempoBpm") {
+        if (!util::check::in_domain(param.value, util::check::float_domain())) {
+          validate_assistant_tempo(param.value);
+        }
+      } else {
+        mastering::api::validate_params(&param, 1);
+      }
       continue;
     }
     const auto& domain = fft ? kStftNFftDomain : kStftHopDomain;
@@ -60,7 +79,7 @@ inline void read_profile_geometry(const mastering::api::Param* params, std::size
 inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api::Param* params,
                                                            std::size_t count) {
   MixAssistantConfig config;
-  detail::read_profile_geometry(params, count, config.n_fft, config.hop_length);
+  detail::read_profile_geometry(params, count, config.n_fft, config.hop_length, true);
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
@@ -73,17 +92,7 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
     } else if (key == "mixBusHeadroomDbtp") {
       config.mix_bus_headroom_dbtp = static_cast<float>(value);
     } else if (key == "tempoBpm") {
-      // Only exact zero is the transport fallback sentinel; test the source double before
-      // narrowing so a small nonzero value cannot underflow into that sentinel.
-      if (!(value == 0.0 || (std::isfinite(value) && value >= kMinAssistantTempoBpm &&
-                             value <= kMaxAssistantTempoBpm))) {
-        throw SonareParameterRefusal::predicate(
-            ErrorCode::InvalidParameter, key,
-            "must be 0 or a tempo between " +
-                std::to_string(static_cast<int>(kMinAssistantTempoBpm)) + " and " +
-                std::to_string(static_cast<int>(kMaxAssistantTempoBpm)) + " BPM")
-            .as_caller_spelled();
-      }
+      detail::validate_assistant_tempo(value);
       config.tempo_bpm = static_cast<float>(value);
     } else if (key == "enableStructure") {
       config.enable_structure = value != 0.0;

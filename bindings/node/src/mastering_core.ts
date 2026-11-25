@@ -420,6 +420,7 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
  * @throws {TypeError} when `sampleRate` or `processor` is missing, a field has the wrong type or a
  *   parameter key is one the processor does not read
  * @throws {RangeError} on audio out of domain or a pair whose channels differ in length
+ * @throws {SonareError} when the named processor has no planar stereo form
  */
 export function masteringApplyPairProcessorStereo(
   request: MasteringApplyPairProcessorStereoRequest,
@@ -430,18 +431,7 @@ export function masteringApplyPairProcessorStereo(
       [request],
     );
     assertString(r.processor, 'processor');
-    assertAudioInput(r.sourceLeft, r.sampleRate, r, 'sourceLeft');
-    assertAudioInput(r.sourceRight, r.sampleRate, r, 'sourceRight');
     const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-    assertSampleRate(referenceRate, 'referenceSampleRate');
-    assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
-    assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
-    if (r.sourceLeft.length !== r.sourceRight.length) {
-      throw refuse('sourceLeft and sourceRight must have the same length');
-    }
-    if (r.referenceLeft.length !== r.referenceRight.length) {
-      throw refuse('referenceLeft and referenceRight must have the same length');
-    }
     return addon.masteringPairProcessStereo(
       r.processor,
       r.sourceLeft,
@@ -537,11 +527,11 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
  * The gain is applied with no upper bound and `matchedTruePeakDbtp` reports
  * where that left the peak, rather than the call capping it: a headroom clamp
  * would return `source` at its own loudness whenever it started near full
- * scale. Both loudness values are non-finite for a silent or below-gate take,
- * and `appliedGainDb` is then 0.
+ * scale. Each take must have measurable integrated loudness.
  *
  * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
- * @throws {RangeError} on audio out of domain
+ * @throws {RangeError} on audio out of domain or when either take has no
+ *   measurable integrated loudness
  *
  * @example
  * ```ts
@@ -563,7 +553,12 @@ export function masteringAbMatchLoudness(
   });
 }
 
-/** Gain-match a stereo source to a stereo reference with one shared gain. */
+/**
+ * Gain-match a stereo source to a stereo reference with one shared gain.
+ *
+ * @throws {RangeError} on audio out of domain, unequal channel lengths or when
+ *   either pair has no measurable integrated loudness
+ */
 export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {

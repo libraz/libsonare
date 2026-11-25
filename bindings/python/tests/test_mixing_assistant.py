@@ -16,7 +16,7 @@ import re
 import numpy as np
 import pytest
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 
@@ -467,11 +467,31 @@ def test_mismatched_channel_lengths_are_rejected():
         mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
 
 
-def test_non_positive_sample_rate_is_rejected():
-    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+@pytest.mark.parametrize("sample_rate", [0, 7999, 384001])
+def test_sample_rate_outside_the_audio_domain_is_rejected_control(sample_rate: int) -> None:
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
 
-    with pytest.raises(SonareValueError, match="sample_rate"):
-        mixing_assistant_suggest([MixAssistantTrack("bass", [_tone(110.0)])], sample_rate=0)
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match="sample_rate"):
+        mixing_assistant_suggest(
+            [MixAssistantTrack("bass", [_tone(110.0)])], sample_rate=sample_rate
+        )
+
+
+@pytest.mark.parametrize("sample_rate", [7999, 384001])
+def test_track_sample_rate_refusal_names_the_python_field(sample_rate: int) -> None:
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
+
+    track = MixAssistantTrack("bass", [[0.0]], sample_rate=sample_rate)
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match=r"tracks\[0\]\.sample_rate"):
+        mixing_assistant_suggest([track], sample_rate=SAMPLE_RATE)
+
+
+def test_zero_track_sample_rate_refusal_names_the_python_field_control() -> None:
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
+
+    track = MixAssistantTrack("bass", [[0.0]], sample_rate=0)
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match=r"tracks\[0\]\.sample_rate"):
+        mixing_assistant_suggest([track], sample_rate=SAMPLE_RATE)
 
 
 def test_non_finite_option_is_rejected():
@@ -485,39 +505,161 @@ def test_non_finite_option_is_rejected():
         )
 
 
-@pytest.mark.parametrize("tempo", [5.0, 1000.0])
+@pytest.mark.parametrize("tempo", [1e-100, 5.0, 19.9, 400.1, 1000.0])
 def test_tempo_outside_the_musical_range_is_rejected(tempo):
     """A mistyped tempo comes back named rather than as a musical-looking delay.
 
-    The range is the core's and is deliberately not mirrored here, so the
-    refusal arrives as the plain core error the sibling options raise for a
-    value they cannot use (``n_fft=-4`` is the same shape). The binding's own
-    argument validation raises the same class but spells the field ``tempo_bpm``,
-    which is what tells a second copy of the bounds on this side apart.
+    A nonzero value must be within [20, 400] BPM; zero selects the transport
+    fallback. The refusal is spelled with the Python keyword ``tempo_bpm``.
     """
-    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
 
-    with pytest.raises(SonareValueError, match="tempoBpm") as caught:
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match="tempo_bpm"):
         mixing_assistant_suggest(
             [MixAssistantTrack("bass", [_tone(110.0)])],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
         )
-    # The core names the field in its wire spelling; the facade's own check says
-    # ``tempo_bpm``.
-    assert "tempo_bpm" not in str(caught.value)
 
 
-@pytest.mark.parametrize("tempo", [0.0, -120.0])
-def test_a_non_positive_tempo_is_refused(tempo):
-    """Absence is ``None``; the C entry's 0 sentinel is not a tempo a caller can pass."""
-    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+def test_omitted_and_none_tempo_use_the_transport_fallback_control() -> None:
+    from libsonare import MixAssistantTrack, mixing_assistant_suggest
 
-    with pytest.raises(SonareValueError, match="tempo_bpm"):
+    tracks = [MixAssistantTrack("bass", [_tone(110.0)])]
+    omitted = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
+    explicit_none = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE, tempo_bpm=None)
+    assert omitted.scene == explicit_none.scene
+    assert omitted.explanation == explicit_none.explanation
+
+
+@pytest.mark.parametrize("tempo", [math.nan, math.inf, -math.inf])
+def test_non_finite_tempo_reaches_the_native_domain_refusal(tempo: float) -> None:
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
+
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER,
+        match=r"tempo_bpm must be 0 or a tempo between 20 and 400 BPM",
+    ):
         mixing_assistant_suggest(
             [MixAssistantTrack("bass", [_tone(110.0)])],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
+        )
+
+
+def test_written_zero_tempo_is_refused_under_the_python_keyword() -> None:
+    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+
+    with pytest.raises(
+        SonareValueError,
+        match=r"^mixing_assistant_suggest: tempo_bpm must be in \[20, 400\] BPM$",
+    ):
+        mixing_assistant_suggest(
+            [MixAssistantTrack("bass", [_tone(110.0)])],
+            sample_rate=SAMPLE_RATE,
+            tempo_bpm=0.0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("tracks_factory", "sample_rate", "tempo_bpm", "suggestion_strength", "error_type", "message"),
+    [
+        (
+            "track_order",
+            7999,
+            0,
+            None,
+            "value",
+            r"tracks\[0\]\.sample_rate must be an integer in \[8000, 384000\]",
+        ),
+        (
+            "root_rate",
+            7999,
+            0,
+            None,
+            "value",
+            r"sample_rate must be an integer in \[8000, 384000\]",
+        ),
+        (
+            "track_shape",
+            7999,
+            0,
+            None,
+            "type",
+            r"tracks\[0\]\.channels must be a list or tuple of planes",
+        ),
+        (
+            "option_shape",
+            7999,
+            0,
+            "strong",
+            "type",
+            r"suggestion_strength must be a number",
+        ),
+        (
+            "zero_tempo",
+            SAMPLE_RATE,
+            0,
+            None,
+            "value",
+            r"tempo_bpm must be in \[20, 400\] BPM",
+        ),
+    ],
+    ids=[
+        "track-rates-by-index",
+        "root-rate-before-tempo",
+        "shape-before-domain",
+        "option-shape-before-length-relation",
+        "zero-after-valid-rates",
+    ],
+)
+def test_assistant_compound_refusals_follow_shape_then_declared_domain_order(
+    tracks_factory, sample_rate, tempo_bpm, suggestion_strength, error_type, message
+) -> None:
+    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+
+    channels = _tone(110.0)
+    factories = {
+        "track_order": lambda: [
+            MixAssistantTrack("first", [channels], sample_rate=7999),
+            MixAssistantTrack("second", [channels], sample_rate=384001),
+        ],
+        "root_rate": lambda: [MixAssistantTrack("track", [channels])],
+        "track_shape": lambda: [MixAssistantTrack("track", "not planes", sample_rate=1e100)],
+        "option_shape": lambda: [MixAssistantTrack("track", [channels, channels[:-1]])],
+        "zero_tempo": lambda: [MixAssistantTrack("track", [channels], sample_rate=SAMPLE_RATE)],
+    }
+    expected = TypeError if error_type == "type" else SonareValueError
+    with pytest.raises(expected, match=message):
+        mixing_assistant_suggest(
+            factories[tracks_factory](),
+            sample_rate=sample_rate,
+            tempo_bpm=tempo_bpm,
+            suggestion_strength=suggestion_strength,
+        )
+
+
+def test_inherited_track_rate_refusal_names_the_call_rate() -> None:
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
+
+    tracks = [
+        MixAssistantTrack("first", [[0.0]]),
+        MixAssistantTrack("second", [[0.0]], sample_rate=SAMPLE_RATE),
+    ]
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER, match=r"sample_rate must be an integer in \[8000, 384000\]"
+    ):
+        mixing_assistant_suggest(tracks, sample_rate=7999)
+
+
+def test_a_negative_tempo_is_refused_by_the_c_domain_control() -> None:
+    from libsonare import ErrorCode, MixAssistantTrack, mixing_assistant_suggest
+
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match="tempo_bpm"):
+        mixing_assistant_suggest(
+            [MixAssistantTrack("bass", [_tone(110.0)])],
+            sample_rate=SAMPLE_RATE,
+            tempo_bpm=-120.0,
         )
 
 

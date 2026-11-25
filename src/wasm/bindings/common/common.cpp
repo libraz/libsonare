@@ -510,6 +510,14 @@ float domainFloatProperty(val object, const char* key, float default_value) {
   return domainFloatFromVal(value, key);
 }
 
+float domainFloatProperty(val object, const char* key, float default_value,
+                          const sonare::util::check::NumericDomain& domain, const std::string& at) {
+  const std::string subject = elementField(at, key);
+  const val value = typedPropertyValue(object, key, "number", subject);
+  if (value.isUndefined()) return default_value;
+  return domainNumberFromVal<float>(value, wasmCString(subject, key), domain);
+}
+
 float floatOption(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
   if (value.isUndefined()) return default_value;

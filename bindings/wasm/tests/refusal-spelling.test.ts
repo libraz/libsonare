@@ -244,6 +244,10 @@ const DRIVERS: Record<string, Driver> = {
     ),
   mixing_scene_preset_json: (_spelling, value) => mixingScenePreset(value as never),
   note_targets_from_smf: (spelling, value) => noteTargetsFromSmf({ [spelling]: value } as never),
+  playback_loudness_meter_create: (_spelling, value) =>
+    using(new PlaybackLoudnessMeter({ numChannels: value as number, sampleRate: 48000 }), (meter) =>
+      meter.pushInterleaved(new Float32Array([0, 0])),
+    ),
   playback_loudness_meter_push_interleaved: (_spelling, value) =>
     using(new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 }), (meter) =>
       meter.pushInterleaved(value as Float32Array),

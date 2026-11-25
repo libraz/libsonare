@@ -176,8 +176,9 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         key="mixing assistant tempo range",
-        pattern=r"outside\s+(?P<lo>\d+)\s*(?:\.\.|[-–—])\s*(?P<hi>\d+)\s*BPM",
+        pattern=r"(?:in|within)\s+\[(?P<lo>\d+)\s*,\s*(?P<hi>\d+)\]\s*BPM",
         groups={"lo": ("min_assistant_tempo_bpm", 0), "hi": ("max_assistant_tempo_bpm", 0)},
+        # Three facade documents and the C header share this assistant-specific range.
         floor=4,
     ),
     Claim(

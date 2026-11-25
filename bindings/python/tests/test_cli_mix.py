@@ -533,6 +533,13 @@ def test_suggest_mix_refuses_invalid_param_values_before_read(tmp_path, params, 
     assert result.stderr.rstrip().endswith(text)
 
 
+def test_mix_assistant_options_preserves_tiny_nonzero_tempo() -> None:
+    from libsonare._cli_mixing import _mix_assistant_options
+
+    assert _mix_assistant_options({"tempoBpm": 1e-50}) == {"tempo_bpm": 1e-50}
+    assert _mix_assistant_options({"tempoBpm": 0.0}) == {}
+
+
 def test_suggest_mix_accepts_transport_tempo_and_even_fft(tmp_path) -> None:
     track = tmp_path / "track.wav"
     _write_test_wav(str(track), [0.3 * math.sin(0.05 * i) for i in range(48000)], 48000)

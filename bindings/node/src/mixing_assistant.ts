@@ -4,7 +4,7 @@ import { parseRecordJson } from './internal/record_json.js';
 import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
-import { assertClosedToken, requestOnly } from './validation.js';
+import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional; an omitted field keeps the
@@ -46,8 +46,7 @@ export interface MixingAssistantSuggestRequest {
    * bare stems and cannot measure a tempo the set as a whole agrees on. Pass the
    * song's tempo and the delay lands on the beat.
    *
-   * Zero or a negative value is refused, and a value outside 20–400 BPM is
-   * rejected rather than clamped.
+   * A supplied tempo must be finite and in [20, 400] BPM; an explicit zero is refused.
    */
   tempoBpm?: number;
   /** Evaluate the bus/structure domain. */
@@ -85,7 +84,7 @@ interface NativeTrackArrays {
   right: (Float32Array | null)[] | null;
   ids: string[];
   names: (string | null)[] | null;
-  sampleRates: number[] | null;
+  sampleRates: (number | null)[] | null;
 }
 
 /** A track's one or two planes; a stereo pair must agree in length. */
@@ -105,13 +104,10 @@ function trackChannels(
     }
   });
   const [first, second] = channels as Float32Array[];
-  if (second !== undefined && second.length !== first.length) {
-    throw refuse(`${prefix}.channels must have equal lengths`);
-  }
   return [first, second];
 }
 
-function normalizeTracks(tracks: MixAssistantTrack[], sampleRate: number): NativeTrackArrays {
+function normalizeTracks(tracks: MixAssistantTrack[]): NativeTrackArrays {
   if (!Array.isArray(tracks)) {
     throw refuseType(`tracks must be an array`);
   }
@@ -120,7 +116,7 @@ function normalizeTracks(tracks: MixAssistantTrack[], sampleRate: number): Nativ
   const right: (Float32Array | null)[] = [];
   const ids: string[] = [];
   const names: (string | null)[] = [];
-  const sampleRates: number[] = [];
+  const sampleRates: (number | null)[] = [];
   const seen = new Set<string>();
   let anyRight = false;
   let anyName = false;
@@ -149,7 +145,7 @@ function normalizeTracks(tracks: MixAssistantTrack[], sampleRate: number): Nativ
     right.push(second ?? null);
     ids.push(track.id);
     names.push(track.name ?? null);
-    sampleRates.push(track.sampleRate ?? sampleRate);
+    sampleRates.push(track.sampleRate ?? null);
     anyRight ||= second !== undefined;
     anyName ||= track.name !== undefined;
     anySampleRate ||= track.sampleRate !== undefined;
@@ -165,6 +161,15 @@ function normalizeTracks(tracks: MixAssistantTrack[], sampleRate: number): Nativ
     names: anyName ? names : null,
     sampleRates: anySampleRate ? sampleRates : null,
   };
+}
+
+function assertAssistantTrackLengths(tracks: NativeTrackArrays): void {
+  for (let index = 0; index < tracks.left.length; index++) {
+    const right = tracks.right?.[index];
+    if (right !== null && right !== undefined && right.length !== tracks.left[index]?.length) {
+      throw refuse(`tracks[${index}].channels must have equal lengths`);
+    }
+  }
 }
 
 const OPTION_KEYS = [
@@ -184,13 +189,20 @@ const OPTION_KEYS = [
   'hopLength',
 ] as const;
 
-/** Absence is the transport fallback; the C entry's `0` for it is not a value a caller may pass. */
-function assertTempo(value: unknown): void {
-  if (typeof value === 'number' && !(Number.isFinite(value) && value > 0)) {
-    throw refuse(
-      `tempoBpm must be finite and greater than 0; omit it to use the transport's fallback tempo`,
-    );
+/** Absence maps to the C fallback; zero is not a caller value on this surface. */
+function assertTempoDomain(value: unknown): void {
+  if (value === 0) {
+    throw refuse('tempoBpm must be in [20, 400] BPM');
   }
+}
+
+function assertAssistantRateDomains(tracks: NativeTrackArrays, sampleRate: number): void {
+  for (const [index, rate] of (tracks.sampleRates ?? []).entries()) {
+    if (rate !== null) {
+      assertSampleRate(rate, `tracks[${index}].sampleRate`);
+    }
+  }
+  assertSampleRate(sampleRate, 'sampleRate');
 }
 
 function normalizeOptions(
@@ -205,11 +217,14 @@ function normalizeOptions(
       params[key] = value;
     }
   }
-  // The STFT sizes are numbers; their domain is the core reader's, which names it.
-  for (const key of ['nFft', 'hopLength'] as const) {
+  for (const key of OPTION_KEYS) {
     const value = request[key];
-    if (!isAbsent(value) && typeof value !== 'number') {
-      throw refuseType(`${key} must be a number`);
+    if (isAbsent(value)) {
+      continue;
+    }
+    const expectsBoolean = key.startsWith('enable');
+    if (expectsBoolean ? typeof value !== 'boolean' : typeof value !== 'number') {
+      throw refuseType(`${key} must be a ${expectsBoolean ? 'boolean' : 'number'}`);
     }
   }
   return params;
@@ -244,9 +259,11 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
     if (typeof req.sampleRate !== 'number') {
       throw refuseType('sampleRate must be an integer');
     }
-    const tracks = normalizeTracks(req.tracks, req.sampleRate);
-    assertTempo(req.tempoBpm);
+    const tracks = normalizeTracks(req.tracks);
     const params = normalizeOptions(req);
+    assertAssistantTrackLengths(tracks);
+    assertAssistantRateDomains(tracks, req.sampleRate);
+    assertTempoDomain(req.tempoBpm);
     const json = addon.mixingAssistantSuggest(
       tracks.left,
       tracks.right,

@@ -68,7 +68,7 @@ export class HrtfSet {
     hrtfHandles.set(this, native);
   }
 
-  /** Builds an HRTF set from SHRF v1 bytes; malformed data throws. */
+  /** Builds an HRTF set from SHRF v1 bytes; malformed data throws InvalidFormat. */
   static fromBytes(bytes: Uint8Array): HrtfSet {
     return new HrtfSet(getSonareModule().createHrtfSet(bytes));
   }

@@ -21,6 +21,7 @@
 #include "feature/tonnetz.h"
 #include "mastering/api/chain.h"
 #include "mastering/assistant/audio_profile.h"
+#include "mastering/eq/eq_band_domains.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
@@ -68,9 +69,24 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"cqt_to_audio", "n_frames", kInverseSpectrogramExtentDomain, "within_work_size_limit"},
     {"cqt_to_audio", "n_iter", kGriffinLimIterationsDomain, nullptr},
     {"cqt_to_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
+    {"eq_magnitude_response", "placement", kEqPlacementDomain, nullptr},
     {"eq_match", "max_bands", kEqMatchMaxBandsDomain, nullptr},
+    {"eq_set_band", "band.attackMs", sonare::mastering::eq::kEqNonnegativeFloatDomain, nullptr},
+    {"eq_set_band", "band.detectorDelayMs", sonare::mastering::eq::kEqNonnegativeFloatDomain,
+     nullptr},
+    {"eq_set_band", "band.gainDb", sonare::mastering::eq::kEqDbGainDomain, nullptr},
+    {"eq_set_band", "band.rangeDb", sonare::mastering::eq::kEqDbGainDomain, nullptr},
+    {"eq_set_band", "band.ratio", sonare::mastering::eq::kEqRatioDomain, nullptr},
+    {"eq_set_band", "band.releaseMs", sonare::mastering::eq::kEqNonnegativeFloatDomain, nullptr},
+    {"eq_set_band", "band.sidechainFreqHz", sonare::mastering::eq::kEqSidechainFrequencyDomain,
+     nullptr},
+    {"eq_set_band", "band.sidechainQ", sonare::mastering::eq::kEqPositiveFloatDomain, nullptr},
+    {"eq_set_band", "band.thresholdDb", sonare::mastering::eq::kEqDbGainDomain, nullptr},
     {"eq_set_band", "index", kEqBandIndexDomain, nullptr},
+    {"eq_set_gain_scale", "scale", sonare::mastering::eq::kEqGainScaleDomain, nullptr},
     {"eq_set_output_gain_db", "gain_db", sonare::mastering::eq::kEqOutputGainDbDomain, nullptr},
+    {"eq_set_output_pan", "pan", sonare::mastering::eq::kEqOutputPanDomain, nullptr},
+    {"eq_set_phase_mode", "mode", kEqPhaseModeDomain, nullptr},
     {"estimate_room", "config.n_octave_bands", sonare::kRoomEstimateOctaveBandsDomain, nullptr},
     {"frame_signal", "frame_length", sonare::kFrameLengthDomain, nullptr},
     {"frame_signal", "hop_length", sonare::kFrameHopLengthDomain, "within_work_size_limit"},
@@ -82,6 +98,10 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"lufs_series_interleaved", "num_channels", kInterleavedChannelsDomain, nullptr},
     {"mastering_analyze_stereo", "params.bandsPerOctave",
      sonare::mastering::stereo::kMonoCompatBandsPerOctaveDomain, nullptr},
+    {"mastering_apply_pair_processor_stereo", "reference_sample_rate",
+     sonare::kAudioSampleRateDomain, nullptr},
+    {"mastering_apply_pair_processor_stereo", "sample_rate", sonare::kAudioSampleRateDomain,
+     nullptr},
     {"mastering_apply_processor", "params.bitDepth",
      sonare::mastering::saturation::kBitCrusherBitDepthDomain, nullptr},
     {"mastering_apply_processor_stereo", "params.bitDepth",

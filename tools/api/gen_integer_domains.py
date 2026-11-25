@@ -31,6 +31,7 @@ SPELLING = ROOT / "bindings/python/src/libsonare/_field_spelling.py"
 PACKAGE = ROOT / "bindings/python/src/libsonare"
 _SYMBOL = re.compile(r"sonare_([a-z0-9_]+)")
 Domain = tuple[int, int | None, str | None]
+RealDomain = tuple[float | None, float | None, bool, bool, float | None]
 
 
 def _text(node: ast.expr) -> str:
@@ -168,6 +169,19 @@ def named_keywords(package: Path = PACKAGE) -> set[tuple[str, str]]:
     return out
 
 
+def named_real_keywords(package: Path = PACKAGE) -> set[tuple[str, str]]:
+    """(entry, keyword) pairs whose annotation is neither ``int`` nor ``float``."""
+    out: set[tuple[str, str]] = set()
+    for entry, node in _decorated_entries(package):
+        a = node.args
+        for arg in [*a.posonlyargs, *a.args, *a.kwonlyargs]:
+            if arg.annotation is not None:
+                annotation = ast.unparse(arg.annotation)
+                if "float" not in annotation and "int" not in annotation:
+                    out.add((entry, arg.arg))
+    return out
+
+
 def signatures(package: Path = PACKAGE) -> dict[str, frozenset[str]]:
     """Public entry name -> the parameter names its signature takes.
 
@@ -297,6 +311,112 @@ def rows(
     return dict(sorted((k, v) for k, v in out.items() if k not in dropped))
 
 
+def real_rows(
+    domains: list[dict],
+    spelled: dict[tuple[str, str], str],
+    reached: dict[str, frozenset[str]],
+    excluded: set[tuple[str, str]] = frozenset(),
+    sentinels: set[tuple[str, str]] = frozenset(),
+    taken: dict[str, frozenset[str]] | None = None,
+    unbound: set[tuple[str, str]] = frozenset(),
+) -> dict[tuple[str, str], RealDomain]:
+    """(entry, keyword) -> the reachable finite-real bounds and their inclusivity."""
+    by_c: dict[str, list[tuple[str, RealDomain, bool, str]]] = {}
+    for row in domains:
+        if row["kind"] != "real":
+            continue
+        keyword = _keyword(row["param"], row["entry"], spelled)
+        lo = None if row["lo"] is None else float(row["lo"])
+        hi = None if row["hi"] is None else float(row["hi"])
+        lo_included = bool(row["lo_included"])
+        hi_included = bool(row["hi_included"])
+        sentinel = row.get("sentinel")
+        if sentinel is not None:
+            sentinel = float(sentinel)
+            at_lo = lo is not None and lo_included and sentinel == lo
+            at_hi = hi is not None and hi_included and sentinel == hi
+            below = lo is not None and (sentinel < lo or (sentinel == lo and not lo_included))
+            above = hi is not None and (sentinel > hi or (sentinel == hi and not hi_included))
+            if not (at_lo or at_hi or below or above):
+                raise SystemExit(
+                    f"{row['entry']} {row['param']}: real sentinel lies inside its domain"
+                )
+            if at_lo:
+                lo_included = False
+            if at_hi:
+                hi_included = False
+        value = (
+            lo,
+            hi,
+            lo_included,
+            hi_included,
+            None if sentinel is None else float(sentinel),
+        )
+        declared = row.get("sentinel") is not None
+        by_c.setdefault(row["entry"], []).append((keyword, value, declared, row["param"]))
+    out: dict[tuple[str, str], RealDomain] = {}
+    split: set[tuple[str, str]] = set()
+    undeclared: set[tuple[str, str]] = set()
+    for entry, c_entries in reached.items():
+        for c_entry in sorted(c_entries):
+            for keyword, value, declared, param in by_c.get(c_entry, []):
+                if not _reachable(entry, c_entry, param, keyword, taken, unbound):
+                    continue
+                key = (entry, keyword)
+                if out.get(key, value) != value:
+                    split.add(key)
+                if key in sentinels and not declared:
+                    undeclared.add(key)
+                out.setdefault(key, value)
+    dropped = split | undeclared | excluded
+    return dict(sorted((k, v) for k, v in out.items() if k not in dropped))
+
+
+def _bare_exponent(text: str) -> str:
+    return text.replace("e+", "e").replace("e-0", "e-").replace("e0", "e")
+
+
+def _float32(value: float) -> float:
+    import struct
+
+    try:
+        return struct.unpack("=f", struct.pack("=f", value))[0]
+    except OverflowError:
+        return float("inf") if value > 0 else float("-inf")
+
+
+def _real_bound_text(value: float) -> str:
+    """Match util::refusal::bound_text for a numeric-domain endpoint."""
+    narrowed = _float32(value)
+    if narrowed == value:
+        for digits in range(6, 10):
+            text = format(value, f".{digits}g")
+            if _float32(float(text)) == narrowed:
+                return _bare_exponent(text)
+    for digits in range(6, 17):
+        text = format(value, f".{digits}g")
+        if float(text) == value:
+            return _bare_exponent(text)
+    return _bare_exponent(format(value, ".17g"))
+
+
+def _real_predicate(domain: RealDomain) -> str:
+    lo, hi, lo_included, hi_included, _sentinel = domain
+    if lo is not None and hi is not None:
+        opening, closing = ("[" if lo_included else "(", "]" if hi_included else ")")
+        return (
+            f"must be finite and in {opening}{_real_bound_text(lo)}, "
+            f"{_real_bound_text(hi)}{closing}"
+        )
+    if lo is not None:
+        word = "at least" if lo_included else "greater than"
+        return f"must be finite and {word} {_real_bound_text(lo)}"
+    if hi is not None:
+        word = "at most" if hi_included else "less than"
+        return f"must be finite and {word} {_real_bound_text(hi)}"
+    return "must be finite"
+
+
 def _quoted(stricter: str | None) -> str:
     return "None" if stricter is None else f'"{stricter}"'
 
@@ -313,16 +433,46 @@ def _row(entry: str, keyword: str, values: list[str]) -> str:
     return f"    {key}: (\n{inner}    ),\n"
 
 
-def render(table: dict[tuple[str, str], Domain]) -> str:
+def _string_row(entry: str, keyword: str, value: str) -> str:
+    """One string-valued mapping line without tuple syntax for a long value."""
+    key = f'("{entry}", "{keyword}")'
+    literal = repr(value)
+    line = f"    {key}: {literal},\n"
+    if len(line) <= 101:
+        return line
+    return f"    {key}: (\n        {literal}\n    ),\n"
+
+
+def render(
+    table: dict[tuple[str, str], Domain],
+    real_table: dict[tuple[str, str], RealDomain] | None = None,
+) -> str:
     body = "".join(
         _row(entry, keyword, [str(lo), str(hi), _quoted(stricter)])
         for (entry, keyword), (lo, hi, stricter) in table.items()
+    )
+    real_table = real_table or {}
+    real_body = "".join(
+        _row(
+            entry,
+            keyword,
+            [repr(lo), repr(hi), repr(lo_included), repr(hi_included), repr(sentinel)],
+        )
+        for (entry, keyword), (lo, hi, lo_included, hi_included, sentinel) in real_table.items()
+    )
+    text_body = "".join(
+        _string_row(entry, keyword, _real_predicate(domain))
+        for (entry, keyword), domain in real_table.items()
     )
     return (
         '"""Generated by tools/api/gen_integer_domains.py from numeric-domains.json; do not edit."""\n\n'
         "# (public entry, Python keyword) -> the integer domain's (lo, hi, stricter); hi is None\n"
         "# when open above, stricter is 'power_of_two', 'even', 'odd' or None.\n"
-        f"DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {{\n{body}}}\n"
+        f"DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {{\n{body}}}\n\n"
+        "# (public entry, Python keyword) -> finite-real bounds, endpoint inclusion and sentinel.\n"
+        f"REAL_DOMAINS: dict[tuple[str, str], tuple[float | None, float | None, bool, bool, float | None]] = {{\n{real_body}}}\n\n"
+        "# Predicate text paired with each real domain.\n"
+        f"REAL_DOMAIN_TEXT: dict[tuple[str, str], str] = {{\n{text_body}}}\n"
     )
 
 
@@ -351,16 +501,30 @@ def main(argv: list[str]) -> int:
             return 1
     else:
         TEMPO_TARGET.write_text(tempo_text)
+    spelled = overrides()
+    reached = entries()
+    sentinels = sentinel_keywords()
+    taken = signatures()
+    unbound = python_unbound()
     table = rows(
         domains,
-        overrides(),
-        entries(),
+        spelled,
+        reached,
         named_keywords(),
-        sentinel_keywords(),
-        signatures(),
-        python_unbound(),
+        sentinels,
+        taken,
+        unbound,
     )
-    text = render(table)
+    real_table = real_rows(
+        domains,
+        spelled,
+        reached,
+        named_real_keywords(),
+        sentinels,
+        taken,
+        unbound,
+    )
+    text = render(table, real_table)
     if "--check" in argv:
         if not TARGET.exists() or TARGET.read_text() != text:
             print(f"{TARGET.relative_to(ROOT)} is stale; run tools/api/gen_integer_domains.py")

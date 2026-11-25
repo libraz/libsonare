@@ -2639,7 +2639,7 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "type"
 old = "SonareProjectTempoOptions"
-changed = "leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused. The initializer writes the library defaults even with arrangement support compiled out."
+changed = "leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused. The initializer sets adaptive_tempo to 0, tempo_update_interval_beats to 8, ramp_threshold to 0.02 and include_octave_candidates to 1 on every build. In 1.x all four fields were zero when arrangement support was compiled out."
 domain = "project"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_project_timeline_test.cpp::tempo bridge defaults are stable across feature builds"
@@ -7261,7 +7261,7 @@ test = "tests/api/feature_off_errors_test.cpp::An unavailable engine graph is re
 [[entry]]
 kind = "function"
 old = "sonare_mixing_assistant_suggest"
-changed = "with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); For a nonempty input list, the analysis and track rates must be in [8000, 384000]. Only exact zero selects automatic tempo. Every other tempo must be finite and in [20, 400] BPM before float conversion."
+changed = "with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); For a nonempty input list, the analysis and track rates must be in [8000, 384000]. Only exact zero selects automatic tempo. Every other tempo must be finite and in [20, 400] BPM before float conversion. A refused tempo key is named params.tempoBpm."
 domain = "mastering"
 rule = "error-class-by-cause"
 test = "tests/api/feature_off_errors_test.cpp::The unavailable mixing assistant refuses NULL inputs and outputs"

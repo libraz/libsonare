@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <set>
@@ -106,9 +107,45 @@ std::vector<std::string> processor_names() {
   return names;
 }
 
+namespace {
+
+struct PairProcessorEntry {
+  std::string_view name;
+  bool supports_stereo;
+};
+
+constexpr PairProcessorEntry kPairProcessors[] = {
+    {"match.applyMatchEq", false},
+    {"match.alignReferenceToSource", false},
+    {"match.abSwitch", false},
+    {"match.abCrossfade", true},
+};
+
+}  // namespace
+
 std::vector<std::string> pair_processor_names() {
-  return {"match.applyMatchEq", "match.alignReferenceToSource", "match.abSwitch",
-          "match.abCrossfade"};
+  std::vector<std::string> names;
+  names.reserve(std::size(kPairProcessors));
+  for (const auto& processor : kPairProcessors) names.emplace_back(processor.name);
+  return names;
+}
+
+void require_stereo_pair_processor(std::string_view name) {
+  util::check::non_empty(name, "processor");
+  if (name.find(char{0}) != std::string_view::npos) {
+    util::check::refuse("processor", "must not contain NUL");
+  }
+  const auto* entry =
+      std::find_if(std::begin(kPairProcessors), std::end(kPairProcessors),
+                   [name](const auto& processor) { return processor.name == name; });
+  if (entry == std::end(kPairProcessors)) {
+    util::check::refuse(
+        "processor", "must be one of " + util::json::schema::expected_keys(pair_processor_names()));
+  }
+  if (!entry->supports_stereo) {
+    throw SonareParameterRefusal::predicate(ErrorCode::NotSupported, "processor",
+                                            "does not support planar stereo pairs");
+  }
 }
 
 std::vector<std::string> pair_analysis_names() {

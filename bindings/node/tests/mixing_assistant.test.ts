@@ -8,7 +8,7 @@ import {
   mixingAssistantSourceClassNames,
   mixingAssistantSuggest,
 } from '../src/index.js';
-import { sine } from './_helpers.js';
+import { expectRefusal, sine } from './_helpers.js';
 
 const SR = 22050;
 
@@ -412,16 +412,97 @@ describe('mixing assistant source classes', () => {
 });
 
 describe('mixing assistant input validation', () => {
-  it('refuses a zero, negative or non-finite tempo by name instead of reading it as the fallback', () => {
-    for (const tempoBpm of [0, -120, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() =>
-        mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR, tempoBpm }),
-      ).toThrow(
-        new RangeError(
-          "mixingAssistantSuggest: tempoBpm must be finite and greater than 0; omit it to use the transport's fallback tempo",
-        ),
+  it('omits automatic tempo and refuses written zero and other out-of-domain values', () => {
+    expect(() => mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR })).not.toThrow();
+    expectRefusal(
+      () => mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR, tempoBpm: 0 }),
+      RangeError,
+      /^mixingAssistantSuggest: tempoBpm must be in \[20, 400\] BPM$/,
+    );
+    for (const tempoBpm of [
+      -120,
+      Number.MIN_VALUE,
+      19.999,
+      400.001,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      expectRefusal(
+        () => mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR, tempoBpm }),
+        RangeError,
+        /^mixingAssistantSuggest: tempoBpm must be 0 or a tempo between 20 and 400 BPM$/,
       );
     }
+  });
+
+  it('keeps the top-level sample-rate subject for an omitted first track rate', () => {
+    const channels = sine(440, 0.25, { sampleRate: SR });
+    expectRefusal(
+      () =>
+        mixingAssistantSuggest({
+          tracks: [
+            { id: 'inherited', channels: [channels] },
+            { id: 'explicit', channels: [channels], sampleRate: 48000 },
+          ],
+          sampleRate: 7999,
+        }),
+      RangeError,
+      /^mixingAssistantSuggest: sampleRate must be an integer in \[8000, 384000\]$/,
+    );
+  });
+
+  it.each([
+    {
+      name: 'checks explicit track rates by index before the call rate and tempo',
+      tracks: (channels: Float32Array) => [
+        { id: 'first', channels: [channels], sampleRate: 7999 },
+        { id: 'second', channels: [channels], sampleRate: 384001 },
+      ],
+      sampleRate: 7999,
+      tempoBpm: 0,
+      kind: RangeError,
+      message:
+        /^mixingAssistantSuggest: tracks\[0\]\.sampleRate must be an integer in \[8000, 384000\]$/,
+    },
+    {
+      name: 'checks the call rate before an explicit zero tempo',
+      tracks: (channels: Float32Array) => [{ id: 'track', channels: [channels] }],
+      sampleRate: 7999,
+      tempoBpm: 0,
+      kind: RangeError,
+      message: /^mixingAssistantSuggest: sampleRate must be an integer in \[8000, 384000\]$/,
+    },
+    {
+      name: '(control) checks track shape before numeric domains',
+      tracks: (_channels: Float32Array) => [{ id: 'track', channels: 'not planes' }],
+      sampleRate: 7999,
+      tempoBpm: 0,
+      kind: TypeError,
+      message: /^mixingAssistantSuggest: tracks\[0\]\.channels must be an array of Float32Array$/,
+    },
+    {
+      name: 'checks option shape before a track length relation',
+      tracks: (channels: Float32Array) => [
+        { id: 'track', channels: [channels, channels.subarray(1)] },
+      ],
+      sampleRate: 7999,
+      tempoBpm: 0,
+      suggestionStrength: 'strong',
+      kind: TypeError,
+      message: /^mixingAssistantSuggest: suggestionStrength must be a number$/,
+    },
+    {
+      name: 'refuses zero tempo after valid rates',
+      tracks: (channels: Float32Array) => [{ id: 'track', channels: [channels], sampleRate: SR }],
+      sampleRate: SR,
+      tempoBpm: 0,
+      kind: RangeError,
+      message: /^mixingAssistantSuggest: tempoBpm must be in \[20, 400\] BPM$/,
+    },
+  ])('$name', ({ tracks, sampleRate, tempoBpm, suggestionStrength, kind, message }) => {
+    const channels = sine(440, 0.25, { sampleRate: SR });
+    const request = { tracks: tracks(channels), sampleRate, tempoBpm, suggestionStrength };
+    expectRefusal(() => mixingAssistantSuggest(request as never), kind, message);
   });
 
   it('rejects a non-positive sample rate', () => {

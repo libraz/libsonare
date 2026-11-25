@@ -39,7 +39,8 @@ void refuse_unknown_band_keys(const sonare::util::json::Value& json) {
 
 namespace sonare::c_api {
 
-sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
+sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json,
+                                                 std::optional<double> sample_rate) {
   if (!band_json) refuse_band("band_json must not be NULL");
   sonare::util::json::Value json;
   try {
@@ -52,7 +53,7 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   // Field parsing and validation are shared with the scene walker.
   sonare::mastering::eq::EqBand band;
   try {
-    band = sonare::mastering::eq::eq_band_from_value(json, kRoot);
+    band = sonare::mastering::eq::eq_band_from_value(json, kRoot, sample_rate);
   } catch (const sonare::SonareParameterRefusal& ex) {
     if (ex.code() != sonare::ErrorCode::InvalidFormat) throw;
     // Keep the refusal's form and subjects so each surface still picks the class from its kind.

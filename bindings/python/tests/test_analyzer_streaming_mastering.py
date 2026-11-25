@@ -74,6 +74,127 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     chain.reset()
 
 
+def test_streaming_mastering_config_refusal_precedes_prepare_domains() -> None:
+    from libsonare import ErrorCode, StreamingMasteringChain
+
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match=r"config\.unknown"):
+        StreamingMasteringChain({"unknown": 1}, sample_rate=0, max_block_size=-1, num_channels=3)
+
+    with raises_coded(ErrorCode.NOT_SUPPORTED, match="repair.declick"):
+        StreamingMasteringChain(
+            {"repair": {"declick": {"enabled": True}}},
+            sample_rate=0,
+            max_block_size=-1,
+            num_channels=3,
+        )
+
+
+def test_control_streaming_mastering_option_shape_precedes_unsupported_config() -> None:
+    from libsonare import StreamingMasteringChain
+
+    with pytest.raises(TypeError) as excinfo:
+        StreamingMasteringChain(
+            {"repair": {"declick": {"enabled": True}}},
+            sample_rate=48000,
+            num_channels=1,
+            loudness_static_gain_db="0",  # type: ignore[arg-type]
+        )
+    assert str(excinfo.value) == (
+        "StreamingMasteringChain: loudness_static_gain_db must be a number"
+    )
+
+
+@pytest.mark.parametrize(
+    ("config", "sample_rate", "max_block_size", "num_channels", "error_class", "message"),
+    [
+        pytest.param(
+            {"repair": {"declick": {"enabled": True}}},
+            48000,
+            512,
+            "1",
+            TypeError,
+            "StreamingMasteringChain: num_channels must be an integer",
+            id="control: wrong-typed channel",
+        ),
+        (
+            None,
+            7999,
+            0,
+            3,
+            "domain",
+            "sample_rate must be an integer in [8000, 384000]",
+        ),
+        (
+            None,
+            48000.5,
+            0,
+            3,
+            "domain",
+            "sample_rate must be an integer in [8000, 384000]",
+        ),
+        (
+            None,
+            48000,
+            0,
+            3,
+            "domain",
+            "max_block_size must be an integer in [1, 1048576]",
+        ),
+        (
+            None,
+            48000,
+            128,
+            3,
+            "control:domain",
+            "num_channels must be an integer in [1, 2]",
+        ),
+    ],
+)
+def test_streaming_mastering_chain_constructor_preflights_shapes_then_prepare_domains(
+    config: dict[str, object] | None,
+    sample_rate: int | float,
+    max_block_size: int,
+    num_channels: int | str,
+    error_class: type[TypeError] | str,
+    message: str,
+) -> None:
+    from libsonare import ErrorCode, SonareValueError, StreamingMasteringChain
+
+    if error_class is TypeError:
+        with pytest.raises(TypeError) as excinfo:
+            StreamingMasteringChain(
+                config,
+                sample_rate=sample_rate,
+                max_block_size=max_block_size,
+                num_channels=num_channels,  # type: ignore[arg-type]
+            )
+        assert str(excinfo.value) == message
+        return
+
+    with pytest.raises(SonareValueError) as excinfo:
+        StreamingMasteringChain(
+            config,
+            sample_rate=sample_rate,
+            max_block_size=max_block_size,
+            num_channels=num_channels,  # type: ignore[arg-type]
+        )
+    assert excinfo.value.code == ErrorCode.INVALID_PARAMETER
+    assert str(excinfo.value) == f"StreamingMasteringChain: {message}"
+
+
+def test_control_streaming_mastering_chain_checks_prepared_channels_before_input_samples() -> None:
+    from libsonare import ErrorCode, StreamingMasteringChain
+
+    with (
+        StreamingMasteringChain(sample_rate=48000, num_channels=1) as chain,
+        raises_coded(
+            ErrorCode.INVALID_PARAMETER,
+            match="left and right must match the prepared channel count",
+        ),
+    ):
+        chain.process_stereo([math.nan], [0.0])
+
+
 def test_streaming_mastering_chain_flushes_delayed_output() -> None:
     """flush_mono drains latency once and then reports completion."""
     from libsonare import StreamingMasteringChain
@@ -167,6 +288,198 @@ def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
     assert np.array_equal(block, original)
     assert any(abs(out[i] - float(original[i])) > 1e-6 for i in range(len(out)))
     chain.close()
+
+
+def test_streaming_equalizer_scalar_refusals_name_the_public_arguments() -> None:
+    from libsonare import ErrorCode, StreamingEqualizer
+
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        with raises_coded(ErrorCode.INVALID_PARAMETER, match="scale"):
+            eq.set_gain_scale(-1.0)
+        with raises_coded(ErrorCode.INVALID_PARAMETER, match="gain_db"):
+            eq.set_output_gain_db(770.25)
+        with raises_coded(ErrorCode.INVALID_PARAMETER, match="pan"):
+            eq.set_output_pan(2.0)
+
+
+def test_streaming_equalizer_refuses_doubles_outside_domains_before_float_narrowing() -> None:
+    import numpy as np
+
+    from libsonare import ErrorCode, StreamingEqualizer
+
+    float_max = 3.4028234663852886e38
+    db_text = "must be finite and in [-3.4028235e38, 770]"
+    scale_text = "StreamingEqualizer.set_gain_scale: scale must be finite and in [0, 2]"
+    pan_text = "StreamingEqualizer.set_output_pan: pan must be finite and in [-1, 1]"
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        scalar_cases = [
+            (lambda: eq.set_gain_scale(float(np.nextafter(0.0, -np.inf))), scale_text),
+            (lambda: eq.set_gain_scale(float(np.nextafter(2.0, np.inf))), scale_text),
+            (lambda: eq.set_output_pan(float(np.nextafter(-1.0, -np.inf))), pan_text),
+            (lambda: eq.set_output_pan(float(np.nextafter(1.0, np.inf))), pan_text),
+        ]
+        for call, predicate in scalar_cases:
+            with raises_coded(ErrorCode.INVALID_PARAMETER, match=f"^{re.escape(predicate)}$"):
+                call()
+
+        eq.set_output_gain_db(-1000.0)
+        gain_text = "StreamingEqualizer.set_output_gain_db: gain_db must be finite and at most 770"
+        for gain in (float(np.nextafter(770.0, np.inf)), 771.0, float("nan"), -1.0e100):
+            with raises_coded(ErrorCode.INVALID_PARAMETER, match=f"^{re.escape(gain_text)}$"):
+                eq.set_output_gain_db(gain)
+
+        band = {"type": "peak", "frequencyHz": 1000.0, "gainDb": 0.0, "q": 1.0, "enabled": True}
+        band_cases = [
+            ("gainDb", float(np.nextafter(-float_max, -np.inf)), db_text),
+            ("gainDb", float(np.nextafter(770.0, np.inf)), db_text),
+        ]
+        for key, value, predicate in band_cases:
+            with raises_coded(
+                ErrorCode.INVALID_PARAMETER,
+                match=f"^{re.escape(f'StreamingEqualizer.set_band: band.{key} {predicate}')}$",
+            ):
+                eq.set_band(0, {**band, key: value})
+
+        dynamic_band = {**band, "dynamic": True}
+        float_max_text = "3.4028235e38"
+        dynamic_cases = [
+            ("thresholdDb", float(np.nextafter(-float_max, -np.inf)), db_text),
+            ("thresholdDb", float(np.nextafter(770.0, np.inf)), db_text),
+            ("rangeDb", float(np.nextafter(-float_max, -np.inf)), db_text),
+            ("rangeDb", float(np.nextafter(770.0, np.inf)), db_text),
+            ("ratio", float(np.nextafter(1.0, -np.inf)), "must be finite and in [1, 3.4028235e38]"),
+            (
+                "ratio",
+                float(np.nextafter(float_max, np.inf)),
+                "must be finite and in [1, 3.4028235e38]",
+            ),
+            (
+                "attackMs",
+                float(np.nextafter(0.0, -np.inf)),
+                f"must be finite and in [0, {float_max_text}]",
+            ),
+            (
+                "attackMs",
+                float(np.nextafter(float_max, np.inf)),
+                f"must be finite and in [0, {float_max_text}]",
+            ),
+            (
+                "releaseMs",
+                float(np.nextafter(0.0, -np.inf)),
+                f"must be finite and in [0, {float_max_text}]",
+            ),
+            (
+                "releaseMs",
+                float(np.nextafter(float_max, np.inf)),
+                f"must be finite and in [0, {float_max_text}]",
+            ),
+            (
+                "detectorDelayMs",
+                float(np.nextafter(0.0, -np.inf)),
+                f"must be finite and in [0, {float_max_text}]",
+            ),
+            (
+                "detectorDelayMs",
+                float(np.nextafter(float_max, np.inf)),
+                f"must be finite and in [0, {float_max_text}]",
+            ),
+            (
+                "sidechainQ",
+                float(np.nextafter(float_max, np.inf)),
+                f"must be finite and in (0, {float_max_text}]",
+            ),
+            (
+                "sidechainFreqHz",
+                float(np.nextafter(-1.0, -np.inf)),
+                f"must be finite and in (0, {float_max_text}]",
+            ),
+            (
+                "sidechainFreqHz",
+                float(np.nextafter(-1.0, np.inf)),
+                f"must be finite and in (0, {float_max_text}]",
+            ),
+            (
+                "sidechainFreqHz",
+                float(np.nextafter(float_max, np.inf)),
+                f"must be finite and in (0, {float_max_text}]",
+            ),
+        ]
+        for key, value, predicate in dynamic_cases:
+            with raises_coded(
+                ErrorCode.INVALID_PARAMETER,
+                match=f"^{re.escape(f'StreamingEqualizer.set_band: band.{key} {predicate}')}$",
+            ):
+                eq.set_band(0, {**dynamic_band, key: value})
+        # Control: exact -1 remains the documented follow-band-frequency value.
+        eq.set_band(0, {**dynamic_band, "sidechainFreqHz": -1.0})
+
+
+def test_streaming_equalizer_names_strict_bounds_under_band() -> None:
+    import numpy as np
+
+    from libsonare import ErrorCode, StreamingEqualizer
+
+    float_max_text = "3.4028235e38"
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        cases = [
+            (
+                lambda: eq.set_band(
+                    0,
+                    {
+                        "type": "peak",
+                        "frequencyHz": float(np.nextafter(0.0, -np.inf)),
+                        "gainDb": 0.0,
+                        "enabled": True,
+                    },
+                ),
+                "StreamingEqualizer.set_band: band.frequencyHz must be finite and in (0, 24000)",
+            ),
+            (
+                lambda: eq.set_band(
+                    0,
+                    {
+                        "type": "peak",
+                        "frequencyHz": float(np.nextafter(24000.0, np.inf)),
+                        "gainDb": 0.0,
+                        "enabled": True,
+                    },
+                ),
+                "StreamingEqualizer.set_band: band.frequencyHz must be finite and in (0, 24000)",
+            ),
+            (
+                lambda: eq.set_band(
+                    0,
+                    {
+                        "type": "peak",
+                        "frequencyHz": 1000.0,
+                        "gainDb": 0.0,
+                        "enabled": True,
+                        "dynamic": True,
+                        "sidechainQ": float(np.nextafter(0.0, -np.inf)),
+                    },
+                ),
+                "StreamingEqualizer.set_band: band.sidechainQ "
+                f"must be finite and in (0, {float_max_text}]",
+            ),
+            (
+                lambda: eq.set_band(
+                    0,
+                    {
+                        "type": "peak",
+                        "frequencyHz": 1000.0,
+                        "gainDb": 0.0,
+                        "enabled": True,
+                        "dynamic": True,
+                        "sidechainFreqHz": float(np.nextafter(0.0, -np.inf)),
+                    },
+                ),
+                "StreamingEqualizer.set_band: band.sidechainFreqHz "
+                f"must be finite and in (0, {float_max_text}]",
+            ),
+        ]
+        for call, message in cases:
+            with raises_coded(ErrorCode.INVALID_PARAMETER, match=f"^{re.escape(message)}$"):
+                call()
 
 
 def test_streaming_equalizer_preserves_ndarray_input() -> None:
@@ -373,13 +686,13 @@ def test_streaming_equalizer_magnitude_response_flat_for_all_pass_band() -> None
         assert all(abs(value) < 0.1 for value in response)
 
 
-def test_streaming_equalizer_magnitude_response_rejects_unknown_placement() -> None:
+def test_streaming_equalizer_magnitude_response_rejects_unknown_placement_by_name() -> None:
     """An unknown placement is rejected by the binding, not forwarded as an ordinal."""
-    from libsonare import SonareValueError, StreamingEqualizer
+    from libsonare import ErrorCode, StreamingEqualizer
 
     with (
         StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq,
-        pytest.raises(SonareValueError),
+        raises_coded(ErrorCode.INVALID_PARAMETER, match="placement"),
     ):
         eq.magnitude_response([1000.0], placement="rear")
 

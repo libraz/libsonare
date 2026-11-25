@@ -533,8 +533,8 @@ export class Mixer {
 
   /**
    * Set a strip's pan position (-1..1) with an optional pan mode. Omitting
-   * `panMode` keeps the strip's current mode (a plain pan nudge does not reset
-   * a scene strip's pan mode).
+   * `panMode` keeps the strip's current mode by using the keep-mode value (a
+   * plain pan nudge does not reset a scene strip's pan mode).
    *
    * @throws {RangeError} when `pan` is outside `[-1, 1]` or non-finite.
    */

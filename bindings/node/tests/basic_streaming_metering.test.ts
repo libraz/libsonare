@@ -28,6 +28,29 @@ import { expectRefusal, present, unknownKeyError } from './_helpers.js';
 
 const SR = 22050;
 
+function adjacentDouble(value: number, upward: boolean): number {
+  if (value === 0) {
+    return upward ? Number.MIN_VALUE : -Number.MIN_VALUE;
+  }
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, value, false);
+  let bits = view.getBigUint64(0, false);
+  bits += value > 0 === upward ? 1n : -1n;
+  view.setBigUint64(0, bits, false);
+  return view.getFloat64(0, false);
+}
+
+function expectEqRangeRefusal(call: () => void, text: string): void {
+  let error: unknown;
+  try {
+    call();
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeInstanceOf(RangeError);
+  expect((error as Error).message).toBe(text);
+}
+
 function generateSine(freq: number, sr: number, duration: number): Float32Array {
   const n = Math.floor(sr * duration);
   const samples = new Float32Array(n);
@@ -221,6 +244,21 @@ describe('color saturation stages engage only when meaningful', () => {
   });
 });
 
+function expectExactError(
+  call: () => unknown,
+  errorClass: ErrorConstructor,
+  message: string,
+): void {
+  let caught: unknown;
+  try {
+    call();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(errorClass);
+  expect((caught as Error).message).toBe(message);
+}
+
 describe('StreamingMasteringChain', () => {
   it('processes mono blocks and reports stage names', () => {
     const chain = new StreamingMasteringChain({
@@ -282,7 +320,7 @@ describe('StreamingMasteringChain', () => {
     chain.destroy();
   });
 
-  it('accepts denoise by default and refuses its whole-signal estimator', () => {
+  it('accepts denoise by default and codes unsupported streaming stages', () => {
     expect(
       () =>
         new StreamingMasteringChain({
@@ -291,14 +329,133 @@ describe('StreamingMasteringChain', () => {
           repair: { denoise: { enabled: true } },
         }),
     ).not.toThrow();
-    expect(
+    expectRefusal(
       () =>
         new StreamingMasteringChain({
           sampleRate: 48000,
           numChannels: 1,
           repair: { denoise: { enabled: true, noiseEstimator: 'quantile' } },
         }),
-    ).toThrow(/quantile/);
+      ErrorCode.NotSupported,
+      /quantile/,
+    );
+    expectRefusal(
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          repair: { declick: { enabled: true } },
+        }),
+      ErrorCode.NotSupported,
+      /repair\.declick/,
+    );
+  });
+
+  it.each([
+    {
+      label: 'wrong-typed field wins over an unsupported config',
+      config: {
+        sampleRate: 48000,
+        numChannels: '1',
+        repair: { declick: { enabled: true } },
+      },
+      errorClass: TypeError,
+      message: 'StreamingMasteringChain: numChannels must be an integer',
+    },
+    {
+      label: 'control: wrong-typed option precedes unsupported config',
+      config: {
+        sampleRate: 48000,
+        numChannels: 1,
+        loudnessStaticGainDb: '0',
+        repair: { declick: { enabled: true } },
+      },
+      errorClass: TypeError,
+      message: 'StreamingMasteringChain: loudnessStaticGainDb must be a number',
+    },
+    {
+      label: 'sampleRate wins before block and channel domains',
+      config: { sampleRate: 7999, maxBlockSize: 0, numChannels: 3 },
+      errorClass: RangeError,
+      message: 'StreamingMasteringChain: sampleRate must be an integer in [8000, 384000]',
+    },
+    {
+      label: 'fractional sampleRate uses its field domain',
+      config: { sampleRate: 48000.5, maxBlockSize: 0, numChannels: 3 },
+      errorClass: RangeError,
+      message: 'StreamingMasteringChain: sampleRate must be an integer in [8000, 384000]',
+    },
+    {
+      label: 'maxBlockSize wins before the channel domain',
+      config: { sampleRate: 48000, maxBlockSize: 0, numChannels: 3 },
+      errorClass: RangeError,
+      message: 'StreamingMasteringChain: maxBlockSize must be an integer in [1, 1048576]',
+    },
+    {
+      label: 'control: numChannels-only domain refusal',
+      config: { sampleRate: 48000, maxBlockSize: 512, numChannels: 3 },
+      errorClass: RangeError,
+      message: 'StreamingMasteringChain: numChannels must be an integer in [1, 2]',
+    },
+  ])('reads prepare fields in contract order: $label', ({ config, errorClass, message }) => {
+    expectExactError(() => new StreamingMasteringChain(config as never), errorClass, message);
+  });
+
+  it('unsupported stages precede non-finite option transport', () => {
+    expectRefusal(
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          repair: { declick: { enabled: true } },
+          loudnessStaticGainDb: Number.POSITIVE_INFINITY,
+        }),
+      ErrorCode.NotSupported,
+      /repair\.declick/,
+    );
+  });
+
+  it.each([
+    ['gain NaN', { loudnessStaticGainDb: Number.NaN }, 'loudnessStaticGainDb'],
+    [
+      'peak NaN without gain',
+      { loudnessStaticGainPeakDbtp: Number.NaN },
+      'loudnessStaticGainPeakDbtp',
+    ],
+    [
+      'peak beyond float32 without gain',
+      { loudnessStaticGainPeakDbtp: 1e100 },
+      'loudnessStaticGainPeakDbtp',
+    ],
+  ])('control: checks every written loudness option transport: %s', (_label, options, field) => {
+    const message = `StreamingMasteringChain: ${field} must be finite and in [-3.4028235e38, 3.4028235e38]`;
+    expectExactError(
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          ...(options as object),
+        } as never),
+      RangeError,
+      message,
+    );
+  });
+
+  it('accepts absence and the documented silent peak', () => {
+    const absent = new StreamingMasteringChain({
+      sampleRate: 48000,
+      numChannels: 1,
+      loudnessStaticGainDb: undefined,
+      loudnessStaticGainPeakDbtp: undefined,
+    });
+    const silent = new StreamingMasteringChain({
+      sampleRate: 48000,
+      numChannels: 1,
+      loudnessStaticGainDb: 0,
+      loudnessStaticGainPeakDbtp: Number.NEGATIVE_INFINITY,
+    });
+    absent.destroy();
+    silent.destroy();
   });
 
   it('builds a loudness stage without a static gain and applies no gain', () => {
@@ -375,6 +532,164 @@ describe('StreamingMasteringChain', () => {
 });
 
 describe('StreamingEqualizer', () => {
+  it('names the EQ band field and scalar argument refused by the processor', () => {
+    using eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    const band = { type: 'peak', frequencyHz: 0, gainDb: 3, q: 1, enabled: true } as const;
+    expect(() => eq.setBand(0, band)).toThrow(/band\.frequencyHz must /);
+    expect(() => eq.setGainScale(-0.1)).toThrow(/(?:^|: )scale must /);
+    expect(() => eq.setOutputGainDb(770.25)).toThrow(/(?:^|: )gainDb must /);
+    expect(() => eq.setOutputPan(2)).toThrow(/(?:^|: )pan must /);
+  });
+
+  it('refuses caller doubles outside EQ numeric domains before float narrowing', () => {
+    using eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    const floatMax = 3.4028234663852886e38;
+    const scaleText = 'must be finite and in [0, 2]';
+    const panText = 'must be finite and in [-1, 1]';
+    const dbText = 'must be finite and in [-3.4028235e38, 770]';
+    const outputGainText = 'must be finite and at most 770';
+    expectEqRangeRefusal(
+      () => eq.setGainScale(adjacentDouble(0, false)),
+      `StreamingEqualizer.setGainScale: scale ${scaleText}`,
+    );
+    expectEqRangeRefusal(
+      () => eq.setGainScale(adjacentDouble(2, true)),
+      `StreamingEqualizer.setGainScale: scale ${scaleText}`,
+    );
+    expectEqRangeRefusal(
+      () => eq.setOutputPan(adjacentDouble(-1, false)),
+      `StreamingEqualizer.setOutputPan: pan ${panText}`,
+    );
+    expectEqRangeRefusal(
+      () => eq.setOutputPan(adjacentDouble(1, true)),
+      `StreamingEqualizer.setOutputPan: pan ${panText}`,
+    );
+    expectEqRangeRefusal(
+      () => eq.setOutputGainDb(adjacentDouble(-floatMax, false)),
+      `StreamingEqualizer.setOutputGainDb: gainDb ${outputGainText}`,
+    );
+    expectEqRangeRefusal(
+      () => eq.setOutputGainDb(adjacentDouble(770, true)),
+      `StreamingEqualizer.setOutputGainDb: gainDb ${outputGainText}`,
+    );
+
+    const band = { type: 'peak', frequencyHz: 1000, gainDb: 0, q: 1, enabled: true } as const;
+    const bandCases: Array<[string, number, string]> = [
+      ['gainDb', adjacentDouble(-floatMax, false), dbText],
+      ['gainDb', adjacentDouble(770, true), dbText],
+    ];
+    for (const [key, value, predicate] of bandCases) {
+      expectEqRangeRefusal(
+        () => eq.setBand(0, { ...band, [key]: value } as never),
+        `StreamingEqualizer.setBand: band.${key} ${predicate}`,
+      );
+    }
+
+    const dynamicBand = { ...band, dynamic: true };
+    const floatMaxText = '3.4028235e38';
+    const dynamicCases: Array<[string, number, string]> = [
+      ['thresholdDb', adjacentDouble(-floatMax, false), dbText],
+      ['thresholdDb', adjacentDouble(770, true), dbText],
+      ['rangeDb', adjacentDouble(-floatMax, false), dbText],
+      ['rangeDb', adjacentDouble(770, true), dbText],
+      ['ratio', adjacentDouble(1, false), 'must be finite and in [1, 3.4028235e38]'],
+      ['ratio', adjacentDouble(floatMax, true), 'must be finite and in [1, 3.4028235e38]'],
+      ['attackMs', adjacentDouble(0, false), `must be finite and in [0, ${floatMaxText}]`],
+      ['attackMs', adjacentDouble(floatMax, true), `must be finite and in [0, ${floatMaxText}]`],
+      ['releaseMs', adjacentDouble(0, false), `must be finite and in [0, ${floatMaxText}]`],
+      ['releaseMs', adjacentDouble(floatMax, true), `must be finite and in [0, ${floatMaxText}]`],
+      ['detectorDelayMs', adjacentDouble(0, false), `must be finite and in [0, ${floatMaxText}]`],
+      [
+        'detectorDelayMs',
+        adjacentDouble(floatMax, true),
+        `must be finite and in [0, ${floatMaxText}]`,
+      ],
+      ['sidechainQ', adjacentDouble(floatMax, true), `must be finite and in (0, ${floatMaxText}]`],
+      ['sidechainFreqHz', adjacentDouble(-1, false), `must be finite and in (0, ${floatMaxText}]`],
+      ['sidechainFreqHz', adjacentDouble(-1, true), `must be finite and in (0, ${floatMaxText}]`],
+      [
+        'sidechainFreqHz',
+        adjacentDouble(floatMax, true),
+        `must be finite and in (0, ${floatMaxText}]`,
+      ],
+    ];
+    for (const [key, value, predicate] of dynamicCases) {
+      expectEqRangeRefusal(
+        () => eq.setBand(0, { ...dynamicBand, [key]: value } as never),
+        `StreamingEqualizer.setBand: band.${key} ${predicate}`,
+      );
+    }
+    // Control: exact -1 remains the documented follow-band-frequency value.
+    expect(() => eq.setBand(0, { ...dynamicBand, sidechainFreqHz: -1 })).not.toThrow();
+  });
+
+  it('names strict EQ edge refusals under the band argument', () => {
+    using eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    const floatMaxText = '3.4028235e38';
+    expectEqRangeRefusal(
+      () =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: adjacentDouble(0, false),
+          gainDb: 0,
+          enabled: true,
+        }),
+      'StreamingEqualizer.setBand: band.frequencyHz must be finite and in (0, 24000)',
+    );
+    expectEqRangeRefusal(
+      () =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: adjacentDouble(24000, true),
+          gainDb: 0,
+          enabled: true,
+        }),
+      'StreamingEqualizer.setBand: band.frequencyHz must be finite and in (0, 24000)',
+    );
+    expectEqRangeRefusal(
+      () =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: 1000,
+          gainDb: 0,
+          enabled: true,
+          dynamic: true,
+          sidechainQ: adjacentDouble(0, false),
+        }),
+      `StreamingEqualizer.setBand: band.sidechainQ must be finite and in (0, ${floatMaxText}]`,
+    );
+    expectEqRangeRefusal(
+      () =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: 1000,
+          gainDb: 0,
+          enabled: true,
+          dynamic: true,
+          sidechainFreqHz: adjacentDouble(0, false),
+        }),
+      `StreamingEqualizer.setBand: band.sidechainFreqHz must be finite and in (0, ${floatMaxText}]`,
+    );
+  });
+
+  it('refuses raw EQ ordinals through their named integer domains', () => {
+    const raw = new addon.StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    try {
+      for (const value of [1.5, 1e100]) {
+        expectEqRangeRefusal(
+          () => raw.setPhaseMode(value),
+          'StreamingEqualizer.setPhaseMode: mode must be an integer in [1, 3]',
+        );
+        expectEqRangeRefusal(
+          () => raw.magnitudeResponse(value, new Float32Array([1000])),
+          'StreamingEqualizer.magnitudeResponse: placement must be an integer in [0, 4]',
+        );
+      }
+    } finally {
+      raw.destroy();
+    }
+  });
+
   it('refuses a band index that is not a non-negative integer', () => {
     // RED WHEN: setBand goes back to casting an int to size_t. A negative index
     // arrives at set_band as an enormous positive one, which is an edit to a

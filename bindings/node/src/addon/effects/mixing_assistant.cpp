@@ -28,6 +28,9 @@ struct TrackArrays {
   std::vector<size_t> lengths;
   // Empty when every track is at the call's sample rate.
   std::vector<int> sample_rates;
+  std::vector<double> raw_sample_rates;
+  std::vector<bool> has_sample_rate;
+  std::vector<bool> has_right;
   // Tracks may differ in length, so the count is per track rather than shared.
   std::vector<bool> has_name;
   bool any_right = false;
@@ -79,27 +82,17 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
         .ThrowAsJavaScriptException();
     return false;
   }
-  if (info[4].IsArray()) {
-    Napi::Array rate_input = info[4].As<Napi::Array>();
-    if (node_list_length(rate_input, "trackSampleRates") != count) {
-      Napi::TypeError::New(env, "trackSampleRates must have one entry per track")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    out->sample_rates.reserve(count);
-    for (uint32_t index = 0; index < count; ++index) {
-      const Napi::Value rate = rate_input.Get(index);
-      const std::string element = "tracks[" + std::to_string(index) + "].sampleRate";
-      if (!rate.IsNumber()) {
-        throw Napi::TypeError::New(env, element + " must be an integer");
-      }
-      out->sample_rates.push_back(node_domain_number<int>(
-          rate, element.c_str(), sonare_c_detail::kMixingAssistantTrackSampleRateDomain));
-    }
+  const bool has_rate_array = info[4].IsArray();
+  Napi::Array rate_input = has_rate_array ? info[4].As<Napi::Array>() : Napi::Array::New(env, 0);
+  if (has_rate_array && node_list_length(rate_input, "trackSampleRates") != count) {
+    Napi::TypeError::New(env, "trackSampleRates must have one entry per track")
+        .ThrowAsJavaScriptException();
+    return false;
   }
 
   out->left_handles.reserve(count);
   out->right_handles.resize(count);
+  out->has_right.assign(count, false);
   out->ids.reserve(count);
   out->names.resize(count);
   out->has_name.assign(count, false);
@@ -127,13 +120,8 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
       Napi::Value right_value = right_input.Get(index);
       if (IsFloat32Array(right_value)) {
         Napi::Float32Array right = right_value.As<Napi::Float32Array>();
-        if (right.ElementLength() != out->lengths.back()) {
-          const std::string at = "tracks[" + std::to_string(index) + "]";
-          Napi::RangeError::New(env, at + ".left and " + at + ".right must have the same length")
-              .ThrowAsJavaScriptException();
-          return false;
-        }
         out->right_handles[index] = right;
+        out->has_right[index] = true;
         out->any_right = true;
       } else if (!right_value.IsUndefined() && !right_value.IsNull()) {
         Napi::TypeError::New(env, "every rightChannels entry must be a Float32Array or null")
@@ -156,6 +144,22 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     }
   }
 
+  if (has_rate_array) {
+    out->raw_sample_rates.reserve(count);
+    out->has_sample_rate.reserve(count);
+    for (uint32_t index = 0; index < count; ++index) {
+      const Napi::Value rate = rate_input.Get(index);
+      if (!rate.IsUndefined() && !rate.IsNull() && !rate.IsNumber()) {
+        const std::string element = "tracks[" + std::to_string(index) + "].sampleRate";
+        Napi::TypeError::New(env, element + " must be an integer").ThrowAsJavaScriptException();
+        return false;
+      }
+      out->raw_sample_rates.push_back(rate.IsNumber() ? rate.As<Napi::Number>().DoubleValue()
+                                                      : 0.0);
+      out->has_sample_rate.push_back(rate.IsNumber());
+    }
+  }
+
   // Pointer arrays are filled only once every string and handle is in place, so
   // no vector reallocation can invalidate a pointer already taken.
   out->left.reserve(count);
@@ -173,19 +177,56 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
   return true;
 }
 
+bool ValidateTrackLengths(Napi::Env env, const TrackArrays& tracks) {
+  for (size_t index = 0; index < tracks.lengths.size(); ++index) {
+    if (tracks.has_right[index] &&
+        tracks.right_handles[index].ElementLength() != tracks.lengths[index]) {
+      const std::string at = "tracks[" + std::to_string(index) + "]";
+      Napi::RangeError::New(env, at + ".left and " + at + ".right must have the same length")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ValidateTrackRates(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays* tracks) {
+  if (tracks->has_sample_rate.empty()) return true;
+  tracks->sample_rates.resize(tracks->has_sample_rate.size());
+  for (size_t index = 0; index < tracks->has_sample_rate.size(); ++index) {
+    if (!tracks->has_sample_rate[index]) continue;
+    const std::string element = "tracks[" + std::to_string(index) + "].sampleRate";
+    tracks->sample_rates[index] = node_domain_number<int>(
+        Napi::Number::New(env, tracks->raw_sample_rates[index]), element.c_str(),
+        sonare_c_detail::kMixingAssistantTrackSampleRateDomain);
+  }
+  const int fallback = node_domain_number<int>(info[5], "sampleRate",
+                                               sonare_c_detail::kMixingAssistantSampleRateDomain);
+  for (size_t index = 0; index < tracks->has_sample_rate.size(); ++index) {
+    if (!tracks->has_sample_rate[index]) tracks->sample_rates[index] = fallback;
+  }
+  return true;
+}
+
 Napi::Value SuggestMixScene(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   TrackArrays tracks;
   if (!ReadTrackArrays(env, info, &tracks)) {
     return env.Undefined();
   }
-
-  SONARE_NODE_TRY
   std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 7 && !info[6].IsObject() && !info[6].IsNull() && !info[6].IsUndefined()) {
+    Napi::TypeError::New(env, "params must be an object").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   if (info.Length() >= 7 && info[6].IsObject()) {
     params = ParamsFromObject(info[6].As<Napi::Object>());
   }
   if (env.IsExceptionPending()) return env.Undefined();
+  if (!ValidateTrackLengths(env, tracks) || !ValidateTrackRates(env, info, &tracks)) {
+    return env.Undefined();
+  }
   std::vector<SonareMasteringParam> c_params;
   c_params.reserve(params.size());
   for (const auto& param : params) {

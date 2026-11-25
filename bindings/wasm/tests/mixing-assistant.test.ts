@@ -295,16 +295,134 @@ describe('mixing assistant (WASM)', () => {
   });
 
   describe('input validation', () => {
-    it('refuses a zero, negative or non-finite tempo by name instead of reading it as the fallback', () => {
-      for (const tempoBpm of [0, -120, Number.NaN, Number.POSITIVE_INFINITY]) {
+    it('uses the transport fallback for an omitted tempo (control)', () => {
+      expect(() =>
+        mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR }),
+      ).not.toThrow();
+    });
+
+    it('refuses an explicit zero tempo under its public domain', () => {
+      expect(() =>
+        mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR, tempoBpm: 0 }),
+      ).toThrow(new RangeError('mixingAssistantSuggest: tempoBpm must be in [20, 400] BPM'));
+    });
+
+    it('refuses tiny tempo values through the native domain (control)', () => {
+      expect(() =>
+        mixingAssistantSuggest({
+          tracks: musicalTracks(),
+          sampleRate: SR,
+          tempoBpm: Number.MIN_VALUE,
+        }),
+      ).toThrow(
+        new RangeError(
+          'mixingAssistantSuggest: tempoBpm must be 0 or a tempo between 20 and 400 BPM',
+        ),
+      );
+    });
+
+    it('refuses other native tempo-domain values', () => {
+      for (const tempoBpm of [
+        -120,
+        1e-100,
+        19.999,
+        400.001,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+      ]) {
         expect(() =>
           mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR, tempoBpm }),
         ).toThrow(
           new RangeError(
-            "mixingAssistantSuggest: tempoBpm must be finite and greater than 0; omit it to use the transport's fallback tempo",
+            'mixingAssistantSuggest: tempoBpm must be 0 or a tempo between 20 and 400 BPM',
           ),
         );
       }
+    });
+
+    it('names the analysis rate when an omitted track rate inherits it', () => {
+      const channels = musicalTracks()[0]?.channels;
+      const call = () =>
+        mixingAssistantSuggest({
+          tracks: [
+            { id: 'inherited', channels },
+            { id: 'explicit', channels, sampleRate: SR },
+          ],
+          sampleRate: 7999,
+          tempoBpm: 5,
+        });
+      expect(call).toThrow(RangeError);
+      expect(call).toThrow(
+        new RangeError('mixingAssistantSuggest: sampleRate must be an integer in [8000, 384000]'),
+      );
+    });
+
+    it.each([
+      {
+        name: 'checks explicit track rates by index before the call rate and tempo',
+        tracks: (channels: Float32Array) => [
+          { id: 'first', channels: [channels], sampleRate: 7999 },
+          { id: 'second', channels: [channels], sampleRate: 384001 },
+        ],
+        sampleRate: 7999,
+        tempoBpm: 0,
+        kind: RangeError,
+        message:
+          /^mixingAssistantSuggest: tracks\[0\]\.sampleRate must be an integer in \[8000, 384000\]$/,
+      },
+      {
+        name: 'checks the call rate before an explicit zero tempo',
+        tracks: (channels: Float32Array) => [{ id: 'track', channels: [channels] }],
+        sampleRate: 7999,
+        tempoBpm: 0,
+        kind: RangeError,
+        message: /^mixingAssistantSuggest: sampleRate must be an integer in \[8000, 384000\]$/,
+      },
+      {
+        name: '(control) checks track shape before numeric domains',
+        tracks: (_channels: Float32Array) => [{ id: 'track', channels: 'not planes' }],
+        sampleRate: 7999,
+        tempoBpm: 0,
+        kind: TypeError,
+        message: /^mixingAssistantSuggest: tracks\[0\]\.channels must be an array of Float32Array$/,
+      },
+      {
+        name: 'checks option shape before a track length relation',
+        tracks: (channels: Float32Array) => [
+          { id: 'track', channels: [channels, channels.subarray(1)] },
+        ],
+        sampleRate: 7999,
+        tempoBpm: 0,
+        suggestionStrength: 'strong',
+        kind: TypeError,
+        message: /^mixingAssistantSuggest: suggestionStrength must be a number$/,
+      },
+      {
+        name: 'refuses zero tempo after valid rates',
+        tracks: (channels: Float32Array) => [{ id: 'track', channels: [channels], sampleRate: SR }],
+        sampleRate: SR,
+        tempoBpm: 0,
+        kind: RangeError,
+        message: /^mixingAssistantSuggest: tempoBpm must be in \[20, 400\] BPM$/,
+      },
+    ])('$name', ({ tracks, sampleRate, tempoBpm, suggestionStrength, kind, message }) => {
+      const channels = sine(440, DURATION, { sampleRate: SR });
+      expect(() =>
+        mixingAssistantSuggest({
+          tracks: tracks(channels),
+          sampleRate,
+          tempoBpm,
+          suggestionStrength,
+        } as never),
+      ).toThrow(kind);
+      expect(() =>
+        mixingAssistantSuggest({
+          tracks: tracks(channels),
+          sampleRate,
+          tempoBpm,
+          suggestionStrength,
+        } as never),
+      ).toThrow(message);
     });
 
     it('rejects a non-positive sample rate', () => {
@@ -322,7 +440,7 @@ describe('mixing assistant (WASM)', () => {
       expect(() => mixingAssistantSuggest(request)).toThrow();
     });
 
-    it('accepts exactly the integer sample rates within [8000, 384000]', () => {
+    it('accepts exactly the integer sample rates within [8000, 384000] (control)', () => {
       const at = (sampleRate: number) => () =>
         mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate });
       expect(at(8000)).not.toThrow();

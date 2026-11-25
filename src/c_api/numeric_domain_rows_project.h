@@ -256,6 +256,7 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"project_set_warp_map", "desc.id", kWarpMapIdDomain, nullptr},
     {"project_snap_to_grid", "options.division", kSnapDivisionDomain, nullptr},
     {"project_snap_to_grid", "ppq", kPublicPpqDomain, nullptr},
+    {"project_snap_to_grid", "strength", kSnapStrengthDomain, nullptr},
     {"project_split_clip", "split_ppq", kPublicPpqDomain, nullptr},
     {"project_transcribe_to_clip", "config.channel", kMidiChannelDomain, nullptr},
     {"project_transcribe_to_clip", "config.f0_max_hz", kTranscribeFrequencyHzDomain, nullptr},

@@ -424,7 +424,20 @@ describe('Mixer tail draining (WASM)', () => {
       expect(project.snapToGrid(1.02, 1.0)).toBe(1.0);
       expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
       expect(project.snapToGrid(4.02, 1.0, 0)).toBe(4.0);
-      expect(() => project.snapToGrid(1.0, 1.0, -1)).toThrow();
+      expect(() => project.snapToGrid(Number.NaN, 2, 0.5)).toThrow(
+        new RangeError('Project.snapToGrid: ppq must be finite and in [0, 1e12]'),
+      );
+      expect(() => project.snapToGrid(1e12 + 1, 0.5, 1)).toThrow(
+        new RangeError('Project.snapToGrid: ppq must be finite and in [0, 1e12]'),
+      );
+      expect(() => project.snapToGrid(1, 2, 0.5)).toThrow(
+        new RangeError('Project.snapToGrid: strength must be finite and in [0, 1]'),
+      );
+      for (const division of [2000, 0.5, Number.NaN, 2 ** 32]) {
+        expect(() => project.snapToGrid(1, 0.5, division)).toThrow(
+          new RangeError('Project.snapToGrid: division must be an integer in [0, 1024]'),
+        );
+      }
     } finally {
       project.destroy();
     }

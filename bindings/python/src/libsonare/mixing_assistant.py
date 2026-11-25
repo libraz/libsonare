@@ -21,16 +21,15 @@ import numpy as np
 
 from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._field_spelling import parameter_bag_key as _parameter_bag_key
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
 from ._mastering_offline import _mastering_params
-from ._narrowing import _narrow_double, _Respelling
+from ._narrowing import _domain_double, _is_number, _Respelling
 from ._result_records import _fields, _fill_null_ends
 from ._runtime import (
-    _C_INT_MAX,
     _as_float32_buffer,
     _check,
     _get_lib,
     _joined_names,
-    _narrow_int,
     _to_c_float_array,
     _to_c_int,
     _to_c_int_array,
@@ -68,7 +67,9 @@ _PARAM_KEYS = {
 }
 
 # The core names the STFT sizes by their wire keys; a refusal names the keyword the caller wrote.
-_STFT_RESPELLED = {_PARAM_KEYS[key]: _Respelling(key) for key in _INTEGER_PARAMS}
+_STFT_RESPELLED = {
+    _PARAM_KEYS[key]: _Respelling(key) for key in (*sorted(_INTEGER_PARAMS), "tempo_bpm")
+}
 
 
 class MixAssistantTrack(NamedTuple):
@@ -114,28 +115,30 @@ class _TrackArrays(NamedTuple):
     names: Any
     lengths: Any
     sample_rates: Any
+    raw_sample_rates: list[object | None]
+    right_lengths: list[int]
     count: int
     pins: list[Any]
 
 
-def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -> _TrackArrays:
-    """Validate ``tracks`` and marshal them into the parallel C arrays.
+def _build_track_arrays(tracks: Sequence[MixAssistantTrack]) -> _TrackArrays:
+    """Check track shapes and marshal them into the parallel C arrays.
 
     Every allocated buffer is pinned in the returned tuple, so the caller keeps
     one reference alive for the duration of the C call.
     """
     count = len(tracks)
     if count == 0:
-        return _TrackArrays(None, None, None, None, None, None, 0, [])
+        return _TrackArrays(None, None, None, None, None, None, [], [], 0, [])
 
     seen: set[str] = set()
     left_arrays: list[Any] = []
     right_arrays: list[Any] = []
     lengths: list[int] = []
+    right_lengths: list[int] = []
     id_buffers: list[bytes] = []
     name_buffers: list[bytes | None] = []
-    sample_rates: list[int] = []
-    any_rate = False
+    raw_sample_rates: list[object | None] = []
     any_right = False
 
     for index, track in enumerate(tracks):
@@ -145,19 +148,6 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -
         if track_id in seen:
             raise _refuse(f"tracks[{index}].id must be unique among tracks")
         seen.add(track_id)
-
-        if track.sample_rate is None:
-            sample_rates.append(sample_rate)
-        else:
-            # Refused like the call's own rate: narrowed first, then the sign.
-            track_rate = _narrow_int(
-                track.sample_rate,
-                f"tracks[{index}].sample_rate",
-                1,
-                _C_INT_MAX,
-            )
-            sample_rates.append(track_rate)
-            any_rate = True
 
         # Coerce only: a non-finite sample is degenerate audio here, not a
         # malformed call. The core classifies it per track and returns
@@ -178,14 +168,17 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -
             right = _as_float32_buffer(channels[1], arg_name=f"tracks[{index}].channels[1]")
             right_array, right_length = _to_c_float_array(right)
             any_right = True
-        if right_length != left_length:
-            raise _refuse(f"tracks[{index}].channels planes must have equal lengths")
-
         left_arrays.append(left_array)
         right_arrays.append(right_array)
         lengths.append(left_length)
+        right_lengths.append(right_length)
         id_buffers.append(_utf8_arg(track_id, f"tracks[{index}].id"))
+        if track.name is not None and not isinstance(track.name, str):
+            raise _refuse_type(f"tracks[{index}].name must be a string when present")
         name_buffers.append(_utf8_arg(track.name, "name") if track.name is not None else None)
+        if track.sample_rate is not None and not _is_number(track.sample_rate):
+            raise _refuse_type(f"tracks[{index}].sample_rate must be an integer")
+        raw_sample_rates.append(track.sample_rate)
 
     float_ptr = ctypes.POINTER(ctypes.c_float)
     left_ptrs = (float_ptr * count)(*[ctypes.cast(arr, float_ptr) for arr in left_arrays])
@@ -205,12 +198,18 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -
         else None
     )
     length_array = (ctypes.c_size_t * count)(*lengths)
-    # NULL when no track names its own rate: every track is at the call's rate.
-    rate_array = _to_c_int_array(sample_rates, "sample_rates")[0] if any_rate else None
-
     pins: list[Any] = [left_arrays, right_arrays, id_buffers, name_buffers]
     return _TrackArrays(
-        left_ptrs, right_ptrs, id_array, name_array, length_array, rate_array, count, pins
+        left_ptrs,
+        right_ptrs,
+        id_array,
+        name_array,
+        length_array,
+        None,
+        raw_sample_rates,
+        right_lengths,
+        count,
+        pins,
     )
 
 
@@ -227,10 +226,57 @@ def _assistant_params(options: dict[str, float | int | bool | None]) -> tuple[An
             continue
         if name in _INTEGER_PARAMS and isinstance(value, (bool, np.bool_)):
             raise _refuse_type(f"{name} must be an integer")
-        params[_PARAM_KEYS[name]] = (
-            value if isinstance(value, bool) else _narrow_double(value, name)
-        )
+        if name.startswith("enable_") and not isinstance(value, (bool, np.bool_)):
+            raise _refuse_type(f"{name} must be a boolean")
+        if name.startswith("enable_"):
+            params[_PARAM_KEYS[name]] = bool(value)
+        else:
+            params[_PARAM_KEYS[name]] = _domain_double(value, name)
     return _mastering_params(params)
+
+
+def _validate_assistant_track_lengths(tracks: _TrackArrays) -> None:
+    if tracks.count == 0:
+        return
+    for index, (left, right) in enumerate(zip(tracks.lengths, tracks.right_lengths, strict=True)):
+        if left != right:
+            raise _refuse(f"tracks[{index}].channels planes must have equal lengths")
+
+
+def _assistant_rate(value: object, name: str, low: int, high: int) -> int:
+    if not _is_number(value):
+        raise _refuse_type(f"{name} must be an integer")
+    number = _domain_double(value, name)
+    if not low <= number <= high or not number.is_integer():
+        raise _refuse(f"{name} must be an integer in [{low}, {high}]")
+    return int(number)
+
+
+def _validate_assistant_rates(
+    tracks: _TrackArrays, sample_rate: object
+) -> tuple[_TrackArrays, int]:
+    # Use the generated field domains so widths and bounds stay tied to the C rows.
+    track_low, track_high, _ = _INTEGER_DOMAINS[
+        ("mixing_assistant_suggest", "track_sample_rates[]")
+    ]
+    sample_low, sample_high, _ = _INTEGER_DOMAINS[("mixing_assistant_suggest", "sample_rate")]
+    assert track_high is not None and sample_high is not None
+    rates = [
+        None
+        if value is None
+        else _assistant_rate(value, f"tracks[{index}].sample_rate", track_low, track_high)
+        for index, value in enumerate(tracks.raw_sample_rates)
+    ]
+    call_rate = _assistant_rate(sample_rate, "sample_rate", sample_low, sample_high)
+    any_rate = any(rate is not None for rate in rates)
+    rate_array = (
+        _to_c_int_array(
+            [call_rate if rate is None else rate for rate in rates], "track_sample_rates"
+        )[0]
+        if any_rate
+        else None
+    )
+    return tracks._replace(sample_rates=rate_array), call_rate
 
 
 def _suggest(
@@ -244,11 +290,14 @@ def _suggest(
     # probe for here. _check turns that answer into the same error class every
     # other unsupported call raises.
     lib = _get_lib()
-    # Narrowed, not int()-coerced: int() takes 44100.7 as 44100, a rate the
-    # whole suggestion would then be computed at.
-    sample_rate_value = _narrow_int(sample_rate, "sample_rate", 1, _C_INT_MAX)
-    arrays = _build_track_arrays(tracks, sample_rate_value)
+    if not _is_number(sample_rate):
+        raise _refuse_type("sample_rate must be an integer")
+    arrays = _build_track_arrays(tracks)
     param_array, param_count = _assistant_params(options)
+    _validate_assistant_track_lengths(arrays)
+    arrays, sample_rate_value = _validate_assistant_rates(arrays, sample_rate)
+    if options.get("tempo_bpm") == 0:
+        raise _refuse("tempo_bpm must be in [20, 400] BPM")
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mixing_assistant_suggest(
         arrays.left_ptrs,
@@ -263,7 +312,14 @@ def _suggest(
         _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
-    _check(rc, flattened="params", respelled=_STFT_RESPELLED)
+    if rc != 0:
+        respelled = dict(_STFT_RESPELLED)
+        for index, track in enumerate(tracks):
+            subject = (
+                f"tracks[{index}].sample_rate" if track.sample_rate is not None else "sample_rate"
+            )
+            respelled[f"track_sample_rates[{index}]"] = _Respelling(subject)
+        _check(rc, flattened="params", respelled=respelled)
     try:
         return json.loads(ctypes.string_at(json_ptr).decode("utf-8")) if json_ptr.value else {}
     finally:
@@ -392,8 +448,8 @@ def mixing_assistant_suggest(
             ``None`` (the default) selects the transport's own fallback tempo: the
             assistant is handed bare stems and cannot measure a tempo the set as
             a whole agrees on. Pass the song's tempo and the delay lands on the
-            beat. Zero, a negative, or a value outside 20-400 BPM is rejected
-            rather than clamped.
+            beat. A supplied tempo must be finite and in [20, 400] BPM; an
+            explicit zero is refused, so use ``None`` for the fallback.
         enable_structure: Suggest bus structure and routing.
         enable_gain: Suggest per-track gain staging.
         enable_balance: Suggest fader balance between tracks.
@@ -423,9 +479,6 @@ def mixing_assistant_suggest(
         with the measurements behind the suggestion, and ``explanation``, a list
         of human-readable lines in application order.
     """
-    # None is the fallback; 0 is the C entry's spelling of it and is not a tempo here.
-    if tempo_bpm is not None and tempo_bpm <= 0:
-        raise _refuse("tempo_bpm must be greater than 0")
     wire = _suggest(
         tracks,
         sample_rate,

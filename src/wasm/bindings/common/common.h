@@ -577,6 +577,9 @@ float floatProperty(val object, const char* key, float default_value,
 ///          infinity, so the core refuses all of them in its own domain text.
 /// @throws WasmArgumentError naming @p key for a non-number.
 float domainFloatProperty(val object, const char* key, float default_value);
+/// @brief Check a present field against its domain before narrowing to float.
+float domainFloatProperty(val object, const char* key, float default_value,
+                          const sonare::util::check::NumericDomain& domain, const std::string& at);
 /// @brief Fallback float reader: a field that is absent, or present but not a
 ///        finite number, takes @p default_value. A wrong-typed value, and a
 ///        finite value outside the 32-bit float range, are refused rather than

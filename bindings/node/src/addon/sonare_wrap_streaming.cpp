@@ -8,13 +8,16 @@
 #include <string>
 #include <vector>
 
+#include "c_api/eq_band_json.h"
 #include "c_api/mastering_input_domains.h"
+#include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/streaming_retune.h"
 #include "mastering/api/chain.h"
 #include "mastering/eq/band_strings.h"
 #include "mastering/eq/eq_band.h"
+#include "mastering/eq/eq_band_domains.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/spectrum_engine.h"
 #include "mastering/match/match_eq.h"
@@ -31,59 +34,56 @@ template <typename Parse, typename Tokens>
 auto ParseEqToken(const std::string& value, const char* label, Parse parse, Tokens tokens) {
   const auto parsed = parse(value);
   if (!parsed) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        std::string("unknown EQ ") + label + ": " + value + " (expected " + tokens() + ")");
+    sonare::util::check::refuse(label, std::string("must be one of ") + tokens());
   }
   return *parsed;
 }
 
 sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
-  return ParseEqToken(value, "band type", sonare::mastering::eq::band_type_from_string,
+  return ParseEqToken(value, "band.type", sonare::mastering::eq::band_type_from_string,
                       sonare::mastering::eq::band_type_tokens);
 }
 
 sonare::mastering::eq::BiquadCoeffMode ParseCoeffMode(const std::string& value) {
-  return ParseEqToken(value, "coefficient mode", sonare::mastering::eq::coeff_mode_from_string,
+  return ParseEqToken(value, "band.coeffMode", sonare::mastering::eq::coeff_mode_from_string,
                       sonare::mastering::eq::coeff_mode_tokens);
 }
 
 sonare::mastering::eq::StereoPlacement ParsePlacement(const std::string& value) {
-  return ParseEqToken(value, "placement", sonare::mastering::eq::placement_from_string,
+  return ParseEqToken(value, "band.placement", sonare::mastering::eq::placement_from_string,
                       sonare::mastering::eq::placement_tokens);
 }
 
 sonare::mastering::eq::PhaseMode ParseBandPhase(const std::string& value) {
-  return ParseEqToken(value, "band phase mode", sonare::mastering::eq::phase_mode_from_string,
+  return ParseEqToken(value, "band.phase", sonare::mastering::eq::phase_mode_from_string,
                       sonare::mastering::eq::phase_mode_tokens);
 }
 
 sonare::mastering::eq::PhaseMode ParsePhaseModeInt(int mode) {
-  const auto parsed = sonare::mastering::eq::phase_mode_from_int(mode);
-  if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ phase mode");
-  }
-  return *parsed;
+  sonare::util::check::integer_within(mode, sonare_c_detail::kEqPhaseModeDomain, "mode");
+  return *sonare::mastering::eq::phase_mode_from_int(mode);
 }
 
 sonare::mastering::eq::StereoPlacement ParsePlacementInt(int placement) {
-  const auto parsed = sonare::mastering::eq::placement_from_int(placement);
-  if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ band placement");
-  }
-  return *parsed;
+  sonare::util::check::integer_within(placement, sonare_c_detail::kEqPlacementDomain, "placement");
+  return *sonare::mastering::eq::placement_from_int(placement);
 }
 
-sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
+sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object, double sample_rate) {
   sonare::mastering::eq::EqBand band;
   band.type = ParseBandType(
       StringProperty(object, "type", sonare::mastering::eq::band_type_to_string(band.type)));
   band.coeff_mode = ParseCoeffMode(StringProperty(
       object, "coeffMode", sonare::mastering::eq::coeff_mode_to_string(band.coeff_mode)));
-  band.frequency_hz = FloatProperty(object, "frequencyHz", band.frequency_hz);
-  band.gain_db = FloatProperty(object, "gainDb", band.gain_db);
-  band.q = FloatProperty(object, "q", band.q);
   band.enabled = BoolProperty(object, "enabled", band.enabled);
+  band.frequency_hz =
+      band.enabled ? DomainProperty<float>(
+                         object, "frequencyHz", band.frequency_hz,
+                         sonare::mastering::eq::eq_band_frequency_domain(sample_rate), "band")
+                   : FloatProperty(object, "frequencyHz", band.frequency_hz);
+  band.gain_db = DomainProperty<float>(object, "gainDb", band.gain_db,
+                                       sonare::mastering::eq::kEqDbGainDomain, "band");
+  band.q = FloatProperty(object, "q", band.q);
   band.slope_db_oct = IntProperty(object, "slopeDbOct", band.slope_db_oct);
   band.placement = ParsePlacement(StringProperty(
       object, "placement", sonare::mastering::eq::placement_to_string(band.placement)));
@@ -95,17 +95,47 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.proportional_q_strength =
       FloatProperty(object, "proportionalQStrength", band.proportional_q_strength);
   band.dyn.enabled = BoolProperty(object, "dynamic", band.dyn.enabled);
-  band.dyn.threshold_db = FloatProperty(object, "thresholdDb", band.dyn.threshold_db);
+  band.dyn.threshold_db = DomainProperty<float>(object, "thresholdDb", band.dyn.threshold_db,
+                                                sonare::mastering::eq::kEqDbGainDomain, "band");
   band.dyn.auto_threshold = BoolProperty(object, "autoThreshold", band.dyn.auto_threshold);
-  band.dyn.ratio = FloatProperty(object, "ratio", band.dyn.ratio);
-  band.dyn.range_db = FloatProperty(object, "rangeDb", band.dyn.range_db);
-  band.dyn.attack_ms = FloatProperty(object, "attackMs", band.dyn.attack_ms);
-  band.dyn.release_ms = FloatProperty(object, "releaseMs", band.dyn.release_ms);
-  band.dyn.detector_delay_ms = FloatProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms);
+  band.dyn.ratio = band.dyn.enabled
+                       ? DomainProperty<float>(object, "ratio", band.dyn.ratio,
+                                               sonare::mastering::eq::kEqRatioDomain, "band")
+                       : FloatProperty(object, "ratio", band.dyn.ratio);
+  band.dyn.range_db = DomainProperty<float>(object, "rangeDb", band.dyn.range_db,
+                                            sonare::mastering::eq::kEqDbGainDomain, "band");
+  band.dyn.attack_ms =
+      band.dyn.enabled
+          ? DomainProperty<float>(object, "attackMs", band.dyn.attack_ms,
+                                  sonare::mastering::eq::kEqNonnegativeFloatDomain, "band")
+          : FloatProperty(object, "attackMs", band.dyn.attack_ms);
+  band.dyn.release_ms =
+      band.dyn.enabled
+          ? DomainProperty<float>(object, "releaseMs", band.dyn.release_ms,
+                                  sonare::mastering::eq::kEqNonnegativeFloatDomain, "band")
+          : FloatProperty(object, "releaseMs", band.dyn.release_ms);
+  band.dyn.detector_delay_ms =
+      band.dyn.enabled
+          ? DomainProperty<float>(object, "detectorDelayMs", band.dyn.detector_delay_ms,
+                                  sonare::mastering::eq::kEqNonnegativeFloatDomain, "band")
+          : FloatProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms);
   band.dyn.external_sidechain =
       BoolProperty(object, "externalSidechain", band.dyn.external_sidechain);
-  band.dyn.sidechain_freq_hz = FloatProperty(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz);
-  band.dyn.sidechain_q = FloatProperty(object, "sidechainQ", band.dyn.sidechain_q);
+  const Napi::Value sidechain_frequency = object.Get("sidechainFreqHz");
+  const bool sidechain_frequency_given =
+      !sidechain_frequency.IsUndefined() && !sidechain_frequency.IsNull();
+  const bool follows_band_frequency = sidechain_frequency_given && sidechain_frequency.IsNumber() &&
+                                      sidechain_frequency.As<Napi::Number>().DoubleValue() == -1.0;
+  band.dyn.sidechain_freq_hz =
+      band.dyn.enabled && sidechain_frequency_given && !follows_band_frequency
+          ? DomainProperty<float>(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz,
+                                  sonare::mastering::eq::kEqPositiveFloatDomain, "band")
+          : FloatProperty(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz);
+  band.dyn.sidechain_q =
+      band.dyn.enabled
+          ? DomainProperty<float>(object, "sidechainQ", band.dyn.sidechain_q,
+                                  sonare::mastering::eq::kEqPositiveFloatDomain, "band")
+          : FloatProperty(object, "sidechainQ", band.dyn.sidechain_q);
   return band;
 }
 
@@ -116,12 +146,6 @@ void RefuseBlockLength(Napi::Env env, const char* array, size_t length, int max_
                                          sonare::util::refusal::integer_range_predicate(
                                              0.0, static_cast<double>(max_block_size)));
   }
-}
-
-// Refuses a block holding a non-finite sample by the caller's array, as the C ABI does.
-void RefuseNonFinite(const char* array, const Napi::Float32Array& samples) {
-  sonare::validate_offline_audio_samples(array, sonare_node::ElementData(samples),
-                                         samples.ElementLength(), 0);
 }
 
 }  // namespace
@@ -172,9 +196,25 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
     Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return;
   }
+  Napi::Object options_object;
+  if (has_options) {
+    options_object = info[1].As<Napi::Object>();
+    for (const char* key : {"loudnessStaticGainDb", "loudnessStaticGainPeakDbtp"}) {
+      const Napi::Value value = options_object.Get(key);
+      if (!value.IsUndefined() && !value.IsNull() && !value.IsNumber()) {
+        Napi::TypeError::New(env, std::string(key) + " must be a number")
+            .ThrowAsJavaScriptException();
+        return;
+      }
+    }
+  }
+  auto config = sonare::mastering::api::streaming_chain_config_from_json(
+      has_config ? node_narrow_string(env, info[0], "configJson") : std::string("{\"params\":{}}"),
+      // The constructor's request object is the chain config itself, so its keys have no root.
+      sonare::mastering::api::chain_params_argument(""));
+  sonare::mastering::api::validate_streaming_chain_config(config);
   sonare::mastering::api::StreamingMasteringChainOptions options;
   if (has_options) {
-    Napi::Object options_object = info[1].As<Napi::Object>();
     options.loudness_static_gain_db =
         FloatProperty(options_object, "loudnessStaticGainDb", options.loudness_static_gain_db);
     // -Infinity is the measured peak of digital silence and leaves the gain unclamped.
@@ -187,10 +227,6 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
                                     options.loudness_static_gain_peak_dbtp);
   }
 
-  auto config = sonare::mastering::api::streaming_chain_config_from_json(
-      has_config ? node_narrow_string(env, info[0], "configJson") : std::string("{\"params\":{}}"),
-      // The constructor's request object is the chain config itself, so its keys have no root.
-      sonare::mastering::api::chain_params_argument(""));
   chain_ =
       std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config), options);
   SONARE_NODE_CATCH_VOID(env)
@@ -214,22 +250,26 @@ Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   SONARE_NODE_TRY
-  double sample_rate{};
-  if (!sonare_node::RequiredDoubleArg(env, info, 0, "sampleRate", &sample_rate)) {
-    return env.Undefined();
+  const Napi::Value sample_rate_value = info[0];
+  const Napi::Value max_block_size_value = info[1];
+  const Napi::Value num_channels_value = info[2];
+  const bool has_max_block_size =
+      !max_block_size_value.IsUndefined() && !max_block_size_value.IsNull();
+  node_require_property_type(env, sample_rate_value.IsNumber(), "sampleRate", "an integer");
+  if (has_max_block_size) {
+    node_require_property_type(env, max_block_size_value.IsNumber(), "maxBlockSize", "an integer");
   }
-  int max_block_size{};
-  if (!sonare_node::OptionalIntArg(env, info, 1, "maxBlockSize",
-                                   sonare::mastering::api::MasteringChain::kDefaultMaxBlock,
-                                   &max_block_size)) {
-    return env.Undefined();
-  }
-  int num_channels{};
-  if (!sonare_node::RequiredDomainArg(env, info, 2, "numChannels",
-                                      sonare::mastering::api::kStreamingChainChannelCountDomain,
-                                      &num_channels)) {
-    return env.Undefined();
-  }
+  node_require_property_type(env, num_channels_value.IsNumber(), "numChannels", "an integer");
+
+  const int sample_rate = sonare_node::node_domain_number<int>(sample_rate_value, "sampleRate",
+                                                               sonare::kAudioSampleRateDomain);
+  const int max_block_size =
+      has_max_block_size
+          ? sonare_node::node_domain_number<int>(max_block_size_value, "maxBlockSize",
+                                                 sonare::kRealtimeBlockSizeDomain)
+          : sonare::mastering::api::MasteringChain::kDefaultMaxBlock;
+  const int num_channels = sonare_node::node_domain_number<int>(
+      num_channels_value, "numChannels", sonare::mastering::api::kStreamingChainChannelCountDomain);
   chain_->prepare(sample_rate, max_block_size, num_channels);
   max_block_size_ = max_block_size;
   return env.Undefined();
@@ -244,7 +284,6 @@ Napi::Value StreamingMasteringChainWrap::ProcessMono(const Napi::CallbackInfo& i
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
   size_t length = typed.ElementLength();
   RefuseBlockLength(env, "samples", length, max_block_size_);
-  RefuseNonFinite("samples", typed);
   Napi::Float32Array out_arr = Napi::Float32Array::New(env, length);
   if (length > 0) {
     std::memcpy(sonare_node::ElementData(out_arr), sonare_node::ElementData(typed),
@@ -271,8 +310,6 @@ Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo&
   }
   size_t length = left.ElementLength();
   RefuseBlockLength(env, "left", length, max_block_size_);
-  RefuseNonFinite("left", left);
-  RefuseNonFinite("right", right);
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
   if (length > 0) {
@@ -496,8 +533,9 @@ Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "band must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  sonare::mastering::eq::EqBand band = EqBandFromObject(info[1].As<Napi::Object>());
-  eq_->set_band(index, band);
+  sonare::mastering::eq::EqBand band = EqBandFromObject(info[1].As<Napi::Object>(), sample_rate_);
+  sonare_c_detail::with_c_names(sonare::c_api::kEqBandRefusalNames,
+                                [&] { eq_->set_band(index, band); });
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -516,7 +554,10 @@ Napi::Value StreamingEqualizerWrap::SetPhaseMode(const Napi::CallbackInfo& info)
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
   int mode{};
-  if (!sonare_node::RequiredIntArg(env, info, 0, "mode", &mode)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "mode", sonare_c_detail::kEqPhaseModeDomain,
+                                      &mode)) {
+    return env.Undefined();
+  }
   eq_->set_phase_mode(ParsePhaseModeInt(mode));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -537,35 +578,35 @@ Napi::Value StreamingEqualizerWrap::SetGainScale(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
-  float value = 0.0f;
-  if (!RequiredFloatArg(env, info, 0, "scale", &value)) return env.Undefined();
-  eq_->set_gain_scale(value);
+  double number = 0.0;
+  if (!RequiredDomainDoubleValue(env, info[0], "scale", &number)) return env.Undefined();
+  sonare::util::check::within(number, sonare::mastering::eq::kEqGainScaleDomain, "scale");
+  eq_->set_gain_scale(static_cast<float>(number));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
-
 Napi::Value StreamingEqualizerWrap::SetOutputGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
-  float value = 0.0f;
-  if (!RequiredFloatArg(env, info, 0, "gainDb", &value)) return env.Undefined();
-  eq_->set_output_gain_db(value);
+  if (!RequireNumberValue(env, info[0], "gainDb")) return env.Undefined();
+  const float gain_db =
+      node_domain_number<float>(info[0], "gainDb", sonare::mastering::eq::kEqOutputGainDbDomain);
+  eq_->set_output_gain_db(gain_db);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
-
 Napi::Value StreamingEqualizerWrap::SetOutputPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
-  float value = 0.0f;
-  if (!RequiredFloatArg(env, info, 0, "pan", &value)) return env.Undefined();
-  eq_->set_output_pan(value);
+  double number = 0.0;
+  if (!RequiredDomainDoubleValue(env, info[0], "pan", &number)) return env.Undefined();
+  sonare::util::check::within(number, sonare::mastering::eq::kEqOutputPanDomain, "pan");
+  eq_->set_output_pan(static_cast<float>(number));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
-
 Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
@@ -734,7 +775,10 @@ Napi::Value StreamingEqualizerWrap::MagnitudeResponse(const Napi::CallbackInfo& 
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
   int placement{};
-  if (!sonare_node::RequiredIntArg(env, info, 0, "placement", &placement)) return env.Undefined();
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "placement",
+                                      sonare_c_detail::kEqPlacementDomain, &placement)) {
+    return env.Undefined();
+  }
   if (!RequireFloat32Array(info, 1, "frequenciesHz must be a Float32Array")) return env.Undefined();
   Napi::Float32Array frequencies = info[1].As<Napi::Float32Array>();
   const size_t count = frequencies.ElementLength();

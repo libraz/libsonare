@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { createVocalEditSession } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { withConfiguredProject, withEngine } from './_abort_guard_handles.js';
+import { addonSourceText } from './_addon_sources.js';
 
 // biome-ignore lint/suspicious/noExplicitAny: the native surface is untyped on purpose here.
 type Loose = any;
@@ -24,6 +25,26 @@ const captureError = (run: () => unknown): Error | undefined => {
     return error as Error;
   }
 };
+
+describe('playback renderer output ownership', () => {
+  it('keeps native output owned while allocating the typed-array result', () => {
+    const source = addonSourceText('playback/renderer.cpp');
+    const start = source.indexOf('Napi::Value PlaybackRendererWrap::RenderOffline(');
+    const end = source.indexOf('\nNapi::Value PlaybackRendererWrap::', start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const body = source.slice(start, end);
+    const owner = body.indexOf('std::unique_ptr<float,');
+    const allocation = body.indexOf('Napi::Float32Array::New');
+    const allocationGuard = body.indexOf('if (env.IsExceptionPending())', allocation);
+    const copy = body.indexOf('std::memcpy');
+    expect(owner).toBeGreaterThanOrEqual(0);
+    expect(allocation).toBeGreaterThan(owner);
+    expect(allocationGuard).toBeGreaterThan(allocation);
+    expect(copy).toBeGreaterThan(allocationGuard);
+    expect(body).toContain('owned_output.get()');
+  });
+});
 
 describe('GM and MIDI lookups take the integer the caller wrote', () => {
   const lookups: Array<[string, string, (value: unknown) => unknown]> = [
@@ -320,6 +341,22 @@ describe('bounceOffline refuses a non-finite targetLufs instead of normalizing t
       ).toThrow(/ditherSeed/);
     });
   });
+});
+
+it('control: the native mixer accepts only the exact negative pan-mode sentinel', () => {
+  const scene = JSON.stringify({
+    version: 2,
+    strips: [{ id: 'a' }],
+    buses: [{ id: 'master', role: 'master' }],
+  });
+  const mixer = new addon.Mixer(scene, 48000, 512);
+  try {
+    expect(() => mixer.setPan('a', 0.25, -1)).not.toThrow();
+    expect(() => mixer.setPan('a', 0.25, -2)).toThrow(RangeError);
+    expect(() => mixer.setPan('a', 0.25, -2)).toThrow('panMode must be an integer in [0, 2]');
+  } finally {
+    mixer.destroy?.();
+  }
 });
 
 describe('the mixer entry points refuse a sample rate outside [8000, 384000]', () => {

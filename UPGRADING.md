@@ -930,7 +930,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_mastering_enum_value` | a retired flat chain key returns SONARE_ERROR_INVALID_PARAMETER as an unknown key under the key argument (1.x returned SONARE_OK with out_is_enum 0) |
 | `sonare_mixing_assistant_source_class_from_name` | with the mixing assistant compiled out, returns -1 with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: -1 with no error) |
 | `sonare_mixing_assistant_source_class_names` | with the mixing assistant compiled out, returns the empty string with SONARE_ERROR_NOT_SUPPORTED recorded (1.x: empty string with no error) |
-| `sonare_mixing_assistant_suggest` | with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); For a nonempty input list, the analysis and track rates must be in [8000, 384000]. Only exact zero selects automatic tempo. Every other tempo must be finite and in [20, 400] BPM before float conversion. |
+| `sonare_mixing_assistant_suggest` | with the mixing assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); For a nonempty input list, the analysis and track rates must be in [8000, 384000]. Only exact zero selects automatic tempo. Every other tempo must be finite and in [20, 400] BPM before float conversion. A refused tempo key is named params.tempoBpm. |
 | `sonare_project_assist_apply_json` | with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); A refused module leaves out_json null. Read its diagnostic from sonare_last_error_message instead of a rejection document. Apply leaves the project and undo history untouched if publishing the result fails. |
 | `sonare_project_assist_preview_json` | with the composition assistant compiled out, a NULL required pointer returns SONARE_ERROR_NOT_SUPPORTED with the entry and notCompiledIn reason recorded, and supplied result slots receive the entry's usual empty value (1.x returned SONARE_ERROR_INVALID_PARAMETER for that NULL call); A refused module leaves out_json null. Read its diagnostic from sonare_last_error_message instead of a rejection document. |
 | `sonare_streaming_mastering_chain_process_mono` | For nonempty buffers, the prepared channel mode is checked before scanning samples for non-finite values. |
@@ -1259,7 +1259,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default. The initializer writes the library defaults even with arrangement support compiled out. |
 | `SonareExternalStemImportRequest` | leads with uint32_t struct_size in place of struct_version; prepare it with sonare_external_stem_import_request_init, after which every field is read literally: sample_rate must equal the project's (default 0, so it is always set), stems non-NULL and stem_count at least 1; a struct whose struct_size was not set is refused |
 | `SonareMidiRouteConfig` | leads with uint32_t struct_size; prepare it with sonare_midi_route_config_init, after which every field is read literally: filter_group and filter_channel SONARE_MIDI_ROUTE_ANY (-1) accept any group or channel and remap_channel SONARE_MIDI_ROUTE_NO_REMAP (-1) leaves the channel unchanged; a NULL config still means those defaults |
-| `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused. The initializer writes the library defaults even with arrangement support compiled out. |
+| `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused. The initializer sets adaptive_tempo to 0, tempo_update_interval_beats to 8, ramp_threshold to 0.02 and include_octave_candidates to 1 on every build. In 1.x all four fields were zero when arrangement support was compiled out. |
 | `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default. The initializer writes the library defaults even with arrangement support compiled out. |
 | `SonareTakeAlignConfig` | leads with uint32_t struct_size; prepare it with sonare_take_align_config_init, after which every field is read literally: hop_length in [1, 65536] (default 512) and bins_per_octave a positive multiple of 12 (default 12); a 0 is no longer the library value, and a NULL config still means those defaults |
 | `sonare_project_annotate_chords` | omit a Roman numeral with NULL. A non-NULL empty string is refused under chords[i].roman_numeral. |
@@ -3097,7 +3097,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_true_peak_db(oversample_factor)` | `metering_true_peak_dbtp(oversample_factor)`: None (the default) is 4; an explicit 0 raises SonareValueError |
 | `metering_vectorscope(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
 | `mix_source_class_from_name` | `mixing_assistant_source_class_from_name`: renamed to the C/JS name; an unknown name raises SonareValueError (returned -1) |
-| `suggest_mix_scene(tempo_bpm)` | `mixing_assistant_suggest(tempo_bpm)`: None selects the transport fallback tempo; 0 and negatives raise SonareValueError (0 was the fallback sentinel) |
 
 #### An option left out takes the library's default
 
@@ -3113,7 +3112,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `DynamicRangeReport.dynamic_range_db` | float \| None: `inf` when the low percentile lands on a silent window, None when the high percentile is silent too or the input is empty |
 | `DynamicRangeReport.high_percentile_db` | float \| None: `-inf` on a silent window, None for empty input |
 | `DynamicRangeReport.low_percentile_db` | float \| None: `-inf` on a silent window, None for empty input |
-| `LoudnessMatch.reference_lufs` | `LoudnessMatchResult.reference_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
 | `LoudnessMatch.source_lufs` | `LoudnessMatchResult.source_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
 | `MasteringAssistantProfile.crestFactorDb` | `MasteringAssistantProfile.crest_factor_db`: crestFactorDb -> crest_factor_db, float \| None: None for a silent take |
 | `MasteringAssistantProfile.integratedLufs` | `MasteringAssistantProfile.integrated_lufs`: integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None |
@@ -3184,6 +3182,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `mastering_dynamics_gate(range_db)` | range_db refuses a finite value beyond float width and accepts -inf as the muted closed gate (1.x narrowed a value below -3.4e38 to -inf, muting the gate, and refused -inf itself) |
+| `suggest_mix_scene(tempo_bpm)` | `mixing_assistant_suggest(tempo_bpm)`: Omit the keyword or pass None for the transport fallback; explicitly passing zero is refused under tempo_bpm. Other supplied tempos must be finite and in [20, 400] BPM. A tiny nonzero tempo is checked before float32 conversion, so it cannot become the fallback as it could in 1.x. |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -3272,7 +3271,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StereoMonoCompatCheckResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; width is inf for a fully out-of-phase pair, and correlation and width are None when both channels are silent |
 | `StreamingEqualizer.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `StreamingMasteringChain.flush_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_stereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_stereo instead |
-| `StreamingMasteringChain.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `master_audio(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `master_audio_stereo(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `mastering_ab_match_loudness(with_match)` | removed: the match is always measured and returned in the LoudnessMatchResult; read samples for the audio alone |
@@ -3292,7 +3290,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `streaming_loudness_gain(config)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `streaming_loudness_gain_stereo(config)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `suggest_mix_scene_json` | removed: read mixing_assistant_suggest(...).scene, the same scene document |
-| `suggest_mix_scene` | `mixing_assistant_suggest`: renamed to the C/JS name and returns a MixAssistantResult record (scene document, MixAssistantTrackProfile per track, MixAssistantMixProfile) instead of a dict; an absent name, exclusion reason or loudness is None |
+| `suggest_mix_scene` | `mixing_assistant_suggest`: renamed to the C/JS name and returns a MixAssistantResult record (scene document, MixAssistantTrackProfile per track, MixAssistantMixProfile) instead of a dict; an absent name, exclusion reason or loudness is None. Analysis and supplied track rates must be in [8000, 384000] for a nonempty input list. After argument shape, the analysis checks supplied track rates in track order, then the call rate, then the tempo. |
 
 #### Python arrays are numpy arrays
 
@@ -3315,7 +3313,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingEqualizer.magnitude_response` | returns float32 ndarrays instead of list[float]. An out-of-domain frequency raises SonareValueError naming frequencies_hz. |
 | `StreamingEqualizer.process_mono` | returns float32 ndarrays instead of list[float] |
 | `StreamingMasteringChain.flush_mono` | returns a float32 ndarray instead of list[float]; an enabled stage with an unbounded tail (tape saturation with a bias, for one) raises SonareError (NOT_SUPPORTED) 'StreamingMasteringChain.flush_mono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to process_mono instead |
-| `StreamingMasteringChain.process_mono` | returns a float32 ndarray instead of list[float] |
 | `TrimSilenceStereoResult` | left, right are float32 ndarrays instead of list[float]; the record compares by identity |
 
 #### Python composite results are frozen dataclasses
@@ -3366,6 +3363,24 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `StreamingEqualizer.match(max_bands)` | keyword-only |
 
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `LoudnessMatch.reference_lufs` | `LoudnessMatchResult.reference_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness. The same refusal applies to both mono and stereo matching. |
+| `StreamingMasteringChain.process_mono` | returns a float32 ndarray instead of list[float]. For nonempty buffers, the prepared channel mode is checked before reading non-finite samples. |
+| `StreamingMasteringChain.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists. For nonempty buffers, the prepared channel mode is checked before reading non-finite samples. |
+| `StreamingMasteringChain` | builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError. A well-formed configuration requesting a stage or estimator unavailable to streaming raises NotSupported. Prepare checks the sample rate, maximum block size and channel count in that order after validating argument types. |
+| `mastering_pair_process_stereo` | `mastering_apply_pair_processor_stereo`: An undeclared processor raises SonareValueError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference. |
+
+#### A refusal names the public entry the caller invoked
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingEqualizer.set_gain_scale` | The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale. |
+| `StreamingEqualizer.set_output_gain_db` | Pass gain_db of at most 770 dB; larger finite values that converted within the float range were accepted in 1.x. A refusal names gain_db. The gain_db limit is checked before conversion to float32. |
+| `StreamingEqualizer.set_output_pan` | The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan. |
+
 #### Cheap scalar state reads are getters and properties
 
 | 1.x | 2.0.0 |
@@ -3387,7 +3402,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `mastering_pair_process_stereo` | `mastering_apply_pair_processor_stereo` |
 | `mastering_pair_process` | `mastering_apply_pair_processor` |
 | `mastering_process_stereo` | `mastering_apply_processor_stereo` |
 | `mastering_process` | `mastering_apply_processor` |
@@ -3397,7 +3411,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingMasteringChain.prepare` | removed: pass sample_rate=, max_block_size= and num_channels= to the constructor |
-| `StreamingMasteringChain` | builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError |
 | `mastering_insert_param_names(name)` | `mastering_insert_param_names(insert)` |
 
 #### Stereo-only algorithms take left and right
@@ -3471,7 +3484,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
+| `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)`: Use loudness_static_gain_peak_dbtp. None leaves the peak unmeasured. A supplied peak must fit float32, or be negative infinity for measured silence. An invalid supplied peak is refused even when the static gain is omitted. In 1.x the peak was ignored when no static gain was supplied. |
 | `master_audio(preset_name)` | `master_audio(preset)` |
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
 | `mastering_audio_profile(params)` | a refused nFft or hopLength raises SonareValueError naming the key under the mapping the caller passed: 'mastering_audio_profile: params.nFft must be an even integer in [2, 524288]', 'mastering_audio_profile: params.nFft rescaled to sample_rate must fit the largest FFT size'; an odd nFft, or nFft 1, is refused on the caller's value before the rescale at every sample rate, where input at a rate other than 48 kHz used to accept it because the FFT length chosen for the rescaled window came out even |
@@ -3689,6 +3702,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `SidechainSourceKind` | Literal['track', 'bus']; the IntEnum and its members are removed |
 | `synth_engine_param_info` | returns frozen SynthParamInfo dataclasses read by attribute; engine_mode takes a SynthEngineMode token and an ordinal is TypeError |
 
+#### Results are typed values, not JSON strings
+
+| 1.x | 2.0.0 |
+|---|---|
+| `PlaybackRenderer.render_offline` | A native render failure preserves the renderer's processing state. A Python allocation or copy failure after the native call is outside this guarantee. |
+
 #### Python arrays are numpy arrays
 
 | 1.x | 2.0.0 |
@@ -3725,6 +3744,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `HrtfSet.from_bytes` | Malformed SHRF bytes raise a coded InvalidFormat document error rather than an invalid-argument error. |
 | `Mixer.read_goniometer_latest(max_points)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError |
 | `Mixer.scene_warnings` | unread insert parameters are refused at load time and no longer appear as warnings |
 | `Mixer.strip_by_id` | an unknown id raises SonareValueError instead of KeyError |
@@ -3803,7 +3823,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `EngineBounceOptions.num_channels` | required (was 2 by default) |
 | `EngineFreezeOptions.num_channels` | required (was 2 by default) |
-| `PlaybackLoudnessMeter.constructor(channels)` | `PlaybackLoudnessMeter.constructor(num_channels)` |
+| `PlaybackLoudnessMeter.constructor(channels)` | `PlaybackLoudnessMeter.constructor(num_channels)`: A refused channel count names num_channels. |
 | `PlaybackRenderer.process_interleaved(in_channels)` | `PlaybackRenderer.process_interleaved(num_input_channels)` |
 | `PlaybackRenderer.render_offline(in_channels)` | `PlaybackRenderer.render_offline(num_input_channels)` |
 | `render_playback(channels)` | `render_playback(num_channels)` |
@@ -4073,6 +4093,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `align_take_to_reference(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.snap_to_grid` | PPQ must be finite and in [0, 1e12]; finite values above that ceiling were accepted in 1.x. For values representable by the C arguments, PPQ, strength and division are checked in that order and the first refusal is named. |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |
@@ -4132,6 +4158,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `MidiRouteResult.events` | a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
+| `Project.last_bounce_compile_result` | Returns the result of the last successful bounce or None before the first success. A failed bounce preserves that result. Read the error raised by bounce for details of that failure. In 1.x this method returned a result object with has_timeline even before the first bounce, and a failed bounce could clear or replace the recorded diagnostics. |
 
 #### Python arrays are numpy arrays
 
@@ -4201,6 +4228,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.from_json_with_diagnostics` | An allocation failure while decoding raises SonareError with code OUT_OF_MEMORY rather than INVALID_FORMAT. |
 | `Project.preview_midi_fx_count` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `Project.set_max_history_bytes(bytes)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a non-integer number or one outside [0, SIZE_MAX] stays SonareValueError |
 
@@ -4302,7 +4330,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.from_json(json)` | `Project.from_json(document)` |
 | `Project.from_json_with_diagnostics(json)` | `Project.from_json_with_diagnostics(document)` |
-| `Project.from_json` | a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document |
+| `Project.from_json` | a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document. Allocation failure while decoding raises SonareError with code OUT_OF_MEMORY. In 1.x this could be reported as INVALID_FORMAT. |
 | `Project.set_mixer_scene_json` | removed: parse JSON into a MixSceneDocument mapping and call project.set_mixer_scene(scene); pass None to clear the scene |
 
 #### Historical aliases are removed
@@ -4353,7 +4381,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.annotate_chords` | A read-only sequence of chord mappings is accepted. Both PPQ endpoints are required, and invalid extension and Roman text errors name the indexed chord field |
 | `Project.auto_tempo` | returns ProjectAutoTempoResult with bpm, bpm_confidence and the detected TimeSignature, including when apply_time_signatures is false. Every option after sample_rate is keyword-only, and supplied flags must be Boolean |
 | `Project.clear_soundfont` | `Project.clear_sound_font`: takes keyword-only uri=None to clear the named URI; None selects the default SoundFont and an empty URI is refused |
-| `Project.last_bounce_compile_result` | Returns None before any bounce has produced a compile result. Check for None before accessing ProjectCompileResult fields. |
 | `Project.load_soundfont` | `Project.load_sound_font`: takes keyword-only uri=None to load bytes at the named URI; None selects the default SoundFont and an empty URI is refused. The data must be bytes, bytearray or memoryview, and a given URI must be nonempty, NUL-free and valid Unicode |
 | `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
 | `Project.set_marker_ex(marker)` | removed: pass ppq and the marker's fields directly to Project.set_marker |
@@ -6457,7 +6484,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MatchReferenceLoudnessResult.gainToMatchDb` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MeteringDynamicRangeOptions.hopSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
 | `PhaseScopeReport.angleRad` | NaN at a silent point, which has no angle (was 0); the array keeps one element per point |
 | `PhaseScopeReport.averageAbsAngleRad` | optional; absent when every point is silent (was 0) |
 | `PhaseScopeReport.correlation` | optional; absent when either channel has zero energy (was a required number) |
@@ -6523,6 +6549,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `TransientShaperOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `WaveformPeakPyramidRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `WaveformPeaksRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: Omit tempoBpm for the transport fallback. A supplied tempo must be in [20, 400] BPM; written zero and every other out-of-domain value raise RangeError naming tempoBpm. A tiny nonzero tempo that rounded to the fallback in 1.x is refused. |
 
 #### String values are lowerCamelCase tokens
 
@@ -6722,7 +6754,21 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `StreamingMasteringChain.processMono` | For nonempty buffers, the prepared channel mode is checked before reading non-finite samples. |
+| `StreamingMasteringChain.processStereo` | For nonempty buffers, the prepared channel mode is checked before reading non-finite samples. |
 | `StreamingMasteringChain.setParameter` | An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `StreamingMasteringChain` | Pass an explicit StreamingMasteringChainConfig to the constructor. A well-formed configuration requesting a stage or estimator unavailable to streaming raises NotSupported. Prepare checks the sample rate, maximum block size and channel count in that order after validating argument types. |
+| `masteringAbMatchLoudnessStereo` | If either take has no measurable loudness, the call raises RangeError naming that side instead of applying zero gain. |
+| `masteringAbMatchLoudness` | If either take has no measurable loudness, the call raises RangeError naming that side instead of applying zero gain. |
+
+#### A refusal names the public entry the caller invoked
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. |
+| `StreamingEqualizer.setGainScale` | The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale. |
+| `StreamingEqualizer.setOutputGainDb` | Pass gainDb of at most 770 dB. A refusal names gainDb. Values above 770 dB with finite linear conversion could pass in 1.x. The gainDb limit is checked before conversion to float32. |
+| `StreamingEqualizer.setOutputPan` | The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan. |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -6756,7 +6802,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringProcessStereoRequest.processorName` | `MasteringApplyProcessorStereoRequest.processor`: processorName -> processor (SoloProcessor (generic P)) |
 | `MasteringStereoAnalyzeRequest.analysisName` | `MasteringAnalyzeStereoRequest.analysis`: analysisName -> analysis (StereoAnalysis (generic A)) |
 | `masteringPairAnalyze` | `masteringAnalyzePair`: renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
-| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only). An undeclared processor raises an InvalidParameter RangeError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference. An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
 | `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
@@ -6931,12 +6977,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SuggestMixSceneRequest` | `MixingAssistantSuggestRequest` |
 | `TrimSilenceStereoResult` | `MasteringRepairTrimSilenceResult`: renamed to MasteringRepairTrimSilenceResult; shape {channels, reports} |
 
-#### Input-only types are named <Name>Input
-
-| 1.x | 2.0.0 |
-|---|---|
-| `StreamingMasteringChain` | Pass an explicit StreamingMasteringChainConfig to the constructor. |
-
 #### Historical aliases are removed
 
 | 1.x | 2.0.0 |
@@ -6991,7 +7031,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringChainConfig.repair.declip` | a new linkChannels, default false: on more than one channel each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); true restores the union |
 | `MeteringDynamicRangeOptions.lowPercentile` | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
-| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
 | `StreamingMasteringChain.flushMono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead |
 | `StreamingMasteringChain.flushStereo` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushStereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processStereo instead |
 | `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
@@ -7199,6 +7238,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Mixer.toSceneJson` | `Mixer.toJson` |
+| `PlaybackRenderer.renderOffline` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. A native render refusal preserves the renderer's prior processing state. The binding releases the native result even if allocating the typed-array result fails. |
 | `RealtimeEngine.drainExternalMidi` | Read ExternalMidiEvent rows and handle an absent destinationId for broadcast events. |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
@@ -7271,10 +7311,16 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `HrtfSet.fromBytes` | Malformed SHRF bytes raise a coded InvalidFormat document error instead of an invalid-argument error. |
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `PlaybackRenderer.processPlanar` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
-| `PlaybackRenderer.renderOffline` | An input channel count unsupported by the configured layout raises RangeError instead of SonareError InvalidParameter. |
 | `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
+
+#### A refusal names the public entry the caller invoked
+
+| 1.x | 2.0.0 |
+|---|---|
+| `PlaybackLoudnessMeter.pushInterleaved` | Pass interleaved samples containing whole frames. The call converts the sample count to frames and refuses a partial frame. A non-finite value names samples. |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -7340,7 +7386,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `EngineClip.pageProvider.id` | removed: pageProvider takes the ClipPageProvider instance; a number or { id } is refused |
 | `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required. An unread insert key is InvalidFormat with its full scene path and the sorted accepted keys. |
-| `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
+| `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }). A refused channel count names numChannels. |
 | `PlaybackLoudnessMeter.constructor(sampleRate)` | removed: pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `RealtimeEngine.clearClipPage` | removed: call clear(pageIndex) on the ClipPageProvider |
 | `RealtimeEngine.constructor(maxChannels)` | removed: pass maxChannels in the config object: new RealtimeEngine({ sampleRate, maxChannels }) |
@@ -7596,6 +7642,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ProjectMarker` | Read kind as ProjectMarkerKind and copy the record before editing. Check name for undefined before using it and copy the record before editing the field. |
 | `ProjectSource` | Check contentHash for undefined before using it and copy the record before editing the field. Check externalStemRole for undefined before using it and copy the record before editing the field. Read kind as ProjectSourceKind and copy the record before editing. |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.snapToGrid` | PPQ must be finite and within [0, 1e12]. Finite PPQ above that ceiling was accepted in 1.x. For values representable by the C arguments, the checks run in order ppq, strength, division and name the first refusal. |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -7647,7 +7699,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.compile` | returns { diagnostics } with named codes and severities, plus timeline when withTimeline is set |
 | `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer |
 | `Project.exportSmf` | returns a plain Uint8Array, not a Buffer |
-| `Project.lastBounceCompileResult` | returns { diagnostics } only. Check for undefined when the most recent bounce has no compile result, including before the first bounce. |
+| `Project.lastBounceCompileResult` | Returns { diagnostics } from the last successful bounce and undefined before the first success. A failed bounce preserves that result. Read the error thrown by bounce for details of that failure. In 1.x this method returned a result object with hasTimeline even before the first bounce, and a failed bounce could clear or replace the recorded diagnostics. |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
@@ -7924,8 +7976,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AlignTakeToReferenceRequest.binsPerOctave` | a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter') |
 | `AlignTakeToReferenceRequest.hopLength` | an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage |
 | `Project.clearSoundFont` | clearSoundFont({ uri }?) releases one named SoundFont. Omit the URI for the default font. |
-| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
-| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
+| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.loadSoundFont` | loadSoundFont(data, { uri }?) loads or replaces one named SoundFont. Omit the URI for the default font. |
 | `Project.setMaxUndoDepth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention. |
 | `Project.setMixerSceneJson` | removed: Use setMixerScene(scene) with a scene object, or omit it to clear. Unknown keys are TypeError and refusal paths start at scene. Use version 2 or omit the version, and remove the former surroundPan distance and elevation keys. |
@@ -11416,7 +11468,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MeteringDynamicRangeOptions.hopSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
 | `PhaseScopeReport.angleRad` | NaN at a silent point, which has no angle (was 0); the array keeps one element per point |
 | `PhaseScopeReport.averageAbsAngleRad` | optional; absent when every point is silent (was 0) |
 | `PhaseScopeReport.correlation` | optional; absent when either channel has zero energy (was a required number) |
@@ -11505,6 +11556,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `WaveformPeakPyramidRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `WaveformPeaksRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `WaveformPeaksRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: Omit tempoBpm for the transport fallback. A supplied tempo must be finite and in [20, 400] BPM; zero is refused, and a tiny nonzero tempo that rounded to the fallback in 1.x raises RangeError naming tempoBpm. |
 
 #### String values are lowerCamelCase tokens
 
@@ -11778,8 +11835,22 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `StreamingMasteringChain.processMono` | For nonempty buffers, the prepared channel mode is checked before reading non-finite samples. |
+| `StreamingMasteringChain.processStereo` | For nonempty buffers, the prepared channel mode is checked before reading non-finite samples. |
 | `StreamingMasteringChain.setParameter` (`./worklet`) | An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `StreamingMasteringChain.setParameter` | An undeclared key raises TypeError naming the supplied key with the sorted accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `StreamingMasteringChain` | A well-formed configuration requesting a stage or estimator unavailable to streaming raises NotSupported. Prepare checks the sample rate, maximum block size and channel count in that order after validating argument types. |
+| `masteringAbMatchLoudnessStereo` | If either take has no measurable loudness, the call raises RangeError naming that side instead of applying zero gain. |
+| `masteringAbMatchLoudness` | If either take has no measurable loudness, the call raises RangeError naming that side instead of applying zero gain. |
+
+#### A refusal names the public entry the caller invoked
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. |
+| `StreamingEqualizer.setGainScale` | The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale. |
+| `StreamingEqualizer.setOutputGainDb` | Pass gainDb of at most 770 dB. A refusal names gainDb. Values above 770 dB with finite linear conversion could pass in 1.x. The gainDb limit is checked before conversion to float32. |
+| `StreamingEqualizer.setOutputPan` | The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan. |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -11821,7 +11892,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringProcessStereoRequest.processorName` | `MasteringApplyProcessorStereoRequest.processor`: processorName -> processor (SoloProcessor (generic P)) |
 | `MasteringStereoAnalyzeRequest.analysisName` | `MasteringAnalyzeStereoRequest.analysis`: analysisName -> analysis (StereoAnalysis (generic A)) |
 | `masteringPairAnalyze` | `masteringAnalyzePair`: renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
-| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
+| `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only). An undeclared processor raises an InvalidParameter RangeError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference. An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter. |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
 | `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001); final.bitDepth and final.outputChain take no clamp param and refuse it as an unknown key, since the code range holds a sample past full scale on its own |
@@ -12252,7 +12323,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `SoloProcessor` (`./analysis`) | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `SoloProcessor` | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
-| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
 | `StreamingMasteringChain.flushMono` (`./worklet`) | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead |
 | `StreamingMasteringChain.flushMono` | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushMono: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processMono instead |
 | `StreamingMasteringChain.flushStereo` (`./worklet`) | an enabled stage with an unbounded tail (tape saturation with a bias, for one) throws a NotSupported SonareError 'StreamingMasteringChain.flushStereo: cannot automatically flush a chain with an unbounded tail'; 1.x kept emitting blocks for up to 2147483647 samples, so a loop flushing until an empty block did not end. Feed a bounded number of silent blocks to processStereo instead |
@@ -12532,6 +12602,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTelemetry` | Read type and error as tokens and graphLatencySamples in place of graphLatencySamplesQ8. |
 | `EngineTransportState` | Use barIndex instead of barCount. |
 | `Mixer.toSceneJson` | `Mixer.toJson` |
+| `PlaybackRenderer.renderOffline` | Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError. The native renderer preserves its processing state when rendering fails before producing a result. |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>. Unread insert keys are TypeError with the settings.inserts[i].params path and sorted accepted keys. |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
@@ -12646,6 +12717,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
 | `EngineTimeSignatureSegment.denominator` | an absent denominator is refused with TypeError naming segments[i].denominator (1.x read it as 0 and refused it with RangeError) |
 | `EngineTimeSignatureSegment.numerator` | an absent numerator is refused with TypeError naming segments[i].numerator (1.x read it as 0 and refused it with RangeError) |
+| `HrtfSet.fromBytes` | Malformed SHRF bytes raise a coded InvalidFormat document error instead of an invalid-argument error. |
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `RealtimeEngine.clearMidiCcBindings` | Allocation failure raises a coded OutOfMemory error and leaves the previous bindings active. The prior clear returned success on allocation failure. |
 | `SonareEngineSyncErrorMessage.failure` (`./worklet`) | `EngineSyncErrorMessage.failure`: typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload |
@@ -12732,7 +12804,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `EngineClip.pageProvider.id` | removed: pageProvider takes the ClipPageProvider instance; a number or { id } is refused |
 | `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required; an unread insert params key is refused as InvalidFormat with its indexed document path and the sorted accepted keys |
-| `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
+| `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }). A refused channel count names numChannels. |
 | `PlaybackLoudnessMeter.constructor(sampleRate)` | removed: pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `RealtimeEngine.clearClipPage` | removed: call clear(pageIndex) on the ClipPageProvider |
 | `RealtimeEngine.constructor(maxChannels)` | removed: pass maxChannels in the config object: new RealtimeEngine({ sampleRate, maxChannels }) |
@@ -13169,7 +13241,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineMidiEvent.wordCount` | only 0..4 is accepted; 0 and omission infer the word count from the last non-zero word, while an explicit integer above 4 is refused as a RangeError naming clips[i].events[j].wordCount (1.x inferred the word count for it) |
 | `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number \| undefined: a value not measured (the correlation of silence) is undefined, not NaN |
 | `PlaybackRenderer.processPlanar` | Invalid input channel counts are RangeError rather than coded SonareError. Non-finite samples in an otherwise valid block are still replaced and counted. |
-| `PlaybackRenderer.renderOffline` | Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError. |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.clipPageRequestScratchSample` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.configureScopeTelemetry` | intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged. |
@@ -13309,7 +13380,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.addMidiClip` | a NaN, infinite or out-of-range startPpq or lengthPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.duplicateClip` | a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.removeAutomationLane` | takes the lane ID that addAutomationLane returns and automationLanes() reads; a NaN, infinite or out-of-range laneId is refused with RangeError naming it (1.x passed it through) |
-| `Project.snapToGrid` | a NaN, infinite or out-of-range ppq or strength is refused with RangeError naming it (1.x passed it through) |
+| `Project.snapToGrid` | PPQ must be finite and within [0, 1e12]. Finite PPQ above that ceiling was accepted in 1.x. For values representable by the C arguments, the checks run in order ppq, strength, division and name the first refusal. The fraction, nonfinite value and unrepresentable division use the same division predicate. |
 | `Project.splitClip` | a NaN, infinite or out-of-range splitPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.trimClip` | a NaN, infinite or out-of-range newStartPpq or newLengthPpq is refused with RangeError naming it (1.x passed it through) |
 
@@ -13360,7 +13431,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.compile` | compile returns { diagnostics } only; each diagnostic has a code token, an error / warning severity and an optional targetId |
-| `Project.lastBounceCompileResult` | lastBounceCompileResult returns the same { diagnostics } shape as compile. Check for undefined before the first bounce; only a completed attempt has a diagnostics record. |
+| `Project.lastBounceCompileResult` | Returns { diagnostics } from the last successful bounce and undefined before the first success. A compile failure leaves the last successful result. Read the error thrown by bounce for details of that failure. In 1.x this method returned a result object with hasTimeline even before the first bounce, and a failed bounce could clear or replace the recorded diagnostics. |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.diagnosticCount` | removed: Read diagnostics.length. |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
@@ -13729,8 +13800,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipPageStreamerRequest.sample` | only on ClipPageSampleRequest, which also carries channel; narrow with "sample" in request |
 | `Project.annotateChords` | Accepts a readonly list and requires startPpq and endPpq on each chord. |
 | `Project.clearSoundFont` | Accepts ({ uri }?). Omit the URI to clear only the default SoundFont. |
-| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
-| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. |
+| `Project.fromJsonWithDiagnostics` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
+| `Project.fromJson` | An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat. |
 | `Project.loadSoundFont` | Accepts (data, { uri }?). Omit the URI to replace the default SoundFont. A supplied empty URI is refused. |
 | `Project.setMaxUndoDepth(depth)` | Pass an integer in [1, 500000000]. Zero previously selected depth 1 and now throws RangeError 'Project.setMaxUndoDepth: depth must be an integer in [1, 500000000]'. Use setMaxHistoryBytes(0) to disable undo retention. |
 | `Project.setMixerSceneJson` | removed: Pass a MixSceneDocumentInput to setMixerScene(scene), or omit scene to clear it. Unknown scene keys and wrong field types are TypeError. Out-of-domain values are RangeError. |

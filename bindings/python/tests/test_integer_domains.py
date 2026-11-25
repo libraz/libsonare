@@ -118,7 +118,16 @@ _PAIRED = {"bank_msb": "bank_lsb", "bank_lsb": "bank_msb"}
 # Entries whose required argument of a shared name needs another shape.
 _ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
     "mix_stereo": {"strips": [(_TONE, _TONE)]},
-    "mixing_assistant_suggest": {"tracks": [libsonare.MixAssistantTrack("a", [_TONE])]},
+    "mixing_assistant_suggest": {
+        "tracks": [libsonare.MixAssistantTrack("a", [_TONE], sample_rate=_SR)]
+    },
+    "mastering_apply_pair_processor_stereo": {
+        "processor": "match.abCrossfade",
+        "source_left": _TONE,
+        "source_right": _TONE,
+        "reference_left": _TONE,
+        "reference_right": _TONE,
+    },
     "segment_cross_similarity": {
         "x": np.ones((8, 16), np.float32),
         "y": np.ones((8, 16), np.float32),
@@ -235,6 +244,16 @@ def test_the_table_reaches_the_public_entries() -> None:
     # A member of an array element is keyed by its path, which no signature names.
     keywords = [key for key in DOMAINS if "[" not in key[1]]
     assert len(_rows()) >= len(keywords) // 2
+
+
+@pytest.mark.parametrize("value", [7999, 384001, 8000.5, 1e100, math.inf])
+def test_assistant_track_sample_rate_uses_its_array_domain(value: object) -> None:
+    low, high, stricter = DOMAINS[("mixing_assistant_suggest", "track_sample_rates[]")]
+    expected = _domain_text("tracks[0].sample_rate", low, high, stricter)
+    track = libsonare.MixAssistantTrack("a", [_TONE], sample_rate=value)
+    with pytest.raises((SonareError, TypeError, ValueError)) as caught:
+        libsonare.mixing_assistant_suggest([track], sample_rate=_SR)
+    assert expected in str(caught.value)
 
 
 @pytest.mark.parametrize(("entry", "keyword", "lo", "hi", "stricter"), _rows())

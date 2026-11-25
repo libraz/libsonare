@@ -497,9 +497,8 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'mixing/mixing_assistant.cpp',
       text: 'subject.c_str()',
-      count: 5,
-      reason:
-        'error-subject labels (tracks[i].sampleRate, left/right plane names) built from a literal name and an element index',
+      count: 1,
+      reason: 'track sample-rate error subject built from a literal name and track index',
     },
     {
       file: 'realtime/processing.cpp',

@@ -13661,8 +13661,7 @@ export interface LoudnessMatchResult {
   sampleRate: number;
   /**
    * The reference's BS.1770 integrated loudness. Always finite: a silent or
-   * below-gate take on either side is refused with `RangeError` ("... has no
-   * measurable loudness").
+   * below-gate take on either side is refused with `RangeError`.
    */
   referenceLufs: number;
   /** The source's, before the gain. Always finite, as `referenceLufs`. */
@@ -13675,8 +13674,7 @@ export interface LoudnessMatchResult {
    * headroom would return the source at its own loudness whenever it started
    * near full scale, which is the one thing a loudness match must not do.
    * Limiting is the caller's decision, so a value above 0 is a report rather
-   * than a defect. `-Infinity` for silence.
-   * Never absent: every input sample measures it.
+   * than a defect. Never absent: every accepted input sample measures it.
    */
   matchedTruePeakDbtp: number;
 }
@@ -13690,20 +13688,17 @@ export interface LoudnessMatchStereoResult {
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
   /**
-   * The reference program's BS.1770 integrated loudness.
-   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   * The reference program's BS.1770 integrated loudness. Always finite: a silent
+   * or below-gate pair is refused with `RangeError`.
    */
   referenceLufs: number;
-  /**
-   * The stereo source program's loudness before the gain.
-   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
-   */
+  /** The stereo source program's finite loudness before the gain. */
   sourceLufs: number;
   /** One gain applied to both source channels, in dB. */
   appliedGainDb: number;
   /**
-   * Maximum true peak across the matched left and right channels, in dBTP. `-Infinity` for silence.
-   * Never absent: every input sample measures it.
+   * Maximum true peak across the matched left and right channels, in dBTP.
+   * Never absent: every accepted input sample measures it.
    */
   matchedTruePeakDbtp: number;
 }

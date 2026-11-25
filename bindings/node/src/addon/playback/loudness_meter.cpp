@@ -26,12 +26,13 @@ PlaybackLoudnessMeterWrap::PlaybackLoudnessMeterWrap(const Napi::CallbackInfo& i
   SONARE_NODE_TRY
   int channels = 0;
   int sample_rate = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 0, "channels", &channels) ||
+  if (!sonare_node::RequiredIntArg(env, info, 0, "numChannels", &channels) ||
       !sonare_node::RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) {
     return;
   }
   sonare_node::ThrowIfError(env,
                             sonare_playback_loudness_meter_create(channels, sample_rate, &meter_));
+  if (env.IsExceptionPending()) return;
   channels_ = channels;
   SONARE_NODE_CATCH_VOID(env)
 }

@@ -633,8 +633,9 @@ SonareError probe_snap_to_grid(const std::string& param, double value) {
   sonare_project_snap_to_grid_options_init(&options);
   if (is_param(param, "options.division")) options.division = static_cast<int>(value);
   const double ppq = is_param(param, "ppq") ? value : 0.0;
+  const double strength = is_param(param, "strength") ? value : 1.0;
   double out = 0.0;
-  return sonare_project_snap_to_grid(project.handle, ppq, 1.0, &options, &out);
+  return sonare_project_snap_to_grid(project.handle, ppq, strength, &options, &out);
 }
 
 SonareProjectMarker marker_for(const std::string& param, double value) {

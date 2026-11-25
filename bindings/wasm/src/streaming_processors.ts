@@ -73,6 +73,24 @@ function assertConfigObject(config: unknown): asserts config is object {
   }
 }
 
+function assertIntegerFieldShape(value: unknown, name: string, optional = false): void {
+  if (optional && isAbsent(value)) {
+    return;
+  }
+  if (typeof value !== 'number') {
+    throw refuseType(`${name} must be an integer`);
+  }
+}
+
+function assertNumberFieldShape(value: unknown, name: string, optional = false): void {
+  if (optional && isAbsent(value)) {
+    return;
+  }
+  if (typeof value !== 'number') {
+    throw refuseType(`${name} must be a number`);
+  }
+}
+
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
 function optionalIntegerBlockSize(value: unknown): number | undefined {
   if (isAbsent(value)) {
@@ -183,13 +201,16 @@ export class StreamingMasteringChain {
       loudnessStaticGainPeakDbtp,
       ...chainConfig
     } = config;
-    assertIntegerValue(sampleRate, 'sampleRate');
-    const blockSize = optionalIntegerBlockSize(maxBlockSize);
+    assertIntegerFieldShape(sampleRate, 'sampleRate');
+    assertIntegerFieldShape(maxBlockSize, 'maxBlockSize', true);
+    assertIntegerFieldShape(numChannels, 'numChannels');
+    assertNumberFieldShape(loudnessStaticGainDb, 'loudnessStaticGainDb', true);
+    assertNumberFieldShape(loudnessStaticGainPeakDbtp, 'loudnessStaticGainPeakDbtp', true);
     const options: Record<string, number> = {};
-    if (loudnessStaticGainDb !== undefined) {
+    if (!isAbsent(loudnessStaticGainDb)) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;
     }
-    if (loudnessStaticGainPeakDbtp !== undefined) {
+    if (!isAbsent(loudnessStaticGainPeakDbtp)) {
       options.loudnessStaticGainPeakDbtp = loudnessStaticGainPeakDbtp;
     }
     const module = getSonareModule();
@@ -198,7 +219,7 @@ export class StreamingMasteringChain {
       options,
     );
     try {
-      this.chainHandle.prepare(sampleRate, blockSize, numChannels);
+      this.chainHandle.prepare(sampleRate, maxBlockSize, numChannels);
     } catch (error) {
       this.chainHandle.delete();
       throw error;

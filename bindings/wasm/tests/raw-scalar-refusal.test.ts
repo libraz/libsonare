@@ -93,6 +93,65 @@ describe('raw scalar arguments refuse non-finite values by name', () => {
   });
 });
 
+it('control: the raw mixing assistant refuses a tiny nonzero tempo before float conversion', () => {
+  const error = refusal(() =>
+    mod.mixingAssistantSuggest([new Float32Array(128)], null, ['bass'], null, null, 48000, {
+      tempoBpm: Number.MIN_VALUE,
+    }),
+  );
+  expect(error).toBeInstanceOf(RangeError);
+  expect(error.message).toContain('tempoBpm must be 0 or a tempo between 20 and 400 BPM');
+});
+
+it('raw mixing assistant checks request shapes and channel lengths before rate domains', () => {
+  const call = (left: unknown, right: unknown, rates: unknown, params: unknown): Error =>
+    refusal(() =>
+      mod.mixingAssistantSuggest(
+        left as Float32Array[],
+        right as (Float32Array | null)[] | null,
+        ['bass'],
+        null,
+        rates as (number | null)[] | null,
+        7999,
+        params as Record<string, number | boolean>,
+      ),
+    );
+
+  const badParams = call([new Float32Array(4)], null, [7999], {
+    suggestionStrength: 'strong',
+    tempoBpm: 0,
+  } as never);
+  expect(badParams).toBeInstanceOf(TypeError);
+  expect(badParams.message).toContain("mastering override 'suggestionStrength'");
+
+  const badPlane = call(['not a plane'], null, [7999], {});
+  expect(badPlane).toBeInstanceOf(TypeError);
+  expect(badPlane.message).toContain('leftChannels[0]');
+
+  const unequalPlanes = call([new Float32Array(4)], [new Float32Array(3)], [7999], { tempoBpm: 0 });
+  expect(unequalPlanes).toBeInstanceOf(RangeError);
+  expect(unequalPlanes.message).toBe(
+    'mixingAssistantSuggest: tracks[0].left and tracks[0].right must have the same length',
+  );
+});
+
+it('the raw mixer accepts only the exact negative pan-mode sentinel', () => {
+  const scene = JSON.stringify({
+    version: 2,
+    strips: [{ id: 'a' }],
+    buses: [{ id: 'master', role: 'master' }],
+  });
+  const mixer = mod.createMixerFromSceneJson(scene, 48000, undefined);
+  try {
+    expect(() => mixer.setPan(0, 0.25, -1)).not.toThrow();
+    const error = refusal(() => mixer.setPan(0, 0.25, -2));
+    expect(error).toBeInstanceOf(RangeError);
+    expect(error.message).toContain('panMode must be an integer in [0, 2]');
+  } finally {
+    mixer.delete();
+  }
+});
+
 describe('the raw mixer factory reads maxBlockSize as the facade does', () => {
   const scene = JSON.stringify({
     version: 2,

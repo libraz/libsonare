@@ -10,6 +10,7 @@
 /// resulting Value here, so a scene embedded inside a larger document is not
 /// parsed a second time under a different resource budget.
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,7 +27,8 @@ namespace sonare::mastering::eq {
 /// @throws SonareException(InvalidFormat) on a value that is not a JSON
 ///         object, an unrecognised enum spelling, a wrongly-typed field, or a
 ///         numeric field that is non-finite or out of range.
-EqBand eq_band_from_value(const util::json::Value& value, const std::string& path);
+EqBand eq_band_from_value(const util::json::Value& value, const std::string& path,
+                          std::optional<double> sample_rate = std::nullopt);
 
 /// @brief Every key `eq_band_from_value` reads. A caller reporting unrecognised keys checks
 ///        against this list.

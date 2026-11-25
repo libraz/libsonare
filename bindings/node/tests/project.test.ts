@@ -1974,32 +1974,40 @@ describe('Project value-model accessors', () => {
     project.destroy();
   });
 
-  it('reports no last bounce compile result on a project no bounce has run on', () => {
-    const project = new Project();
-    expect(project.lastBounceCompileResult()).toBeUndefined();
-    project.destroy();
-  });
-
-  it('reports empty diagnostics after a clean bounce', () => {
-    const project = new Project();
-    project.setSampleRate(48000);
-    project.bounce({ totalFrames: 256 });
-    expect(project.lastBounceCompileResult()).toEqual({ diagnostics: [] });
-    project.destroy();
-  });
-
-  it('reports a failed bounce through its error and leaves the compile result empty', () => {
+  it('control: has no last successful result before a bounce and retains it after a failed bounce', () => {
     const project = new Project();
     try {
       project.setSampleRate(48000);
+      expect(project.lastBounceCompileResult()).toBeUndefined();
+      project.bounce({ totalFrames: 256 });
+      const lastSuccess = project.lastBounceCompileResult();
+      expect(lastSuccess).toEqual({ diagnostics: [] });
+
       const trackId = project.addTrack({ kind: 'audio' });
+      // A clip whose audio source was never supplied cannot be compiled.
       project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
       expectRefusal(
         () => project.bounce({ totalFrames: 256 }),
         ErrorCode.InvalidState,
         /^Project\.bounce: the project does not compile: audio source has no decoded samples registered in the AudioContentStore$/,
       );
-      expect(project.lastBounceCompileResult()).toBeUndefined();
+      expect(project.lastBounceCompileResult()).toEqual(lastSuccess);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('control: retains the last successful result after a later argument refusal', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      project.bounce({ totalFrames: 256 });
+      const lastSuccess = project.lastBounceCompileResult();
+      expect(lastSuccess).toEqual({ diagnostics: [] });
+      expect(() => project.bounce({ totalFrames: 256, countInBars: 17 })).toThrow(
+        new RangeError('Project.bounce: countInBars must be an integer in [0, 16]'),
+      );
+      expect(project.lastBounceCompileResult()).toEqual(lastSuccess);
     } finally {
       project.destroy();
     }

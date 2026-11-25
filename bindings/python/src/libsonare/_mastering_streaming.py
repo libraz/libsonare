@@ -6,18 +6,24 @@ import contextlib
 import ctypes
 import json
 import math
+import numbers
+import operator
 from collections.abc import Mapping, Sequence
+from typing import SupportsIndex, cast
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_type, _require_open
+from ._errors import _entry, _refuse, _refuse_integer, _refuse_type, _require_open
 from ._ffi import (
     SonareEqSnapshot,
     SonareStreamingLoudnessGain,
     SonareStreamingMasteringChainOptions,
 )
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
+from ._integer_domains import REAL_DOMAIN_TEXT as _REAL_DOMAIN_TEXT
+from ._integer_domains import REAL_DOMAINS as _REAL_DOMAINS
 from ._mastering_offline import _chain_config_json
-from ._narrowing import _resolve_zero_default
+from ._narrowing import _FLOAT32_MAX, _domain_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -28,7 +34,6 @@ from ._runtime import (
     _guard_buffer,
     _max_block_size,
     _measured_level,
-    _narrow_float,
     _narrow_int,
     _to_c_double,
     _to_c_float,
@@ -48,6 +53,44 @@ from .types import (
     StereoBlock,
     StreamingLoudnessGain,
 )
+
+
+def _streaming_chain_integer(value: object, name: str) -> int:
+    """Read a prepare integer against the generated domain before narrowing it to C int."""
+    if isinstance(value, bool):
+        raise _refuse_type(f"{name} must be an integer")
+    if isinstance(value, numbers.Integral):
+        integer = int(value)
+    elif isinstance(value, numbers.Real):
+        number = float(value)
+        if not math.isfinite(number) or not number.is_integer():
+            raise _refuse_integer(name, f"{name} must be an integer")
+        integer = int(number)
+    else:
+        try:
+            integer = operator.index(cast(SupportsIndex, value))
+        except TypeError:
+            raise _refuse_type(f"{name} must be an integer") from None
+
+    lo, hi, _ = _INTEGER_DOMAINS[("StreamingMasteringChain", name)]
+    if integer < lo or (hi is not None and integer > hi):
+        raise _refuse_integer(name, f"{name} is outside the accepted domain")
+    return integer
+
+
+def _eq_float_in_domain(value: object, entry: str, keyword: str, name: str) -> float:
+    """Check an EQ number against its domain before the call site narrows it to a C float."""
+    number = _domain_double(value, name)
+    lo, hi, lo_included, hi_included, sentinel = _REAL_DOMAINS[(entry, keyword)]
+    inside = number == sentinel if sentinel is not None else math.isfinite(number)
+    if number != sentinel:
+        if lo is not None:
+            inside = inside and (number >= lo if lo_included else number > lo)
+        if hi is not None:
+            inside = inside and (number <= hi if hi_included else number < hi)
+    if not inside or abs(number) > _FLOAT32_MAX:
+        raise _refuse(f"{name} {_REAL_DOMAIN_TEXT[(entry, keyword)]}")
+    return number
 
 
 def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> StreamingLoudnessGain:
@@ -219,30 +262,67 @@ class StreamingMasteringChain:
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
-        # Narrowed rather than coerced: int() takes 512.7 as 512, and the block
-        # layout remembered here would then differ from the one asked for.
-        max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
-        channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
+        for name, value in (
+            ("sample_rate", sample_rate),
+            ("max_block_size", max_block_size),
+            ("num_channels", num_channels),
+        ):
+            if value is None:
+                if name == "max_block_size":
+                    continue
+                raise _refuse_type(f"{name} must be an integer")
+            if isinstance(value, bool):
+                raise _refuse_type(f"{name} must be an integer")
+            try:
+                operator.index(cast(SupportsIndex, value))
+            except TypeError:
+                if not isinstance(value, numbers.Real):
+                    raise _refuse_type(f"{name} must be an integer") from None
+        gain_value = (
+            None
+            if loudness_static_gain_db is None
+            else _domain_double(loudness_static_gain_db, "loudness_static_gain_db")
+        )
+        peak_value = (
+            None
+            if loudness_static_gain_peak_dbtp is None
+            else _domain_double(loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp")
+        )
         config_json = _chain_config_json(config, "config")
         handle = ctypes.c_void_p()
         options = SonareStreamingMasteringChainOptions()
-        if loudness_static_gain_db is not None:
-            # NaN is how the C ABI spells "no offline peak measured", so the
-            # caller's own value is narrowed here rather than at the conversion:
-            # a saturating one would arrive as that same reading.
-            # The peak of digital silence is -inf, which the chain applies verbatim.
-            if loudness_static_gain_peak_dbtp is None:
-                peak = math.nan
-            elif loudness_static_gain_peak_dbtp == -math.inf:
-                peak = -math.inf
-            else:
-                peak = _narrow_float(
-                    loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp"
+        gain_error: BaseException | None = None
+        peak_error: BaseException | None = None
+        if gain_value is not None:
+            try:
+                options.loudness_static_gain_db = _to_c_float(
+                    loudness_static_gain_db, "loudness_static_gain_db"
                 )
-            options.loudness_static_gain_db = _to_c_float(
-                loudness_static_gain_db, "loudness_static_gain_db"
+            except BaseException as error:
+                gain_error = error
+        if peak_value is not None:
+            try:
+                options.loudness_static_gain_peak_dbtp = (
+                    ctypes.c_float(-math.inf)
+                    if peak_value == -math.inf
+                    else _to_c_float(
+                        loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp"
+                    )
+                )
+            except BaseException as error:
+                peak_error = error
+        deferred_error = gain_error or peak_error
+        if deferred_error is not None:
+            classification_options = SonareStreamingMasteringChainOptions()
+            classification_handle = ctypes.c_void_p()
+            rc = lib.sonare_streaming_mastering_chain_create(
+                config_json,
+                ctypes.byref(classification_options),
+                ctypes.byref(classification_handle),
             )
-            options.loudness_static_gain_peak_dbtp = ctypes.c_float(peak)
+            _check(rc, flattened="options")
+            lib.sonare_streaming_mastering_chain_destroy(classification_handle)
+            raise deferred_error
         rc = lib.sonare_streaming_mastering_chain_create(
             config_json, ctypes.byref(options), ctypes.byref(handle)
         )
@@ -250,9 +330,19 @@ class StreamingMasteringChain:
         self._lib = lib
         self._handle = handle
         try:
+            # Match the C prepare order: sample rate, max block size, then channels.
+            sample_rate_value = _streaming_chain_integer(sample_rate, "sample_rate")
+            max_block_value = (
+                0
+                if max_block_size is None
+                else _streaming_chain_integer(
+                    _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
+                )
+            )
+            channels_value = _streaming_chain_integer(num_channels, "num_channels")
             rc = lib.sonare_streaming_mastering_chain_prepare(
                 self._handle,
-                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(sample_rate_value, "sample_rate"),
                 _to_c_int(max_block_value, "max_block_size"),
                 _to_c_int(channels_value, "num_channels"),
             )
@@ -524,7 +614,10 @@ class StreamingEqualizer:
 
     @_entry("StreamingEqualizer.set_band")
     def set_band(self, index: int, band: EqBandInput) -> None:
-        """Set one EQ band from an :data:`EqBandInput` mapping."""
+        """Set one EQ band from an :data:`EqBandInput` mapping.
+
+        An exact ``sidechainFreqHz`` value of ``-1`` follows ``frequencyHz``.
+        """
         self._ensure_open()
         if not isinstance(band, Mapping):
             raise _refuse_type("band must be a mapping (parse JSON text with json.loads first)")
@@ -557,21 +650,32 @@ class StreamingEqualizer:
     def set_gain_scale(self, scale: float) -> None:
         """Set all-band EQ gain scale as a 0.0..2.0 multiplier."""
         self._ensure_open()
-        _check(self._lib.sonare_eq_set_gain_scale(self._handle, _to_c_float(scale, "scale")))
+        value = _to_c_float(
+            _eq_float_in_domain(scale, "StreamingEqualizer.set_gain_scale", "scale", "scale"),
+            "scale",
+        )
+        _check(self._lib.sonare_eq_set_gain_scale(self._handle, value))
 
     @_entry("StreamingEqualizer.set_output_gain_db")
     def set_output_gain_db(self, gain_db: float) -> None:
         """Set post-EQ output gain in dB."""
         self._ensure_open()
-        _check(
-            self._lib.sonare_eq_set_output_gain_db(self._handle, _to_c_float(gain_db, "gain_db"))
+        value = _to_c_float(
+            _eq_float_in_domain(
+                gain_db, "StreamingEqualizer.set_output_gain_db", "gain_db", "gain_db"
+            ),
+            "gain_db",
         )
+        _check(self._lib.sonare_eq_set_output_gain_db(self._handle, value))
 
     @_entry("StreamingEqualizer.set_output_pan")
     def set_output_pan(self, pan: float) -> None:
         """Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan."""
         self._ensure_open()
-        _check(self._lib.sonare_eq_set_output_pan(self._handle, _to_c_float(pan, "pan")))
+        value = _to_c_float(
+            _eq_float_in_domain(pan, "StreamingEqualizer.set_output_pan", "pan", "pan"), "pan"
+        )
+        _check(self._lib.sonare_eq_set_output_pan(self._handle, value))
 
     @_entry("StreamingEqualizer.set_sidechain_mono")
     @_guard_buffer("samples")

@@ -8,6 +8,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/eq/band_frequency.h"
+#include "mastering/eq/eq_band_domains.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "mastering/stereo/mid_side.h"
@@ -529,7 +530,7 @@ void EqualizerProcessor::clear() {
 }
 
 void EqualizerProcessor::set_gain_scale(float scale) {
-  check::in_range(scale, 0.0, 2.0, "gain_scale");
+  check::within(scale, kEqGainScaleDomain, "scale");
   if (scale == gain_scale_) return;
   gain_scale_ = scale;
   if (prepared_) {
@@ -548,7 +549,7 @@ void EqualizerProcessor::set_output_gain_db(float gain_db) {
 }
 
 void EqualizerProcessor::set_output_pan(float pan) {
-  check::in_range(pan, -1.0, 1.0, "output_pan");
+  check::within(pan, kEqOutputPanDomain, "pan");
   output_pan_ = pan;
 }
 

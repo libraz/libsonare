@@ -194,6 +194,12 @@ offset_samples = "record_offset_samples"
 "synthesize_rir.band_scattering_count" = "band_scattering"
 "vocal_draft_apply.count" = "operations"
 
+[node.constructor_renames]
+"playback_loudness_meter_create.channels" = "numChannels"
+
+[wasm.constructor_renames]
+"playback_loudness_meter_create.channels" = "numChannels"
+
 [node.length_of]
 "align_take_to_reference.reference_len" = "reference"
 "align_take_to_reference.take_len" = "take"

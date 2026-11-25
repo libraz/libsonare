@@ -5837,10 +5837,10 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentil
 [[entry]]
 kind = "class"
 old = "StreamingMasteringChain"
-changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError"
+changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError. A well-formed configuration requesting a stage or estimator unavailable to streaming raises NotSupported. Prepare checks the sample rate, maximum block size and channel count in that order after validating argument types."
 domain = "mastering"
-rule = "construction"
-test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_mastering_chain_constructor_preflights_shapes_then_prepare_domains"
 
 [[entry]]
 kind = "method"
@@ -5852,9 +5852,9 @@ rule = "construction"
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.process_mono"
-changed = "returns a float32 ndarray instead of list[float]"
+changed = "returns a float32 ndarray instead of list[float]. For nonempty buffers, the prepared channel mode is checked before reading non-finite samples."
 domain = "mastering"
-rule = "array-results"
+rule = "error-class-by-cause"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
 
 [[entry]]
@@ -5868,10 +5868,10 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.process_stereo"
-changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists"
+changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists. For nonempty buffers, the prepared channel mode is checked before reading non-finite samples."
 domain = "mastering"
-rule = "typed-results"
-test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_stereo_block_names_its_channels_and_still_unpacks"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_control_streaming_mastering_chain_checks_prepared_channels_before_input_samples"
 
 [[entry]]
 kind = "method"
@@ -8058,10 +8058,10 @@ test = "bindings/python/tests/test_streaming_loudness_gain.py::test_silence_leav
 kind = "field"
 old = "LoudnessMatch.reference_lufs"
 to = "LoudnessMatchResult.reference_lufs"
-changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness"
+changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness. The same refusal applies to both mono and stereo matching."
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_naming_it"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_control_a_silent_take_is_refused_naming_it"
 
 [[entry]]
 kind = "field"
@@ -8070,7 +8070,7 @@ to = "LoudnessMatchResult.source_lufs"
 changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness"
 domain = "mastering"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_naming_it"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_control_a_silent_take_is_refused_naming_it"
 
 [[entry]]
 kind = "field"
@@ -8273,9 +8273,11 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "option"
 old = "StreamingMasteringChain.constructor(loudness_static_gain_peak_db)"
-new = "StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)"
+to = "StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)"
+changed = "Use loudness_static_gain_peak_dbtp. None leaves the peak unmeasured. A supplied peak must fit float32, or be negative infinity for measured silence. An invalid supplied peak is refused even when the static gain is omitted. In 1.x the peak was ignored when no static gain was supplied."
 domain = "mastering"
 rule = "individual"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_each_written_loudness_option_is_checked_before_float_narrowing"
 
 [[entry]]
 kind = "option"
@@ -8972,10 +8974,10 @@ rule = "typed-results"
 kind = "function"
 old = "suggest_mix_scene"
 to = "mixing_assistant_suggest"
-changed = "renamed to the C/JS name and returns a MixAssistantResult record (scene document, MixAssistantTrackProfile per track, MixAssistantMixProfile) instead of a dict; an absent name, exclusion reason or loudness is None"
+changed = "renamed to the C/JS name and returns a MixAssistantResult record (scene document, MixAssistantTrackProfile per track, MixAssistantMixProfile) instead of a dict; an absent name, exclusion reason or loudness is None. Analysis and supplied track rates must be in [8000, 384000] for a nonempty input list. After argument shape, the analysis checks supplied track rates in track order, then the call rate, then the tempo."
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_profile_reports_absent_facts_as_none"
+test = "bindings/python/tests/test_mixing_assistant.py::test_inherited_track_rate_refusal_names_the_call_rate"
 
 [[entry]]
 kind = "function"
@@ -9006,10 +9008,10 @@ test = "bindings/python/tests/test_mixing_assistant.py::test_source_class_names_
 kind = "option"
 old = "suggest_mix_scene(tempo_bpm)"
 to = "mixing_assistant_suggest(tempo_bpm)"
-changed = "None selects the transport fallback tempo; 0 and negatives raise SonareValueError (0 was the fallback sentinel)"
+changed = "Omit the keyword or pass None for the transport fallback; explicitly passing zero is refused under tempo_bpm. Other supplied tempos must be finite and in [20, 400] BPM. A tiny nonzero tempo is checked before float32 conversion, so it cannot become the fallback as it could in 1.x."
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_mixing_assistant.py::test_a_non_positive_tempo_is_refused"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_mixing_assistant.py::test_tempo_outside_the_musical_range_is_rejected"
 
 [[entry]]
 kind = "option"
@@ -9375,9 +9377,11 @@ test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_with_no_pla
 [[entry]]
 kind = "function"
 old = "mastering_pair_process_stereo"
-new = "mastering_apply_pair_processor_stereo"
+to = "mastering_apply_pair_processor_stereo"
+changed = "An undeclared processor raises SonareValueError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference."
 domain = "mastering"
-rule = "mastering-names"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_mastering_stereo_surface.py::test_stereo_pair_uses_shape_first_and_c_field_order_for_compound_refusals"
 
 [[entry]]
 kind = "function"
@@ -13509,9 +13513,11 @@ rule = "construction"
 [[entry]]
 kind = "option"
 old = "PlaybackLoudnessMeter.constructor(channels)"
-new = "PlaybackLoudnessMeter.constructor(num_channels)"
+to = "PlaybackLoudnessMeter.constructor(num_channels)"
+changed = "A refused channel count names num_channels."
 domain = "engine"
 rule = "num-channels"
+test = "bindings/python/tests/test_playback.py::test_loudness_meter_rejects_an_unsupported_channel_count_by_name"
 
 [[entry]]
 kind = "option"
@@ -15182,10 +15188,10 @@ test = "bindings/python/tests/test_project.py::test_add_midi_clip_is_one_undo_tr
 [[entry]]
 kind = "method"
 old = "Project.from_json"
-changed = "a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document"
+changed = "a scene insert parameter the processor does not read is an INVALID_FORMAT error naming the indexed parameter path. The rejected key is reported exactly as written in the document. Allocation failure while decoding raises SonareError with code OUT_OF_MEMORY. In 1.x this could be reported as INVALID_FORMAT."
 domain = "project"
 rule = "json-input-kinds"
-test = "bindings/python/tests/test_core_validation_refusals.py::test_project_document_refuses_unread_insert_params_at_their_path"
+test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
 
 [[entry]]
 kind = "method"
@@ -15206,10 +15212,10 @@ test = "bindings/python/tests/test_project.py::test_project_tempo_options_are_ke
 [[entry]]
 kind = "method"
 old = "Project.last_bounce_compile_result"
-changed = "Returns None before any bounce has produced a compile result. Check for None before accessing ProjectCompileResult fields."
+changed = "Returns the result of the last successful bounce or None before the first success. A failed bounce preserves that result. Read the error raised by bounce for details of that failure. In 1.x this method returned a result object with has_timeline even before the first bounce, and a failed bounce could clear or replace the recorded diagnostics."
 domain = "project"
-rule = "individual"
-test = "bindings/python/tests/test_project_bounce.py::test_last_bounce_compile_result_is_none_before_any_bounce"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_bounce.py::test_control_last_bounce_compile_result_survives_a_later_compile_failure"
 
 [[entry]]
 kind = "option"
@@ -15395,3 +15401,59 @@ changed = "BPM and any nonzero ramp target must be finite and in [1e-6, 100000] 
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/python/tests/test_engine.py::test_engine_tempo_domain_and_refused_segment_preserve_state"
+
+[[entry]]
+kind = "method"
+old = "Project.from_json_with_diagnostics"
+changed = "An allocation failure while decoding raises SonareError with code OUT_OF_MEMORY rather than INVALID_FORMAT."
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
+
+[[entry]]
+kind = "method"
+old = "HrtfSet.from_bytes"
+changed = "Malformed SHRF bytes raise a coded InvalidFormat document error rather than an invalid-argument error."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_playback.py::test_control_hrtf_set_from_bytes_rejects_malformed_data_as_invalid_format"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.render_offline"
+changed = "A native render failure preserves the renderer's processing state. A Python allocation or copy failure after the native call is outside this guarantee."
+domain = "engine"
+rule = "typed-results"
+test = "tests/api/sonare_c_playback_test.cpp::playback renderer render_offline matches the one-shot render through a used handle"
+
+[[entry]]
+kind = "method"
+old = "Project.snap_to_grid"
+changed = "PPQ must be finite and in [0, 1e12]; finite values above that ceiling were accepted in 1.x. For values representable by the C arguments, PPQ, strength and division are checked in that order and the first refusal is named."
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/python/tests/test_project.py::test_snap_to_grid_names_the_first_refused_argument_in_native_order"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.set_gain_scale"
+changed = "The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_equalizer_refuses_doubles_outside_domains_before_float_narrowing"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.set_output_gain_db"
+changed = "Pass gain_db of at most 770 dB; larger finite values that converted within the float range were accepted in 1.x. A refusal names gain_db. The gain_db limit is checked before conversion to float32."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_equalizer_refuses_doubles_outside_domains_before_float_narrowing"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.set_output_pan"
+changed = "The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_equalizer_refuses_doubles_outside_domains_before_float_narrowing"

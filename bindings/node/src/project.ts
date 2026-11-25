@@ -2184,10 +2184,11 @@ export class Project {
   }
 
   /**
-   * Retrieve the compile result captured by the most recent {@link bounce}.
+   * Retrieve the compile result from the most recent successful {@link bounce}.
    *
-   * `undefined` when no bounce has run on this project. A clean bounce returns a
-   * result with empty diagnostics; a failed one carries at least one error.
+   * `undefined` until a bounce succeeds. A successful bounce with no diagnostics
+   * returns an empty list; a failed bounce reports its own error and leaves this
+   * result unchanged.
    */
   lastBounceCompileResult(): ProjectCompileResult | undefined {
     const raw = this.native.lastBounceCompileResult();

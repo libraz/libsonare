@@ -471,6 +471,13 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_assistant_suggest_stereo": {
         "params": _ASSISTANT_BAG,
     },
+    # The mixing assistant STFT sizes travel as the nFft / hopLength bag keys and
+    # are refused in C++, so the even-size rule and its text stay in one reader.
+    "mixing_assistant.mixing_assistant_suggest": {
+        "n_fft": ("guarded_past_the_ffi", "carried as the nFft key and refused PAST the FFI by detail::read_profile_geometry in src/mixing/assistant/config_from_params.h as an even integer in [2, 524288]; measured on 1023, 3.5 and 2**40 by test_the_stft_sizes_are_refused_by_the_core_reader_under_the_keyword"),
+        "hop_length": ("guarded_past_the_ffi", "carried as the hopLength key and refused PAST the FFI by detail::read_profile_geometry in src/mixing/assistant/config_from_params.h as an integer in [1, 2147483647]; measured on 0, 2.5 and 2**40 by test_the_stft_sizes_are_refused_by_the_core_reader_under_the_keyword"),
+        "sample_rate": ("domain_checked", "checked by _assistant_rate in mixing_assistant.py against the generated (mixing_assistant_suggest, sample_rate) row [8000, 384000] before _to_c_int; measured on 7999 by test_assistant_compound_refusals_follow_shape_then_declared_domain_order"),
+    },
     # The exception constructors. The library raises them with the status code
     # and the counts a C call returned; none of the three values is handed to the
     # core, so nothing past the FFI has a domain to check them against.

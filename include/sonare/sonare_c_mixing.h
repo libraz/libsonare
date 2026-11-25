@@ -597,8 +597,8 @@ SonareError sonare_validate_mixing_assistant_config(int sample_rate,
 ///                     enableImage, enableHighPass, nFft and hopLength.
 ///                     tempoBpm is the tempo the suggested delay times are voiced
 ///                     against; 0 (the default) selects the transport's own
-///                     fallback tempo. Any nonzero value must be in [20, 400]
-///                     BPM; other values are refused rather than clamped.
+///                     fallback tempo. A nonzero tempo must be finite and in
+///                     [20, 400] BPM.
 /// @param param_count  Number of entries in @c params.
 /// @param json_out     Receives the result JSON. Release with sonare_free_string().
 ///

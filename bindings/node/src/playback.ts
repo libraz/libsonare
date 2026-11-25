@@ -69,7 +69,12 @@ export class HrtfSet {
     return new HrtfSet(addon.HrtfSet.default());
   }
 
-  /** Builds an HRTF set from SHRF v1 bytes; malformed data throws. */
+  /**
+   * Builds an HRTF set from SHRF v1 bytes.
+   *
+   * @throws SonareError with code `ErrorCode.InvalidFormat` when the bytes do not
+   *   encode SHRF v1.
+   */
   static fromBytes(bytes: Uint8Array): HrtfSet {
     return new HrtfSet(addon.HrtfSet.fromBytes(bytes));
   }
@@ -262,7 +267,12 @@ export class PlaybackLoudnessMeter {
     this.native = new addon.PlaybackLoudnessMeter(options.numChannels, options.sampleRate);
   }
 
-  /** Feeds interleaved frames of any length. */
+  /**
+   * Feeds interleaved frames.
+   *
+   * @throws RangeError when the sample count is not a whole number of frames or a
+   *   sample is non-finite.
+   */
   pushInterleaved(samples: Float32Array): void {
     this.native.pushInterleaved(samples);
   }

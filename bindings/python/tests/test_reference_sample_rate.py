@@ -303,6 +303,6 @@ def test_mixing_assistant_resamples_a_track_at_another_rate() -> None:
 def test_mixing_assistant_refuses_a_non_positive_track_rate(bad_rate: int) -> None:
     keys = sine(660.0, 0.8, sr=SR, amp=0.2)
     with pytest.raises(
-        SonareValueError, match=r"tracks\[1\]\.sample_rate must be an integer in \[1, 2147483647\]"
+        SonareValueError, match=r"tracks\[1\]\.sample_rate must be an integer in \[8000, 384000\]"
     ):
         mixing_assistant_suggest(_mix_tracks(bad_rate, keys), sample_rate=SR)

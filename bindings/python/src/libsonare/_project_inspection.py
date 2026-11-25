@@ -5,14 +5,16 @@ from __future__ import annotations
 
 import ctypes
 import json
+import numbers
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
 from ._engine_conversions import _marker_kind_name, _marker_kind_value
-from ._errors import _entry, _malformed_output, _refuse, _refuse_type
-from ._narrowing import _narrow_double
+from ._errors import SonareValueError, _entry, _malformed_output, _refuse, _refuse_type
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
+from ._narrowing import _domain_double, _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _LOOP_MODES,
@@ -293,13 +295,23 @@ class _ProjectInspectionMixin:
         subdivisions per beat (for example, ``4`` for sixteenths). ``strength``
         is in ``[0, 1]`` (0 = no snap, 1 = exact grid line).
         """
+        ppq_value = _domain_double(ppq, "ppq")
+        strength_value = _domain_double(strength, "strength")
+        try:
+            division_value = _to_c_int(division, "division")
+        except SonareValueError:
+            if isinstance(division, (bool, np.bool_)) or not isinstance(division, numbers.Real):
+                raise
+            # Preserve C's PPQ/strength-before-division order for unmarshalable numbers.
+            division_low = _INTEGER_DOMAINS[("Project.snap_to_grid", "division")][0]
+            division_value = division_low - 1
         out_ppq = ctypes.c_double()
-        options = SonareProjectSnapToGridOptions._given(division=_to_c_int(division, "division"))
+        options = SonareProjectSnapToGridOptions._given(division=division_value)
         _check(
             _get_lib().sonare_project_snap_to_grid(
                 self._require_handle(),
-                _narrow_double(ppq, "ppq"),
-                _narrow_double(strength, "strength"),
+                ppq_value,
+                strength_value,
                 ctypes.byref(options),
                 ctypes.byref(out_ppq),
             ),
@@ -1278,13 +1290,13 @@ class _ProjectInspectionMixin:
 
     @_entry("Project.last_bounce_compile_result")
     def last_bounce_compile_result(self) -> ProjectCompileResult | None:
-        """Return the compile result captured by the most recent bounce.
+        """Return the compile result captured by the last successful bounce.
 
         Mirrors :meth:`compile`'s structured :class:`ProjectCompileResult` but
-        reads the diagnostics recorded during the last :meth:`bounce` call instead
-        of recompiling. ``None`` when no bounce has run on this project, or the
-        last one was refused for its arguments before it compiled; an empty
-        ``diagnostics`` means the last bounce compiled clean.
+        reads the diagnostics recorded during that :meth:`bounce` call instead
+        of recompiling. ``None`` until a bounce succeeds. A later refusal or
+        compile failure leaves the last successful result unchanged; empty
+        ``diagnostics`` means that bounce compiled cleanly.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()

@@ -1,4 +1,5 @@
 #include "mastering/eq/cut_band.h"
+#include "mastering/eq/eq_band_domains.h"
 #include "mastering/eq/equalizer.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -38,7 +39,7 @@ void EqualizerProcessor::validate_supported_band(const EqBand& band, PhaseMode g
     return;
   }
   // The shelf designs raise 10^(dB/20) in float, so a gain past kMaxFiniteGainDb overflows.
-  check::at_most(band.gain_db, kMaxFiniteGainDb, "gain_db");
+  check::within(band.gain_db, kEqDbGainDomain, "gain_db");
   const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? global_phase : band.phase;
   const bool brickwall_cut = is_cut_band(band.type) && band.slope_db_oct == 0;
   if (is_cut_band(band.type)) {
@@ -170,18 +171,18 @@ void EqualizerProcessor::validate_dynamic_params(const DynamicParams& dyn) {
   if (!dyn.enabled) {
     return;
   }
-  check::at_least(dyn.ratio, 1.0, "dyn.ratio");
+  check::within(dyn.ratio, kEqRatioDomain, "dyn.ratio");
   // Both reach the biquad as gain: the detector delta is (detector_db -
   // threshold_db) scaled by ratio and clamped to range_db.
-  check::at_most(dyn.threshold_db, kMaxFiniteGainDb, "dyn.threshold_db");
-  check::at_most(dyn.range_db, kMaxFiniteGainDb, "dyn.range_db");
-  check::greater_than(dyn.sidechain_q, 0.0, "dyn.sidechain_q");
-  check::at_least(dyn.attack_ms, 0.0, "dyn.attack_ms");
-  check::at_least(dyn.release_ms, 0.0, "dyn.release_ms");
-  check::at_least(dyn.detector_delay_ms, 0.0, "dyn.detector_delay_ms");
+  check::within(dyn.threshold_db, kEqDbGainDomain, "dyn.threshold_db");
+  check::within(dyn.range_db, kEqDbGainDomain, "dyn.range_db");
+  check::within(dyn.sidechain_q, kEqPositiveFloatDomain, "dyn.sidechain_q");
+  check::within(dyn.attack_ms, kEqNonnegativeFloatDomain, "dyn.attack_ms");
+  check::within(dyn.release_ms, kEqNonnegativeFloatDomain, "dyn.release_ms");
+  check::within(dyn.detector_delay_ms, kEqNonnegativeFloatDomain, "dyn.detector_delay_ms");
   // -1 follows the band frequency.
   if (dyn.sidechain_freq_hz != -1.0f) {
-    check::greater_than(dyn.sidechain_freq_hz, 0.0, "dyn.sidechain_freq_hz");
+    check::within(dyn.sidechain_freq_hz, kEqPositiveFloatDomain, "dyn.sidechain_freq_hz");
   }
 }
 }  // namespace sonare::mastering::eq

@@ -97,6 +97,36 @@ HARMONIC_DOCS = tuple(p for p in POLYPHONY_DOCS if p != TRANSCRIBE_C_HEADER)
 VOICE_FACADE_DOCS = tuple(p for p in POLYPHONY_DOCS if p != POLYPHONY_C_HEADER)
 
 
+class AssistantTempoTest(unittest.TestCase):
+    def test_reads_bracketed_tempo_bounds(self) -> None:
+        claim = CLAIMS["mixing assistant tempo range"]
+        text = "A supplied tempo must be finite and in [20, 400] BPM."
+        blocks = [("tempo", text, [1] * len(text))]
+        sites = check.collect(check.ROOT, blocks, (claim,))[claim.key]
+        self.assertEqual([site.values for site in sites], [{"lo": 20, "hi": 400}])
+
+    def test_bracketed_tempo_range_in_the_public_documentation(self) -> None:
+        claim = CLAIMS["mixing assistant tempo range"]
+        docs = documents_for(claim)
+        self.assertEqual(
+            set(docs),
+            {
+                "bindings/node/src/mixing_assistant.ts",
+                "bindings/python/src/libsonare/mixing_assistant.py",
+                "bindings/wasm/src/mixing_assistant.ts",
+                "include/sonare/sonare_c_mixing.h",
+            },
+        )
+        self.assertEqual(check.evaluate(check.ROOT, (claim,)), [])
+
+    def test_c_header_assistant_bound_does_not_match_public_tempo_claim(self) -> None:
+        sites = check.collect(check.ROOT, check.doc_blocks(check.ROOT))
+        assistant = sites[CLAIMS["mixing assistant tempo range"].key]
+        self.assertTrue(any(site.path == "include/sonare/sonare_c_mixing.h" for site in assistant))
+        public = sites[CLAIMS["public tempo range"].key]
+        self.assertFalse(any(site.path == "include/sonare/sonare_c_mixing.h" for site in public))
+
+
 class _CopiedTree(unittest.TestCase):
     """A throwaway tree holding named files, optionally with one edit each."""
 

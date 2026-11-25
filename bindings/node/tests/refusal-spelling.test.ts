@@ -577,6 +577,11 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   mixing_scene_preset_json: (_s, v) => mixingScenePreset(v as never),
   note_targets_from_smf: (s, v) => noteTargetsFromSmf(given({ data: SMF }, s, v) as never),
+  playback_loudness_meter_create: (s, v) =>
+    withHandle(
+      new PlaybackLoudnessMeter({ [s]: v, sampleRate: 48000 } as never),
+      (meter) => meter.integratedLufs,
+    ),
   playback_loudness_meter_push_interleaved: (_s, v) =>
     withHandle(new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 }), (meter) =>
       meter.pushInterleaved(v as Float32Array),

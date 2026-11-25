@@ -1517,7 +1517,9 @@ TEST_CASE("Mixing assistant enforces the documented sample rate and tempo domain
     json = nullptr;
   }
 
-  for (double tempo : {1.0e-100, -1.0e-100, 19.999, 400.001}) {
+  for (double tempo :
+       {1.0e-100, -1.0e-100, 19.999, 400.001, std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::quiet_NaN()}) {
     SonareMasteringParam params[] = {geometry[0], geometry[1], {"tempoBpm", tempo}};
     CHECK(sonare_mixing_assistant_suggest(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0,
                                           0, params, 3, &json) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1525,6 +1527,15 @@ TEST_CASE("Mixing assistant enforces the documented sample rate and tempo domain
           "params.tempoBpm must be 0 or a tempo between 20 and 400 BPM");
     CHECK(json == nullptr);
   }
+
+  SonareMasteringParam invalid_geometry[] = {{"tempoBpm", std::numeric_limits<double>::quiet_NaN()},
+                                             {"nFft", 3}};
+  CHECK(sonare_mixing_assistant_suggest(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0,
+                                        invalid_geometry, 2,
+                                        &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "params.tempoBpm must be 0 or a tempo between 20 and 400 BPM");
+  CHECK(json == nullptr);
 
   // Nonempty input admits both sample-rate endpoints with a same-rate track.
   for (int sample_rate : {8000, 384000}) {

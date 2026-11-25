@@ -1007,6 +1007,27 @@ def test_snap_to_grid_snaps_near_beat_to_line() -> None:
         project.close()
 
 
+def test_snap_to_grid_names_the_first_refused_argument_in_native_order() -> None:
+    with Project() as project:
+        with pytest.raises(SonareValueError, match=r"ppq must be finite and in \[0, 1e12\]"):
+            project.snap_to_grid(float("nan"), 2, 2000)
+        with pytest.raises(SonareValueError, match=r"ppq must be finite and in \[0, 1e12\]"):
+            project.snap_to_grid(1e12 + 1, 0.5)
+        with pytest.raises(SonareValueError, match=r"strength must be finite and in \[0, 1\]"):
+            project.snap_to_grid(1, 2, 2000)
+        with pytest.raises(SonareValueError, match=r"ppq must be finite and in \[0, 1e12\]"):
+            project.snap_to_grid(float("nan"), 2, 2**32)
+        with pytest.raises(SonareValueError, match=r"strength must be finite and in \[0, 1\]"):
+            project.snap_to_grid(1, 2, 2**32)
+        with pytest.raises(TypeError, match="division must be an integer"):
+            project.snap_to_grid(float("nan"), 0.5, "bad")  # type: ignore[arg-type]
+        for division in (2000, 0.5, float("nan"), 2**32):
+            with pytest.raises(
+                SonareValueError, match=r": division must be an integer in \[0, 1024\]"
+            ):
+                project.snap_to_grid(1, 0.5, division)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize("apply_meter", [False, True])
 def test_auto_tempo_returns_selected_bpm_confidence_and_meter(apply_meter: bool) -> None:
     project = Project()

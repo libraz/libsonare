@@ -4,25 +4,27 @@ from __future__ import annotations
 
 import ctypes
 import json
+import numbers
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
 import numpy as np
 
 from ._effects_repair_session import _audio_defects_from_wire
-from ._errors import _entry, _refuse, _refuse_type
+from ._errors import ErrorCode, _entry, _refuse, _refuse_type
 from ._ffi import (
     SonareLoudnessMatch,
     SonareMasteringResult,
     SonareMasteringStereoResult,
     SonareStreamingPlatform,
 )
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
 from ._mastering_offline import (
     _assistant_params,
     _mastering_params,
     _stage_counts,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _domain_double, _narrow_double, _narrow_int
 from ._result_records import _fill_null_ends, _float_array, _measured_float, _record
 from ._runtime import (
     _check,
@@ -72,10 +74,58 @@ def _reject_nul(value: str, argument: str) -> None:
 
 
 def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
-    """Marshal stereo pair params after checking their C-string keys."""
-    for key in params or {}:
-        _reject_nul(str(key), "parameter key")
-    return _mastering_params(params)
+    """Marshal numeric stereo-pair params after checking their input shapes."""
+    if params is None:
+        return _mastering_params(None)
+    if not isinstance(params, Mapping):
+        raise _refuse_type("params must be an object")
+    checked: dict[str, float] = {}
+    for key, value in params.items():
+        name = str(key)
+        _reject_nul(name, "parameter key")
+        if isinstance(value, (bool, np.bool_)):
+            checked[name] = float(value)
+        elif isinstance(value, numbers.Real):
+            checked[name] = _domain_double(value, f"params.{name}")
+        else:
+            raise _refuse_type(
+                f"Parameter '{name}' must be a number or boolean (got an unsupported type)"
+            )
+    return _mastering_params(checked)
+
+
+def _stereo_pair_rate(value: object, name: str) -> int:
+    """Check a sample rate against its generated field domain before C narrowing."""
+    domain = _INTEGER_DOMAINS.get(("mastering_apply_pair_processor_stereo", name))
+    if domain is None:
+        raise RuntimeError(f"missing numeric domain for {name}")
+    low, high, _ = domain
+    if high is None:
+        raise RuntimeError(f"missing upper numeric domain bound for {name}")
+    return _narrow_int(value, name, low, high)
+
+
+def _require_stereo_pair_processor(lib: Any, processor: str) -> None:
+    """Let the C entry admit a processor before later field domains are checked."""
+    rc = lib.sonare_mastering_apply_pair_processor_stereo(
+        _utf8_arg(processor, "processor"),
+        None,
+        None,
+        0,
+        None,
+        None,
+        0,
+        48000,
+        48000,
+        None,
+        0,
+        None,
+    )
+    if rc != int(ErrorCode.INVALID_PARAMETER) or lib.sonare_last_refusal_subject_count() != 1:
+        _check(rc)
+    subject = (lib.sonare_last_refusal_subject(0) or b"").decode("utf-8")
+    if subject != "source_left":
+        _check(rc)
 
 
 def _looks_like_channel_buffer(value: object) -> bool:
@@ -178,7 +228,6 @@ def mastering_apply_pair_processor(
 
 
 @_entry("mastering_apply_pair_processor_stereo")
-@_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
 def mastering_apply_pair_processor_stereo(
     processor: str,
     source_left: Sequence[float] | list[float],
@@ -201,7 +250,6 @@ def mastering_apply_pair_processor_stereo(
     if not isinstance(processor, str):
         raise _refuse_type("processor must be a string")
     _reject_nul(processor, "processor")
-    param_array, param_count = _stereo_pair_params(params)
     lib = _get_lib()
     source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
     source_right_array, source_right_length = _to_c_float_array(
@@ -213,10 +261,34 @@ def mastering_apply_pair_processor_stereo(
     reference_right_array, reference_right_length = _to_c_float_array(
         reference_right, arg_name="reference_right"
     )
+    _domain_double(sample_rate, "sample_rate")
+    if reference_sample_rate is not None:
+        _domain_double(reference_sample_rate, "reference_sample_rate")
+    param_array, param_count = _stereo_pair_params(params)
+
+    _require_stereo_pair_processor(lib, processor)
     if source_left_length != source_right_length:
         raise _refuse("source_left and source_right must have the same length")
     if reference_left_length != reference_right_length:
         raise _refuse("reference_left and reference_right must have the same length")
+    if source_left_length == 0:
+        _validate_samples(np.ctypeslib.as_array(source_left_array), arg_name="source_left")
+    c_sample_rate = _to_c_int(_stereo_pair_rate(sample_rate, "sample_rate"), "sample_rate")
+    _validate_samples(np.ctypeslib.as_array(source_left_array), arg_name="source_left")
+    _validate_samples(np.ctypeslib.as_array(source_right_array), arg_name="source_right")
+
+    if reference_left_length == 0:
+        _validate_samples(np.ctypeslib.as_array(reference_left_array), arg_name="reference_left")
+    c_reference_sample_rate = _to_c_int(
+        _stereo_pair_rate(
+            sample_rate if reference_sample_rate is None else reference_sample_rate,
+            "reference_sample_rate",
+        ),
+        "reference_sample_rate",
+    )
+    _validate_samples(np.ctypeslib.as_array(reference_left_array), arg_name="reference_left")
+    _validate_samples(np.ctypeslib.as_array(reference_right_array), arg_name="reference_right")
+
     out = SonareMasteringStereoResult()
     try:
         rc = lib.sonare_mastering_apply_pair_processor_stereo(
@@ -227,11 +299,8 @@ def mastering_apply_pair_processor_stereo(
             reference_left_array,
             reference_right_array,
             _to_c_size_t(reference_left_length, "reference_length"),
-            _to_c_int(
-                sample_rate if reference_sample_rate is None else reference_sample_rate,
-                "reference_sample_rate",
-            ),
-            _to_c_int(sample_rate, "sample_rate"),
+            c_reference_sample_rate,
+            c_sample_rate,
             param_array,
             _to_c_size_t(param_count, "param_count"),
             ctypes.byref(out),

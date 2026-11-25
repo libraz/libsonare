@@ -2667,6 +2667,7 @@ export interface SonareModule {
   ) => WasmMasteringResult;
   masteringProcessorNames: () => string[];
   masteringPairProcessorNames: () => string[];
+  masteringRequireStereoPairProcessor: (processorName: string) => void;
   masteringPairAnalysisNames: () => string[];
   masteringStereoAnalysisNames: () => string[];
   masteringInsertNames: () => string[];
@@ -3004,7 +3005,7 @@ export interface SonareModule {
     rightChannels: (Float32Array | null)[] | null,
     trackIds: string[],
     trackNames: (string | null)[] | null,
-    trackSampleRates: number[] | null,
+    trackSampleRates: (number | null)[] | null,
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;

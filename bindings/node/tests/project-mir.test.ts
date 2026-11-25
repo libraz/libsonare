@@ -17,9 +17,30 @@ describe('Project snapToGrid', () => {
       // `division` defaults to beat lines, 0 selects bar lines, and >= 2 that
       // many equal subdivisions per beat.
       expect(project.snapToGrid(1.02, 1.0)).toBe(1.0);
-      expect(project.snapToGrid(1.02, 1.0, 1)).toBe(1.0);
       expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
       expect(project.snapToGrid(4.02, 1.0, 0)).toBe(4.0);
+    });
+  });
+
+  it('checks snap arguments in the native order before narrowing the division', () => {
+    withProject((project) => {
+      expect(() => project.snapToGrid(null as never, Number.NaN, 2 ** 40)).toThrow(
+        new TypeError('Project.snapToGrid: ppq must be a number'),
+      );
+      expect(() => project.snapToGrid(Number.NaN, 2, 2 ** 40)).toThrow(
+        new RangeError('Project.snapToGrid: ppq must be finite and in [0, 1e12]'),
+      );
+      expect(() => project.snapToGrid(1, 2, 2 ** 40)).toThrow(
+        new RangeError('Project.snapToGrid: strength must be finite and in [0, 1]'),
+      );
+      expect(() => project.snapToGrid(1, 2, 2000)).toThrow(
+        new RangeError('Project.snapToGrid: strength must be finite and in [0, 1]'),
+      );
+      for (const division of [2000, 0.5, Number.NaN, 2 ** 32, 2 ** 40]) {
+        expect(() => project.snapToGrid(1, 0.5, division)).toThrow(
+          new RangeError('Project.snapToGrid: division must be an integer in [0, 1024]'),
+        );
+      }
     });
   });
 

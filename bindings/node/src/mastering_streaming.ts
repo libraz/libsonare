@@ -92,6 +92,24 @@ function assertConfigObject(config: unknown): asserts config is object {
   }
 }
 
+function assertIntegerFieldShape(value: unknown, name: string, optional = false): void {
+  if (optional && isAbsent(value)) {
+    return;
+  }
+  if (typeof value !== 'number') {
+    throw refuseType(`${name} must be an integer`);
+  }
+}
+
+function assertNumberFieldShape(value: unknown, name: string, optional = false): void {
+  if (optional && isAbsent(value)) {
+    return;
+  }
+  if (typeof value !== 'number') {
+    throw refuseType(`${name} must be a number`);
+  }
+}
+
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
 function optionalIntegerBlockSize(value: unknown): number | undefined {
   if (isAbsent(value)) {
@@ -111,7 +129,8 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  * `spectral.airBand`, `stereo.imager` (stereo only), `stereo.monoMaker`
  * (stereo only), `maximizer.truePeakLimiter`. Constructing with ANY of the five
  * whole-signal repair stages enabled (`repair.declick`, `repair.declip`,
- * `repair.decrackle`, `repair.dehum`, `repair.dereverb`) throws an Error. A
+ * `repair.decrackle`, `repair.dehum`, `repair.dereverb`) raises `SonareError`
+ * with code `ErrorCode.NotSupported`. A
  * `loudness`-enabled config applies
  * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} per block, or no
  * gain when it is omitted.
@@ -153,6 +172,7 @@ export class StreamingMasteringChain {
    *
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
+   * @throws SonareError with code `ErrorCode.NotSupported` for a well-formed but unsupported stage.
    */
   constructor(config: StreamingMasteringChainConfig) {
     assertConfigObject(config);
@@ -164,13 +184,16 @@ export class StreamingMasteringChain {
       loudnessStaticGainPeakDbtp,
       ...chainConfig
     } = config;
-    assertIntegerValue(sampleRate, 'sampleRate');
-    const blockSize = optionalIntegerBlockSize(maxBlockSize);
+    assertIntegerFieldShape(sampleRate, 'sampleRate');
+    assertIntegerFieldShape(maxBlockSize, 'maxBlockSize', true);
+    assertIntegerFieldShape(numChannels, 'numChannels');
+    assertNumberFieldShape(loudnessStaticGainDb, 'loudnessStaticGainDb', true);
+    assertNumberFieldShape(loudnessStaticGainPeakDbtp, 'loudnessStaticGainPeakDbtp', true);
     const options: Record<string, number> = {};
-    if (loudnessStaticGainDb !== undefined) {
+    if (!isAbsent(loudnessStaticGainDb)) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;
     }
-    if (loudnessStaticGainPeakDbtp !== undefined) {
+    if (!isAbsent(loudnessStaticGainPeakDbtp)) {
       options.loudnessStaticGainPeakDbtp = loudnessStaticGainPeakDbtp;
     }
     this.native = new addon.StreamingMasteringChain(
@@ -178,7 +201,7 @@ export class StreamingMasteringChain {
       options,
     );
     try {
-      this.native.prepare(sampleRate, blockSize, numChannels);
+      this.native.prepare(sampleRate, maxBlockSize, numChannels);
     } catch (error) {
       this.native.destroy();
       throw error;

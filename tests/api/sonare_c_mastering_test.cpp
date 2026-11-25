@@ -186,9 +186,12 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
       REQUIRE(sonare_eq_set_gain_scale(eq, scale) == SONARE_ERROR_INVALID_PARAMETER);
       CHECK(std::string(sonare_last_error_message()) == "scale must be finite and in [0, 2]");
     }
+    REQUIRE(sonare_eq_set_output_gain_db(eq, -1000.0f) == SONARE_OK);
     REQUIRE(sonare_eq_set_output_gain_db(eq, 3.0f) == SONARE_OK);
-    REQUIRE(sonare_eq_set_output_gain_db(eq, 771.0f) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()) == "gain_db must be finite and at most 770");
+    for (const float gain : {771.0f, std::numeric_limits<float>::quiet_NaN()}) {
+      REQUIRE(sonare_eq_set_output_gain_db(eq, gain) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "gain_db must be finite and at most 770");
+    }
     REQUIRE(sonare_eq_set_output_pan(eq, 0.25f) == SONARE_OK);
     for (const float pan : {-1.5f, 1.5f}) {
       REQUIRE(sonare_eq_set_output_pan(eq, pan) == SONARE_ERROR_INVALID_PARAMETER);

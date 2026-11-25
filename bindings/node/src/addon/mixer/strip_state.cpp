@@ -89,7 +89,9 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   // Omitting panMode passes SONARE_PAN_MODE_KEEP (-1) so a plain pan nudge does
   // not reset a scene strip's current pan mode.
   int pan_mode{};
-  if (!OptionalIntArg(env, info, 2, "panMode", -1, &pan_mode)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "panMode", SONARE_PAN_MODE_KEEP, &pan_mode)) {
+    return env.Undefined();
+  }
   SonareError err = sonare_strip_set_pan(strip, node_narrow_float(env, info[1], "pan"), pan_mode);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);

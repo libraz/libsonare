@@ -12,9 +12,15 @@ import math
 import numpy as np
 import pytest
 
-from libsonare import SonareValueError, StereoBlock, StreamingEqualizer, StreamingMasteringChain
+from libsonare import (
+    ErrorCode,
+    SonareValueError,
+    StereoBlock,
+    StreamingEqualizer,
+    StreamingMasteringChain,
+)
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -57,6 +63,68 @@ def test_the_channel_count_given_at_construction_selects_the_stereo_stages() -> 
         assert left.dtype == right.dtype == np.float32
         flushed = stereo.flush_stereo()
         assert all(isinstance(channel, np.ndarray) for channel in flushed)
+
+
+def test_explicit_zero_block_size_is_refused_before_channel_prepare() -> None:
+    with pytest.raises(SonareValueError, match="max_block_size"):
+        StreamingMasteringChain(sample_rate=SR, max_block_size=0, num_channels=3)
+    with pytest.raises(SonareValueError, match="sample_rate"):
+        StreamingMasteringChain(sample_rate=7999, max_block_size=0, num_channels=3)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("loudness_static_gain_db", math.nan, id="control: gain NaN"),
+        pytest.param("loudness_static_gain_peak_dbtp", math.nan, id="peak NaN without gain"),
+        pytest.param(
+            "loudness_static_gain_peak_dbtp",
+            1e100,
+            id="peak beyond float32 without gain",
+        ),
+    ],
+)
+def test_each_written_loudness_option_is_checked_before_float_narrowing(
+    field: str, value: float
+) -> None:
+    with pytest.raises(SonareValueError) as excinfo:
+        StreamingMasteringChain(
+            sample_rate=SR,
+            num_channels=1,
+            **{field: value},
+        )
+    assert excinfo.value.code == ErrorCode.INVALID_PARAMETER
+    assert str(excinfo.value) == (
+        f"StreamingMasteringChain: {field} must be finite and in [-3.4028235e38, 3.4028235e38]"
+    )
+
+
+def test_loudness_option_absence_and_silent_peak_are_not_sentinels() -> None:
+    with StreamingMasteringChain(
+        sample_rate=SR,
+        num_channels=1,
+        loudness_static_gain_db=None,
+        loudness_static_gain_peak_dbtp=None,
+    ):
+        pass
+    with StreamingMasteringChain(
+        sample_rate=SR,
+        num_channels=1,
+        loudness_static_gain_db=0.0,
+        loudness_static_gain_peak_dbtp=-math.inf,
+    ):
+        pass
+
+
+def test_configuration_refusal_precedes_a_nonfinite_static_gain() -> None:
+    config = {"repair": {"declick": {"enabled": 1}}}
+    with raises_coded(ErrorCode.NOT_SUPPORTED, match="repair.declick"):
+        StreamingMasteringChain(
+            config,
+            sample_rate=SR,
+            num_channels=1,
+            loudness_static_gain_db=math.inf,
+        )
 
 
 def test_the_block_size_given_at_construction_bounds_a_block() -> None:

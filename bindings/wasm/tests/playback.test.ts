@@ -351,10 +351,11 @@ describe('playback renderer (WASM)', () => {
       const afterPlanar = renderer.nonFiniteDiscardCount;
       expect(afterPlanar).toBeGreaterThan(0);
 
-      expect(() => renderer.processPlanar(noisePlanes(2, 128))).toThrow(
-        /rejected 2 input channels/,
+      expect(() => renderer.processPlanar(noisePlanes(2, 128))).toThrow(/planes/);
+      expect(() => renderer.processPlanar(noisePlanes(6, 129))).toThrow(/planes.*maxBlockSize/);
+      expect(() => renderer.processInterleaved(interleave(noisePlanes(6, 129)), 6)).toThrow(
+        /samples\.length.*maxBlockSize/,
       );
-      expect(() => renderer.processPlanar(noisePlanes(6, 129))).toThrow(/maxBlockSize/);
 
       const samples = interleave(noisePlanes(6, 128));
       samples[7] = Number.POSITIVE_INFINITY;
@@ -666,6 +667,9 @@ describe('playback renderer (WASM)', () => {
       meter.destroy();
     }
     expect(() => new PlaybackLoudnessMeter({ numChannels: 3, sampleRate: SR })).toThrow(RangeError);
+    expect(() => new PlaybackLoudnessMeter({ numChannels: 3, sampleRate: SR })).toThrow(
+      /numChannels must be one of 1, 2, 6, 8/,
+    );
   });
 
   it('renders a whole buffer offline through an existing renderer like renderPlayback', () => {

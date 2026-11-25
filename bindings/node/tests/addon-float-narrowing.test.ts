@@ -340,6 +340,32 @@ function inputMonitorOutput(gain: number): number {
 /** Optional floats whose numeric domain is owned by the core. */
 const CORE_DOMAIN_FLOAT_ARGUMENTS: FloatArgument[] = [
   {
+    name: 'Project.snapToGrid strength',
+    site: 'project/midi_mir.cpp SnapToGrid strength',
+    control: [0, 1],
+    call: (value) => {
+      const project = new native.Project();
+      try {
+        return project.snapToGrid(0.27, value, 4);
+      } finally {
+        project.destroy();
+      }
+    },
+  },
+  {
+    name: 'Project.snapToGrid division',
+    site: 'project/midi_mir.cpp SnapToGrid division',
+    control: [1, 4],
+    call: (value) => {
+      const project = new native.Project();
+      try {
+        return project.snapToGrid(0.27, 1, value);
+      } finally {
+        project.destroy();
+      }
+    },
+  },
+  {
     name: 'melToStft fminHz',
     site: 'features/advanced.cpp MelToStft fminHz',
     control: [0, 300],

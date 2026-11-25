@@ -1028,16 +1028,6 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                     sample_rate, params);
 }
 
-void require_stereo_pair_processor(std::string_view name) {
-  if (name == "match.abCrossfade") return;
-  const auto names = pair_processor_names();
-  if (std::find(names.begin(), names.end(), name) == names.end()) {
-    util::check::refuse("processor", "must be one of " + util::json::schema::expected_keys(names));
-  }
-  throw SonareParameterRefusal::predicate(ErrorCode::NotSupported, "processor",
-                                          "does not support planar stereo pairs");
-}
-
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
                                                const float* source_right, std::size_t source_length,
                                                const float* reference_left,

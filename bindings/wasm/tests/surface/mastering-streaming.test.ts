@@ -20,6 +20,18 @@ import { getSonareModule } from '../../src/module_state';
 const sampleRate = 48000;
 const block = 256;
 
+function adjacentDouble(value: number, upward: boolean): number {
+  if (value === 0) {
+    return upward ? Number.MIN_VALUE : -Number.MIN_VALUE;
+  }
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, value, false);
+  let bits = view.getBigUint64(0, false);
+  bits += value > 0 === upward ? 1n : -1n;
+  view.setBigUint64(0, bits, false);
+  return view.getFloat64(0, false);
+}
+
 function tone(frames: number): Float32Array {
   const out = new Float32Array(frames);
   for (let i = 0; i < frames; i++) {
@@ -462,6 +474,217 @@ describe('StreamingEqualizer band tokens', () => {
       }
     },
   );
+});
+
+describe('StreamingEqualizer numeric domains', () => {
+  it('refuses caller doubles outside EQ numeric domains before float narrowing', () => {
+    const eq = new StreamingEqualizer({ sampleRate, maxBlockSize: block });
+    const floatMax = 3.4028234663852886e38;
+    const check = (call: () => unknown, subject: string) => {
+      const error = errorOf(call);
+      expect(error).toBeInstanceOf(RangeError);
+      expect((error as Error).message).toBe(subject);
+    };
+    try {
+      const dbText = 'must be finite and in [-3.4028235e38, 770]';
+      const outputGainText = 'must be finite and at most 770';
+      check(
+        () => eq.setGainScale(adjacentDouble(0, false)),
+        'StreamingEqualizer.setGainScale: scale must be finite and in [0, 2]',
+      );
+      check(
+        () => eq.setGainScale(adjacentDouble(2, true)),
+        'StreamingEqualizer.setGainScale: scale must be finite and in [0, 2]',
+      );
+      check(
+        () => eq.setOutputPan(adjacentDouble(-1, false)),
+        'StreamingEqualizer.setOutputPan: pan must be finite and in [-1, 1]',
+      );
+      check(
+        () => eq.setOutputPan(adjacentDouble(1, true)),
+        'StreamingEqualizer.setOutputPan: pan must be finite and in [-1, 1]',
+      );
+      check(
+        () => eq.setOutputGainDb(adjacentDouble(-floatMax, false)),
+        `StreamingEqualizer.setOutputGainDb: gainDb ${outputGainText}`,
+      );
+      check(
+        () => eq.setOutputGainDb(adjacentDouble(770, true)),
+        `StreamingEqualizer.setOutputGainDb: gainDb ${outputGainText}`,
+      );
+
+      const band = { type: 'peak', frequencyHz: 1000, gainDb: 0, q: 1, enabled: true } as const;
+      const bandCases: Array<[string, number, string]> = [
+        ['gainDb', adjacentDouble(-floatMax, false), dbText],
+        ['gainDb', adjacentDouble(770, true), dbText],
+      ];
+      for (const [key, value, predicate] of bandCases) {
+        check(
+          () => eq.setBand(0, { ...band, [key]: value } as never),
+          `StreamingEqualizer.setBand: band.${key} ${predicate}`,
+        );
+      }
+
+      const dynamicBand = { ...band, dynamic: true };
+      const floatMaxText = '3.4028235e38';
+      const dynamicCases: Array<[string, number, string]> = [
+        ['thresholdDb', adjacentDouble(-floatMax, false), dbText],
+        ['thresholdDb', adjacentDouble(770, true), dbText],
+        ['rangeDb', adjacentDouble(-floatMax, false), dbText],
+        ['rangeDb', adjacentDouble(770, true), dbText],
+        ['ratio', adjacentDouble(1, false), 'must be finite and in [1, 3.4028235e38]'],
+        ['ratio', adjacentDouble(floatMax, true), 'must be finite and in [1, 3.4028235e38]'],
+        ['attackMs', adjacentDouble(0, false), `must be finite and in [0, ${floatMaxText}]`],
+        ['attackMs', adjacentDouble(floatMax, true), `must be finite and in [0, ${floatMaxText}]`],
+        ['releaseMs', adjacentDouble(0, false), `must be finite and in [0, ${floatMaxText}]`],
+        ['releaseMs', adjacentDouble(floatMax, true), `must be finite and in [0, ${floatMaxText}]`],
+        ['detectorDelayMs', adjacentDouble(0, false), `must be finite and in [0, ${floatMaxText}]`],
+        [
+          'detectorDelayMs',
+          adjacentDouble(floatMax, true),
+          `must be finite and in [0, ${floatMaxText}]`,
+        ],
+        [
+          'sidechainQ',
+          adjacentDouble(floatMax, true),
+          `must be finite and in (0, ${floatMaxText}]`,
+        ],
+        [
+          'sidechainFreqHz',
+          adjacentDouble(-1, false),
+          `must be finite and in (0, ${floatMaxText}]`,
+        ],
+        ['sidechainFreqHz', adjacentDouble(-1, true), `must be finite and in (0, ${floatMaxText}]`],
+        [
+          'sidechainFreqHz',
+          adjacentDouble(floatMax, true),
+          `must be finite and in (0, ${floatMaxText}]`,
+        ],
+      ];
+      for (const [key, value, predicate] of dynamicCases) {
+        check(
+          () => eq.setBand(0, { ...dynamicBand, [key]: value } as never),
+          `StreamingEqualizer.setBand: band.${key} ${predicate}`,
+        );
+      }
+      // Control: exact -1 remains the documented follow-band-frequency value.
+      expect(() => eq.setBand(0, { ...dynamicBand, sidechainFreqHz: -1 })).not.toThrow();
+    } finally {
+      eq.destroy();
+    }
+  });
+});
+
+describe('StreamingEqualizer strict numeric bounds', () => {
+  it('names strict EQ edge refusals under the band argument', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    const floatMaxText = '3.4028235e38';
+    try {
+      const frequency = errorOf(() =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: adjacentDouble(0, false),
+          gainDb: 0,
+          enabled: true,
+        }),
+      );
+      expect(frequency).toBeInstanceOf(RangeError);
+      expect((frequency as Error).message).toBe(
+        'StreamingEqualizer.setBand: band.frequencyHz must be finite and in (0, 24000)',
+      );
+      const frequencyUpper = errorOf(() =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: adjacentDouble(24000, true),
+          gainDb: 0,
+          enabled: true,
+        }),
+      );
+      expect(frequencyUpper).toBeInstanceOf(RangeError);
+      expect((frequencyUpper as Error).message).toBe(
+        'StreamingEqualizer.setBand: band.frequencyHz must be finite and in (0, 24000)',
+      );
+      const q = errorOf(() =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: 1000,
+          gainDb: 0,
+          enabled: true,
+          dynamic: true,
+          sidechainQ: adjacentDouble(0, false),
+        }),
+      );
+      expect(q).toBeInstanceOf(RangeError);
+      expect((q as Error).message).toBe(
+        `StreamingEqualizer.setBand: band.sidechainQ must be finite and in (0, ${floatMaxText}]`,
+      );
+      const sidechainFrequency = errorOf(() =>
+        eq.setBand(0, {
+          type: 'peak',
+          frequencyHz: 1000,
+          gainDb: 0,
+          enabled: true,
+          dynamic: true,
+          sidechainFreqHz: adjacentDouble(0, false),
+        }),
+      );
+      expect(sidechainFrequency).toBeInstanceOf(RangeError);
+      expect((sidechainFrequency as Error).message).toBe(
+        `StreamingEqualizer.setBand: band.sidechainFreqHz must be finite and in (0, ${floatMaxText}]`,
+      );
+    } finally {
+      eq.destroy();
+    }
+  });
+});
+
+describe('StreamingEqualizer refusal subjects', () => {
+  it('uses the public field paths for band and output-domain refusals', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      const frequency = errorOf(() =>
+        eq.setBand(0, { type: 'peak', frequencyHz: 0, gainDb: 3, q: 1, enabled: true }),
+      );
+      expect(frequency).toBeInstanceOf(RangeError);
+      expect((frequency as Error).message).toContain('band.frequencyHz');
+
+      const scale = errorOf(() => eq.setGainScale(-0.1));
+      expect(scale).toBeInstanceOf(RangeError);
+      expect((scale as Error).message).toMatch(/(?:^|: )scale must /);
+
+      const gain = errorOf(() => eq.setOutputGainDb(770.25));
+      expect(gain).toBeInstanceOf(RangeError);
+      expect((gain as Error).message).toMatch(/(?:^|: )gainDb must /);
+
+      const pan = errorOf(() => eq.setOutputPan(2));
+      expect(pan).toBeInstanceOf(RangeError);
+      expect((pan as Error).message).toMatch(/(?:^|: )pan must /);
+    } finally {
+      eq.destroy();
+    }
+  });
+
+  it('names invalid ordinals at the raw EQ embind entry', async () => {
+    await initSource();
+    const raw = getSonareModule().createEqualizer({ sampleRate });
+    try {
+      for (const value of [99, 1.5, 1e100]) {
+        const phase = errorOf(() => raw.setPhaseMode(value));
+        expect(phase).toBeInstanceOf(RangeError);
+        expect((phase as Error).message).toBe(
+          'StreamingEqualizer.setPhaseMode: mode must be an integer in [1, 3]',
+        );
+
+        const placement = errorOf(() => raw.magnitudeResponse(value, new Float32Array([1000])));
+        expect(placement).toBeInstanceOf(RangeError);
+        expect((placement as Error).message).toBe(
+          'StreamingEqualizer.magnitudeResponse: placement must be an integer in [0, 4]',
+        );
+      }
+    } finally {
+      raw.delete();
+    }
+  });
 });
 
 describe('StreamingEqualizer.setPhaseMode', () => {

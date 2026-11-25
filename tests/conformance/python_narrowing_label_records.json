@@ -510,10 +510,10 @@
     },
     {
       "file": "mixing_assistant.py",
-      "function": "_build_track_arrays",
-      "label": "sample_rates",
+      "function": "_validate_assistant_rates",
+      "label": "track_sample_rates",
       "state": "bounded",
-      "reason": "the call's sample_rate and every explicit tracks[i].sample_rate have already been narrowed to [1, INT_MAX]"
+      "reason": "the call's sample_rate and every explicit tracks[i].sample_rate have already been narrowed by _assistant_rate to their generated integer domains"
     },
     {
       "file": "vocal_project.py",

@@ -21063,10 +21063,10 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.lastBounceCompileResult"
-changed = "lastBounceCompileResult returns the same { diagnostics } shape as compile. Check for undefined before the first bounce; only a completed attempt has a diagnostics record."
+changed = "Returns { diagnostics } from the last successful bounce and undefined before the first success. A compile failure leaves the last successful result. Read the error thrown by bounce for details of that failure. In 1.x this method returned a result object with hasTimeline even before the first bounce, and a failed bounce could clear or replace the recorded diagnostics."
 domain = "project"
 rule = "typed-results"
-test = "bindings/wasm/tests/project-mixer-counts.test.ts::reports no last bounce compile result on a project no bounce has run on"
+test = "bindings/wasm/tests/surface/project.test.ts::keeps the last successful bounce diagnostics after a compile failure"
 
 [[entry]]
 kind = "method"
@@ -25438,10 +25438,10 @@ test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.setBand"
-changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent"
+changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band."
 domain = "mastering"
-rule = "individual"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses the undeclared band key"
+rule = "entry-named-refusals"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::uses the public field paths for band and output-domain refusals"
 
 [[entry]]
 kind = "method"
@@ -25785,7 +25785,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringPairProcessStereo"
 to = "masteringApplyPairProcessorStereo"
-changed = "renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
+changed = "renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only). An undeclared processor raises an InvalidParameter RangeError before the audio domain is checked. A declared processor without a stereo pair implementation raises a coded NotSupported error. Request shape, including parameter types, is checked first. After processor admission the source is checked before the reference. An undeclared params key raises TypeError naming params.<key> with the accepted keys, where v1.10.0 raised SonareError InvalidParameter."
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
@@ -26678,7 +26678,7 @@ entry = "./worklet"
 [[entry]]
 kind = "option"
 old = "PlaybackLoudnessMeter.constructor(channels)"
-removed = "pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate })"
+removed = "pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }). A refused channel count names numChannels."
 domain = "engine"
 rule = "construction"
 entry = "."
@@ -27743,10 +27743,10 @@ test = "bindings/wasm/tests/surface/core-audio.test.ts::requires the sample rate
 kind = "field"
 old = "MixAssistantOptions.tempoBpm"
 to = "MixingAssistantSuggestRequest.tempoBpm"
-changed = "0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it)"
+changed = "Omit tempoBpm for the transport fallback. A supplied tempo must be finite and in [20, 400] BPM; zero is refused, and a tiny nonzero tempo that rounded to the fallback in 1.x raises RangeError naming tempoBpm."
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/mixing-assistant.test.ts::refuses a zero, negative or non-finite tempo by name instead of reading it as the fallback"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::refuses an explicit zero tempo under its public domain"
 
 [[entry]]
 kind = "field"
@@ -35534,10 +35534,10 @@ test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments ref
 [[entry]]
 kind = "method"
 old = "Project.snapToGrid"
-changed = "a NaN, infinite or out-of-range ppq or strength is refused with RangeError naming it (1.x passed it through)"
+changed = "PPQ must be finite and within [0, 1e12]. Finite PPQ above that ceiling was accepted in 1.x. For values representable by the C arguments, the checks run in order ppq, strength, division and name the first refusal. The fraction, nonfinite value and unrepresentable division use the same division predicate."
 domain = "project"
 rule = "finite-or-refused"
-test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+test = "bindings/wasm/tests/project-mixer-counts.test.ts::snaps a near-beat coordinate to the requested grid line"
 
 [[entry]]
 kind = "method"
@@ -37108,18 +37108,18 @@ test = "bindings/wasm/tests/worklet/capture.test.ts::requires the dropped-frame 
 [[entry]]
 kind = "method"
 old = "Project.fromJson"
-changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys."
+changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat."
 domain = "project"
 rule = "individual"
-test = "bindings/wasm/tests/scene-warnings.test.ts::names unread insert params in typed scenes and loaded documents"
+test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
 
 [[entry]]
 kind = "method"
 old = "Project.fromJsonWithDiagnostics"
-changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys."
+changed = "An unread insert params key in a stored scene is refused as InvalidFormat with its indexed scene path and the sorted accepted keys. Allocation failure while decoding raises a SonareError with code OutOfMemory. In 1.x this could be reported as InvalidFormat."
 domain = "project"
 rule = "individual"
-test = "bindings/wasm/tests/scene-warnings.test.ts::names unread insert params in typed scenes and loaded documents"
+test = "tests/bindings/binding_project_c_surface_test.cpp::malformed project diagnostics are published only after formatting completes"
 
 [[entry]]
 kind = "option"
@@ -37825,10 +37825,10 @@ test = "bindings/wasm/tests/playback.test.ts::follows the input channel count un
 [[entry]]
 kind = "method"
 old = "PlaybackRenderer.renderOffline"
-changed = "Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError."
+changed = "Invalid channel counts and nonfinite input are argument RangeErrors rather than coded SonareError. The native renderer preserves its processing state when rendering fails before producing a result."
 domain = "engine"
-rule = "individual"
-test = "bindings/wasm/tests/playback.test.ts::refuses a wrong channel count and non-finite input in renderOffline"
+rule = "typed-results"
+test = "tests/api/sonare_c_playback_test.cpp::playback renderer render_offline matches the one-shot render through a used handle"
 
 [[entry]]
 kind = "function"
@@ -37953,3 +37953,75 @@ changed = "An empty block returns an empty Float32Array without requiring prepar
 domain = "effects"
 rule = "individual"
 test = "bindings/wasm/tests/streaming-retune.test.ts::treats an empty block as a no-op before and after prepare"
+
+[[entry]]
+kind = "method"
+old = "HrtfSet.fromBytes"
+changed = "Malformed SHRF bytes raise a coded InvalidFormat document error instead of an invalid-argument error."
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/playback.test.ts::builds an HRTF set from bytes and refuses malformed data"
+
+[[entry]]
+kind = "function"
+old = "masteringAbMatchLoudness"
+changed = "If either take has no measurable loudness, the call raises RangeError naming that side instead of applying zero gain."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mastering-ab-match-loudness.test.ts::refuses a silent %s, naming it"
+
+[[entry]]
+kind = "function"
+old = "masteringAbMatchLoudnessStereo"
+changed = "If either take has no measurable loudness, the call raises RangeError naming that side instead of applying zero gain."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/mastering-ab-match-loudness.test.ts::refuses a silent stereo %s, naming both its channels"
+
+[[entry]]
+kind = "class"
+old = "StreamingMasteringChain"
+changed = "A well-formed configuration requesting a stage or estimator unavailable to streaming raises NotSupported. Prepare checks the sample rate, maximum block size and channel count in that order after validating argument types."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/streaming-processors.test.ts::reads prepare fields in contract order"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.processMono"
+changed = "For nonempty buffers, the prepared channel mode is checked before reading non-finite samples."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/streaming-processors.test.ts::checks prepared channel mode before non-finite block samples"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.processStereo"
+changed = "For nonempty buffers, the prepared channel mode is checked before reading non-finite samples."
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/streaming-processors.test.ts::checks prepared channel mode before non-finite block samples"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.setGainScale"
+changed = "The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses caller doubles outside EQ numeric domains before float narrowing"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.setOutputGainDb"
+changed = "Pass gainDb of at most 770 dB. A refusal names gainDb. Values above 770 dB with finite linear conversion could pass in 1.x. The gainDb limit is checked before conversion to float32."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses caller doubles outside EQ numeric domains before float narrowing"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.setOutputPan"
+changed = "The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan."
+domain = "mastering"
+rule = "entry-named-refusals"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses caller doubles outside EQ numeric domains before float narrowing"

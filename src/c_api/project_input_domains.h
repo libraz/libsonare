@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "c_api/ppq_domains.h"
 #include "core/audio.h"
 #include "util/parameter_checks.h"
 
@@ -76,6 +77,27 @@ inline constexpr sonare::util::check::NumericDomain kExternalStemStartFrameDomai
 /// @brief What the grid division of a snap accepts, 0 meaning the project's own grid.
 inline constexpr sonare::util::check::NumericDomain kSnapDivisionDomain =
     sonare::util::check::integer_domain(0, 1024);
+
+/// @brief What the blend strength of a grid snap accepts.
+inline constexpr auto kSnapStrengthDomain = sonare::util::check::real_domain(0.0, 1.0);
+
+inline void check_snap_position_and_strength(double ppq, double strength) {
+  namespace check = sonare::util::check;
+  check::within(ppq, kPublicPpqDomain, "ppq");
+  check::within(strength, kSnapStrengthDomain, "strength");
+}
+
+/// @brief Rejects numbers the binding cannot pass faithfully, in native validation order.
+inline int narrow_snap_division(double ppq, double strength, double division) {
+  namespace check = sonare::util::check;
+  constexpr auto int_domain = check::integer_domain_of<int>(std::numeric_limits<int>::min());
+  if (!check::in_domain(division, int_domain)) {
+    check_snap_position_and_strength(ppq, strength);
+    check::refuse_outside(kSnapDivisionDomain, "division");
+  }
+  return static_cast<int>(division);
+}
+
 /// @brief What the entry count of a key or chord annotation list accepts.
 inline constexpr sonare::util::check::NumericDomain kAnnotationCountDomain =
     sonare::util::check::integer_domain(0, static_cast<long long>(sonare::kMaxAudioBufferSize));

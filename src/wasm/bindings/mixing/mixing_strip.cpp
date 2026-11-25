@@ -29,7 +29,7 @@ void MixerWasm::setPan(const val& strip_index_val, const val& pan_val, const val
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
-  checkStripValueError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode));
+  checkStripError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode));
 }
 
 // Sets the strip's stereo width.

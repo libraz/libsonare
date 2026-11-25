@@ -1,11 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   init,
+  isSonareError,
   masteringAbMatchLoudnessStereo,
   masteringApplyPairProcessorStereo,
   StreamingMasteringChain,
 } from '../dist/index.js';
 import type { StereoPairProcessor } from '../src/index.js';
+import { expectRefusalOf } from './_helpers.js';
 
 const SAMPLE_RATE = 44_100;
 
@@ -65,7 +68,7 @@ describe('WASM stereo mastering design APIs', () => {
     ).toThrow(TypeError);
   });
 
-  it('refuses unequal channel lengths and unknown processors', () => {
+  it('control: refuses unequal channel lengths and unknown processors', () => {
     const source = tone(32, 0.2);
     const reference = tone(32, 0.4);
     const short = tone(31, 0.2);
@@ -82,7 +85,12 @@ describe('WASM stereo mastering design APIs', () => {
         source,
         /^masteringApplyPairProcessorStereo: sourceLeft and sourceRight must have the same length$/,
       ],
-      ['match.abSwitch' as StereoPairProcessor, source, source, /abSwitch/],
+      [
+        'match.abSwitch' as StereoPairProcessor,
+        source,
+        source,
+        /processor does not support planar stereo pairs/,
+      ],
     ];
     for (const [processor, sourceLeft, sourceRight, message] of cases) {
       expect(() =>
@@ -108,6 +116,211 @@ describe('WASM stereo mastering design APIs', () => {
     ).toThrow(
       /^masteringApplyPairProcessorStereo: referenceLeft and referenceRight must have the same length$/,
     );
+  });
+
+  it('control: checks source audio before narrowing the reference sample rate', () => {
+    const source = tone(32, 0.2);
+    source[3] = Number.NaN;
+    const request = {
+      processor: 'match.abCrossfade' as const,
+      sourceLeft: source,
+      sourceRight: tone(32, 0.2),
+      referenceLeft: tone(32, 0.2),
+      referenceRight: tone(32, 0.2),
+      sampleRate: SAMPLE_RATE,
+      referenceSampleRate: 0.5,
+    };
+    expect(() => masteringApplyPairProcessorStereo(request)).toThrow(
+      new RangeError(
+        'masteringApplyPairProcessorStereo: sourceLeft contains a non-finite sample at index 3',
+      ),
+    );
+
+    const invalidReferenceRate = { ...request, sourceLeft: tone(32, 0.2), referenceSampleRate: 0 };
+    expect(() => masteringApplyPairProcessorStereo(invalidReferenceRate)).toThrow(
+      new RangeError(
+        'masteringApplyPairProcessorStereo: referenceSampleRate must be an integer in [8000, 384000]',
+      ),
+    );
+  });
+
+  it('checks an empty source before narrowing the primary sample rate', () => {
+    const empty = new Float32Array(0);
+    expect(() =>
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abCrossfade' as const,
+        sourceLeft: empty,
+        sourceRight: empty,
+        referenceLeft: tone(32, 0.2),
+        referenceRight: tone(32, 0.2),
+        sampleRate: 0.5,
+      }),
+    ).toThrow(
+      new RangeError('masteringApplyPairProcessorStereo: sourceLeft must be a non-empty buffer'),
+    );
+  });
+
+  it('checks stereo processor support before channel length relation', () => {
+    const one = tone(32, 0.2);
+    const two = tone(31, 0.2);
+    const unknown = (() => {
+      try {
+        masteringApplyPairProcessorStereo({
+          processor: 'match.notRegistered' as never,
+          sourceLeft: one,
+          sourceRight: two,
+          referenceLeft: one,
+          referenceRight: one,
+          sampleRate: SAMPLE_RATE,
+        });
+      } catch (error) {
+        return error;
+      }
+      throw new Error('expected the unknown processor to be refused');
+    })();
+    expect(unknown).toBeInstanceOf(RangeError);
+    expect((unknown as Error).message).toMatch(
+      /^masteringApplyPairProcessorStereo: processor must be one of /,
+    );
+
+    expect(() =>
+      masteringApplyPairProcessorStereo({
+        processor: 'match.notRegistered' as never,
+        sourceLeft: {} as never,
+        sourceRight: one,
+        referenceLeft: one,
+        referenceRight: one,
+        sampleRate: SAMPLE_RATE,
+      }),
+    ).toThrow(
+      new TypeError('masteringApplyPairProcessorStereo: sourceLeft must be a Float32Array'),
+    );
+
+    const unsupported = (() => {
+      try {
+        masteringApplyPairProcessorStereo({
+          processor: 'match.abSwitch' as never,
+          sourceLeft: one,
+          sourceRight: two,
+          referenceLeft: one,
+          referenceRight: one,
+          sampleRate: SAMPLE_RATE,
+        });
+      } catch (error) {
+        return error;
+      }
+      throw new Error('expected the unsupported processor to be refused');
+    })();
+    expect(isSonareError(unsupported)).toBe(true);
+    expect((unsupported as { code: number }).code).toBe(ErrorCode.NotSupported);
+    expect((unsupported as Error).message).toMatch(
+      /^masteringApplyPairProcessorStereo: processor does not support planar stereo pairs$/,
+    );
+  });
+
+  it.each([
+    {
+      name: 'processor membership precedes unequal plane lengths',
+      request: {
+        processor: 'match.notRegistered',
+        sourceLeft: tone(32, 0.2),
+        sourceRight: tone(31, 0.2),
+        referenceLeft: tone(32, 0.4),
+        referenceRight: tone(32, 0.4),
+        sampleRate: 0,
+      },
+      kind: RangeError,
+      messagePrefix:
+        'masteringApplyPairProcessorStereo: processor must be one of match.abCrossfade, match.abSwitch, match.alignReferenceToSource, match.applyMatchEq',
+    },
+    {
+      name: 'params bag shape precedes processor membership and domains',
+      request: {
+        processor: 'match.notRegistered',
+        sourceLeft: tone(32, 0.2),
+        sourceRight: tone(32, 0.2),
+        referenceLeft: tone(32, 0.4),
+        referenceRight: tone(32, 0.4),
+        sampleRate: 0,
+        params: 1,
+      },
+      kind: TypeError,
+      messagePrefix: 'masteringApplyPairProcessorStereo: params must be an object',
+    },
+    {
+      name: 'parameter value shape precedes processor membership and domains',
+      request: {
+        processor: 'match.notRegistered',
+        sourceLeft: tone(32, 0.2),
+        sourceRight: tone(32, 0.2),
+        referenceLeft: tone(32, 0.4),
+        referenceRight: tone(32, 0.4),
+        sampleRate: 0,
+        params: { mix: 'bad' },
+      },
+      kind: TypeError,
+      messagePrefix:
+        "masteringApplyPairProcessorStereo: mastering override 'mix' " +
+        'must be a number or boolean',
+    },
+    {
+      name: 'control: sampleRate domain precedes source samples',
+      request: (() => {
+        const sourceLeft = tone(32, 0.2);
+        sourceLeft[0] = Number.NaN;
+        return {
+          processor: 'match.abCrossfade',
+          sourceLeft,
+          sourceRight: tone(32, 0.2),
+          referenceLeft: tone(32, 0.4),
+          referenceRight: tone(32, 0.4),
+          sampleRate: 48_000.5,
+          referenceSampleRate: 0,
+        };
+      })(),
+      kind: RangeError,
+      messagePrefix:
+        'masteringApplyPairProcessorStereo: sampleRate must be an integer in ' + '[8000, 384000]',
+    },
+    {
+      name: 'control: referenceSampleRate domain precedes parameter domain',
+      request: {
+        processor: 'match.abCrossfade',
+        sourceLeft: tone(32, 0.2),
+        sourceRight: tone(32, 0.2),
+        referenceLeft: tone(32, 0.4),
+        referenceRight: tone(32, 0.4),
+        sampleRate: SAMPLE_RATE,
+        referenceSampleRate: 0,
+        params: { mix: 2 },
+      },
+      kind: RangeError,
+      messagePrefix:
+        'masteringApplyPairProcessorStereo: referenceSampleRate must be an integer in ' +
+        '[8000, 384000]',
+    },
+    {
+      name: 'control: source samples precede referenceSampleRate domain',
+      request: (() => {
+        const sourceLeft = tone(32, 0.2);
+        sourceLeft[0] = Number.NaN;
+        return {
+          processor: 'match.abCrossfade',
+          sourceLeft,
+          sourceRight: tone(32, 0.2),
+          referenceLeft: tone(32, 0.4),
+          referenceRight: tone(32, 0.4),
+          sampleRate: SAMPLE_RATE,
+          referenceSampleRate: 48_000.5,
+        };
+      })(),
+      kind: RangeError,
+      messagePrefix:
+        'masteringApplyPairProcessorStereo: sourceLeft contains a non-finite sample at index 0',
+    },
+  ])('$name', ({ request, kind, messagePrefix }) => {
+    const error = expectRefusalOf(() => masteringApplyPairProcessorStereo(request as never), kind);
+    expect(error.message).toBe(messagePrefix);
   });
 
   it('shares one gain across stereo loudness matching', () => {

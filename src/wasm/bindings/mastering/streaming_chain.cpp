@@ -42,22 +42,40 @@ mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val optio
   return options;
 }
 
+mastering::api::MasteringChainConfig streamingChainConfigFromDocument(const val& config_json) {
+  auto config = masteringChainConfigFromDocument(config_json, true, "");
+  mastering::api::validate_streaming_chain_config(config);
+  return config;
+}
+
 }  // namespace
 
 class StreamingMasteringChainWrapper {
  public:
   StreamingMasteringChainWrapper(val config_json, val options)
-      // The constructor's request object is the chain config itself, so its keys have no root.
-      : chain_(masteringChainConfigFromDocument(config_json, true, ""),
-               streamingOptionsFromVal(options)) {}
+      : StreamingMasteringChainWrapper(streamingChainConfigFromDocument(config_json), options) {}
+
+  StreamingMasteringChainWrapper(mastering::api::MasteringChainConfig config, val options)
+      : chain_(std::move(config), streamingOptionsFromVal(options)) {}
 
   // Every argument arrives as val: embind's integer glue wraps 2^32 + n to n, and
   // its double glue lets a NaN or infinite sample rate through unrefused.
   void prepare(const val& sample_rate_val, const val& max_block_size, const val& num_channels) {
-    const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
-    const int block_size = max_block_size.isUndefined() || max_block_size.isNull()
-                               ? mastering::api::MasteringChain::kDefaultMaxBlock
-                               : checkedIntFromVal(max_block_size, "maxBlockSize");
+    // Read every field's type before applying any numeric domain.
+    const bool has_max_block_size = !max_block_size.isUndefined() && !max_block_size.isNull();
+    const auto require_integer_shape = [](const val& value, const char* name) {
+      if (!value.isNumber()) throw WasmTypeError(std::string(name) + " must be an integer");
+    };
+    require_integer_shape(sample_rate_val, "sampleRate");
+    if (has_max_block_size) require_integer_shape(max_block_size, "maxBlockSize");
+    require_integer_shape(num_channels, "numChannels");
+
+    const int sample_rate =
+        domainNumberFromVal<int>(sample_rate_val, "sampleRate", sonare::kAudioSampleRateDomain);
+    const int block_size = has_max_block_size
+                               ? domainNumberFromVal<int>(max_block_size, "maxBlockSize",
+                                                          sonare::kRealtimeBlockSizeDomain)
+                               : mastering::api::MasteringChain::kDefaultMaxBlock;
     const int channels = domainNumberFromVal<int>(
         num_channels, "numChannels", mastering::api::kStreamingChainChannelCountDomain);
     chain_.prepare(sample_rate, block_size, channels);
@@ -68,7 +86,6 @@ class StreamingMasteringChainWrapper {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
     validateBlockLength(length, "samples");
     std::vector<float> block = float32ArrayToVector(samples, "samples");
-    validateFinite(block, "samples");
     if (!block.empty()) {
       float* channels[] = {block.data()};
       chain_.process_block(channels, 1, static_cast<int>(block.size()));
@@ -82,8 +99,6 @@ class StreamingMasteringChainWrapper {
     validateBlockLength(length, "left");
     std::vector<float> left = float32ArrayToVector(left_samples, "left");
     std::vector<float> right = float32ArrayToVector(right_samples, "right");
-    validateFinite(left, "left");
-    validateFinite(right, "right");
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
       chain_.process_block(channels, 2, static_cast<int>(left.size()));
@@ -142,7 +157,9 @@ class StreamingMasteringChainWrapper {
   // once per call however many stages did it -- not the same measurement as
   // nonFiniteSubstitutionCount, which sums replaced samples. See
   // sonare_streaming_mastering_chain_non_finite_discard_count.
-  size_t nonFiniteDiscardCount() const { return chain_.non_finite_discard_count(); }
+  double nonFiniteDiscardCount() const {
+    return static_cast<double>(chain_.non_finite_discard_count());
+  }
 
  private:
   void ensurePreparedForFlush() const {
@@ -159,11 +176,6 @@ class StreamingMasteringChainWrapper {
                            sonare::util::refusal::integer_range_predicate(
                                0.0, static_cast<double>(max_block_size_)));
     }
-  }
-
-  // Refuses a block holding a non-finite sample by the caller's array, as the C ABI does.
-  static void validateFinite(const std::vector<float>& block, const char* array) {
-    sonare::validate_offline_audio_samples(array, block.data(), block.size(), 0);
   }
 
   mastering::api::StreamingMasteringChain chain_;

@@ -5,87 +5,95 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 
+#include "c_api/eq_band_json.h"
 #include "c_api/mastering_input_domains.h"
+#include "c_api/sonare_c_internal.h"
 #include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
 // Included after common.h, which opens `using namespace sonare` for the
 // unqualified `mastering::eq` spelling used throughout this file.
 #include "mastering/eq/band_strings.h"
+#include "mastering/eq/eq_band_domains.h"
 
 // ---------------------------------------------------------------------------
 // StreamingEqualizer wrapper (block-by-block streaming EqualizerProcessor).
 // Construct via createEqualizer(config) factory.
 // ---------------------------------------------------------------------------
 
-mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
+mastering::eq::EqBandType eqBandTypeFromString(const std::string& value, const char* subject) {
   const auto parsed = mastering::eq::band_type_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ band type: " + value + " (expected " +
-                         mastering::eq::band_type_tokens() + ")");
+    util::check::refuse(subject,
+                        std::string("must be one of ") + mastering::eq::band_type_tokens());
   }
   return *parsed;
 }
 
-mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
+mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value,
+                                                     const char* subject) {
   const auto parsed = mastering::eq::coeff_mode_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ coefficient mode: " + value + " (expected " +
-                         mastering::eq::coeff_mode_tokens() + ")");
+    util::check::refuse(subject,
+                        std::string("must be one of ") + mastering::eq::coeff_mode_tokens());
   }
   return *parsed;
 }
 
-mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
+mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value,
+                                                     const char* subject) {
   const auto parsed = mastering::eq::placement_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ placement: " + value + " (expected " +
-                         mastering::eq::placement_tokens() + ")");
+    util::check::refuse(subject,
+                        std::string("must be one of ") + mastering::eq::placement_tokens());
   }
   return *parsed;
 }
 
-mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
+mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value, const char* subject) {
   const auto parsed = mastering::eq::phase_mode_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ band phase mode: " + value + " (expected " +
-                         mastering::eq::phase_mode_tokens() + ")");
+    util::check::refuse(subject,
+                        std::string("must be one of ") + mastering::eq::phase_mode_tokens());
   }
   return *parsed;
 }
 
 mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
-  const auto parsed = mastering::eq::phase_mode_from_int(mode);
-  if (!parsed) {
-    throw WasmRangeError("unknown EQ phase mode");
-  }
-  return *parsed;
+  util::check::integer_within(mode, sonare_c_detail::kEqPhaseModeDomain, "mode");
+  return *mastering::eq::phase_mode_from_int(mode);
 }
 
-mastering::eq::StereoPlacement eqPlacementFromInt(int placement) {
-  const auto parsed = mastering::eq::placement_from_int(placement);
-  if (!parsed) {
-    throw WasmRangeError("unknown EQ band placement");
-  }
-  return *parsed;
+mastering::eq::StereoPlacement eqPlacementFromInt(int placement, const char* subject) {
+  util::check::integer_within(placement, sonare_c_detail::kEqPlacementDomain, subject);
+  return *mastering::eq::placement_from_int(placement);
 }
 
-mastering::eq::EqBand eqBandFromVal(val band) {
+mastering::eq::EqBand eqBandFromVal(val band, double sample_rate) {
   mastering::eq::EqBand result;
   result.type = eqBandTypeFromString(
-      stringProperty(band, "type", mastering::eq::band_type_to_string(result.type)));
+      stringProperty(band, "type", mastering::eq::band_type_to_string(result.type)), "band.type");
   result.coeff_mode = eqCoeffModeFromString(
-      stringProperty(band, "coeffMode", mastering::eq::coeff_mode_to_string(result.coeff_mode)));
-  result.frequency_hz = floatProperty(band, "frequencyHz", result.frequency_hz);
-  result.gain_db = floatProperty(band, "gainDb", result.gain_db);
-  result.q = floatProperty(band, "q", result.q);
+      stringProperty(band, "coeffMode", mastering::eq::coeff_mode_to_string(result.coeff_mode)),
+      "band.coeffMode");
   result.enabled = boolProperty(band, "enabled", result.enabled);
+  result.frequency_hz =
+      result.enabled
+          ? domainFloatProperty(band, "frequencyHz", result.frequency_hz,
+                                mastering::eq::eq_band_frequency_domain(sample_rate), "band")
+          : floatProperty(band, "frequencyHz", result.frequency_hz);
+  result.gain_db =
+      domainFloatProperty(band, "gainDb", result.gain_db, mastering::eq::kEqDbGainDomain, "band");
+  result.q = floatProperty(band, "q", result.q);
   result.slope_db_oct = intProperty(band, "slopeDbOct", result.slope_db_oct);
   result.placement = eqPlacementFromString(
-      stringProperty(band, "placement", mastering::eq::placement_to_string(result.placement)));
+      stringProperty(band, "placement", mastering::eq::placement_to_string(result.placement)),
+      "band.placement");
   result.phase = eqBandPhaseFromString(
-      stringProperty(band, "phase", mastering::eq::phase_mode_to_string(result.phase)));
+      stringProperty(band, "phase", mastering::eq::phase_mode_to_string(result.phase)),
+      "band.phase");
   result.soloed = boolProperty(band, "soloed", result.soloed);
   result.bypassed = boolProperty(band, "bypassed", result.bypassed);
   result.proportional_q = boolProperty(band, "proportionalQ", result.proportional_q);
@@ -93,19 +101,44 @@ mastering::eq::EqBand eqBandFromVal(val band) {
       floatProperty(band, "proportionalQStrength", result.proportional_q_strength);
 
   result.dyn.enabled = boolProperty(band, "dynamic", result.dyn.enabled);
-  result.dyn.threshold_db = floatProperty(band, "thresholdDb", result.dyn.threshold_db);
+  result.dyn.threshold_db = domainFloatProperty(band, "thresholdDb", result.dyn.threshold_db,
+                                                mastering::eq::kEqDbGainDomain, "band");
   result.dyn.auto_threshold = boolProperty(band, "autoThreshold", result.dyn.auto_threshold);
-  result.dyn.ratio = floatProperty(band, "ratio", result.dyn.ratio);
-  result.dyn.range_db = floatProperty(band, "rangeDb", result.dyn.range_db);
-  result.dyn.attack_ms = floatProperty(band, "attackMs", result.dyn.attack_ms);
-  result.dyn.release_ms = floatProperty(band, "releaseMs", result.dyn.release_ms);
+  result.dyn.ratio = result.dyn.enabled ? domainFloatProperty(band, "ratio", result.dyn.ratio,
+                                                              mastering::eq::kEqRatioDomain, "band")
+                                        : floatProperty(band, "ratio", result.dyn.ratio);
+  result.dyn.range_db = domainFloatProperty(band, "rangeDb", result.dyn.range_db,
+                                            mastering::eq::kEqDbGainDomain, "band");
+  result.dyn.attack_ms = result.dyn.enabled
+                             ? domainFloatProperty(band, "attackMs", result.dyn.attack_ms,
+                                                   mastering::eq::kEqNonnegativeFloatDomain, "band")
+                             : floatProperty(band, "attackMs", result.dyn.attack_ms);
+  result.dyn.release_ms =
+      result.dyn.enabled ? domainFloatProperty(band, "releaseMs", result.dyn.release_ms,
+                                               mastering::eq::kEqNonnegativeFloatDomain, "band")
+                         : floatProperty(band, "releaseMs", result.dyn.release_ms);
   result.dyn.detector_delay_ms =
-      floatProperty(band, "detectorDelayMs", result.dyn.detector_delay_ms);
+      result.dyn.enabled
+          ? domainFloatProperty(band, "detectorDelayMs", result.dyn.detector_delay_ms,
+                                mastering::eq::kEqNonnegativeFloatDomain, "band")
+          : floatProperty(band, "detectorDelayMs", result.dyn.detector_delay_ms);
   result.dyn.external_sidechain =
       boolProperty(band, "externalSidechain", result.dyn.external_sidechain);
+  const val sidechain_frequency = band["sidechainFreqHz"];
+  const bool sidechain_frequency_given =
+      !sidechain_frequency.isUndefined() && !sidechain_frequency.isNull();
+  const bool follows_band_frequency = sidechain_frequency_given &&
+                                      sidechain_frequency.typeOf().as<std::string>() == "number" &&
+                                      sidechain_frequency.as<double>() == -1.0;
   result.dyn.sidechain_freq_hz =
-      floatProperty(band, "sidechainFreqHz", result.dyn.sidechain_freq_hz);
-  result.dyn.sidechain_q = floatProperty(band, "sidechainQ", result.dyn.sidechain_q);
+      result.dyn.enabled && sidechain_frequency_given && !follows_band_frequency
+          ? domainFloatProperty(band, "sidechainFreqHz", result.dyn.sidechain_freq_hz,
+                                mastering::eq::kEqPositiveFloatDomain, "band")
+          : floatProperty(band, "sidechainFreqHz", result.dyn.sidechain_freq_hz);
+  result.dyn.sidechain_q = result.dyn.enabled
+                               ? domainFloatProperty(band, "sidechainQ", result.dyn.sidechain_q,
+                                                     mastering::eq::kEqPositiveFloatDomain, "band")
+                               : floatProperty(band, "sidechainQ", result.dyn.sidechain_q);
   return result;
 }
 
@@ -121,30 +154,42 @@ class EqualizerWrapper {
   }
 
   void setBand(const val& index, val band) {
-    processor_.set_band(checkedUintFromVal(index, "index"), eqBandFromVal(band));
+    auto parsed = eqBandFromVal(band, sample_rate_);
+    sonare_c_detail::with_c_names(sonare::c_api::kEqBandRefusalNames, [&] {
+      processor_.set_band(checkedUintFromVal(index, "index"), parsed);
+    });
   }
 
   void clear() { processor_.clear(); }
 
   void setPhaseMode(const val& mode) {
-    processor_.set_phase_mode(eqPhaseFromInt(checkedIntFromVal(mode, "mode")));
+    processor_.set_phase_mode(eqPhaseFromInt(
+        domainNumberFromVal<int>(mode, "mode", sonare_c_detail::kEqPhaseModeDomain)));
   }
 
   void setAutoGain(bool enabled) { processor_.set_auto_gain_enabled(enabled); }
 
   void setGainScale(const val& scale_val) {
-    const float scale = checkedFloatFromVal(scale_val, "scale");
-    processor_.set_gain_scale(scale);
+    const double scale = numberFromVal(scale_val, "scale");
+    util::check::within(scale, mastering::eq::kEqGainScaleDomain, "scale");
+    processor_.set_gain_scale(static_cast<float>(scale));
   }
 
   void setOutputGainDb(const val& gain_db_val) {
-    const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
-    processor_.set_output_gain_db(gain_db);
+    const double gain_db = numberFromVal(gain_db_val, "gainDb");
+    const auto& domain = mastering::eq::kEqOutputGainDbDomain;
+    util::check::within(gain_db, domain, "gainDb");
+    const double maximum = static_cast<double>(std::numeric_limits<float>::max());
+    if (gain_db < -maximum || gain_db > maximum) {
+      util::check::refuse_outside(domain, "gainDb");
+    }
+    processor_.set_output_gain_db(static_cast<float>(gain_db));
   }
 
   void setOutputPan(const val& pan_val) {
-    const float pan = checkedFloatFromVal(pan_val, "pan");
-    processor_.set_output_pan(pan);
+    const double pan = numberFromVal(pan_val, "pan");
+    util::check::within(pan, mastering::eq::kEqOutputPanDomain, "pan");
+    processor_.set_output_pan(static_cast<float>(pan));
   }
 
   // Borrows a mono external sidechain key for dynamic bands that opt into
@@ -202,7 +247,7 @@ class EqualizerWrapper {
 
   // Number of blocks in which the EQ discarded recursive state because a
   // non-finite value had reached it. See sonare_eq_non_finite_discard_count.
-  size_t nonFiniteDiscardCount() const { return processor_.non_finite_discard_count(); }
+  uint32_t nonFiniteDiscardCount() const { return processor_.non_finite_discard_count(); }
 
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
@@ -239,13 +284,14 @@ class EqualizerWrapper {
   // placement as the same ordinal the C ABI does rather than a string, so the
   // wrapper stays a marshaller and the naming lives in the TS facade.
   val magnitudeResponse(const val& placement, val frequencies_hz) const {
-    const int placement_id = checkedIntFromVal(placement, "placement");
+    const int placement_id =
+        domainNumberFromVal<int>(placement, "placement", sonare_c_detail::kEqPlacementDomain);
     std::vector<float> frequencies = float32ArrayToVector(frequencies_hz, "frequenciesHz");
     std::vector<float> out(frequencies.size(), 0.0f);
     sonare::util::check::with_camel_paths(
         [&] {
-          processor_.magnitude_response_db(eqPlacementFromInt(placement_id), frequencies.data(),
-                                           frequencies.size(), out.data());
+          processor_.magnitude_response_db(eqPlacementFromInt(placement_id, "placement"),
+                                           frequencies.data(), frequencies.size(), out.data());
         },
         std::array<sonare::util::check::MemberKey, 0>{});
     return vectorToFloat32Array(out);

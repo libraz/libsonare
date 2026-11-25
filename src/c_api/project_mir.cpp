@@ -192,10 +192,8 @@ SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq
   SONARE_C_ZERO_OUTS(out_ppq);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
-  if (const SonareError err = run_validation([&] {
-        check::within(ppq, sonare_c_detail::kPublicPpqDomain, "ppq");
-        check::in_range(strength, 0.0, 1.0, "strength");
-      });
+  if (const SonareError err =
+          run_validation([&] { sonare_c_detail::check_snap_position_and_strength(ppq, strength); });
       err != SONARE_OK) {
     return err;
   }

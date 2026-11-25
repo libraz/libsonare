@@ -465,14 +465,12 @@ Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   double ppq = 0.0;
-  double strength = 1.0;
-  int division = 1;
-  if (!OptionalDoubleArg(env, info, 0, "ppq", 0.0, &ppq) ||
-      !OptionalDoubleArg(env, info, 1, "strength", 1.0, &strength) ||
-      !sonare_node::OptionalDomainArg<int>(env, info, 2, "division", 1,
-                                           sonare_c_detail::kSnapDivisionDomain, &division)) {
+  if (!sonare_node::RequiredDomainDoubleValue(env, info[0], "ppq", &ppq)) {
     return env.Undefined();
   }
+  const double strength = sonare_node::DomainDoubleValue(env, info[1], "strength", 1.0);
+  const double division_value = sonare_node::DomainDoubleValue(env, info[2], "division", 1.0);
+  const int division = sonare_c_detail::narrow_snap_division(ppq, strength, division_value);
   double out_ppq = 0.0;
   SonareProjectSnapToGridOptions snap_options;
   sonare_project_snap_to_grid_options_init(&snap_options);

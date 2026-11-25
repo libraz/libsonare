@@ -379,8 +379,8 @@ def test_hrtf_set_default_and_lifecycle() -> None:
         assert renderer.num_output_channels == 2
 
 
-def test_hrtf_set_from_bytes_rejects_malformed_data() -> None:
-    with pytest.raises(SonareError):
+def test_control_hrtf_set_from_bytes_rejects_malformed_data_as_invalid_format() -> None:
+    with raises_coded(ErrorCode.INVALID_FORMAT):
         HrtfSet.from_bytes(b"SHRF\x00\x00\x00\x00")
 
 
@@ -428,9 +428,22 @@ def test_loudness_meter_reads_minus_infinity_while_nothing_passes_the_gate() -> 
         assert meter.integrated_lufs == -math.inf
 
 
-def test_loudness_meter_rejects_an_unsupported_channel_count() -> None:
-    with pytest.raises(SonareError):
+def test_loudness_meter_rejects_an_unsupported_channel_count_by_name() -> None:
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match="num_channels"):
         PlaybackLoudnessMeter(num_channels=3, sample_rate=SR)
+
+
+def test_control_loudness_meter_refuses_zero_sample_rate_by_name() -> None:
+    with raises_coded(ErrorCode.INVALID_PARAMETER, match="sample_rate"):
+        PlaybackLoudnessMeter(num_channels=2, sample_rate=0)
+
+
+def test_loudness_meter_refusal_subjects_use_python_input_names() -> None:
+    with PlaybackLoudnessMeter(num_channels=2, sample_rate=SR) as meter:
+        with raises_coded(ErrorCode.INVALID_PARAMETER, match="samples length"):
+            meter.push_interleaved([])
+        with raises_coded(ErrorCode.INVALID_PARAMETER, match="samples must contain only finite"):
+            meter.push_interleaved([0.0, math.nan])
 
 
 @pytest.mark.parametrize("sample_rate", [4000, 400000])
