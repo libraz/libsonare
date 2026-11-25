@@ -989,7 +989,7 @@ TEST_CASE("a many-segment profile agrees with a linear scan at every boundary", 
 
   // A map diverging from this one at the last segment agrees right up to it.
   std::vector<TimeStretchSegment> other = segments;
-  other.back().rate = 3.0f;
+  other.at(kSegments - 1).rate = 3.0f;
   const TimeStretchMap diverging(other);
   const int boundary = static_cast<int>(output_start.back());
   CHECK(map.agrees_through(diverging, boundary - 1));

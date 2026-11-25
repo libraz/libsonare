@@ -154,9 +154,10 @@ std::array<float, 3> poison_values() {
 BlockProcessor wrap(const std::shared_ptr<sonare::rt::ProcessorBase>& processor) {
   return [processor](const std::vector<float>& mono) {
     std::vector<float> left = mono;
-    std::vector<float> right(mono.size());
-    for (size_t i = 0; i < mono.size(); ++i) {
-      right[i] = kSecondChannelScale * mono[i];
+    std::vector<float> right;
+    right.reserve(mono.size());
+    for (const float sample : mono) {
+      right.push_back(kSecondChannelScale * sample);
     }
     float* channels[] = {left.data(), right.data()};
     processor->process(channels, kChannels, static_cast<int>(mono.size()));
