@@ -461,7 +461,7 @@ describe('Sonare WASM Module', () => {
         const routes: Array<[string, (frequencyHz: number) => void]> = [
           ['setStrip', (hz) => engine.setStrip(10, { id: 'track-10', eq: eqAt(hz) })],
           ['setStrip', (hz) => engine.setStrip('master', { id: 'master', eq: eqAt(hz) })],
-          ['setBusStrip', (hz) => engine.setBusStrip(1, { id: '1', eq: eqAt(hz) })],
+          ['setBusStrip', (hz) => engine.setBusStrip(1, { id: '1', role: 'submix', eq: eqAt(hz) })],
         ];
         for (const [entry, setEq] of routes) {
           const subject = 'settings.eq.bands[0].frequencyHz';

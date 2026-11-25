@@ -14,7 +14,7 @@
  * measured.
  */
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { assert, beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
   masteringAudioProfile,
@@ -764,12 +764,16 @@ it('omits unmeasured flat levels in the profile and repair analysis', () => {
   expect(profile.defects?.clip.flatRunCount).toBe(0);
   expect(profile.defects?.clip).not.toHaveProperty('flatLevel');
   const repair = masteringRepairAnalyze({ channels: [samples], sampleRate });
+  assert.isDefined(repair.channels);
+  assert.isDefined(repair.defects);
   expect(repair.channels[0]?.clip.flatRunCount).toBe(0);
   expect(repair.channels[0]?.clip).not.toHaveProperty('flatLevel');
   expect(repair.defects.clip).not.toHaveProperty('flatLevel');
 
   samples.fill(0.25, 400, 440);
   const measured = masteringRepairAnalyze({ channels: [samples], sampleRate });
+  assert.isDefined(measured.channels);
+  assert.isDefined(measured.defects);
   expect(measured.channels[0]?.clip.flatRunCount).toBeGreaterThan(0);
   expect(measured.defects.clip.flatLevel).toBeCloseTo(0.25, 5);
 });
