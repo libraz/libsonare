@@ -527,8 +527,24 @@ describe('WASM vocal edit facade', () => {
         expect(run).toThrow(TypeError);
         expect(run).toThrow(new RegExp(`edit\\.${field}`));
       }
+      expect(() =>
+        apply({
+          kind: 'setEdit',
+          noteId: 1,
+          edit: { ...edit, pitch: { target: { mode: 'center' } } },
+        }),
+      ).toThrow(/edit\.pitch\.target\.midi must be a number/);
       // The refused operations left the draft generation where it was.
       expect(draft.token.generation).toBe(generation);
+      const noteId = draft.notes().notes[0].id;
+      for (const midi of [0, 60]) {
+        apply({
+          kind: 'setEdit',
+          noteId,
+          edit: { ...edit, pitch: { target: { mode: 'center', midi } } },
+        });
+        expect(draft.notes().notes[0].edit.pitch.target).toEqual({ mode: 'center', midi });
+      }
       draft.cancel();
     } finally {
       session.destroy();

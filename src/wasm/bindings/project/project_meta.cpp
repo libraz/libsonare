@@ -96,7 +96,7 @@ void ProjectWasm::annotateKeys(val keys) {
       refuseUnknownAnnotationKeys(entry, "keys", i, kAllowed);
       SonareProjectKeySegment seg{};
       seg.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
-      seg.end_ppq = doubleProperty(entry, "endPpq", 0.0);
+      seg.end_ppq = requiredDomainDoubleProperty(entry, "endPpq", at);
       seg.tonic_pc =
           static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "tonicPc", 0, 11, 255));
       seg.mode = uintProperty(entry, "mode", seg.mode);
@@ -258,8 +258,9 @@ void ProjectWasm::annotateSections(val sections) {
     for (size_t i = 0; i < count; ++i) {
       val entry = sections[i];
       SonareProjectSection section{};
-      section.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      section.end_ppq = doubleProperty(entry, "endPpq", 0.0);
+      const std::string at = elementAt("sections", i);
+      section.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
+      section.end_ppq = requiredDomainDoubleProperty(entry, "endPpq", at);
       labels.push_back(stringProperty(entry, "label", std::string()));
       section.label = wasmCString(labels.back(), "label");
       values.push_back(section);

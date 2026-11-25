@@ -302,6 +302,46 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('requires raw section endpoints and preserves an explicit zero', () => {
+    const project = new Project();
+    try {
+      const native = project['native'];
+      const sections = [
+        { startPpq: 0, endPpq: 1, label: 'intro' },
+        { startPpq: 1, endPpq: 2, label: 'verse' },
+      ];
+      native.annotateSections(sections);
+      expect(project.sectionAnnotations()).toEqual(sections);
+      for (const field of ['startPpq', 'endPpq'] as const) {
+        const { [field]: _omitted, ...partial } = sections[0];
+        expect(() => native.annotateSections([partial] as never)).toThrow();
+        expect(project.sectionAnnotations()).toEqual(sections);
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('requires both key annotation endpoints and preserves an explicit zero', () => {
+    const project = new Project();
+    try {
+      const keys = [
+        { startPpq: 0, endPpq: 1, tonicPc: 0, mode: 'major' },
+        { startPpq: 1, endPpq: 2, tonicPc: 0, mode: 'major' },
+      ] as const;
+      project.annotateKeys(keys);
+      expect(project.keyAnnotations()).toEqual(keys);
+      for (const field of ['startPpq', 'endPpq'] as const) {
+        const { [field]: _omitted, ...partial } = keys[0];
+        const error = expectRefusalOf(() => project.annotateKeys([partial] as never), TypeError);
+        expect(error.message).toContain(`keys[0].${field} must be a number`);
+        expect(project.keyAnnotations()).toEqual(keys);
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('round-trips absent Roman numerals and refuses a specified empty numeral', () => {
     const project = new Project();
     try {

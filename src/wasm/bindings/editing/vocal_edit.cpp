@@ -190,7 +190,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     result.target_mode = SONARE_VOCAL_TARGET_NONE;
   } else if (targetMode == "center") {
     result.target_mode = SONARE_VOCAL_TARGET_CENTER;
-    result.target_midi = doubleProperty(target, "midi", 0.0);
+    result.target_midi = requiredDomainDoubleProperty(target, "midi", "edit.pitch.target");
   } else if (targetMode == "curve") {
     result.target_mode = SONARE_VOCAL_TARGET_CURVE;
     const val points = property(target, "points");
