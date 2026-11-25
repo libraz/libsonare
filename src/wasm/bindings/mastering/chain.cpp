@@ -8,6 +8,89 @@
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
+namespace sonare {
+namespace {
+
+emscripten::val masteringLoudnessSummaryToVal(
+    const sonare::mastering::api::MasteringLoudnessSummary& summary) {
+  emscripten::val out = emscripten::val::object();
+  out.set("integratedLufs", summary.integrated_lufs);
+  setMeasured(out, "maxMomentaryLufs", summary.max_momentary_lufs);
+  setMeasured(out, "maxShortTermLufs", summary.max_short_term_lufs);
+  out.set("truePeakDbtp", summary.true_peak_dbtp);
+  setMeasured(out, "loudnessRangeLu", summary.loudness_range_lu);
+  return out;
+}
+
+void setMasteringReport(emscripten::val& out,
+                        const sonare::mastering::api::MasteringReport& report) {
+  emscripten::val report_out = emscripten::val::object();
+  report_out.set("before", masteringLoudnessSummaryToVal(report.before));
+  report_out.set("after", masteringLoudnessSummaryToVal(report.after));
+  report_out.set("appliedGainDb", report.applied_gain_db);
+  report_out.set("maxGainReductionDb", report.max_gain_reduction_db);
+  setMeasured(report_out, "loudnessGainDb", report.loudness_gain_db);
+  report_out.set("loudnessTargetLimited", report.loudness_target_limited);
+  report_out.set("bandEnergyDeltaDb", vectorToFloat32Array(report.band_energy_delta_db.data(),
+                                                           report.band_energy_delta_db.size()));
+  out.set("report", report_out);
+}
+
+void setChainMetrics(emscripten::val& out, const mastering::api::ChainMetrics& metrics,
+                     std::uint32_t substitutions, const std::optional<std::size_t>& declip_runs) {
+  out.set("outputTruePeakDbtp", metrics.output_true_peak_dbtp);
+  setMeasured(out, "outputLoudnessRangeLu", metrics.output_loudness_range_lu);
+  out.set("loudnessTargetLimited", metrics.loudness_target_limited);
+  setMeasured(out, "loudnessGainDb", metrics.loudness_gain_db);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(substitutions));
+  setOptionalCount(out, "declipUnreconstructedRuns", declip_runs);
+  emscripten::val reductions = emscripten::val::array();
+  for (const auto& reduction : metrics.stage_gain_reductions) {
+    emscripten::val entry = emscripten::val::object();
+    entry.set("stage", reduction.stage);
+    entry.set("gainReductionDb", reduction.gain_reduction_db);
+    reductions.call<void>("push", entry);
+  }
+  out.set("stageGainReductions", reductions);
+  setMasteringReport(out, metrics.report);
+}
+
+/// @brief Write the level, stage-list and metric fields every mastering-chain
+/// result object carries, whichever channel layout produced it.
+template <typename Result>
+void setChainLevelsAndStages(emscripten::val& out, const Result& result) {
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  out.set("stages", stringVectorToVal(result.stages));
+  setChainMetrics(out, result, result.non_finite_substitution_count,
+                  result.declip_unreconstructed_runs);
+}
+
+}  // namespace
+
+/// @brief The JS object every mono mastering entry point returns. `master_audio`
+/// and the chain share one result type, so this is one owner for both.
+emscripten::val masteringMonoResultToVal(const sonare::mastering::api::MonoChainResult& result) {
+  emscripten::val out = emscripten::val::object();
+  out.set("samples", vectorToFloat32Array(result.samples));
+  setChainLevelsAndStages(out, result);
+  return out;
+}
+
+/// @brief The JS object every stereo mastering entry point returns.
+emscripten::val masteringStereoResultToVal(
+    const sonare::mastering::api::StereoChainResult& result) {
+  emscripten::val out = emscripten::val::object();
+  out.set("left", vectorToFloat32Array(result.left));
+  out.set("right", vectorToFloat32Array(result.right));
+  setChainLevelsAndStages(out, result);
+  return out;
+}
+
+}  // namespace sonare
+
 val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs_val,
                  const val& ceiling_dbtp_val, const val& true_peak_oversample_val,
                  const val& release_ms_val, bool apply_gain_at_input_rate) {
