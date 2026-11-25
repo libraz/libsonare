@@ -219,7 +219,7 @@ export interface PlaybackRendererOptions {
 export interface PlaybackLoudnessMeterOptions {
   /** Interleaved channel count of the program: 1, 2, 6 or 8. */
   numChannels: number;
-  /** Sample rate of the program, in Hz. */
+  /** Integer sample rate in Hz, [8000, 384000]; out-of-range values throw RangeError. */
   sampleRate: number;
 }
 

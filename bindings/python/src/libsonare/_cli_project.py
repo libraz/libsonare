@@ -1099,7 +1099,10 @@ def register_project_parsers(
             "--tempo-bpm",
             type=_tempo_bpm,
             default=None,
-            help="Tempo the PPQ grid is built on (default: detected from the audio)",
+            help=(
+                "Tempo of the project's PPQ grid. An explicit tempo uses the project tempo domain "
+                "(default: detected from the audio)"
+            ),
         ),
         minimum=PROJECT_TEMPO_MIN,
         maximum=PROJECT_TEMPO_MAX,

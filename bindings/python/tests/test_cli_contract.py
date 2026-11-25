@@ -559,6 +559,14 @@ def test_a_non_finite_option_value_is_a_usage_error(literal) -> None:
             assert raised.value.code == 2, argv
 
 
+def test_transcribe_help_names_the_project_tempo_domain() -> None:
+    result = _run_console("transcribe", "--help")
+    assert result.returncode == 0, result.stderr
+    help_text = " ".join(result.stdout.split())
+    assert "An explicit tempo uses the project tempo domain" in help_text
+    assert "detected from the audio" in help_text
+
+
 @pytest.mark.parametrize(
     ("tempo", "accepted"),
     [

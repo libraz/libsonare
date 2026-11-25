@@ -14904,10 +14904,10 @@ rule = "collections"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMarkers"
-changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given; nonzero key-signature fields on another marker kind are refused by the core. A key-signature marker outside [-7, 7] raises RangeError."
+changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given; nonzero key-signature fields on another marker kind are refused by the core. A key-signature marker outside [-7, 7] raises RangeError. A marker position of the wrong type raises TypeError naming markers[i].ppq; 1.x did not name the marker index."
 domain = "engine"
 rule = "engine-vocabulary"
-test = "bindings/wasm/tests/new-apis.test.ts::refuses out-of-domain fifths on a key signature without replacing the snapshot"
+test = "bindings/wasm/tests/new-apis.test.ts::checks key fifths and marker PPQ shapes by index"
 
 [[entry]]
 kind = "method"
@@ -15093,10 +15093,10 @@ test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a mar
 [[entry]]
 kind = "field"
 old = "EngineMarker.keyFifths"
-changed = "RealtimeEngine.setMarkers requires an integer in [-7, 7]; 1.x accepted values such as -8 and 8 and stored them as signed bytes"
+changed = "RealtimeEngine.setMarkers requires an integer in [-7, 7] on a key signature, including inputs too wide for a signed byte; 1.x accepted values such as -8 and 8 and stored them as signed bytes"
 domain = "engine"
 rule = "finite-or-refused"
-test = "bindings/wasm/tests/absence-contract.test.ts::refuses engine marker key fifths outside the key signature domain"
+test = "bindings/wasm/tests/new-apis.test.ts::checks key fifths against their public domain before narrowing"
 
 [[entry]]
 kind = "field"
@@ -25481,7 +25481,7 @@ test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.setBand"
-changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band."
+changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. Omitting sidechainFreqHz or explicitly setting it to -1 makes the detector follow the band frequency."
 domain = "mastering"
 rule = "entry-named-refusals"
 test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::uses the public field paths for band and output-domain refusals"

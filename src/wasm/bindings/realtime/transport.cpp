@@ -194,17 +194,11 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   static_assert(noexcept(marker_strings_.swap(staged_strings)),
                 "marker backing-store commit must not throw");
   std::vector<sonare::transport::Marker> prepared;
-  const int count = static_cast<int>(wasmArrayLength(markers, "markers"));
-  // Bound the list before reserving, matching the shared kMaxBufferSize cap the
-  // C-ABI segment setters enforce, so a crafted length cannot drive an unbounded
-  // allocation.
-  if (count < 0 || static_cast<size_t>(count) > sonare::kMaxAudioBufferSize) {
-    throw WasmRangeError("marker count exceeds the maximum");
-  }
-  prepared.reserve(static_cast<size_t>(count));
+  const std::size_t count = wasmArrayLength(markers, "markers");
+  prepared.reserve(count);
   std::vector<uint32_t> ids;
   ids.reserve(static_cast<size_t>(count));
-  for (int i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < count; ++i) {
     val marker = markers[i];
     const std::string id_key = "markers[" + std::to_string(i) + "].id";
     const uint32_t id = domainNumberFromVal<uint32_t>(objectProperty(marker, "id"), id_key.c_str(),
@@ -212,24 +206,28 @@ void RealtimeEngineWasm::setMarkers(val markers) {
     if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
       sonare::util::check::refuse(id_key.c_str(), "must be unique across markers");
     }
-    const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
-    sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
-                                  ("markers[" + std::to_string(i) + "].ppq").c_str());
+    const std::string marker_path = elementAt("markers", i);
+    const std::string prefix = marker_path + ".";
+    const std::string ppq_path = prefix + "ppq";
+    const double ppq = domainNumberFromVal<double>(objectProperty(marker, "ppq"), ppq_path,
+                                                   sonare_c_detail::kPublicPpqDomain);
     const uint8_t kind = byteProperty(marker, "kind", sonare::transport::Marker{}.kind, "marker");
-    const auto key_fifths_path = elementField(elementAt("markers", i), "keyFifths");
-    const auto key_fifths_value = optionalDomainValue<int8_t>(
-        objectProperty(marker, "keyFifths"), key_fifths_path,
-        sonare::util::check::integer_domain(std::numeric_limits<int8_t>::min(),
-                                            std::numeric_limits<int8_t>::max()));
-    const int8_t key_fifths = key_fifths_value.value_or(sonare::transport::Marker{}.key_fifths);
+    const val key_fifths_input = objectProperty(marker, "keyFifths");
+    const bool has_key_fifths = !key_fifths_input.isUndefined() && !key_fifths_input.isNull();
+    const double key_fifths_raw =
+        has_key_fifths
+            ? requireTypedProperty(marker, "keyFifths", marker_path.data(), "number", "an integer")
+                  .as<double>()
+            : 0.0;
     const uint8_t key_minor =
         boolProperty(marker, "keyMinor", sonare::transport::Marker{}.key_minor) ? 1 : 0;
-    const std::string prefix = "markers[" + std::to_string(i) + "].";
     sonare::util::check::with_camel_paths(
         [&] {
-          sonare_c_detail::check_marker_key_signature_fields(kind, key_fifths, key_minor, prefix);
+          sonare_c_detail::check_marker_key_signature_fields(kind, key_fifths_raw, key_minor,
+                                                             prefix);
         },
         std::array<sonare::util::check::MemberKey, 0>{});
+    const int8_t key_fifths = static_cast<int8_t>(key_fifths_raw);
     ids.push_back(id);
     staged_strings.push_back(stringProperty(marker, "name", ""));
     prepared.push_back(

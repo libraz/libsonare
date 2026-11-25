@@ -158,8 +158,9 @@ class _EngineMidiMixin:
         """Queue an immediate (live) MIDI control change to a MIDI destination.
 
         Values are 7-bit (``controller`` / ``value`` in 0..127); ``channel`` and
-        ``group`` in 0..15. ``render_frame`` is the render-frame time to apply
-        (``None`` for immediate).
+        ``group`` in 0..15. ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("destination_id", destination_id, "integer"),
@@ -205,8 +206,10 @@ class _EngineMidiMixin:
         """Queue an immediate (live) MIDI SysEx message to a MIDI destination.
 
         ``data`` is the full SysEx frame including the leading ``0xF0`` and
-        trailing ``0xF7`` (1..512 bytes). ``render_frame`` is the render-frame
-        time to apply (``None`` for immediate). Raises :class:`SonareValueError`
+        trailing ``0xF7`` (1..512 bytes).
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`. Raises :class:`SonareValueError`
         if the payload exceeds the accepted size or the destination instrument
         cannot prepare it (retrying cannot help), and :class:`SonareError` with code
         ``OUT_OF_MEMORY`` if the payload slots or the command queue are full (retry after a
@@ -247,8 +250,9 @@ class _EngineMidiMixin:
         (MT 0x3 / 0x5) are refused: use :meth:`push_midi_sysex`. Raises
         :class:`SonareValueError` for a malformed or refused message and
         :class:`SonareError` with code ``OUT_OF_MEMORY`` when the engine queue
-        is full. ``render_frame`` is the render-frame time to apply (``None``
-        for immediate).
+        is full. ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(("destination_id", destination_id, "integer"))
         words = _require_midi_ump_words(words)
@@ -284,8 +288,10 @@ class _EngineMidiMixin:
         One message selects the bank (when ``bank_valid``) and then the program,
         through the receive path a wire message takes. ``program``, ``bank_msb``
         and ``bank_lsb`` are 0..127; ``channel`` and ``group`` 0..15. A non-zero
-        bank with ``bank_valid`` false is refused. ``render_frame`` is the
-        render-frame time to apply (``None`` for immediate). Raises
+        bank with ``bank_valid`` false is refused.
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`. Raises
         :class:`SonareValueError` naming a refused argument and
         :class:`SonareError` with code ``OUT_OF_MEMORY`` if the queue is full.
 
@@ -339,7 +345,9 @@ class _EngineMidiMixin:
     def push_midi_panic(self, render_frame: int | None = None) -> None:
         """Queue a MIDI panic (all-notes-off) releasing every sounding note.
 
-        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("render_frame", render_frame, "optional_index_integer"),
@@ -1369,7 +1377,9 @@ class _EngineMidiMixin:
     ) -> None:
         """Queue an immediate live MIDI note-on to a MIDI destination.
 
-        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("destination_id", destination_id, "integer"),
@@ -1417,7 +1427,9 @@ class _EngineMidiMixin:
     ) -> None:
         """Queue an immediate live MIDI note-off to a MIDI destination.
 
-        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("destination_id", destination_id, "integer"),
@@ -1467,7 +1479,9 @@ class _EngineMidiMixin:
         ``bend14`` is the unsigned 14-bit bend with centre ``8192`` (0..16383),
         carried at its own width because no 7-bit scalar command can spell it;
         a value above the range is refused rather than clamped.
-        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("destination_id", destination_id, "integer"),
@@ -1510,8 +1524,10 @@ class _EngineMidiMixin:
     ) -> None:
         """Queue an immediate live MIDI channel pressure to a MIDI destination.
 
-        ``pressure`` is 7-bit (0..127). ``render_frame`` is the render-frame
-        time to apply (``None`` for immediate).
+        ``pressure`` is 7-bit (0..127).
+        ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("destination_id", destination_id, "integer"),
@@ -1556,8 +1572,9 @@ class _EngineMidiMixin:
         """Queue an immediate live MIDI key pressure to a MIDI destination.
 
         ``note`` is the key the pressure belongs to and ``pressure`` is 7-bit
-        (both 0..127). ``render_frame`` is the render-frame time to apply (``None`` for
-        immediate).
+        (both 0..127). ``render_frame`` is a non-negative integer frame when supplied.
+        ``None`` applies at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         _require_midi_shapes(
             ("destination_id", destination_id, "integer"),

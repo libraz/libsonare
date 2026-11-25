@@ -511,7 +511,8 @@ class PlaybackLoudnessMeter:
     """Integrated-loudness meter for multichannel program material (1/2/6/8 ch).
 
     Feeds :meth:`push_interleaved` in chunks to measure ``loudness.programLufs``
-    ahead of a :class:`PlaybackRenderer`.
+    ahead of a :class:`PlaybackRenderer`. ``sample_rate`` is an integer in
+    [8000, 384000]; an out-of-range value raises :class:`SonareValueError`.
     """
 
     # Declared on the class so close() reads it even when __init__ never ran.

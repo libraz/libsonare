@@ -11,7 +11,7 @@ from typing import Any, cast
 import numpy as np
 
 from ._effects_repair_session import _audio_defects_from_wire
-from ._errors import ErrorCode, _entry, _refuse, _refuse_type
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SonareLoudnessMatch,
     SonareMasteringResult,
@@ -106,26 +106,8 @@ def _stereo_pair_rate(value: object, name: str) -> int:
 
 
 def _require_stereo_pair_processor(lib: Any, processor: str) -> None:
-    """Let the C entry admit a processor before later field domains are checked."""
-    rc = lib.sonare_mastering_apply_pair_processor_stereo(
-        _utf8_arg(processor, "processor"),
-        None,
-        None,
-        0,
-        None,
-        None,
-        0,
-        48000,
-        48000,
-        None,
-        0,
-        None,
-    )
-    if rc != int(ErrorCode.INVALID_PARAMETER) or lib.sonare_last_refusal_subject_count() != 1:
-        _check(rc)
-    subject = (lib.sonare_last_refusal_subject(0) or b"").decode("utf-8")
-    if subject != "source_left":
-        _check(rc)
+    """Use the C admission entry before checking audio and parameter domains."""
+    _check(lib.sonare_validate_mastering_stereo_pair_processor(_utf8_arg(processor, "processor")))
 
 
 def _looks_like_channel_buffer(value: object) -> bool:

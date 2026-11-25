@@ -6812,7 +6812,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. |
+| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. Omitting sidechainFreqHz or explicitly setting it to -1 makes the detector follow the band frequency. |
 | `StreamingEqualizer.setGainScale` | The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale. |
 | `StreamingEqualizer.setOutputGainDb` | Pass gainDb of at most 770 dB. A refusal names gainDb. Values above 770 dB with finite linear conversion could pass in 1.x. The gainDb limit is checked before conversion to float32. |
 | `StreamingEqualizer.setOutputPan` | The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan. |
@@ -7163,7 +7163,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
 | `RealtimeEngine.pushMidiInputUmp` | a fractional word in words is refused with a RangeError instead of truncated |
 | `RealtimeEngine.pushMidiUmp` | a fractional word in words is refused with a RangeError instead of truncated |
-| `RealtimeEngine.setMidiClips` | a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core |
+| `RealtimeEngine.setMidiClips` | a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core; a non-array events field raises TypeError naming clips[i].events (1.x named no clip index), and an over-budget event list raises RangeError under the same indexed field. |
 | `RealtimeEngine.setTempo` | BPM and any nonzero ramp target must be finite and in [1e-6, 100000] for RealtimeEngine.setTempo, RealtimeEngine.setTempoSegments and Project.setTempoSegments. Positive values below 1e-6 were accepted in 1.x and are refused by name. Project.fromJson and Project.fromJsonWithDiagnostics refuse a loadable document's positive sub-floor tempo as InvalidFormat at its authored field. transcribe requires a supplied tempo to be finite and at least 1e-6; omit tempoBpm to detect. |
 
 #### String values are lowerCamelCase tokens
@@ -7620,7 +7620,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ClipPageRequest` | `ClipPageSampleRequest` |
-| `EngineMidiEvent.wordCount` | an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring |
+| `EngineMidiEvent.wordCount` | an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring; the word-count domain is checked before group and sysexHandle |
 | `RealtimeEngine.configureScopeTelemetry` | intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged. |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
 | `SampleDesc.rootKey` | an integer in [1, 127]; 128..255, previously accepted as a byte, is refused |
@@ -11908,7 +11908,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. |
+| `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. Omitting sidechainFreqHz or explicitly setting it to -1 makes the detector follow the band frequency. |
 | `StreamingEqualizer.setGainScale` | The caller’s scale must be in [0, 2] before conversion to float32. A refusal names scale. |
 | `StreamingEqualizer.setOutputGainDb` | Pass gainDb of at most 770 dB. A refusal names gainDb. Values above 770 dB with finite linear conversion could pass in 1.x. The gainDb limit is checked before conversion to float32. |
 | `StreamingEqualizer.setOutputPan` | The caller’s pan must be in [-1, 1] before conversion to float32. A refusal names pan. |
@@ -12526,7 +12526,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
-| `EngineMarker.keyFifths` | RealtimeEngine.setMarkers requires an integer in [-7, 7]; 1.x accepted values such as -8 and 8 and stored them as signed bytes |
+| `EngineMarker.keyFifths` | RealtimeEngine.setMarkers requires an integer in [-7, 7] on a key signature, including inputs too wide for a signed byte; 1.x accepted values such as -8 and 8 and stored them as signed bytes |
 | `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError; a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of RangeError |
 | `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted; a routing graph with an empty send destination is refused with InvalidFormat naming the stored path instead of RangeError |
 | `PlaybackLoudnessMeter` | sampleRate must be an integer in [8000, 384000] Hz. The constructor raises RangeError naming sampleRate outside that domain; 1.x refused only a non-positive rate. |
@@ -13207,7 +13207,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
-| `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given; nonzero key-signature fields on another marker kind are refused by the core. A key-signature marker outside [-7, 7] raises RangeError. |
+| `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given; nonzero key-signature fields on another marker kind are refused by the core. A key-signature marker outside [-7, 7] raises RangeError. A marker position of the wrong type raises TypeError naming markers[i].ppq; 1.x did not name the marker index. |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. Shorten recordOffsetSamples to at most one loop pass when capture is armed with punch on. Changes to the loop or tempo that would make an existing offset too long are also refused with RangeError. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
 | `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); absent or null is destination 0; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |

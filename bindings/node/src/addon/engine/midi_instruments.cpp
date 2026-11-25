@@ -45,13 +45,14 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
 std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Value value,
                                                         const std::string& clip_path) {
   if (!value.IsArray()) {
-    Napi::TypeError::New(env, "MIDI clip events must be an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, clip_path + ".events must be an array")
+        .ThrowAsJavaScriptException();
     return {};
   }
   Napi::Array input = value.As<Napi::Array>();
-  const uint32_t input_count = sonare_node::node_list_length(input, "MIDI clip events");
-  std::vector<SonareEngineMidiEvent> events(input_count);
   const std::string events_path = clip_path + ".events";
+  const uint32_t input_count = sonare_node::node_list_length(input, events_path);
+  std::vector<SonareEngineMidiEvent> events(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Object obj;
     std::string event_path;
@@ -90,10 +91,8 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     if (word3.IsNumber())
       event.word3 = node_narrow_word(env, word3, field_subject("word3").c_str());
     // Zero and absence ask the C reader to infer the word form.
-    if (word_count.IsNumber() &&
-        !sonare::numeric::checked_integral_cast(word_count.As<Napi::Number>().DoubleValue(),
-                                                &event.word_count)) {
-      const std::string subject = event_path + ".wordCount";
+    if (word_count.IsNumber()) {
+      const std::string subject = field_subject("wordCount");
       if (!RequiredDomainValue(env, word_count, subject.c_str(),
                                sonare_c_detail::kEngineUmpWordCountDomain, &event.word_count)) {
         return {};
@@ -101,11 +100,6 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     }
     if (group.IsNumber() && !sonare::numeric::checked_integral_cast(
                                 group.As<Napi::Number>().DoubleValue(), &event.group)) {
-      if (word_count.IsNumber() &&
-          !RequiredDomainValue(env, word_count, field_subject("wordCount").c_str(),
-                               sonare_c_detail::kEngineUmpWordCountDomain, &event.word_count)) {
-        return {};
-      }
       const std::string subject = field_subject("group");
       if (!RequiredDomainValue(env, group, subject.c_str(), sonare_c_detail::kEngineUmpGroupDomain,
                                &event.group)) {

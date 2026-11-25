@@ -770,8 +770,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     ) -> None:
         """Set a strip's fader in decibels in realtime, through its reserved automation id.
 
-        ``ref`` is a track id or ``"master"``; ``render_frame`` is the render-frame time
-        to apply, None for immediate.
+        ``ref`` is a track id or `"master"`. When supplied,
+        ``render_frame`` is a non-negative integer frame; ``None`` applies
+        at the next block head. A negative value raises
+        :class:`SonareValueError`.
         """
         param_id = self.resolve_strip_automation_id(ref, "faderDb")
         self.set_parameter(param_id, fader_db, render_frame)
@@ -793,8 +795,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     ) -> None:
         """Push a live parameter value to the engine (immediate jump by default).
 
-        ``render_frame`` is the render-frame time to apply (``None`` for
-        immediate). With ``smoothed=True`` the value is reached through a
+        When supplied, ``render_frame`` is a non-negative integer frame; ``None``
+        applies at the next block head. A negative value raises
+        :class:`SonareValueError`. With ``smoothed=True`` the value is reached through a
         smoothed ramp instead of a jump; the ramp's target (not its in-flight
         position) becomes the base value. This value also becomes ``param_id``'s base value: if an
         automation lane later starts (and stops) driving ``param_id``, the

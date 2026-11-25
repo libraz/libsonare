@@ -77,7 +77,9 @@ describe('argument refusal error class', () => {
       );
       expect(error).toBeInstanceOf(TypeError);
       expect(isSonareError(error)).toBe(false);
-      expect((error as Error).message).toBe('RealtimeEngine.setMarkers: ppq must be a number');
+      expect((error as Error).message).toBe(
+        'RealtimeEngine.setMarkers: markers[0].ppq must be a number',
+      );
     });
   });
 

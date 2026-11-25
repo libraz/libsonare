@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ExternalMidiEvent } from '../src/index.js';
 import { ErrorCode, isSonareError, RealtimeEngine } from '../src/index.js';
 import { midi1Word, rms } from './_engine_signals.js';
+import { expectRefusal } from './_helpers.js';
 
 describe('RealtimeEngine native binding', () => {
   it('renders scheduled MIDI clips through built-in instruments', () => {
@@ -57,6 +58,61 @@ describe('RealtimeEngine native binding', () => {
 
     engine.setMidiClips([]);
     engine.destroy();
+  });
+
+  it('names a non-array event list by the clip path', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expectRefusal(
+        () => engine.setMidiClips([{ id: 1, trackId: 5, events: {} as never }]),
+        TypeError,
+        /^RealtimeEngine\.setMidiClips: clips\[0\]\.events must be an array$/,
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('names the event-list length budget by the clip path', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      const events = new Array(64 * 1024 * 1024 + 1);
+      expectRefusal(
+        () => engine.setMidiClips([{ id: 1, trackId: 5, events } as never]),
+        RangeError,
+        /^RealtimeEngine\.setMidiClips: clips\[0\]\.events exceeds the input length budget$/,
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('checks wordCount before group and SysEx handle domains', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expectRefusal(
+        () =>
+          engine.setMidiClips([
+            {
+              id: 1,
+              trackId: 5,
+              events: [
+                {
+                  renderFrame: 0,
+                  word0: midi1Word(0x9, 0, 60, 100),
+                  wordCount: 5,
+                  group: 0,
+                  sysexHandle: -1,
+                },
+              ],
+            },
+          ]),
+        RangeError,
+        /^RealtimeEngine\.setMidiClips: clips\[0\]\.events\[0\]\.wordCount must be an integer in \[0, 4\]$/,
+      );
+    } finally {
+      engine.destroy();
+    }
   });
 
   it('refuses an oversized scheduled wordCount and keeps the installed schedule', () => {

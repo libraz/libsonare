@@ -57,6 +57,30 @@ const tempoCases: ReadonlyArray<readonly [string, Segment[], typeof TypeError, s
     'segments[0].endBpm must be a number',
   ],
   [
+    'a negative start',
+    [{ startPpq: -0.5, bpm: 120 }],
+    RangeError,
+    'segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'a start above the public maximum',
+    [{ startPpq: 1e12 + 1, bpm: 120 }],
+    RangeError,
+    'segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'a very large start',
+    [{ startPpq: 1e100, bpm: 120 }],
+    RangeError,
+    'segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'an infinite start',
+    [{ startPpq: Number.POSITIVE_INFINITY, bpm: 120 }],
+    RangeError,
+    'segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
     'a NaN start',
     [{ startPpq: Number.NaN, bpm: 120 }],
     RangeError,
@@ -142,6 +166,11 @@ describe.each([
       expect(error.message).toBe(`${target.signatureEntry}: ${text}`);
     },
   );
+
+  it('accept a fractional PPQ start within the public domain', () => {
+    const target = make();
+    expect(() => target.tempo([{ startPpq: 0.5, bpm: 120 }])).not.toThrow();
+  });
 
   it('accept a list with an omitted end tempo', () => {
     const target = make();

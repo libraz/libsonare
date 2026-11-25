@@ -661,7 +661,11 @@ export interface EngineMidiEvent {
   word2?: number;
   /** Fourth UMP word. */
   word3?: number;
-  /** Number of UMP words in use (0..4). Omitted or 0: inferred from the last non-zero word. */
+  /**
+   * Number of UMP words in use. Zero or omission infers the count from the last
+   * nonzero word. A fraction or a value outside [0, 4] raises `RangeError`
+   * naming `clips[i].events[j].wordCount`.
+   */
   wordCount?: number;
   /**
    * Redundant with `word0`, which already carries the UMP group in bits 24..27.

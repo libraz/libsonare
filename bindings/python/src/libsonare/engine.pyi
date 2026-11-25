@@ -92,8 +92,9 @@ class RealtimeEngine:
         max_channels: int | None = None,
     ) -> None: ...
     def play(self, render_frame: int | None = None) -> None:
-        """Start the transport; ``render_frame`` is the render-frame time to apply (None: next
-        block head)."""
+        """Start the transport; ``render_frame`` is a non-negative integer frame
+        when supplied; None applies at the next block head. Negative values raise
+        SonareValueError."""
         ...
     def stop(self, render_frame: int | None = None) -> None: ...
     def seek_sample(self, timeline_sample: int, render_frame: int | None = None) -> None: ...
@@ -137,12 +138,15 @@ class RealtimeEngine:
         ...
     def seek_ppq(self, ppq: float, render_frame: int | None = None) -> None: ...
     def reset_master_loudness_meter(self, render_frame: int | None = None) -> None:
-        """Queue a reset of the master integrated-loudness meter at ``render_frame`` (None: next
-        block head)."""
+        """Queue a reset at the next block head when ``render_frame`` is None;
+        otherwise it must be a non-negative integer frame. Negative values raise
+        SonareValueError."""
         ...
     def reset_processor_state(self, render_frame: int | None = None) -> None:
-        """Queue a reset of every lane, bus, master and graph processor state at ``render_frame``
-        (None: next block head); raises SonareError when the command queue is full."""
+        """Queue a reset of every lane, bus, master and graph processor state at the
+        next block head when ``render_frame`` is None. Otherwise it must be a
+        non-negative integer frame. Negative values raise SonareValueError; the
+        command queue can also raise SonareError when full."""
         ...
     def set_tempo(self, bpm: float) -> None: ...
     def set_time_signature(self, numerator: int, denominator: int) -> None:
@@ -181,7 +185,9 @@ class RealtimeEngine:
         """Return the marker with the given ``id``."""
         ...
     def seek_marker(self, marker_id: int, render_frame: int | None = None) -> None:
-        """Move the playhead to a marker at ``render_frame`` (None: next block head)."""
+        """Move the playhead at the next block head when ``render_frame`` is None;
+        otherwise it must be a non-negative integer frame. Negative values raise
+        SonareValueError."""
         ...
     def set_loop_from_markers(self, start_marker_id: int, end_marker_id: int) -> None:
         """Set the loop region from a start and an end marker id."""
@@ -521,8 +527,10 @@ class RealtimeEngine:
         value: int,
         render_frame: int | None = None,
     ) -> None:
-        """Queue a live control change; ``controller`` and ``value`` are 0..127, ``channel`` and
-        ``group`` 0..15, ``render_frame`` None for immediate."""
+        """Queue a live control change; ``controller`` and ``value`` are 0..127,
+        ``channel`` and ``group`` 0..15. ``render_frame`` is a non-negative integer
+        frame when supplied; None applies at the next block head. Negative values
+        raise SonareValueError."""
         ...
     def push_midi_sysex(
         self,
@@ -557,7 +565,9 @@ class RealtimeEngine:
         are 0..127, ``channel`` and ``group`` 0..15."""
         ...
     def push_midi_panic(self, render_frame: int | None = None) -> None:
-        """Queue a MIDI panic (all-notes-off) at ``render_frame`` (None: immediate)."""
+        """Queue a MIDI panic at the next block head when ``render_frame`` is None;
+        otherwise it must be a non-negative integer frame. Negative values raise
+        SonareValueError."""
         ...
     def set_builtin_instrument(
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
@@ -776,7 +786,9 @@ class RealtimeEngine:
         velocity: int,
         render_frame: int | None = None,
     ) -> None:
-        """Queue a live note-on to a MIDI destination; ``render_frame`` None for immediate."""
+        """Queue a live note-on to a MIDI destination; ``render_frame`` is a
+        non-negative integer frame when supplied. None applies at the next block
+        head. Negative values raise SonareValueError."""
         ...
     def push_midi_note_off(
         self,
@@ -787,7 +799,9 @@ class RealtimeEngine:
         velocity: int = 0,
         render_frame: int | None = None,
     ) -> None:
-        """Queue a live note-off to a MIDI destination; ``render_frame`` None for immediate."""
+        """Queue a live note-off to a MIDI destination; ``render_frame`` is a
+        non-negative integer frame when supplied. None applies at the next block
+        head. Negative values raise SonareValueError."""
         ...
     def push_midi_pitch_bend(
         self,

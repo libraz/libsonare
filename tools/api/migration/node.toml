@@ -8110,10 +8110,10 @@ test = "bindings/node/tests/runtime-refusal-parity.test.ts::refuses a fractional
 [[entry]]
 kind = "field"
 old = "EngineMidiEvent.wordCount"
-changed = "an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring"
+changed = "an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring; the word-count domain is checked before group and sysexHandle"
 domain = "engine"
 rule = "individual"
-test = "bindings/node/tests/engine-midi.test.ts::refuses an oversized scheduled wordCount and keeps the installed schedule"
+test = "bindings/node/tests/engine-midi.test.ts::checks wordCount before group and SysEx handle domains"
 
 [[entry]]
 kind = "method"
@@ -8134,7 +8134,7 @@ test = "bindings/node/tests/surface/engine.test.ts::reports OutOfMemory when cle
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiClips"
-changed = "a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core"
+changed = "a sample position or length outside the JS safe-integer range is refused with a RangeError here and on every entry taking one; on a one-shot clip omit loopLengthSamples, an explicit 0 is refused, and a positive inactive period is refused by the core; a non-array events field raises TypeError naming clips[i].events (1.x named no clip index), and an over-budget event list raises RangeError under the same indexed field."
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/node/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
@@ -13921,7 +13921,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.setBand"
-changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band."
+changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent. A refused band value names the field under band. Omitting sidechainFreqHz or explicitly setting it to -1 makes the detector follow the band frequency."
 domain = "mastering"
 rule = "entry-named-refusals"
 test = "bindings/node/tests/basic_streaming_metering.test.ts::names the EQ band field and scalar argument refused by the processor"

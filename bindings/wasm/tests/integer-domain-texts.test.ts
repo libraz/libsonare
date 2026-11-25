@@ -49,6 +49,31 @@ const cases: ReadonlyArray<readonly [string, () => unknown, string]> = [
     'RealtimeEngine.setTimeSignatureSegments: segments[0].startPpq must be finite and in [0, 1e12]',
   ],
   [
+    'a tempo segment start above the public PPQ maximum',
+    () => engine().setTempoSegments([{ startPpq: 1e12 + 1, bpm: 120 }]),
+    'RealtimeEngine.setTempoSegments: segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'a negative fractional tempo segment start',
+    () => engine().setTempoSegments([{ startPpq: -0.5, bpm: 120 }]),
+    'RealtimeEngine.setTempoSegments: segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'a NaN tempo segment start',
+    () => engine().setTempoSegments([{ startPpq: Number.NaN, bpm: 120 }]),
+    'RealtimeEngine.setTempoSegments: segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'a non-finite tempo segment start',
+    () => engine().setTempoSegments([{ startPpq: Number.POSITIVE_INFINITY, bpm: 120 }]),
+    'RealtimeEngine.setTempoSegments: segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
+    'an unrepresentable tempo segment start',
+    () => engine().setTempoSegments([{ startPpq: Number.MAX_VALUE, bpm: 120 }]),
+    'RealtimeEngine.setTempoSegments: segments[0].startPpq must be finite and in [0, 1e12]',
+  ],
+  [
     'a tempo segment of 0 bpm',
     () => engine().setTempoSegments([{ startPpq: 0, bpm: 0 }]),
     'RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in [1e-6, 100000]',
@@ -98,5 +123,8 @@ describe('integer refusals state the C domain', () => {
     const error = caught(run);
     expect(error).toBeInstanceOf(RangeError);
     expect(error.message).toBe(text);
+  });
+  it('accepts a fractional tempo segment position', () => {
+    expect(() => engine().setTempoSegments([{ startPpq: 0.5, bpm: 120 }])).not.toThrow();
   });
 });

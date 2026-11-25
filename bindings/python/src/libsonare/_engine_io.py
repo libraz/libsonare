@@ -557,8 +557,9 @@ class _EngineIoMixin:
     def reset_processor_state(self, render_frame: int | None = None) -> None:
         """Queue a reset of every lane, bus, master and graph processor state.
 
-        At ``render_frame`` (``None``: the next block head) tails, delay lines
-        and envelopes are dropped, automation is applied at the transport
+        At a non-negative integer ``render_frame`` (or the next block head when
+        ``None``), tails, delay lines and envelopes are dropped. Negative values
+        raise :class:`SonareValueError`. Automation is applied at the transport
         position and every smoother is snapped to its target. Instruments keep
         their state. Raises when the command queue is full.
         """

@@ -1580,10 +1580,46 @@ describe('v1.2 feature additions (WASM)', () => {
       }
     });
 
+    it('checks key fifths and marker PPQ shapes by index', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        const error = expectRefusalOf(
+          () => engine.setMarkers([{ id: 1, ppq: 'invalid' as never }]),
+          TypeError,
+        );
+        expect(error.message).toBe('RealtimeEngine.setMarkers: markers[0].ppq must be a number');
+        const fifths = expectRefusalOf(
+          () => engine.setMarkers([{ id: 1, ppq: 0, keyFifths: 'invalid' as never }]),
+          TypeError,
+        );
+        expect(fifths.message).toBe(
+          'RealtimeEngine.setMarkers: markers[0].keyFifths must be an integer',
+        );
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('checks key fifths against their public domain before narrowing', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      for (const keyFifths of [128, -129, 1.5, -1.5, 1e100, -1e100]) {
+        const error = expectRefusalOf(
+          () => engine.setMarkers([{ id: 1, ppq: 0, kind: 'keySignature', keyFifths }]),
+          RangeError,
+        );
+        expect(error.message).toBe(
+          'RealtimeEngine.setMarkers: markers[0].keyFifths must be an integer in [-7, 7]',
+        );
+      }
+      engine.destroy();
+    });
+
     it('refuses inactive key-signature fields and accepts them on a key signature', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       for (const [field, value] of [
         ['keyFifths', 1],
+        ['keyFifths', 8],
+        ['keyFifths', 128],
         ['keyMinor', true],
       ] as const) {
         expect(() =>

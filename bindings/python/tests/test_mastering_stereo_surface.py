@@ -94,6 +94,40 @@ def test_stereo_pair_uses_independent_lengths_and_shared_crossfade() -> None:
     assert at_reference.left[0] == pytest.approx(reference_left[0], abs=1e-6)
 
 
+def test_stereo_pair_admission_uses_its_c_entry_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    import libsonare
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    validate = lib.sonare_validate_mastering_stereo_pair_processor
+    apply = lib.sonare_mastering_apply_pair_processor_stereo
+    calls: list[str] = []
+
+    def record_validate(processor: bytes) -> int:
+        calls.append("validate")
+        return int(validate(processor))
+
+    def record_apply(*args: object) -> int:
+        calls.append("apply")
+        return int(apply(*args))
+
+    monkeypatch.setattr(lib, "sonare_validate_mastering_stereo_pair_processor", record_validate)
+    monkeypatch.setattr(lib, "sonare_mastering_apply_pair_processor_stereo", record_apply)
+
+    result = libsonare.mastering_apply_pair_processor_stereo(
+        "match.abCrossfade",
+        [1.0] * 8,
+        [-1.0] * 8,
+        [3.0] * 5,
+        [-3.0] * 5,
+        sample_rate=48000,
+        params={"mix": 0.25},
+    )
+    assert calls == ["validate", "apply"]
+    assert result.left[0] == pytest.approx(1.5, abs=1e-6)
+    assert result.right[0] == pytest.approx(-1.5, abs=1e-6)
+
+
 def test_stereo_pair_control_rejects_unsupported_processor_before_audio_domains() -> None:
     import libsonare
 
