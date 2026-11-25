@@ -155527,9 +155527,12 @@
           ],
           "sampleRate": 48000
         },
+        "toleranceBasis": {
+          "result.db": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 7.25e-5 dB (GCC -O0, a bin 55 dB under the peak), 19 binary32 ULPs at the largest magnitude"
+        },
         "tolerances": {
           "*": 9.5367431640625e-07,
-          "result.db": 6.866455078125e-05
+          "result.db": 0.00014495849609375
         }
       },
       {
@@ -367297,11 +367300,11 @@
           }
         },
         "toleranceBasis": {
-          "result.defects.reverb.lateDecayRatioDb": "Linux native vs WASM difference of the same code; measured 0.0202 (macOS native 0.0144)"
+          "result.defects.reverb.lateDecayRatioDb": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 0.0273 dB (GCC -O0; Linux Clang vs WASM 0.0202, macOS -O0 0.0144)"
         },
         "tolerances": {
           "*": 4.3000000000000002e-05,
-          "result.defects.reverb.lateDecayRatioDb": 0.020223617553710938
+          "result.defects.reverb.lateDecayRatioDb": 0.054577827453613281
         }
       },
       {
@@ -508153,9 +508156,12 @@
             0.36385032534599304
           ]
         },
+        "toleranceBasis": {
+          "result.h": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 6.68e-6 (GCC -O0), 56 binary32 ULPs at the largest magnitude"
+        },
         "tolerances": {
           "result.components[]": 1.6093254089355469e-06,
-          "result.h": 5.4836273193359375e-06,
+          "result.h": 1.33514404296875e-05,
           "result.w": 0.0002899169921875
         }
       },
@@ -704485,11 +704491,12 @@
           ]
         },
         "toleranceBasis": {
-          "result.h": "Linux-vs-macOS difference of the same code; measured 2.09e-6"
+          "result.components[][]": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 1.91e-6 (macOS -O0), 64 binary32 ULPs at the largest magnitude",
+          "result.h": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 2.50e-6 (macOS -O0), 21 binary32 ULPs at the largest magnitude"
         },
         "tolerances": {
-          "result.components[][]": 1.4007091522216797e-06,
-          "result.h": 3.1999999999999999e-06,
+          "result.components[][]": 3.814697265625e-06,
+          "result.h": 5.0067901611328125e-06,
           "result.w": 0.0002899169921875
         }
       },
@@ -711354,10 +711361,11 @@
           "wasm"
         ],
         "toleranceBasis": {
+          "result[].correlation": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 3.97e-5 (macOS -O0), 1331 binary32 ULPs at the largest magnitude",
           "result[].key.confidence": "Linux-vs-macOS difference of the same code; measured 3.68e-5"
         },
         "tolerances": {
-          "result[].correlation": 3.2529234886169434e-05,
+          "result[].correlation": 7.9333782196044922e-05,
           "result[].key.confidence": 6.0000000000000002e-05
         }
       },
@@ -720270,9 +720278,12 @@
           "node",
           "wasm"
         ],
+        "toleranceBasis": {
+          "result.data": "2x the largest difference measured from the stored value across GCC 14 -O0 and Clang Release on Linux x86-64, AppleClang -O0 on macOS arm64 and the WASM build; measured 3.40e-4 (GCC -O0), 356 binary32 ULPs at the largest magnitude"
+        },
         "tolerances": {
           "*": 9.5367431640625e-07,
-          "result.data": 0.00033500000000000001
+          "result.data": 0.00067901611328125
         }
       },
       {
