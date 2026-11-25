@@ -445,6 +445,12 @@ lint:
 		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; fi'
 	$(CHECK) $(MAKE) lint-static
+# The standalone parity target also runs the full conformance suite.
+	$(CHECK) python3 tools/parity/check_parity.py
+	$(CHECK) $(MAKE) surface-check
+	$(CHECK) python3 tests/conformance/check_facade_refusal_ratchet.py
+	$(CHECK) sh tools/conformance/check_adapter_counts.sh broad-catches
+	$(CHECK) sh tools/conformance/check_adapter_counts.sh zero-empty-fallbacks
 	$(CHECK_REPORT)
 
 .PHONY: lint-gs-efx-sr-coefficient lint-mastering-enum-cast lint-gs-efx-convert-test-scope \
@@ -639,8 +645,8 @@ wasm-browser-smoke:
 
 # Runs each JS suite with its public exports wrapped and ratchets how many of the
 # refusals it provokes name a field in C spelling (tests/conformance/
-# refusal_spelling_ratchet.json). Test failures are the test targets' business;
-# a capture holding no refusal fails the checker. `refusal-spelling-check` runs
+# refusal_spelling_ratchet.json). Test failures and empty captures both fail
+# the check. `refusal-spelling-check` runs
 # against the builds already present, one surface per REFUSAL_SPELLING_SURFACES entry.
 # With both captures present, tools/api/refusal_parity.py then fails on any input the two
 # surfaces refuse with a different class or text (parked: tests/conformance/refusal_parity_parked.json).
@@ -651,14 +657,18 @@ refusal-spelling: build-node build-wasm-binding
 
 refusal-spelling-check:
 	@python3 -m unittest -q tools/api/test_refusal_parity.py
-	@dir=$$(mktemp -d) && for surface in $(REFUSAL_SPELLING_SURFACES); do \
-	  (cd bindings/$$surface && SONARE_REFUSAL_CAPTURE=$$dir/$$surface.jsonl yarn vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/$$surface.log 2>&1; true) && \
-	  touch $$dir/$$surface.jsonl && \
-	  python3 tests/conformance/refusal_subject_plugin.py $$surface $$dir/$$surface.jsonl && \
-	  python3 tools/api/refusal_spelling.py --surface $$surface $$dir/$$surface.jsonl || exit 1; \
+	@dir=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$dir"' 0; \
+	for surface in $(REFUSAL_SPELLING_SURFACES); do \
+	  if ! (cd bindings/$$surface && SONARE_REFUSAL_CAPTURE="$$dir/$$surface.jsonl" yarn vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >"$$dir/$$surface.log" 2>&1); then \
+	    cat "$$dir/$$surface.log" >&2; exit 1; \
+	  fi; \
+	  touch "$$dir/$$surface.jsonl" && \
+	  python3 tests/conformance/refusal_subject_plugin.py $$surface "$$dir/$$surface.jsonl" && \
+	  python3 tools/api/refusal_spelling.py --surface $$surface "$$dir/$$surface.jsonl" || exit 1; \
 	done && \
-	if [ -s $$dir/node.jsonl ] && [ -s $$dir/wasm.jsonl ]; then \
-	  python3 tools/api/refusal_parity.py $$dir/node.jsonl $$dir/wasm.jsonl; \
+	if [ -s "$$dir/node.jsonl" ] && [ -s "$$dir/wasm.jsonl" ]; then \
+	  python3 tools/api/refusal_parity.py "$$dir/node.jsonl" "$$dir/wasm.jsonl"; \
 	fi
 
 # Focused security-hardening gates. Each test command writes its complete log

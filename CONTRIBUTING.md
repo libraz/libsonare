@@ -115,6 +115,9 @@ Before merging, the maintainer brings a change here to the following:
 - A deliberately modified WASM module is built in a separate `git worktree` at the same path depth as the repository.
 - `make lint` has run after any edit to a `.pyi` stub or TypeScript type file.
 - `ruff` runs over the repository rather than a path list, so a Python error in `tools/`, `tests/` or `benchmarks/` fails the `lint` job too.
+- `make lint` passes parity, the public surface checks and the facade refusal ratchet. The refusal spelling target passes both its test run and its refusal audit.
+- Changes to Node and WASM native adapters keep the broad-catch count at or below the recorded count and lower it when a catch is removed.
+- Changes to Node and WASM facade sources keep the zero and empty-string fallback count at or below the recorded count and lower it when a fallback is removed.
 - The WASM test run refuses to start against a `dist/` older than its sources.
 - A TypeScript declaration emit only adds to `dist/`, so a deleted or renamed source leaves its `.d.ts` behind, and the npm tarball ships `dist/` whole. The package scripts clear it; a bare `tsc` does not, and nothing fails while the orphan is there.
 - A WASM build overwrites `bindings/wasm/dist/` wherever its build directory lives, and every surface's tests import it. Emscripten compiles its system libraries through a path relative to the build directory, so a worktree under `/tmp` fails to link for a reason unrelated to your change.
