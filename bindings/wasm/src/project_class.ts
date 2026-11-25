@@ -1417,10 +1417,6 @@ export class Project {
     const nativeProject = this.native;
     const refusalNames: Record<string, { name: string; scale: number }> = {
       'options.count_in_bars': { name: 'countInBars', scale: 1 },
-      'options.metronome.beat_gain': { name: 'metronome.beatGain', scale: 1 },
-      'options.metronome.accent_gain': { name: 'metronome.accentGain', scale: 1 },
-      'options.metronome.click_samples': { name: 'metronome.clickSamples', scale: 1 },
-      'options.metronome.click_sec': { name: 'metronome.clickSec', scale: 1 },
     };
     for (let index = 0; index < (native.controllerProfiles?.length ?? 0); index++) {
       refusalNames[`options.controller_profiles[${index}].destination_id`] = {
