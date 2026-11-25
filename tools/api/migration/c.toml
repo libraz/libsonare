@@ -4574,6 +4574,14 @@ domain = "engine"
 rule = "one-entry-per-operation"
 
 [[entry]]
+kind = "option"
+old = "sonare_engine_set_parameter(smoothed)"
+changed = "a first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step."
+domain = "engine"
+rule = "individual"
+test = "tests/engine/instrument_automation_test.cpp::A first smoothed set on each mixer target ramps from the value its owner holds"
+
+[[entry]]
 kind = "function"
 old = "sonare_engine_set_synth_instrument"
 changed = "takes a const SonareSynthInstrumentBinding* (destination_id, patch, use_gm_programs, sample_bank); a NULL sample_bank binds none, as the patch-only call did"

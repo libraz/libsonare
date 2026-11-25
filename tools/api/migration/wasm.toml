@@ -14844,6 +14844,14 @@ domain = "engine"
 rule = "one-entry-per-operation"
 
 [[entry]]
+kind = "option"
+old = "RealtimeEngine.setParameter(options.smoothed)"
+changed = "a first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step."
+domain = "engine"
+rule = "individual"
+test = "tests/engine/instrument_automation_test.cpp::A first smoothed set on each mixer target ramps from the value its owner holds"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.prepare"
 changed = "prepare(config: RealtimeEngineConfig) takes the constructor object with the same defaults and validation"

@@ -1262,6 +1262,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_set_capture_punch` | turning punch on while capture is armed with an enabled loop refuses a record offset longer than the loop with SONARE_ERROR_INVALID_PARAMETER and preserves the punch setting; 1.x accepted it. Use sonare_engine_set_capture_timing to change the offset and punch together. |
 | `sonare_engine_set_markers` | a key-signature marker with key_fifths outside [-7, 7] returns SONARE_ERROR_INVALID_PARAMETER and leaves the previous markers unchanged (1.x stored it) |
 | `sonare_engine_set_midi_clips` | a clip with loop 0 and a non-zero loop_length_samples returns SONARE_ERROR_INVALID_PARAMETER naming clips[i].loop_length_samples and clips[i].loop (1.x stored the unused period) |
+| `sonare_engine_set_parameter(smoothed)` | a first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step. |
 | `sonare_engine_warp_stretch_overflow_count` | takes const SonareEngine* because it only reads engine state |
 | `sonare_midi_cc_learn` | validates the entire events array before learning; an invalid event after a learnable prefix returns SONARE_ERROR_INVALID_PARAMETER and clears out_binding (1.x could return the binding without reading the rest) |
 | `sonare_midi_param_to_cc` | a binding with a non-zero cc_lsb_number unless its kind is SONARE_MIDI_CC_CONTROL_CHANGE_14, or a non-zero selector_msb or selector_lsb unless its kind is SONARE_MIDI_CC_RPN or SONARE_MIDI_CC_NRPN, returns SONARE_ERROR_INVALID_PARAMETER naming bindings[i].<field> and bindings[i].kind and clears out_event (1.x ignored it) |
@@ -4054,6 +4055,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.load_soundfont` | `RealtimeEngine.load_sound_font`: renamed; the data must be bytes, bytearray or memoryview |
 | `RealtimeEngine.set_markers(markers)` | a nonzero key_fifths or true key_minor is refused unless kind is keySignature. A key-signature marker outside [-7, 7] raises SonareValueError. |
 | `RealtimeEngine.set_markers` | returns the stored markers in the order given (was None); a refused list leaves the stored markers and the allocation counter unchanged |
+| `RealtimeEngine.set_parameter(smoothed)` | a first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step. |
 | `RealtimeEngine.set_track_strip_surround_pan(distance)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `RealtimeEngine.set_track_strip_surround_pan(elevation)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SynthPatch.lfo_shape` | Supply a named token instead of an integer ordinal. The old default ordinal 0 is spelled "default". Omit the field or use "default" to keep the preset setting. |
@@ -7626,6 +7628,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineMidiEvent.wordCount` | an integer in [0, 4]; zero or omission infers the active UMP word count, while a value above 4 is a RangeError naming clips[i].events[j].wordCount instead of silently inferring; the word-count domain is checked before group and sysexHandle |
 | `RealtimeEngine.configureScopeTelemetry` | intervalFrames must be an integer in [0, 2147483647] and bandCount an integer in [1, 64]. Negative intervals and band counts of 0 or above 64 that were previously clamped now raise RangeError and leave the active tap unchanged. |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
+| `RealtimeEngine.setParameter(options.smoothed)` | a first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step. |
 | `SampleDesc.rootKey` | an integer in [1, 127]; 128..255, previously accepted as a byte, is refused |
 | `SampleZoneDesc.keyHi` | an integer in [1, 127]; an out-of-domain bound is refused before the zone is added |
 | `SampleZoneDesc.keyLo` | an integer in [0, 127]; an out-of-domain bound is refused before the zone is added |
@@ -13346,6 +13349,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.scopeScratchRenderFrame` | removed: use drainScopeTelemetry(maxRecords) and read the fields of each EngineScopeTelemetry |
 | `RealtimeEngine.scopeScratchTargetId` | removed: use drainScopeTelemetry(maxRecords) and read the fields of each EngineScopeTelemetry |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names; a node's numPorts may be omitted for the spec's channel count, and an explicit 0 is a RangeError reading 'spec.nodes[i].numPorts must be an integer in [1, 2147483647]' (0 used to select the channel count); a node id longer than 63 bytes is a RangeError, as on Node |
+| `RealtimeEngine.setParameter(options.smoothed)` | a first smoothed set on a target with no recorded base ramps from the value the target's owner holds (fader, pan, width, insert, instrument or bound processor parameter); 1.x began it at the requested value. A smoothing time of 0 makes a smoothed set a step. |
 | `RealtimeEngine.telemetryScratchAudibleTimelineSample` | removed: use drainTelemetry(maxRecords) and read the fields of each EngineTelemetry |
 | `RealtimeEngine.telemetryScratchError` | removed: use drainTelemetry(maxRecords) and read the fields of each EngineTelemetry |
 | `RealtimeEngine.telemetryScratchGraphLatencySamplesQ8` | removed: use drainTelemetry(maxRecords) and read the fields of each EngineTelemetry |
