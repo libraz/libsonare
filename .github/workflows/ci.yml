@@ -386,8 +386,10 @@ jobs:
       - name: Generate coverage report
         run: |
           mkdir -p build/coverage
-          lcov --directory build --capture --output-file build/coverage/coverage.info --ignore-errors source,gcov,negative,mismatch
-          lcov --extract build/coverage/coverage.info "${PWD}/src/*" --output-file build/coverage/coverage_filtered.info --ignore-errors unused,negative
+          # Only src/ is uploaded, so the capture reads nothing else: GCC 15 records Catch2 template test registrations with an end line before their start.
+          lcov --directory build --capture --include "${PWD}/src/*" --output-file build/coverage/coverage.info --ignore-errors source,gcov,negative,mismatch
+          # GCC 15 reports a lambda opening on an executed line as an unhit function on a hit line, which lcov refuses as inconsistent.
+          lcov --extract build/coverage/coverage.info "${PWD}/src/*" --output-file build/coverage/coverage_filtered.info --ignore-errors unused,negative,inconsistent
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
