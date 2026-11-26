@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -376,7 +377,40 @@ def test_rows_measured_on_the_row_pool_are_the_rows_measured_together(tmp_path):
         for c in render_rows._chunks(3, 2)
     ]
     whole = probe_rows(mono, pattern, SR, raw=raw)
-    assert json.dumps([row for p in got for row in json.loads(p)]) == json.dumps(whole)
+    _assert_rows_agree([row for p in got for row in json.loads(p)], json.loads(json.dumps(whole)))
+
+
+#: A pool worker runs BLAS on one thread and this process on one per core, so `np.polyfit`
+#: sums in a different order: reordering n points of a fit conditioned kappa moves it by
+#: n*kappa*eps, 7.5e-14 relative here (49 points, kappa 6.9); measured 1.2e-15.
+ROW_REL_TOL = 1e-12
+#: The same relative bound at the 100 dB scale the rows' levels and slopes are read on, so a
+#: level taken relative to another near 0 dB is held to its operands' rounding, not its own.
+ROW_ABS_TOL = 1e-10
+
+
+def _assert_rows_agree(got, want, path="rows"):
+    """Same structure and non-float values exactly, NaN where NaN, floats within the BLAS bound."""
+    if isinstance(want, dict):
+        assert isinstance(got, dict) and got.keys() == want.keys(), path
+        for key in want:
+            _assert_rows_agree(got[key], want[key], f"{path}.{key}")
+    elif isinstance(want, list):
+        assert isinstance(got, list) and len(got) == len(want), path
+        for i, (g, w) in enumerate(zip(got, want, strict=True)):
+            _assert_rows_agree(g, w, f"{path}[{i}]")
+    elif isinstance(want, float):
+        assert isinstance(got, float), (path, got, want)
+        if math.isnan(want):
+            assert math.isnan(got), (path, got, want)
+        else:
+            assert math.isclose(got, want, rel_tol=ROW_REL_TOL, abs_tol=ROW_ABS_TOL), (
+                path,
+                got,
+                want,
+            )
+    else:
+        assert type(got) is type(want) and got == want, (path, got, want)
 
 
 def test_a_split_render_returns_the_rows_and_audio_of_a_whole_one(tuning_build):
@@ -391,5 +425,6 @@ def test_a_split_render_returns_the_rows_and_audio_of_a_whole_one(tuning_build):
         row_workers=3,
         **kw,
     )
+    # Exact: the render child and the row workers both run BLAS on one thread.
     assert json.dumps(split[0]) == json.dumps(whole[0]), "NaN rows compare by their JSON"
     assert split[1].dtype == whole[1].dtype and np.array_equal(split[1], whole[1])
