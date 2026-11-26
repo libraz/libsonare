@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -44,6 +45,7 @@
 #include "midi/synth/gs_classic/classic_unit.h"
 #include "midi/synth/gs_classic/graph_engine.h"
 #include "midi/synth/gs_classic/model_registry.h"
+#include "support/sweep_parts.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth::gs_classic {
@@ -713,7 +715,7 @@ TEST_CASE("GS classic conformance: the first type draws alike at 44.1 and 48 kHz
   require_rate_independent([](std::size_t t) { return t == 0; });
 }
 
-TEST_CASE("GS classic conformance: every type draws alike at 44.1 and 48 kHz",
-          "[.][slow][gs-classic-conformance-all]") {
-  require_rate_independent([](std::size_t) { return true; });
+TEMPLATE_LIST_TEST_CASE("GS classic conformance: every type draws alike at 44.1 and 48 kHz",
+                        "[.][slow][gs-classic-conformance-all]", sonare::test::SweepParts<16>) {
+  require_rate_independent([](std::size_t t) { return TestType::contains(t); });
 }
