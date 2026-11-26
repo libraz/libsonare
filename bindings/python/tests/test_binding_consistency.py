@@ -503,8 +503,11 @@ def test_public_analysis_and_catalog_helpers_return_usable_values() -> None:
     assert len(blind.rt60_bands) == 3
     # Band estimators report NaN when a synthetic signal has insufficient
     # usable decay in a particular band; the public result must still retain
-    # its requested band layout without raising.
-    assert any(math.isfinite(value) for value in measured.rt60_bands + blind.rt60_bands)
+    # its requested band layout without raising. A steady tone has no decay,
+    # so the blind estimate measures nothing.
+    assert any(math.isfinite(value) for value in measured.rt60_bands)
+    assert blind.rt60 is None
+    assert all(math.isnan(value) for value in blind.rt60_bands)
 
     candidates = detect_key_candidates(samples, sample_rate, n_fft=1024, hop_length=256)
     assert candidates
