@@ -15,10 +15,12 @@ read it.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 import libsonare as ls
-from libsonare import MidiCcBinding, RealtimeEngine, SonareValueError
+from libsonare import ErrorCode, MidiCcBinding, RealtimeEngine, SonareValueError
 from libsonare.types import EngineMarker
 
 from ._helpers import scene_bus
@@ -43,6 +45,27 @@ def test_a_wrapped_sample_rate_is_refused_rather_than_read_as_a_smaller_one() ->
     for value in (2**32 + 8000, 2**32 + 16000, 2**32, -(2**31) - 1, 8000.5):
         with pytest.raises(SonareValueError, match="sr"):
             ls.tone(sr=value, duration=0.1)
+
+
+def test_a_wrapped_hpss_kernel_is_refused_where_its_wrap_is_accepted() -> None:
+    """``2**32 + 1`` wraps to the odd kernel 1, which ``hpss`` accepts on its own."""
+    tone = [math.sin(2 * math.pi * 440 * i / 22050) for i in range(4096)]
+    ls.hpss(tone, 22050, kernel_harmonic=1)  # the wrapped value is accepted
+    with pytest.raises(SonareValueError, match="kernel_harmonic") as raised:
+        ls.hpss(tone, 22050, kernel_harmonic=2**32 + 1)
+    assert raised.value.code == ErrorCode.INVALID_PARAMETER
+
+
+def test_a_wrapped_percussive_kernel_is_refused_where_its_wrap_is_accepted() -> None:
+    """``2**32 + 31`` wraps to 31, a kernel ``extract_percussive_events`` accepts on its own."""
+    hits = [0.02 * math.sin(2 * math.pi * 220 * i / 22050) for i in range(22050)]
+    for start in range(1000, 22050 - 1000, 2205):
+        for j in range(200):
+            hits[start + j] += 0.9 * math.exp(-j / 25) * (1 if j % 2 else -1)
+    ls.extract_percussive_events(hits, 22050, hpss_kernel_percussive=31)  # accepted
+    with pytest.raises(SonareValueError, match="hpss_kernel_percussive") as raised:
+        ls.extract_percussive_events(hits, 22050, hpss_kernel_percussive=2**32 + 31)
+    assert raised.value.code == ErrorCode.INVALID_PARAMETER
 
 
 def test_a_wrapped_marker_id_is_refused_rather_than_read_as_a_smaller_one() -> None:

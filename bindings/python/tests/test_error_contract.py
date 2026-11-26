@@ -66,7 +66,7 @@ def test_bad_scene_json_carries_oracle_code_and_detail() -> None:
     with pytest.raises(SonareError) as raised:
         Mixer.from_json("{ not json", sample_rate=48000)
     assert type(raised.value) is SonareError
-    assert raised.value.code != ErrorCode.OK
+    assert raised.value.code == ErrorCode.INVALID_FORMAT
     message = str(raised.value)
     assert message.startswith(f"[{raised.value.code}] Mixer.from_json: ")
     assert message.split("Mixer.from_json: ", 1)[1].strip()

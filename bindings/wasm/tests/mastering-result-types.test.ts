@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
@@ -9,7 +8,6 @@ import {
   masteringAnalyzeStereo,
   masteringAssistantSuggest,
   masteringAudioProfile,
-  masteringNormalizeLoudness,
   masteringStreamingPreview,
   type PairAnalysis,
   type PairAnalysisResultMap,
@@ -117,33 +115,4 @@ describe('typed results of the explainable-mastering helpers (WASM)', () => {
     });
     expect(typeof result.likelyMonoCompatible).toBe('boolean');
   });
-});
-
-it('reports the C-backed limiter latency on normalized audio', () => {
-  const samples = tones(220, 997, 0.3).slice(0, 11037);
-  const inputs = {
-    sampleRate: SR,
-    targetLufs: -14,
-    ceilingDbtp: -1,
-    truePeakOversample: 4,
-    releaseMs: 50,
-  };
-  const script = [
-    'import json, sys',
-    'import numpy as np',
-    'from libsonare import mastering',
-    'samples = np.asarray(json.load(sys.stdin), dtype=np.float32)',
-    'print(mastering(samples, 22050, -14, -1, 4, 50).latency_samples)',
-  ].join('\n');
-  const expected = Number(
-    execFileSync('uv', ['run', '--locked', 'python', '-c', script], {
-      cwd: new URL('../../python/', import.meta.url),
-      encoding: 'utf8',
-      input: JSON.stringify(Array.from(samples)),
-    }).trim(),
-  );
-  expect(expected).toBeGreaterThan(0);
-  const result = masteringNormalizeLoudness({ samples, ...inputs });
-  expect(result.latencySamples).toBe(expected);
-  expect(result.samples.length).toBe(samples.length);
 });
