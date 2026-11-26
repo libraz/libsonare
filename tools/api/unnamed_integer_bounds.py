@@ -27,7 +27,6 @@ Usage: python3 tools/api/unnamed_integer_bounds.py [--count]
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -107,21 +106,22 @@ def sites(root: Path = ROOT) -> list[tuple[str, int, str, str, str]]:
     return scan(root)[0]
 
 
-def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int, int]:
-    """The unnamed bounds, the integer checks read, and the tracked files absent from the tree."""
+def sources(root: Path = ROOT) -> list[str]:
+    """The C++ sources under src/ and include/, read from the tree so no git checkout is needed."""
+    return sorted(
+        file.relative_to(root).as_posix()
+        for top in ("src", "include")
+        for file in (root / top).rglob("*")
+        if file.suffix in (".cpp", ".h") and file.is_file()
+    )
+
+
+def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int]:
+    """The unnamed bounds and the number of integer checks read."""
     scanned = 0
-    skipped = 0
-    listed = subprocess.run(
-        ["git", "ls-files", "src", "include"], cwd=root, capture_output=True, text=True, check=True
-    ).stdout.split()
     out = []
-    for path in listed:
-        if not path.endswith((".cpp", ".h")) or path.startswith("src/wasm/"):
-            continue
-        if path.endswith("util/parameter_checks.h"):
-            continue
-        if not (root / path).is_file():
-            skipped += 1
+    for path in sources(root):
+        if path.startswith("src/wasm/") or path.endswith("util/parameter_checks.h"):
             continue
         text = re.sub(r"//[^\n]*", lambda m: " " * len(m.group()), (root / path).read_text())
 
@@ -140,7 +140,7 @@ def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int, 
             if bounds and all(_is_constant(b) for b in bounds):
                 out.append((path, line(m.start()), m.group(1), ", ".join(bounds), args[-1]))
     rows = [(p, n, check, " ".join(b.split()), " ".join(s.split())) for p, n, check, b, s in out]
-    return rows, scanned, skipped
+    return rows, scanned
 
 
 CLASSES = ("enum", "c-only", "facade")
@@ -203,7 +203,7 @@ def classified(root: Path = ROOT) -> list[tuple[str, int, str, str, str, str]]:
 
 
 def main(argv: list[str]) -> int:
-    found, scanned, skipped = scan()
+    found, scanned = scan()
     exposed = facade_names()
     rows = [(*site, classify(site[3], site[4], exposed)) for site in found]
     counts = {name: sum(row[5] == name for row in rows) for name in CLASSES}
@@ -214,8 +214,7 @@ def main(argv: list[str]) -> int:
         for path, line, check, bounds, subject, cls in rows:
             print(f"{path}:{line}\t{cls}\t{check}\t{bounds}\t{subject}")
     print(
-        f"unnamed integer bounds: scanned {scanned} integer checks"
-        f" (skipped {skipped} tracked files absent from the tree); "
+        f"unnamed integer bounds: scanned {scanned} integer checks; "
         + " ".join(f"{name}={counts[name]}" for name in CLASSES),
         file=sys.stderr,
     )
