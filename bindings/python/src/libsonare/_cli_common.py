@@ -557,12 +557,9 @@ def _read_audio_bounded(path: str) -> bytes:
 
     try:
         stream = open(path, "rb")  # noqa: SIM115 - classify the open before entering context
-    except IsADirectoryError:
-        # On POSIX, Python reports a directory at open time while the native
-        # ifstream path can open it and hand an empty stream to the decoder.
-        # Preserve that decoder-specific classification instead of guessing an
-        # open or read error here.
-        return b""
+    except IsADirectoryError as exc:
+        # The native path loaders refuse a directory as a read failure.
+        raise SonareError(SONARE_ERROR_DECODE_FAILED, f"Failed to read file: {path}") from exc
     except OSError as exc:
         # Native read_file() maps every failure to open the path, including
         # PermissionError and other open-time OSError subclasses, to

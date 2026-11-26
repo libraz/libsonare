@@ -264,6 +264,7 @@ This release gives the public interface one set of conventions on every surface 
 - The WASM voice-changer worklet reports a refused control message instead of dropping it.
 - A Python tempo, time-signature or key segment, track lane, bus or send mapping without a required key raises `SonareValueError` (`segments[i].bpm must be given`) instead of a bare `KeyError`.
 - On Node and WASM, a null or primitive element of the `annotateKeys` keys, `setTrackLanes` lanes or `setTrackBuses` buses raises `TypeError` (`keys[i] must be an object`) instead of a property-read or destructuring error.
+- A path naming a directory is `DecodeFailed` ("Failed to read file") from every path loader (`sonare_audio_from_file`, `sonare_audio_file_num_channels`, `Audio.fromFile`, `Audio.from_file`, `Audio.file_num_channels` and both command lines) on every filesystem, instead of `InvalidParameter` ("File too large") on ext4 and `InvalidFormat` on macOS.
 
 #### Mastering and repair
 

@@ -17,6 +17,7 @@
 // File-path I/O is unavailable in WebAssembly builds; the core exposes only the
 // buffer-based loaders there (see the load_buffer_* functions below).
 #ifndef __EMSCRIPTEN__
+#include <filesystem>
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
@@ -274,10 +275,15 @@ std::wstring utf8_to_wide_path(const std::string& path) {
 /// @param max_size Maximum allowed file size in bytes (0 = no limit)
 std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 #ifdef _WIN32
-  std::ifstream file(utf8_to_wide_path(path), std::ios::binary);
+  const std::filesystem::path fs_path(utf8_to_wide_path(path));
 #else
-  std::ifstream file(path, std::ios::binary);
+  const std::filesystem::path fs_path(path);
 #endif
+  // A directory opens on POSIX and then fails differently per filesystem, so refuse it first.
+  std::error_code directory_error;
+  SONARE_CHECK_MSG(!std::filesystem::is_directory(fs_path, directory_error),
+                   ErrorCode::DecodeFailed, "Failed to read file: " + path);
+  std::ifstream file(fs_path, std::ios::binary);
   SONARE_CHECK_MSG(file.is_open(), ErrorCode::FileNotFound, "Cannot open file: " + path);
 
   // The seek/tell probe only sizes the reserve: a non-regular input (a FIFO, a

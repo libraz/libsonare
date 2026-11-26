@@ -2418,6 +2418,34 @@ TEST_CASE("a failed write reports an encode error, not a decode error", "[audio_
   REQUIRE(code_of([&] { Audio::from_file(unwritable); }) != ErrorCode::EncodeFailed);
 }
 
+TEST_CASE("every path loader refuses a directory as a read failure", "[audio_io]") {
+  // A directory opens on POSIX and then fails per filesystem, so the code must not depend on it.
+  const std::filesystem::path scratch = scratch_dir();
+  const std::string dir = scratch.string();
+  const auto refusal_of = [](auto&& fn) -> std::pair<ErrorCode, std::string> {
+    try {
+      fn();
+    } catch (const SonareException& e) {
+      return {e.code(), e.what()};
+    }
+    return {ErrorCode::Ok, ""};
+  };
+  const std::vector<std::pair<const char*, std::pair<ErrorCode, std::string>>> rows = {
+      {"load_audio", refusal_of([&] { load_audio(dir); })},
+      {"load_audio_interleaved", refusal_of([&] { load_audio_interleaved(dir); })},
+      {"load_wav", refusal_of([&] { load_wav(dir); })},
+      {"load_mp3", refusal_of([&] { load_mp3(dir); })},
+      {"audio_channel_count", refusal_of([&] { audio_channel_count(dir); })},
+      {"Audio::from_file", refusal_of([&] { Audio::from_file(dir); })},
+  };
+  for (const auto& [entry, refusal] : rows) {
+    CAPTURE(entry, refusal.second);
+    CHECK(refusal.first == ErrorCode::DecodeFailed);
+    CHECK(refusal.second.find("Failed to read file: " + dir) != std::string::npos);
+  }
+  std::filesystem::remove_all(scratch);
+}
+
 #ifndef _WIN32
 TEST_CASE("a write failing at write, flush or close leaves the destination byte-identical",
           "[audio_io]") {

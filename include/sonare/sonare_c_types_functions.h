@@ -187,6 +187,7 @@ void sonare_audio_file_options_init(SonareAudioFileOptions* options);
 ///          decoded once per call. A NULL @p options downmixes. An empty decode or a
 ///          non-finite sample in the requested plane is @c SONARE_ERROR_DECODE_FAILED, a
 ///          declared rate outside the supported range is @c SONARE_ERROR_INVALID_FORMAT.
+///          A path naming a directory is @c SONARE_ERROR_DECODE_FAILED.
 /// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOptions* options,
@@ -197,9 +198,9 @@ SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOption
 ///          a positive channel count and is left at 0 on every failure. Both
 ///          @p path and @p out_channels must be non-NULL; either NULL argument
 ///          returns @c SONARE_ERROR_INVALID_PARAMETER. Failure to open @p path
-///          returns @c SONARE_ERROR_FILE_NOT_FOUND. A read failure after opening,
-///          a malformed recognized file or a decoder/probe failure returns
-///          @c SONARE_ERROR_DECODE_FAILED.
+///          returns @c SONARE_ERROR_FILE_NOT_FOUND. A path naming a directory, a read
+///          failure after opening, a malformed recognized file or a decoder/probe
+///          failure returns @c SONARE_ERROR_DECODE_FAILED.
 ///          An unknown or unsupported format returns @c SONARE_ERROR_INVALID_FORMAT
 ///          when no FFmpeg decoder is enabled; with FFmpeg enabled, failures
 ///          while probing that format return @c SONARE_ERROR_DECODE_FAILED.

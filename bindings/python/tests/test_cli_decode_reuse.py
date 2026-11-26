@@ -255,6 +255,19 @@ def test_open_oserrors_keep_native_open_error(monkeypatch, tmp_path, open_error:
     assert str(caught.value) == f"[{caught.value.code}] Cannot open file: {path}"
 
 
+def test_directory_path_matches_native_read_error(tmp_path) -> None:
+    """A directory is the same read failure in the CLI reader and the native loaders."""
+    path = str(tmp_path)
+    refusals = []
+    for read in (common._read_audio_bounded, audio.Audio.from_file, audio.Audio.file_num_channels):
+        with pytest.raises(SonareError) as caught:
+            read(path)
+        refusals.append((caught.value.code, str(caught.value)))
+
+    assert [code for code, _ in refusals] == [common.SONARE_ERROR_DECODE_FAILED] * 3
+    assert all(text.endswith(f"Failed to read file: {path}") for _, text in refusals)
+
+
 def test_read_oserror_keeps_native_read_error(monkeypatch, tmp_path) -> None:
     """An OSError raised by an already-open stream remains DecodeFailed."""
     path = str(tmp_path / "input.wav")

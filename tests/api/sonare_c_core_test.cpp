@@ -536,12 +536,10 @@ TEST_CASE("sonare_audio_file_num_channels reports source channels", "[c_api][aud
           SONARE_ERROR_DECODE_FAILED);
   REQUIRE(channels == 0);
 
-#if defined(__linux__)
   channels = 17;
   REQUIRE(sonare_audio_file_num_channels(".", &channels) == SONARE_ERROR_DECODE_FAILED);
   CHECK(std::string(sonare_last_error_message()).find("Failed to read file:") == 0);
   CHECK(channels == 0);
-#endif
 
   channels = 17;
   REQUIRE(sonare_audio_file_num_channels(nullptr, &channels) == SONARE_ERROR_INVALID_PARAMETER);
@@ -2921,6 +2919,9 @@ TEST_CASE("sonare_audio_from_file downmixes by default and loads one channel on 
   options.channel_index = -2;
   CHECK(sonare_audio_from_file(path.string().c_str(), &options, &missing) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(missing == nullptr);
+  CHECK(sonare_audio_from_file(".", nullptr, &missing) == SONARE_ERROR_DECODE_FAILED);
+  CHECK(std::string(sonare_last_error_message()).find("Failed to read file:") == 0);
   CHECK(missing == nullptr);
 
   sonare_audio_destroy(downmix);
