@@ -266,13 +266,13 @@ jobs:
 
   sanitizer:
     # The instrumented suite runs about four times as long as the build, so it
-    # is split in two by test number; each shard builds the same tree.
-    name: ASan/UBSan (ubuntu-latest, shard ${{ matrix.shard }}/2)
+    # is split in four by test number; each shard builds the same tree.
+    name: ASan/UBSan (ubuntu-latest, shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - name: Install dependencies
@@ -296,7 +296,7 @@ jobs:
             -DBUILD_TESTING=ON \
             -DBUILD_CLI=OFF \
             -DSONARE_WITH_FFMPEG=OFF \
-            -DSONARE_TEST_SHARDS=32 \
+            -DSONARE_TEST_SHARDS=128 \
             -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
@@ -319,11 +319,13 @@ jobs:
         # otherwise diagnoses and continues, so the process still exits 0, Catch2
         # still reports every test passed, ctest still exits 0, and
         # --output-on-failure never prints the diagnostic because nothing failed.
-        # The 32 Catch2 shards are dealt out by test number, so each job runs 16.
+        # The 128 Catch2 shards are dealt out by test number, so each job runs 32.
+        # Small shards keep the slowest one near half the 1500 s ctest timeout;
+        # a single case of several minutes belongs in [.][slow], not here.
         env:
           ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-        run: ctest --test-dir build-sanitize --output-on-failure --no-tests=error --parallel 4 -I ${{ matrix.shard }},,2
+        run: ctest --test-dir build-sanitize --output-on-failure --no-tests=error --parallel 4 -I ${{ matrix.shard }},,4
       # Windows is intentionally excluded: MSVC sanitizer coverage differs from
       # Clang/GCC ASan+UBSan and would make this gate inconsistent across OSes.
 
