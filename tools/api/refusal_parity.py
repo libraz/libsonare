@@ -5,8 +5,10 @@ that crossed a facade while that surface's suite ran. A refusal is keyed by its 
 its message names, and the refused value read back from the call's arguments at that subject (the
 whole argument list when the subject does not resolve), so a pair joins only when both surfaces
 were handed the same input. Where that value does not decide the refusal on one surface (two texts
-under one key), those rows are keyed again by the whole argument list. A joined pair whose class or
-text differs fails, unless
+under one key), those rows are keyed again by the whole argument list. A key that still holds two
+texts on one surface, which the other surface does not match, is decided by the receiver's state
+rather than the call (a bound read off the object), so it counts as undecided and is not compared.
+A joined pair whose class or text differs fails, unless
 ``tests/conformance/refusal_parity_parked.json`` parks it; a parked entry that excuses nothing
 fails too, so an entry expires with the divergence it names.
 
@@ -125,7 +127,13 @@ def compare(node_rows: list[dict], wasm_rows: list[dict], parked: list[dict]) ->
     refine = ambiguous(node_rows) | ambiguous(wasm_rows)
     node, node_unkeyed = index(node_rows, refine)
     wasm, wasm_unkeyed = index(wasm_rows, refine)
-    joined = sorted(set(node) & set(wasm))
+    shared = set(node) & set(wasm)
+    undecided = {
+        key
+        for key in shared
+        if node[key] != wasm[key] and (len(node[key]) > 1 or len(wasm[key]) > 1)
+    }
+    joined = sorted(shared - undecided)
     used = [False] * len(parked)
     differing = []
     excused = []
@@ -154,6 +162,7 @@ def compare(node_rows: list[dict], wasm_rows: list[dict], parked: list[dict]) ->
         "wasm_only": len(set(wasm) - set(node)),
         "unkeyed": {"node": node_unkeyed, "wasm": wasm_unkeyed},
         "refined": len(refine),
+        "undecided": len(undecided),
         "differing": differing,
         "excused": excused,
         "stale_parked": [p for p, u in zip(parked, used) if not u],
@@ -172,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         f"refusal parity: compared={result['compared']} node_only={result['node_only']}"
         f" wasm_only={result['wasm_only']} unkeyed_node={result['unkeyed']['node']}"
         f" unkeyed_wasm={result['unkeyed']['wasm']} refined={result['refined']}"
+        f" undecided={result['undecided']}"
         f" parked={len(result['excused'])}"
         f" differing={len(result['differing'])}"
     )

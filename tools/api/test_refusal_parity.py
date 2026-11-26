@@ -71,6 +71,18 @@ class CompareTest(unittest.TestCase):
         result = rp.compare(node, wasm, [])
         self.assertEqual((result["compared"], result["differing"], result["refined"]), (1, [], 1))
 
+    def test_a_call_that_does_not_decide_the_refusal_is_not_compared(self) -> None:
+        args = [0]
+        node = [row("f", "f: n must be an integer in [1, 8]", args)]
+        wasm = [
+            row("f", "f: n must be an integer in [1, 128]", args),
+            row("f", "f: n must be an integer in [1, 512]", args),
+        ]
+        result = rp.compare(node, wasm, [])
+        self.assertEqual((result["compared"], result["undecided"], result["differing"]), (0, 1, []))
+        result = rp.compare(wasm, wasm, [])
+        self.assertEqual((result["compared"], result["undecided"]), (1, 0))
+
     def test_a_row_without_arguments_is_not_keyed(self) -> None:
         node = [{"entry": "f", "errorClass": "TypeError", "message": "f: x must be a number"}]
         result = rp.compare(node, [], [])
