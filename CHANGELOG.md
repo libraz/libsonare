@@ -41,6 +41,7 @@ This release gives the public interface one set of conventions on every surface 
 - Python provides `midi_route_events`, `midi_cc_to_breakpoint`, `midi_param_to_cc` and `midi_cc_learn` as module functions taking the typed records named in the upgrade guide.
 - JavaScript handles use `destroy()` or `using`, including `Project` in place of `Project.delete()`. Python handles use `close()` or a context manager.
 - Built-in synthesizer patches take waveform names, including Python `SynthPatch`. The preset catalogs and loaders spell `saw-lead`, `warm-pad`, `e-piano` and `drum-kit` as `sawLead`, `warmPad`, `ePiano` and `drumKit`. The old names are refused. Node `RemixRequest.intervals` takes a flat array-like sequence of start and end samples.
+- The Python package has no `dev` extra: `pip install libsonare[dev]` installs only the library, and development dependencies come from the `dev`, `lint` and `test` dependency groups (`uv sync --project bindings/python`).
 
 #### Now refused
 
