@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -44,6 +45,7 @@
 #include "midi/synth/string_loop.h"
 #include "midi/ump.h"
 #include "support/midi_render.h"
+#include "support/sweep_parts.h"
 #include "util/constants.h"
 
 namespace {
@@ -1308,13 +1310,18 @@ HeldNote held_note(int program, int note, uint8_t velocity, double sr, double se
 /// Sweeps the top @p span semitones of every compass (the whole compass when @p span is
 /// negative) at each of @p rates and @p velocities. Each note sounds its played fundamental above
 /// numerical silence, within kCompassStepDb of the semitone under it and no further than
-/// kCompassOctaveDb under the octave below, wherever those lie in the compass.
-void compass_sweep(int span, const std::vector<double>& rates,
-                   const std::vector<uint8_t>& velocities, double seconds) {
+/// kCompassOctaveDb under the octave below, wherever those lie in the compass. @p in_part keeps the
+/// (program, rate, velocity) units by their running index.
+void compass_sweep(
+    int span, const std::vector<double>& rates, const std::vector<uint8_t>& velocities,
+    double seconds,
+    const std::function<bool(std::size_t)>& in_part = [](std::size_t) { return true; }) {
+  std::size_t unit = 0;
   for (const ShippedCompass& row : kShippedCompasses) {
     const int low = span < 0 ? row.low : std::max(row.low, row.top - span);
     for (const double sr : rates) {
       for (const uint8_t velocity : velocities) {
+        if (!in_part(unit++)) continue;
         std::array<double, 128> level;
         level.fill(std::nan(""));
         const auto level_at = [&](int note) {
@@ -1349,7 +1356,9 @@ TEST_CASE("every shipped self-oscillating program speaks at the top of its writt
   compass_sweep(0, {48000.0}, {20, 127}, 0.5);
 }
 
-TEST_CASE("every shipped self-oscillating program speaks across its written compass at any rate",
-          "[.][slow][midi][synth][wind][compass]") {
-  compass_sweep(-1, {44100.0, 48000.0, 96000.0}, {20, 60, 127}, 0.8);
+TEMPLATE_LIST_TEST_CASE(
+    "every shipped self-oscillating program speaks across its written compass at any rate",
+    "[.][slow][midi][synth][wind][compass]", sonare::test::SweepParts<16>) {
+  compass_sweep(-1, {44100.0, 48000.0, 96000.0}, {20, 60, 127}, 0.8,
+                [](std::size_t unit) { return TestType::contains(unit); });
 }
