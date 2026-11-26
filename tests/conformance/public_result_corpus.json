@@ -6920,6 +6920,47 @@
         }
       },
       {
+        "entry": "sonare_detect_acoustic",
+        "fixture": "decay_envelope",
+        "id": "detect_acoustic_decay_envelope",
+        "result": {
+          "confidence": 1,
+          "isBlind": true,
+          "rt60": 0.2970105707645416,
+          "rt60Bands": [
+            "NaN",
+            "NaN",
+            "NaN",
+            "NaN",
+            "NaN",
+            "NaN"
+          ]
+        },
+        "tolerances": {
+          "*": 9.5367431640625e-07
+        }
+      },
+      {
+        "entry": "sonare_detect_acoustic",
+        "fixture": "lone_impulse",
+        "id": "detect_acoustic_lone_impulse",
+        "result": {
+          "confidence": 0,
+          "isBlind": true,
+          "rt60Bands": [
+            "NaN",
+            "NaN",
+            "NaN",
+            "NaN",
+            "NaN",
+            "NaN"
+          ]
+        },
+        "tolerances": {
+          "*": 9.5367431640625e-07
+        }
+      },
+      {
         "entry": "sonare_estimate_room",
         "fixture": "historical_rir",
         "id": "estimate_room_rir",

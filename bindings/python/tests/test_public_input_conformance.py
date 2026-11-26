@@ -946,15 +946,7 @@ def _one_shot_call(
         "sonare_estimate_room",
     }
     if entry in analysis_entries:
-        acoustic_entries = {
-            "sonare_analyze_impulse_response",
-            "sonare_detect_acoustic",
-            "sonare_estimate_room",
-        }
-        analysis_samples = (
-            _one_shot_signal("historical_rir", samples) if entry in acoustic_entries else samples
-        )
-        return function(analysis_samples, sample_rate)
+        return function(samples, sample_rate)
     if entry == "sonare_frame_signal":
         return function(samples, 4, 2)
     if entry == "sonare_mastering_audio_profile_stereo":

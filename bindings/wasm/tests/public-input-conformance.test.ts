@@ -1111,6 +1111,8 @@ type PublicResultFixture =
   | 'historical_rir'
   | 'historical_frame'
   | 'meter_accents'
+  | 'decay_envelope'
+  | 'lone_impulse'
   | 'profile_silence'
   | 'midi'
   | 'tagged_wav';
@@ -1329,7 +1331,9 @@ type PublicResultSignals = Record<
   | 'historical_reference_right'
   | 'historical_rir'
   | 'historical_frame'
-  | 'meter_accents',
+  | 'meter_accents'
+  | 'decay_envelope'
+  | 'lone_impulse',
   number[]
 >;
 

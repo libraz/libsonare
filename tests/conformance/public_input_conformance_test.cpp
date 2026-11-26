@@ -223,7 +223,8 @@ std::vector<float> result_corpus_fixture(const std::string& fixture, size_t fram
     return input;
   }
   if (fixture == "silence_excerpt") return std::vector<float>(8192);
-  if (fixture.rfind("historical_", 0) == 0 || fixture == "meter_accents") {
+  if (fixture.rfind("historical_", 0) == 0 || fixture == "meter_accents" ||
+      fixture == "decay_envelope" || fixture == "lone_impulse") {
     static const auto signals = read_corpus_json("tests/conformance/public_result_signals.json");
     std::vector<float> samples;
     const auto& input =
@@ -1972,7 +1973,11 @@ std::optional<CorpusCallResult> run_analysis_corpus(const std::string& entry,
   }
 
   if (entry == "sonare_analyze_impulse_response" || entry == "sonare_detect_acoustic") {
-    if (fixture != "historical_rir") return std::nullopt;
+    if (fixture != "historical_rir" &&
+        (entry != "sonare_detect_acoustic" ||
+         (fixture != "decay_envelope" && fixture != "lone_impulse"))) {
+      return std::nullopt;
+    }
     const sonare::AcousticConfig config;
     SonareAcousticResult result{};
     SonareError error = SONARE_OK;
