@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdlib>
@@ -25,6 +26,7 @@
 #include "mastering/saturation/tube.h"
 #include "rt/processor_base.h"
 #include "support/depends_on_probe.h"
+#include "support/sweep_parts.h"
 #include "util/json.h"
 
 namespace {
@@ -424,8 +426,9 @@ TEST_CASE("Every factory insert declares the latency its impulse response shows"
   for (const Configuration& config : defaults) CheckAlignment(config);
 }
 
-TEST_CASE("Every published choice declares the latency its impulse response shows",
-          "[mastering][insert_factory][latency][.][slow]") {
+TEMPLATE_LIST_TEST_CASE("Every published choice declares the latency its impulse response shows",
+                        "[mastering][insert_factory][latency][.][slow]",
+                        sonare::test::SweepParts<16>) {
   const std::vector<Configuration>& configs = SweptConfigurations();
   REQUIRE(configs.size() > insert_factory_names().size());
   RequireExemptionsExist(PeakShiftedConfigurations(), configs);
@@ -433,7 +436,9 @@ TEST_CASE("Every published choice declares the latency its impulse response show
   RequireExemptionsExist(FlatPeakConfigurations(), configs);
   RequireExemptionsExist(PulseConfigurations(), configs);
 
-  for (const Configuration& config : configs) CheckAlignment(config);
+  for (size_t index = 0; index < configs.size(); ++index) {
+    if (TestType::contains(index)) CheckAlignment(configs[index]);
+  }
 }
 
 TEST_CASE("An insert's latency does not depend on the block size it is prepared at",
