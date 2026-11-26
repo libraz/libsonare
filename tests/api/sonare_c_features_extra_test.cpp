@@ -599,11 +599,11 @@ TEST_CASE("sonare_trim_silence and sonare_split_silence reject an empty input",
           "[c_api][features][edge]") {
   // 0.1 s of silence framed by 0.1 s tones, so a real trim has to move both edges.
   const int quarter = kSampleRate / 10;
-  std::vector<float> samples;
   const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, quarter, 1.0f);
-  samples.insert(samples.end(), tone.begin(), tone.end());
-  samples.insert(samples.end(), static_cast<size_t>(quarter), 0.0f);
-  samples.insert(samples.end(), tone.begin(), tone.end());
+  // Sized up front: GCC 15 at -O2 flags the growth path of a range insert with -Warray-bounds.
+  std::vector<float> samples(2 * tone.size() + static_cast<size_t>(quarter), 0.0f);
+  std::copy(tone.begin(), tone.end(), samples.begin());
+  std::copy(tone.begin(), tone.end(), samples.end() - static_cast<std::ptrdiff_t>(tone.size()));
 
   const std::vector<float> silence(static_cast<size_t>(kSampleRate), 0.0f);
 
