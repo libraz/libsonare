@@ -604,7 +604,7 @@ TEST_CASE("AcousticAnalyzer aggregates repeated blind free-decay regions",
 // The bands of a carrier-less decay hold only filter ringing; a fit reaching the filter's
 // rounding floor read 0.31 s here on some builds and not on others.
 TEST_CASE("AcousticAnalyzer blind RT60 of a short carrier-less decay does not follow rounding",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   const float expected_rt60 = 0.4f;
   const Audio audio = create_repeated_free_decays(expected_rt60);
 
@@ -622,7 +622,7 @@ TEST_CASE("AcousticAnalyzer blind RT60 of a short carrier-less decay does not fo
 
 // Without the 60 dB bound these read 23-26% low and 30-32% high on every build; with it 1.6% low.
 TEST_CASE("AcousticAnalyzer blind RT60 of a carrier-less decay is not set by the filter's rounding",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   for (const float expected_rt60 : {1.30f, 1.45f}) {
     CAPTURE(expected_rt60);
     AcousticConfig config;
