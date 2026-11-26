@@ -167,6 +167,31 @@ describe('Mixer runtime controls (WASM)', () => {
     }
   });
 
+  it('names the argument whose length overruns the block size, as Node and Python do', () => {
+    using mixer = new Mixer({ sampleRate: SR, maxBlockSize: BLOCK });
+    mixer.addStrip('source');
+    const buffer = mixer.createRealtimeBuffer();
+    const tooLong = new Float32Array(BLOCK + 1);
+    expect(() => mixer.processStereo([tooLong], [tooLong])).toThrow(
+      new RangeError(
+        `Mixer.processStereo: leftInputs[0].length must be an integer in [0, ${BLOCK}]`,
+      ),
+    );
+    expect(() => mixer.processStereoInto([tooLong], [tooLong], tooLong, tooLong)).toThrow(
+      new RangeError(`Mixer.processStereoInto: outLeft.length must be an integer in [0, ${BLOCK}]`),
+    );
+    expect(() => mixer.drainTailStereo(BLOCK + 1)).toThrow(
+      new RangeError(`Mixer.drainTailStereo: numSamples must be an integer in [1, ${BLOCK}]`),
+    );
+    expect(() => mixer.drainTailStereo(0)).toThrow(
+      new RangeError(`Mixer.drainTailStereo: numSamples must be an integer in [1, ${BLOCK}]`),
+    );
+    expect(() => buffer.process(BLOCK + 1)).toThrow(RangeError);
+    expect(() => buffer.process(BLOCK + 1)).toThrow(
+      `numSamples must be an integer in [1, ${BLOCK}]`,
+    );
+  });
+
   it('keeps the one-shot mixer process refusal class at the native boundary', async () => {
     await initSource();
     const good = new Float32Array([0.25]);

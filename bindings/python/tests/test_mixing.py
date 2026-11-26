@@ -1121,6 +1121,13 @@ def test_process_stereo_input_count_rule(mixer) -> None:
         ),
     ):
         mixer.process_stereo([too_long], [too_long])
+    drain_range = (
+        rf"^Mixer\.drain_tail_stereo: num_samples must be an integer in "
+        rf"\[1, {mixer.max_block_size}\]$"
+    )
+    for count in (0, mixer.max_block_size + 1):
+        with pytest.raises(SonareValueError, match=drain_range):
+            mixer.drain_tail_stereo(count)
 
 
 def test_mixing_scene_preset_returns_a_scene_document_mapping() -> None:

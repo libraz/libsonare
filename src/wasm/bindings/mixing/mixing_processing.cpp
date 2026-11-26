@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+#include <string>
+
 #include "mixing_wasm.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
@@ -64,7 +67,8 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     }
   }
   if (length > static_cast<size_t>(block_size_)) {
-    throw WasmRangeError("block length exceeds the mixer's configured block size");
+    throw WasmRangeError("leftInputs[0].length must be an integer in [0, " +
+                         std::to_string(block_size_) + "]");
   }
   for (int index = 0; index < count; ++index) {
     left_inputs.push_back(float32ArrayToVector(left_channels[index], "leftInputs"));
@@ -108,7 +112,8 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
                            /*require_non_zero=*/false);
   const size_t length = static_cast<size_t>(length_i);
   if (length > static_cast<size_t>(block_size_)) {
-    throw WasmRangeError("block length exceeds the mixer's configured block size");
+    throw WasmRangeError("outLeft.length must be an integer in [0, " + std::to_string(block_size_) +
+                         "]");
   }
 
   for (int index = 0; index < count; ++index) {
@@ -176,7 +181,8 @@ val MixerWasm::outputRightView() {
 void MixerWasm::processPreparedStereo(const val& num_samples_val) {
   const size_t num_samples = static_cast<size_t>(checkedUintFromVal(num_samples_val, "numSamples"));
   if (num_samples == 0 || num_samples > static_cast<size_t>(block_size_)) {
-    throw WasmRangeError("invalid prepared mixer block length");
+    throw WasmRangeError("numSamples must be an integer in [1, " + std::to_string(block_size_) +
+                         "]");
   }
   const size_t count = left_scratch_.size();
   SonareError err = sonare_mixer_process_stereo(
@@ -270,10 +276,12 @@ int MixerWasm::maxBlockSize() {
 // Drains delayed/tail audio by processing a zero-input block of num_samples
 // frames. Returns { left, right, sampleRate } mirroring processStereo.
 val MixerWasm::drainTailStereo(double num_samples) {
-  const size_t count = wasmCountArg(num_samples, "mixer drain numSamples");
-  if (count == 0 || count > static_cast<size_t>(block_size_)) {
-    throw WasmRangeError("mixer drain numSamples must be in [1, prepared block size]");
+  if (!std::isfinite(num_samples) || std::floor(num_samples) != num_samples || num_samples < 1.0 ||
+      num_samples > static_cast<double>(block_size_)) {
+    throw WasmRangeError("numSamples must be an integer in [1, " + std::to_string(block_size_) +
+                         "]");
   }
+  const size_t count = static_cast<size_t>(num_samples);
   std::vector<float> out_left(count, 0.0f);
   std::vector<float> out_right(count, 0.0f);
   SonareError err =

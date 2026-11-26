@@ -598,6 +598,18 @@ describe('Mixer argument validation', () => {
     expect(() => mixer.drainTailStereo(1)).not.toThrow();
     expect(() => mixer.drainTailStereo(BLOCK_SIZE)).not.toThrow();
   });
+
+  it('names the argument whose length overruns the block size, as WASM and Python do', () => {
+    const tooLong = new Float32Array(BLOCK_SIZE + 1);
+    expect(() => mixer.processStereo([tooLong], [tooLong])).toThrow(
+      new RangeError(
+        `Mixer.processStereo: leftInputs[0].length must be an integer in [0, ${BLOCK_SIZE}]`,
+      ),
+    );
+    expect(() => mixer.drainTailStereo(BLOCK_SIZE + 1)).toThrow(
+      new RangeError(`Mixer.drainTailStereo: numSamples must be an integer in [1, ${BLOCK_SIZE}]`),
+    );
+  });
 });
 
 describe('Mixer.setOutputBus', () => {

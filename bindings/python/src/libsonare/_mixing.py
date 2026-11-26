@@ -1112,7 +1112,7 @@ class Mixer:
         self._require()
         # The integrality half is the shared narrowing rather than a `float`
         # test, which a numpy scalar walks straight past.
-        count = _narrow_int(num_samples, "num_samples", 1, _C_INT_MAX)
+        count = _narrow_int(num_samples, "num_samples", 1, self.max_block_size)
         out_left = (ctypes.c_float * count)()
         out_right = (ctypes.c_float * count)()
         _check(
