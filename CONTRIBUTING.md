@@ -78,6 +78,7 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 | `Examples` | `develop` | The Python and C++ examples |
 | `Python wheel` | `develop` | A manylinux x86_64 wheel build |
 | `ASan/UBSan` | `main` | The suite under the address and undefined-behaviour sanitizers |
+| `Slow tests` | `main` | The `[.][slow]` C++ tier in an optimized build, split over four runners |
 | `Coverage` | `main` | The default ctest run under coverage instrumentation, uploaded to Codecov |
 | `Python binding` | `main` | The Python binding's type checks and tests, and the capability catalog drift check |
 | `WASM` | `main` | The emscripten build and the WASM binding's tests |
@@ -274,7 +275,7 @@ Before merging, the maintainer brings a change here to the following:
 
 Before merging, the maintainer brings a change here to the following:
 
-- C++ cases over roughly two seconds are tagged `[.][slow]` and slow Python tests `@pytest.mark.slow`; shrinking the input is preferred.
+- C++ cases over roughly two seconds are tagged `[.][slow]` and slow Python tests `@pytest.mark.slow`; shrinking the input is preferred. The C++ slow tier runs in the `Slow tests` job on `main`, so a case there still has to pass.
 - Golden tests run through `make test-golden` only, and a golden failure is confirmed not pre-existing before it is attributed to a change.
 - A golden moves only in the same commit as the behavioural change that justifies it.
 - A change under `src/midi/synth/` has run `make test-golden` locally and carries the synth manifests' diffs (program, gesture and drum kit) in the same commit.

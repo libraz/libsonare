@@ -1085,12 +1085,17 @@ endif()
 
 include(CTest)
 set(SONARE_TEST_SHARDS 0 CACHE STRING "Register sonare_tests as N Catch2 shards instead of one ctest entry per case (0 = per case)")
+set(SONARE_TEST_SHARD_SPEC "" CACHE STRING "Catch2 test spec every shard runs, e.g. [slow] for the hidden slow tier (empty = the default run)")
 include(Catch)
 if(SONARE_TEST_SHARDS GREATER 0)
   math(EXPR _sonare_last_shard "${SONARE_TEST_SHARDS} - 1")
+  set(_sonare_shard_spec)
+  if(NOT SONARE_TEST_SHARD_SPEC STREQUAL "")
+    set(_sonare_shard_spec "${SONARE_TEST_SHARD_SPEC}")
+  endif()
   foreach(_i RANGE ${_sonare_last_shard})
     add_test(NAME sonare_tests-shard-${_i}/${_sonare_last_shard}
-      COMMAND sonare_tests --shard-index ${_i} --shard-count ${SONARE_TEST_SHARDS} --rng-seed 0x5eed --order rand
+      COMMAND sonare_tests ${_sonare_shard_spec} --shard-index ${_i} --shard-count ${SONARE_TEST_SHARDS} --rng-seed 0x5eed --order rand
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
   endforeach()
 else()

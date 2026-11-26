@@ -329,6 +329,54 @@ jobs:
       # Windows is intentionally excluded: MSVC sanitizer coverage differs from
       # Clang/GCC ASan+UBSan and would make this gate inconsistent across OSes.
 
+  slow-tests:
+    # The [.][slow] tier, which every other job leaves out. Same sharding as the
+    # sanitizer job, in an optimized build: the longest case alone is about
+    # 18 minutes on a fast host, so the floor of a runner is that one case.
+    name: Slow tests (ubuntu-latest, shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev
+      - name: Set up ccache
+        id: ccache
+        uses: ./.github/actions/ccache-restore
+        with:
+          key-prefix: ccache-v1-gcc-release-slow-
+          max-size: 900M
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON \
+            -DSONARE_WITH_FFMPEG=OFF \
+            -DSONARE_TEST_SHARDS=128 \
+            "-DSONARE_TEST_SHARD_SPEC=[slow]"
+      - name: Build
+        id: build
+        # Capped at 2 jobs like the other builds; the CLI is built too, for its slow cases.
+        run: cmake --build build --parallel 2 --target sonare_tests
+      - name: Save ccache
+        if: always()
+        uses: ./.github/actions/ccache-save
+        with:
+          key: ${{ steps.ccache.outputs.key }}
+          save: ${{ github.event_name == 'push' && steps.build.outcome == 'success' && matrix.shard == 1 }}
+      - name: Generate K-weighting reference fixture
+        run: make fixtures
+      - name: Test
+        # Each job runs 32 of the 128 shards. A shard holding the longest case
+        # outlives ctest's default 1500 s bound on a slow runner, hence 3600 s.
+        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel 4 --timeout 3600 -I ${{ matrix.shard }},,4
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
@@ -746,7 +794,7 @@ jobs:
     # delete caches.
     name: Prune caches
     if: always() && github.event_name == 'push'
-    needs: [build-and-test, sanitizer, coverage, python-binding, wasm, ffmpeg-decode]
+    needs: [build-and-test, sanitizer, slow-tests, coverage, python-binding, wasm, ffmpeg-decode]
     runs-on: ubuntu-latest
     permissions:
       actions: write
