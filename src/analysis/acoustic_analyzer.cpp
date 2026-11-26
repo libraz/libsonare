@@ -132,10 +132,12 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
       estimate_blind_rt60_from_decay(audio.data(), audio.size(), audio.sample_rate(),
                                      config_.min_decay_db, config_.noise_floor_margin_db);
   BlindRt60Estimate global = subband;
+  bool global_from_subbands = subband.confidence > 0.0f;
   if (subband.confidence > 0.0f && fullband.confidence > 0.0f) {
     const float ratio = subband.rt60 / fullband.rt60;
     if (ratio < 0.75f || ratio > 1.35f) {
       global = fullband;
+      global_from_subbands = false;
     }
   } else if (fullband.confidence > 0.0f) {
     global = fullband;
@@ -175,19 +177,24 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
         weighted_subband_average(subband_estimates, center / ratio, center * ratio);
     const BlindRt60Estimate low_frequency_anchor =
         std::isfinite(parameters_.rt60) && parameters_.confidence > 0.0f ? global : subband;
+    bool own_reading_refused = false;
     if (center < 1000.0f &&
         (band.confidence <= 0.0f ||
          (std::isfinite(low_frequency_anchor.rt60) && std::isfinite(band.rt60) &&
           band.rt60 < low_frequency_anchor.rt60 * 0.7f))) {
+      own_reading_refused = band.confidence > 0.0f;
       band = estimate_from_frequency_model(frequency_model, center);
-      if (band.confidence <= 0.0f) {
+      // A low band is extrapolated only from measured subbands, never from the fullband fit.
+      if (band.confidence <= 0.0f && global_from_subbands) {
         band = extrapolate_low_frequency_rt60(low_frequency_anchor, center);
       }
     }
-    if (band.confidence <= 0.0f) {
-      band = estimate_blind_rt60_from_decay(filtered.data(), filtered.size(), audio.sample_rate(),
-                                            config_.min_decay_db, config_.noise_floor_margin_db,
-                                            false);
+    // The octave fit reads the content the refused subbands read, so it is not a second opinion.
+    if (band.confidence <= 0.0f && !own_reading_refused) {
+      band =
+          estimate_blind_rt60_from_decay(filtered.data(), filtered.size(), audio.sample_rate(),
+                                         config_.min_decay_db, config_.noise_floor_margin_db, false,
+                                         kBandRingRt60Margin * octave_band_ring_rt60(center));
     }
     parameters_.rt60_bands.push_back(band.rt60);
     // Same reason as the scalar above: the per-band blind estimate is an rt60,

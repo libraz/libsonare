@@ -6,9 +6,13 @@
 
 #include "analysis/acoustic/internal.h"
 #include "filters/iir.h"
+#include "rt/biquad_design.h"
 #include "util/db.h"
 
 namespace sonare::acoustic_detail {
+
+using sonare::constants::kLn1000D;
+using sonare::constants::kPi;
 
 namespace {
 
@@ -19,6 +23,9 @@ constexpr float kEarlyBoundary80Sec = 0.08f;
 
 // Butterworth order of each octave-band edge filter, run zero-phase.
 constexpr int kOctaveBandOrder = 8;
+
+// Upper-to-centre edge ratio of a third-octave band.
+float third_octave_edge_ratio() { return std::pow(2.0f, 1.0f / 6.0f); }
 
 // A tail whose level falls by more than 1 dB across the last fifth of the span, at 3 standard
 // errors over 16 blocks, is still decaying: a 40 s decay cut at 12 s drops ~3.4 dB there.
@@ -294,6 +301,13 @@ std::vector<float> filter_octave_band(const Audio& ir, float center_hz) {
   return band;
 }
 
+// The slowest pole pair is the highest-Q section of the lower edge: envelope exp(-pi*f*t/Q).
+float octave_band_ring_rt60(float center_hz) {
+  const float lower_hz = center_hz / kSqrt2;
+  const float q = rt::butterworth_stage_q(kOctaveBandOrder, 0);
+  return static_cast<float>(kLn1000D) * q / (kPi * lower_hz);
+}
+
 // Forward biquad pass that subtracts a constant DC offset from each input
 // sample in-line, fusing the DC removal step with the filter's natural copy
 // and eliminating the dedicated `centered` buffer.
@@ -313,7 +327,7 @@ std::vector<float> apply_biquad_dc_removed(const float* input, size_t size, floa
 }
 
 std::vector<float> filter_third_octave_band(const Audio& audio, float center_hz) {
-  const float ratio = std::pow(2.0f, 1.0f / 6.0f);
+  const float ratio = third_octave_edge_ratio();
   const float lower_hz = center_hz / ratio;
   const float upper_hz = center_hz * ratio;
   const float nyquist = static_cast<float>(audio.sample_rate()) * 0.5f;
@@ -335,6 +349,13 @@ std::vector<float> filter_third_octave_band(const Audio& audio, float center_hz)
   std::vector<float> backward = apply_biquad(forward.data(), n, coeffs);
   std::reverse(backward.begin(), backward.end());
   return backward;
+}
+
+// A bandpass biquad of width B (Hz) rings with the envelope exp(-pi*B*t).
+float third_octave_band_ring_rt60(float center_hz) {
+  const float ratio = third_octave_edge_ratio();
+  const float bandwidth_hz = center_hz * ratio - center_hz / ratio;
+  return static_cast<float>(kLn1000D) / (kPi * bandwidth_hz);
 }
 
 }  // namespace sonare::acoustic_detail

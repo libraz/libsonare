@@ -145,7 +145,8 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   // term the synthesis adds by default (ISO reference climate) is taken out first,
   // so resynthesizing the estimate does not count the air twice.
   const size_t n_bands = est.rt60_bands.size();
-  est.absorption_bands.assign(n_bands, 0.0f);
+  // Not measured until a band below fills it; with no band at all the whole array stays so.
+  est.absorption_bands.assign(n_bands, std::numeric_limits<float>::quiet_NaN());
   int valid = 0;
   int clamped = 0;
   double sum_valid = 0.0;

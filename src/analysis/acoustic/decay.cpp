@@ -344,7 +344,8 @@ BlindRt60Estimate aggregate_decay_candidates(std::vector<DecayEstimateCandidate>
 
 BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t size, int sample_rate,
                                                  float min_decay_db, float noise_floor_margin_db,
-                                                 bool suppress_stationary_noise) {
+                                                 bool suppress_stationary_noise,
+                                                 float min_rt60_sec) {
   std::vector<float> denoised;
   const float* analysis_samples = samples;
   if (suppress_stationary_noise) {
@@ -432,6 +433,10 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
     best = aggregate_decay_candidates(std::move(candidates));
   }
   if (best.confidence < 0.5f) {
+    return {};
+  }
+  // A reading this close to the band filter's own decay is the filter's, not the room's.
+  if (best.rt60 < min_rt60_sec) {
     return {};
   }
   return best;

@@ -450,7 +450,7 @@ TEST_CASE("AcousticAnalyzer estimates blind RT60 from synthetic free decay",
       ++finite_bands;
     }
   }
-  REQUIRE(finite_bands >= 3);
+  REQUIRE(finite_bands == 0);
 }
 
 TEST_CASE("AcousticAnalyzer reports blind-mode unmeasurables as not computed",
@@ -737,6 +737,130 @@ TEST_CASE("AcousticAnalyzer is invariant to DC offset in blind third-octave fitt
   // The bandpass filter plus explicit DC removal should make the analyzer
   // effectively invariant to a constant offset.
   REQUIRE_THAT(params_offset.rt60, WithinRel(params_zero.rt60, 0.05f));
+}
+
+TEST_CASE("AcousticAnalyzer reads a lone impulse as no reverberation at all",
+          "[acoustic_analyzer][ring_floor]") {
+  // An impulse has no decay; each low band holds its filter's ringing and nothing else.
+  std::vector<float> samples(48000 * 2, 0.0f);
+  samples[4800] = 1.0f;
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  const auto params =
+      AcousticAnalyzer(Audio::from_vector(std::move(samples), 48000), config).parameters();
+
+  REQUIRE(std::isnan(params.rt60));
+  REQUIRE(params.confidence == 0.0f);
+  REQUIRE(params.rt60_bands.size() == 6);
+  for (size_t band = 0; band < params.rt60_bands.size(); ++band) {
+    CAPTURE(band);
+    REQUIRE(std::isnan(params.rt60_bands[band]));
+  }
+}
+
+TEST_CASE("blind third-octave subbands holding only filter ringing report nothing",
+          "[acoustic_analyzer][ring_floor]") {
+  // A carrier-less envelope leaves each band its filter's ring; the same holds at any rate.
+  for (const int sample_rate : {8000, 22050}) {
+    CAPTURE(sample_rate);
+    AcousticConfig config;
+    config.mode = AcousticConfig::Mode::Blind;
+    config.n_third_octave_subbands = 12;
+    const auto estimates = sonare::acoustic_detail::estimate_third_octave_rt60(
+        create_exponential_ir(0.7f, sample_rate, 4.0f), config);
+    REQUIRE(estimates.size() == 12);
+    for (const auto& estimate : estimates) {
+      CAPTURE(estimate.center_hz, estimate.rt60);
+      REQUIRE(estimate.confidence == 0.0f);
+      REQUIRE(std::isnan(estimate.rt60));
+    }
+  }
+}
+
+TEST_CASE("AcousticAnalyzer does not spread a fullband blind RT60 into unmeasured bands",
+          "[acoustic_analyzer][ring_floor]") {
+  SECTION("a carrier-less decay") {
+    AcousticConfig config;
+    config.mode = AcousticConfig::Mode::Blind;
+    config.n_octave_bands = 4;
+    config.n_third_octave_subbands = 16;
+    const auto params =
+        AcousticAnalyzer(create_exponential_ir(0.7f, 8000, 4.0f), config).parameters();
+    REQUIRE_THAT(params.rt60, WithinRel(0.7f, 0.15f));
+    for (size_t band = 0; band < params.rt60_bands.size(); ++band) {
+      CAPTURE(band);
+      REQUIRE(std::isnan(params.rt60_bands[band]));
+    }
+  }
+  SECTION("the same decay over noise, where the ring bends into the noise floor") {
+    AcousticConfig config;
+    config.mode = AcousticConfig::Mode::Blind;
+    config.noise_floor_margin_db = 8.0f;
+    const auto params = AcousticAnalyzer(create_noisy_exponential_decay(0.7f), config).parameters();
+    REQUIRE_THAT(params.rt60, WithinRel(0.7f, 0.25f));
+    for (size_t band = 0; band < params.rt60_bands.size(); ++band) {
+      CAPTURE(band);
+      REQUIRE(std::isnan(params.rt60_bands[band]));
+    }
+  }
+  SECTION("a steady level") {
+    AcousticConfig config;
+    config.mode = AcousticConfig::Mode::Blind;
+    const auto params =
+        AcousticAnalyzer(Audio::from_vector(std::vector<float>(48000 * 4, 0.1f), 48000), config)
+            .parameters();
+    REQUIRE(std::isnan(params.rt60));
+    for (size_t band = 0; band < params.rt60_bands.size(); ++band) {
+      CAPTURE(band);
+      REQUIRE(std::isnan(params.rt60_bands[band]));
+    }
+  }
+}
+
+TEST_CASE("the ring floor keeps every band of a decay four filter ring times long",
+          "[acoustic_analyzer][ring_floor]") {
+  // Control for the floor margin: 0.3 s is about 4.7 ring times of the 125 Hz octave filter, so
+  // a margin raised past that refuses a real decay along with the filter's own ringing.
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = 4;
+  config.n_third_octave_subbands = 16;
+  const auto params =
+      AcousticAnalyzer(create_white_noise_decay(0.3f, 8000, 4.0f), config).parameters();
+  REQUIRE_THAT(params.rt60, WithinRel(0.3f, 0.25f));
+  for (size_t band = 0; band < params.rt60_bands.size(); ++band) {
+    CAPTURE(band, params.rt60_bands[band]);
+    REQUIRE(std::isfinite(params.rt60_bands[band]));
+    REQUIRE(params.rt60_bands[band] > 0.3f * 0.5f);
+    REQUIRE(params.rt60_bands[band] < 0.3f * 1.6f);
+  }
+}
+
+TEST_CASE("the band filters' stated ring times are the ones the filters have",
+          "[acoustic_analyzer][ring_floor]") {
+  using namespace sonare::acoustic_detail;
+  // A carrier-less envelope leaves a band nothing but its filter's ring, so an unfloored fit of
+  // that band reads the ring time itself.
+  const Audio audio = create_exponential_ir(0.7f, 8000, 4.0f);
+  const AcousticConfig config;
+
+  const auto third = filter_third_octave_band(audio, 125.0f);
+  const auto third_fit = estimate_blind_rt60_from_decay(
+      third.data(), third.size(), 8000, config.min_decay_db, config.noise_floor_margin_db, false);
+  REQUIRE_THAT(third_octave_band_ring_rt60(125.0f), WithinRel(0.0760f, 0.01f));
+  REQUIRE_THAT(third_fit.rt60, WithinRel(third_octave_band_ring_rt60(125.0f), 0.05f));
+
+  const auto octave = filter_octave_band(audio, 125.0f);
+  const auto octave_fit = estimate_blind_rt60_from_decay(
+      octave.data(), octave.size(), 8000, config.min_decay_db, config.noise_floor_margin_db, false);
+  REQUIRE_THAT(octave_band_ring_rt60(125.0f), WithinRel(0.0638f, 0.01f));
+  REQUIRE_THAT(octave_fit.rt60, WithinRel(octave_band_ring_rt60(125.0f), 0.05f));
+
+  // The floored fit of the same bands reports nothing.
+  REQUIRE(estimate_blind_rt60_from_decay(third.data(), third.size(), 8000, config.min_decay_db,
+                                         config.noise_floor_margin_db, false,
+                                         kBandRingRt60Margin * third_octave_band_ring_rt60(125.0f))
+              .confidence == 0.0f);
 }
 
 // The filter's only finiteness clause covered rt60, and rt60 is what came out

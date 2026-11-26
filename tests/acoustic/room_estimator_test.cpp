@@ -356,3 +356,27 @@ TEST_CASE("estimate_room refuses an absorption prior outside its interval",
     }
   }
 }
+
+TEST_CASE("estimate_room reports no band absorption when no band was measured",
+          "[acoustic][room_estimator][ring_floor]") {
+  // A carrier-less decay gives the blind analyzer a broadband RT60 and no band.
+  const int sample_rate = 48000;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4, 0.0f);
+  const float decay = std::log(1000.0f) / 0.7f;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = std::exp(-decay * static_cast<float>(i) / static_cast<float>(sample_rate));
+  }
+  RoomEstimateConfig config;
+  config.acoustic.mode = AcousticConfig::Mode::Blind;
+  const RoomEstimate est =
+      estimate_room(Audio::from_vector(std::move(samples), sample_rate), config);
+
+  REQUIRE(std::isfinite(est.volume));
+  REQUIRE(est.confidence == 0.0f);
+  REQUIRE(est.absorption_bands.size() == est.rt60_bands.size());
+  for (size_t band = 0; band < est.absorption_bands.size(); ++band) {
+    CAPTURE(band);
+    REQUIRE(std::isnan(est.rt60_bands[band]));
+    REQUIRE(std::isnan(est.absorption_bands[band]));
+  }
+}

@@ -28,6 +28,11 @@ constexpr float kRt60AgreementMaxRatio = 1.55f;
 // fit window stops there: below it a band filter's rounding floor, not the decay, sets the slope.
 constexpr double kDecayRangeDb = 60.0;
 
+// A band-filtered blind fit reports nothing under this multiple of its filter's own decay time.
+// Measured on noise decays: under 1% of those faster than the filter read above it, over 97% of
+// those twice as slow do.
+constexpr float kBandRingRt60Margin = 1.5f;
+
 // Longest blind RT60 (seconds) the estimators report.
 constexpr float kMaxBlindRt60Sec = 20.0f;
 
@@ -97,9 +102,11 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
                                                                size_t first, size_t last,
                                                                float seed_rt60);
 BlindRt60Estimate aggregate_decay_candidates(std::vector<DecayEstimateCandidate> candidates);
+/// @param min_rt60_sec Shortest RT60 the fit reports; a band passes its filter's floor here.
 BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t size, int sample_rate,
                                                  float min_decay_db, float noise_floor_margin_db,
-                                                 bool suppress_stationary_noise = true);
+                                                 bool suppress_stationary_noise = true,
+                                                 float min_rt60_sec = 0.0f);
 
 double sum_range(const std::vector<double>& energy, size_t first, size_t last);
 size_t direct_sound_index(const std::vector<double>& energy);
@@ -164,9 +171,13 @@ float estimate_confidence(float rt60, float edt, float min_decay_db);
 AcousticParameters analyze_band(const float* samples, size_t size, int sample_rate,
                                 float min_decay_db);
 std::vector<float> filter_octave_band(const Audio& ir, float center_hz);
+/// @brief RT60 (seconds) of the octave band filter's own ringing at @p center_hz.
+float octave_band_ring_rt60(float center_hz);
 std::vector<float> apply_biquad_dc_removed(const float* input, size_t size, float dc_offset,
                                            const BiquadCoeffs& coeffs);
 std::vector<float> filter_third_octave_band(const Audio& audio, float center_hz);
+/// @brief RT60 (seconds) of the third-octave band filter's own ringing at @p center_hz.
+float third_octave_band_ring_rt60(float center_hz);
 
 double mean_square_energy(const std::vector<float>& samples);
 std::vector<float> third_octave_centers(int count, int sample_rate);

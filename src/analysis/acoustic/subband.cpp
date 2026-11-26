@@ -58,9 +58,10 @@ std::vector<BlindRt60Estimate> estimate_third_octave_rt60(const Audio& audio,
       continue;
     }
 
-    BlindRt60Estimate estimate =
-        estimate_blind_rt60_from_decay(filtered.data(), filtered.size(), audio.sample_rate(),
-                                       config.min_decay_db, config.noise_floor_margin_db, false);
+    BlindRt60Estimate estimate = estimate_blind_rt60_from_decay(
+        filtered.data(), filtered.size(), audio.sample_rate(), config.min_decay_db,
+        config.noise_floor_margin_db, false,
+        kBandRingRt60Margin * third_octave_band_ring_rt60(center_hz));
     estimate.center_hz = center_hz;
     estimate.energy = energy;
     estimates.push_back(estimate);
