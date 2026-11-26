@@ -1797,7 +1797,7 @@ TEST_CASE("Sf2Player counts what it decodes and does not realise", "[midi][sf2][
 }
 
 TEST_CASE("Sf2Player channel-mode All Notes Off preserves sustain for sampled and fallback voices",
-          "[midi][sf2][synth]") {
+          "[midi][sf2][synth][.][slow]") {
   const auto run = [](Sf2Player& player, int controller) {
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
     player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));

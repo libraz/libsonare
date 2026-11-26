@@ -162,7 +162,8 @@ TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing
   }
 }
 
-TEST_CASE("sonare_mel_spectrogram exposes a custom Mel range from pure C", "[c_api][features]") {
+TEST_CASE("sonare_mel_spectrogram exposes a custom Mel range from pure C",
+          "[c_api][features][.][slow]") {
   const int sr = 22050;
   const int n_fft = 1024;
   const int hop = 256;

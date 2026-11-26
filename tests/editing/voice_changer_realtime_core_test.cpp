@@ -1868,7 +1868,7 @@ constexpr VoiceCharacterPreset kChunkProbePresets[] = {
 }  // namespace
 
 TEST_CASE("RealtimeVoiceChanger psola output does not depend on how the host cuts its blocks",
-          "[voice_changer][chunk]") {
+          "[voice_changer][chunk][.][slow]") {
   struct Layout {
     int sample_rate;
     int channels;

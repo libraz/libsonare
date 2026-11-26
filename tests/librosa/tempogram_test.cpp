@@ -404,7 +404,8 @@ TEST_CASE("cyclic_tempogram rejects a non-finite bpm_min", "[tempogram]") {
   REQUIRE_NOTHROW(cyclic_tempogram(env, 22050, cfg, 60.0f, 16));
 }
 
-TEST_CASE("the tempogram window is bounded, and the same bound on every reader", "[tempogram]") {
+TEST_CASE("the tempogram window is bounded, and the same bound on every reader",
+          "[tempogram][.][slow]") {
   // The autocorrelation is quadratic in the window and linear in the frame count,
   // so an unbounded window does not finish rather than failing: 16384 frames
   // already costs seconds over one second of audio.

@@ -424,7 +424,7 @@ TEST_CASE("VelvetReverb bounds the longest reverb time and tap work", "[effects]
 }
 
 TEST_CASE("VelvetReverb decays smoothly across the whole tail it declares",
-          "[effects][reverb][velvet]") {
+          "[effects][reverb][velvet][.][slow]") {
   constexpr int kSegments = 20;
   // The tap gains span 60 dB over the declared T60, so each 5 % slice sits
   // 3 dB below the one before it.

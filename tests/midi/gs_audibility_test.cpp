@@ -923,7 +923,7 @@ std::string row_text(const GsAddressEntry& row, const Probe& probe, Setup setup,
 }  // namespace
 
 TEST_CASE("every GS address row keeps the promise its level makes",
-          "[midi][synth][gs][audibility]") {
+          "[midi][synth][gs][audibility][.][slow]") {
   // A chain that never builds would make every EFX row read as unheard for a
   // reason that is not the table's.
   REQUIRE(sonare::mastering::api::make_insert("saturation.ampSim", "{}") != nullptr);

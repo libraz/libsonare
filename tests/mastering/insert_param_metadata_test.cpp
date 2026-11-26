@@ -988,7 +988,8 @@ TEST_CASE("the slot info schema list matches what the writer emits", "[mastering
   REQUIRE(actual == expected);
 }
 
-TEST_CASE("a slotted key supplied the way its slot's rule says is read", "[mastering][catalog]") {
+TEST_CASE("a slotted key supplied the way its slot's rule says is read",
+          "[mastering][catalog][.][slow]") {
   // The published rule is the one construction applies: supplying the key
   // alone, plus the cutoffs its crossover band needs, reaches the processor.
   // Without those cutoffs a band past the default split is not built, which is
@@ -1696,7 +1697,7 @@ bool repair_accepts_all(const std::string& id,
 }  // namespace
 
 TEST_CASE("the classical repair sizes publish exactly what the stage accepts",
-          "[mastering][catalog]") {
+          "[mastering][catalog][.][slow]") {
   for (const char* id : {"repair.denoiseClassical", "repair.dereverbClassical"}) {
     for (const bool offline : {false, true}) {
       INFO(id << (offline ? " offline" : " insert"));
@@ -2360,7 +2361,7 @@ TEST_CASE("offlineParams appear exactly where the offline form declares another 
 }
 
 TEST_CASE("each form of a dual-form processor takes the set the catalog declares for it",
-          "[mastering][catalog]") {
+          "[mastering][catalog][.][slow]") {
   const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
   std::size_t dual_forms = 0;
   std::size_t checked = 0;

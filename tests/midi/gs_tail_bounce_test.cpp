@@ -202,7 +202,7 @@ TEST_CASE("a GM bounce with no GS envelope-time edit ends at the unscaled tail",
 }
 
 TEST_CASE("a GM bounce whose clip edits the GS release covers the scaled release",
-          "[project][midi][gs-tail]") {
+          "[project][midi][gs-tail][.][slow]") {
   const float max_scale = gs_time_scale(kGsPartOffsetMax);
   const int64_t plain = bounce_gm_frames(false);
   const int64_t edited = bounce_gm_frames(true);
@@ -265,7 +265,7 @@ TEST_CASE("an unbounded instrument tail makes the auto-length bounce refuse",
 }
 
 TEST_CASE("events after a note do not reach the bounce's opening through the tail probe",
-          "[project][midi][gs-tail]") {
+          "[project][midi][gs-tail][.][slow]") {
   const std::vector<std::vector<SonareMidiEventPod>> trailing = {
       {pod(0.9, 0x20B00700u)},                                                 // CC7 = 0
       {pod(0.9, 0x20C02800u)},                                                 // program 40

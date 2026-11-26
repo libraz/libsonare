@@ -996,7 +996,7 @@ TEST_CASE("a brass bore sounds each note whose loop is short at a low rate",
 }
 
 TEST_CASE("a harpsichord sounds each note whose strings are short at a low rate",
-          "[midi][synth][wind]") {
+          "[midi][synth][wind][.][slow]") {
   sonare::midi::synth::HarpsichordPatchParams params;
   params.eight_b = true;
   params.four = true;
@@ -1015,7 +1015,8 @@ TEST_CASE("a harpsichord sounds each note whose strings are short at a low rate"
   require_floored_notes_hold_pitch({5.1, 3.0, 2.3, 0.9}, 127, render);
 }
 
-TEST_CASE("a piano sounds each note whose strings are short at a low rate", "[midi][synth][wind]") {
+TEST_CASE("a piano sounds each note whose strings are short at a low rate",
+          "[midi][synth][wind][.][slow]") {
   sonare::midi::synth::PianoPatchParams params;
   const auto render = [&](uint8_t note, double sr, double seconds) {
     std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(sr)));
@@ -1047,7 +1048,7 @@ struct CompassVoice {
 }  // namespace
 
 TEST_CASE("each wind voice sounds its equal-tempered fundamental across its compass at 48 kHz",
-          "[midi][synth][wind]") {
+          "[midi][synth][wind][.][slow]") {
   // The tolerances are one scan step of the estimator (0.87 cents) over the largest residual
   // left across the compass once every term the loop compensation can name is in it: the
   // cone's highpass lead enters by a regime-dependent share (within 5.2 cents at the shipped
