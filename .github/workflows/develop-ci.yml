@@ -337,12 +337,13 @@ jobs:
           cache-dependency-glob: bindings/python/uv.lock
       - name: Build, audit, and test wheel
         # The manylinux image has no system Eigen package; the top-level CMake
-        # FetchContent fallback supplies its header-only dependency.
+        # FetchContent fallback supplies its header-only dependency. Capped at 2
+        # jobs like the other builds: a bare --parallel is an unbounded make -j.
         run: |
           cmake -B build-wheel -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
                                 -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
                                 -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build-wheel --target sonare_shared --config Release --parallel
+          cmake --build build-wheel --target sonare_shared --config Release --parallel 2
           cp build-wheel/lib/libsonare.so bindings/python/src/libsonare/
           cd bindings/python
           export UV_PYTHON=/opt/python/cp313-cp313/bin/python

@@ -448,14 +448,15 @@ jobs:
         id: build
         # The Python binding loads libsonare via dlopen, so it needs a
         # BUILD_SHARED=ON tree; the realtime voice changer quality gate and the
-        # binding tests run against it.
+        # binding tests run against it. Capped at 2 jobs like the other builds:
+        # a bare --parallel is an unbounded make -j on a cold cache.
         run: |
           cmake -B build-shared \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DBUILD_CLI=OFF \
             -DBUILD_SHARED=ON
-          cmake --build build-shared --parallel --target sonare_shared
+          cmake --build build-shared --parallel 2 --target sonare_shared
       - name: Save ccache
         if: always()
         uses: ./.github/actions/ccache-save
