@@ -115,12 +115,16 @@ def _python_paths(value, path, depth=0):
     if value is None:
         return
     yield path
-    if depth == 4:
+    # Deep enough for synth_instruments[0].instrument.mod_routings[0].source.
+    if depth == 5:
         return
     if type(value) is dict:
         for name, child in value.items():
             if isinstance(name, str):
                 yield from _python_paths(child, f"{path}.{name}", depth + 1)
+    elif type(value).__module__ == "numpy" and getattr(value, "ndim", 0) == 1:
+        # A buffer's length is the one member a caller supplies with it.
+        yield f"{path}.length"
     elif type(value) in (list, tuple):
         yield f"{path}.length"
         for index, child in enumerate(value[:64]):
@@ -156,11 +160,16 @@ def _python_argument_paths(frame, entry_code):
 
 def _converted_subjects(subjects, root, respelled):
     """Read the selected alias separately from the rendered message."""
-    if not isinstance(respelled, Mapping):
+    # The same two forms ``_render_as_given`` accepts: a mapping or a per-subject function.
+    if callable(respelled):
+        lookup = respelled
+    elif isinstance(respelled, Mapping):
+        lookup = respelled.get
+    else:
         return None
     prefix = f"{root}." if root is not None else ""
     return [
-        given.name if (given := respelled.get(subject.removeprefix(prefix))) is not None else None
+        given.name if (given := lookup(subject.removeprefix(prefix))) is not None else None
         for subject in subjects
     ]
 

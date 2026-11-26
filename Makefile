@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint lint-static check-js-types wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
+       test-python test-python-suite test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check scene-token-cases result-null-means processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-snapshot surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
@@ -624,8 +624,12 @@ build-wasm-binding:
 	cd bindings/wasm && yarn install --immutable && yarn build
 
 test-python: build-shared
-	$(UV) sync --locked --project bindings/python
+	$(MAKE) test-python-suite
+
+# The one way to run the Python suite, also called by CI against its own shared library.
 # The refusal-subject plugin fails the run when a refusal names no parameter of its entry.
+test-python-suite:
+	$(UV) sync --locked --project bindings/python
 	SONARE_EMITTED_PAIRS=1 PYTHONPATH=tests/conformance $(PY_RUN) python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
 
 # Tests marked @pytest.mark.slow are excluded by the default addopts

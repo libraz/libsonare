@@ -80,7 +80,7 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 | `ASan/UBSan` | `main` | The suite under the address and undefined-behaviour sanitizers |
 | `Slow tests` | `main` | The `[.][slow]` C++ tier in an optimized build, split over four runners |
 | `Coverage` | `main` | The default ctest run under coverage instrumentation, uploaded to Codecov |
-| `Python binding` | `main` | The Python binding's type checks and tests, and the capability catalog drift check |
+| `Python binding` | `main` | The Python binding's type checks and tests (`make test-python-suite`, refusal-subject checks included), and the capability catalog drift check |
 | `WASM` | `main` | The emscripten build and the WASM binding's tests |
 | `FFmpeg decode` | `main` | The optional FFmpeg decode path, which every other job compiles out |
 
