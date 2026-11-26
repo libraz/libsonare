@@ -279,6 +279,7 @@ This release gives the public interface one set of conventions on every surface 
 - NNLS chroma accepts a negative `midi_min`, and analysis durations and frame counts no longer overflow on long inputs or large hops.
 - In C++, `hz_to_pitch_class` returns -1 for a non-finite frequency.
 - A `StreamAnalyzer` keeps publishing statistics when a reader releases a slot during a switch.
+- Blind acoustic analysis (`sonare_detect_acoustic`, `detectAcoustic`, `detect_acoustic` and the `acoustic` command on a recording) fits a band's decay over at most the 60 dB an RT60 is defined over, so its `rt60` no longer depends on the platform's floating-point contraction and no longer reads up to a quarter low or a third high on decays whose bands hold little content. Blind band values change, room recordings included (the 125 Hz band of a measured room response moved by a fifth), and a band holding only the analysis filter's ringing is reported as not measured.
 
 #### Editing and alignment
 

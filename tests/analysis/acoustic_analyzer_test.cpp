@@ -46,6 +46,21 @@ Audio create_delayed_exponential_ir(float rt60_sec, float delay_sec, int sample_
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+// A broadband decay: white noise under the exponential envelope, so every band carries the decay.
+Audio create_white_noise_decay(float rt60_sec, int sample_rate = 48000, float duration_sec = 4.0f) {
+  const int n_samples = static_cast<int>(sample_rate * duration_sec);
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+  const float decay = std::log(1000.0f) / rt60_sec;
+  uint32_t state = 0x2468aceu;
+  for (int i = 0; i < n_samples; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float white = static_cast<float>((state >> 8) & 0xffffu) / 32768.0f - 1.0f;
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(i)] = white * std::exp(-decay * t);
+  }
+  return Audio::from_vector(std::move(samples), sample_rate);
+}
+
 Audio create_noisy_exponential_decay(float rt60_sec, int sample_rate = 48000,
                                      float duration_sec = 4.0f, float noise_amplitude = 0.003f) {
   const int n_samples = static_cast<int>(sample_rate * duration_sec);
@@ -478,7 +493,7 @@ TEST_CASE("AcousticAnalyzer reports blind-mode unmeasurables as not computed",
 TEST_CASE("AcousticAnalyzer extrapolates blind low-frequency bands from high bands",
           "[acoustic_analyzer]") {
   const float expected_rt60 = 0.7f;
-  const Audio audio = create_exponential_ir(expected_rt60, 8000, 4.0f);
+  const Audio audio = create_white_noise_decay(expected_rt60, 8000, 4.0f);
 
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
@@ -584,6 +599,59 @@ TEST_CASE("AcousticAnalyzer aggregates repeated blind free-decay regions",
   REQUIRE(std::isfinite(params.rt60));
   REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.18f));
   REQUIRE(params.confidence >= 0.5f);
+}
+
+// The bands of a carrier-less decay hold only filter ringing; a fit reaching the filter's
+// rounding floor read 0.31 s here on some builds and not on others.
+TEST_CASE("AcousticAnalyzer blind RT60 of a short carrier-less decay does not follow rounding",
+          "[acoustic_analyzer]") {
+  const float expected_rt60 = 0.4f;
+  const Audio audio = create_repeated_free_decays(expected_rt60);
+
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_third_octave_subbands = 24;
+  AcousticAnalyzer analyzer(audio, config);
+  const auto& params = analyzer.parameters();
+
+  REQUIRE(params.is_blind);
+  REQUIRE(std::isfinite(params.rt60));
+  REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.18f));
+  REQUIRE(params.confidence >= 0.5f);
+}
+
+// Without the 60 dB bound these read 23-26% low and 30-32% high on every build; with it 1.6% low.
+TEST_CASE("AcousticAnalyzer blind RT60 of a carrier-less decay is not set by the filter's rounding",
+          "[acoustic_analyzer]") {
+  for (const float expected_rt60 : {1.30f, 1.45f}) {
+    CAPTURE(expected_rt60);
+    AcousticConfig config;
+    config.mode = AcousticConfig::Mode::Blind;
+    config.n_third_octave_subbands = 24;
+    AcousticAnalyzer analyzer(create_exponential_ir(expected_rt60), config);
+    const auto& params = analyzer.parameters();
+
+    REQUIRE(std::isfinite(params.rt60));
+    REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.05f));
+  }
+}
+
+TEST_CASE("AcousticAnalyzer reports a blind band holding only filter ringing as not measured",
+          "[acoustic_analyzer]") {
+  const float expected_rt60 = 0.7f;
+  const Audio audio = create_exponential_ir(expected_rt60, 8000, 4.0f);
+
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = 4;
+  config.n_third_octave_subbands = 16;
+  AcousticAnalyzer analyzer(audio, config);
+  const auto& params = analyzer.parameters();
+
+  REQUIRE(params.rt60_bands.size() == 4);
+  REQUIRE(std::isnan(params.rt60_bands[3]));
+  REQUIRE(std::isfinite(params.rt60));
+  REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.15f));
 }
 
 TEST_CASE("AcousticAnalyzer reports low-confidence blind RT60 as unavailable",

@@ -201,7 +201,7 @@ test = "tests/cli/cli_analysis_test.cpp::silence omits every measure read off vo
 [[entry]]
 kind = "command"
 old = "acoustic"
-changed = "the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead; a band list leaves out a band nothing measured and carries the measured bands' indices beside it in rt60_band, edt_band, c50_band and c80_band, and rt60 is absent when not measured"
+changed = "the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead; a band list leaves out a band nothing measured and carries the measured bands' indices beside it in rt60_band, edt_band, c50_band and c80_band, and rt60 is absent when not measured; a blind estimate fits a band's decay over at most the 60 dB an RT60 is defined over, so blind rt60 no longer depends on the build's floating-point contraction and blind rt60 bands change, room recordings included; a band holding only the analysis filter's ringing is left out as not measured"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_cli_absent_keys.py::test_acoustic_omits_what_only_an_impulse_response_measures"

@@ -610,6 +610,14 @@ test = "tests/analysis/beat_event_time_test.cpp::beats on a click train out of s
 
 [[entry]]
 kind = "function"
+old = "sonare_detect_acoustic"
+changed = "a blind estimate fits a band's decay over at most the 60 dB an RT60 is defined over, so blind rt60 no longer depends on the build's floating-point contraction and blind rt60_bands change, room recordings included; a band holding only the analysis filter's ringing is NaN (not measured)"
+domain = "analysis"
+rule = "individual"
+test = "tests/analysis/acoustic_analyzer_test.cpp::reports a blind band holding only filter ringing as not measured"
+
+[[entry]]
+kind = "function"
 old = "sonare_audio_detect_bpm"
 changed = "takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
 domain = "analysis"

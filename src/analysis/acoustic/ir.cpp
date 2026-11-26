@@ -30,9 +30,6 @@ constexpr double kTailTrendSigmas = 3.0;
 // noise-floor margin; the truncated curve is then within 0.5 dB of the true one at that limit.
 constexpr double kTruncationMarginDb = 10.0;
 
-// Level drop the Schroeder fit spans to report a reverberation time.
-constexpr double kDecayRangeDb = 60.0;
-
 // Lundeby noise-floor crossing, searched forward of the direct sound. Both the
 // noise estimate and the moving-average window are measured over the post-origin
 // span, so the returned index shifts by exactly the amount of leading silence

@@ -382,13 +382,16 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
         if (drop < required_drop) {
           continue;
         }
+        if (drop > static_cast<float>(kDecayRangeDb)) {
+          break;
+        }
 
         const auto fit = fit_line(frames.times, frames.db, first, last);
         if (!fit || fit->slope >= -1e-6f) {
           continue;
         }
 
-        const float rt60 = -60.0f / fit->slope;
+        const float rt60 = -static_cast<float>(kDecayRangeDb) / fit->slope;
         if (!std::isfinite(rt60) || rt60 <= 0.05f || rt60 > kMaxBlindRt60Sec) {
           continue;
         }

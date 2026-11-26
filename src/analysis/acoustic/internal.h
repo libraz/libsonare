@@ -24,6 +24,10 @@ constexpr float kOctaveBaseHz = 125.0f;
 constexpr float kRt60AgreementMinRatio = 0.65f;
 constexpr float kRt60AgreementMaxRatio = 1.55f;
 
+// Level drop a reverberation time is defined over. The Schroeder fit spans it, and a blind
+// fit window stops there: below it a band filter's rounding floor, not the decay, sets the slope.
+constexpr double kDecayRangeDb = 60.0;
+
 // Longest blind RT60 (seconds) the estimators report.
 constexpr float kMaxBlindRt60Sec = 20.0f;
 

@@ -711,6 +711,14 @@ rule = "sample-rate-required"
 test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
 
 [[entry]]
+kind = "function"
+old = "detect_acoustic"
+changed = "a blind estimate fits a band's decay over at most the 60 dB an RT60 is defined over, so blind rt60 no longer depends on the build's floating-point contraction and blind rt60_bands change, room recordings included; a band holding only the analysis filter's ringing is NaN (not measured)"
+domain = "analysis"
+rule = "individual"
+test = "tests/analysis/acoustic_analyzer_test.cpp::reports a blind band holding only filter ringing as not measured"
+
+[[entry]]
 kind = "option"
 old = "synthesize_rir(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 48000)"

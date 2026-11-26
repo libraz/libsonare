@@ -9322,7 +9322,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::removed names and po
 [[entry]]
 kind = "function"
 old = "detectAcoustic"
-changed = "one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'|'sampleRate'>)); request form takes DetectAcousticRequest"
+changed = "one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'|'sampleRate'>)); request form takes DetectAcousticRequest; a blind estimate fits a band's decay over at most the 60 dB an RT60 is defined over, so blind rt60 no longer depends on the build's floating-point contraction and blind rt60Bands change, room recordings included; a band holding only the analysis filter's ringing is NaN (not measured)"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -9330,7 +9330,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectAcoustic"
-changed = "one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'|'sampleRate'>)); request form takes DetectAcousticRequest"
+changed = "one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'|'sampleRate'>)); request form takes DetectAcousticRequest; a blind estimate fits a band's decay over at most the 60 dB an RT60 is defined over, so blind rt60 no longer depends on the build's floating-point contraction and blind rt60Bands change, room recordings included; a band holding only the analysis filter's ringing is NaN (not measured)"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
