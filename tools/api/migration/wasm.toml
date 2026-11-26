@@ -23838,7 +23838,7 @@ old = "MasteringResult.latencySamples"
 changed = "Optional -> required. The v1.10.0 normalization result could omit latencySamples. Normalization now reports the compensated true-peak limiter look-ahead in samples. Do not trim the returned audio by this amount."
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/wasm/tests/mastering-result-types.test.ts::reports the C-backed limiter latency on normalized audio"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::masteringNormalizeLoudness({ samples, sampleRate })"
 
 [[entry]]
 kind = "field"
@@ -23847,7 +23847,7 @@ changed = "Optional -> required. The v1.10.0 normalization result could omit lat
 domain = "mastering"
 rule = "typed-results"
 entry = "./analysis"
-test = "bindings/wasm/tests/mastering-result-types.test.ts::reports the C-backed limiter latency on normalized audio"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::masteringNormalizeLoudness({ samples, sampleRate })"
 
 [[entry]]
 kind = "field"
