@@ -249,9 +249,12 @@ TEST_CASE("dehum insert reproduces the offline notch and the adaptive pass",
       const std::size_t compared =
           input.size() -
           (adaptive ? input.size() % static_cast<std::size_t>(config.frame_size) : 0);
-      const bool retunes = adaptive && mode == repair::DehumMode::Notch;
-      CHECK(delayed_difference(out[0], offline, insert.latency_samples(), 0, compared) <=
-            (retunes ? retune_tolerance : tolerance));
+      // A subtract retune scales the cancellers' step by at most 1e-3, which moves their
+      // converging estimate by at most that share of what they subtract.
+      const float bound = !adaptive                          ? tolerance
+                          : mode == repair::DehumMode::Notch ? retune_tolerance
+                                                             : 1e-3f * processed_by(input, offline);
+      CHECK(delayed_difference(out[0], offline, insert.latency_samples(), 0, compared) <= bound);
     }
   }
 }
