@@ -377,6 +377,48 @@ jobs:
         # outlives ctest's default 1500 s bound on a slow runner, hence 3600 s.
         run: ctest --test-dir build --output-on-failure --no-tests=error --parallel 4 --timeout 3600 -I ${{ matrix.shard }},,4
 
+  release-fma:
+    # The default tier as the shipped optimized builds compile it, with multiply-adds fused.
+    # The Debug job never fuses, so a test asserting bit-identity between two compiled copies
+    # of the same arithmetic shows only here.
+    name: Native C++ (GCC Release, x86-64-v3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev
+      - name: Set up ccache
+        id: ccache
+        uses: ./.github/actions/ccache-restore
+        with:
+          key-prefix: ccache-v1-gcc-release-v3-
+          max-size: 900M
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON \
+            -DBUILD_CLI=OFF \
+            -DSONARE_WITH_FFMPEG=OFF \
+            -DSONARE_TEST_SHARDS=16 \
+            -DCMAKE_C_FLAGS=-march=x86-64-v3 \
+            -DCMAKE_CXX_FLAGS=-march=x86-64-v3
+      - name: Build
+        id: build
+        run: cmake --build build --parallel 2
+      - name: Save ccache
+        if: always()
+        uses: ./.github/actions/ccache-save
+        with:
+          key: ${{ steps.ccache.outputs.key }}
+          save: ${{ github.event_name == 'push' && steps.build.outcome == 'success' }}
+      - name: Generate K-weighting reference fixture
+        run: make fixtures
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel 4
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

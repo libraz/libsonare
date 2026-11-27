@@ -79,6 +79,7 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 | `Python wheel` | `develop` | A manylinux x86_64 wheel build |
 | `ASan/UBSan` | `main` | The suite under the address and undefined-behaviour sanitizers |
 | `Slow tests` | `main` | The `[.][slow]` C++ tier in an optimized build, split over four runners |
+| `Native C++ (GCC Release, x86-64-v3)` | `main` | The default ctest run in a GCC Release build targeting x86-64-v3, where multiply-adds are contracted into fused operations as in the shipped optimized builds |
 | `Coverage` | `main` | The default ctest run under coverage instrumentation, uploaded to Codecov |
 | `Python binding` | `main` | The Python binding's type checks and tests (`make test-python-suite`, refusal-subject checks included), and the capability catalog drift check |
 | `WASM` | `main` | The emscripten build and the WASM binding's tests |
