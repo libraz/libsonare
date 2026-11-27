@@ -458,12 +458,20 @@ constexpr double kGhostTracksSoloDb = 5.0;
 // --- The chain's own per-note step -----------------------------------------
 
 /// @brief One note's contribution to the masked render, built the way
-///        @ref render_masked_notes builds it.
+///        @ref render_masked_notes builds it: its segment placed at its first sample.
 sonare::Audio contribution_of(const sonare::Spectrogram& spec, const NoteMask& mask,
                               const NoteObject& note, int length,
                               const NoteRenderConfig& config = {}) {
-  const sonare::Audio masked = apply_note_mask(spec, mask).to_audio(length);
-  return note_model::render_notes(masked, {note}, config);
+  const NoteSegment segment = invert_note_mask(spec, mask, length);
+  REQUIRE(segment.first_sample >= 0);
+  REQUIRE(static_cast<size_t>(segment.first_sample) + segment.audio.size() <=
+          static_cast<size_t>(length));
+  std::vector<float> samples(static_cast<size_t>(length), 0.0f);
+  std::copy(segment.audio.begin(), segment.audio.end(),
+            samples.begin() + static_cast<std::ptrdiff_t>(segment.first_sample));
+  const sonare::Audio placed =
+      sonare::Audio::from_vector(std::move(samples), segment.audio.sample_rate());
+  return note_model::render_notes(placed, {note}, config);
 }
 
 /// @brief The note of @p notes whose median pitch is closest to @p hz.
@@ -985,22 +993,22 @@ TEST_CASE("the two pairs differ in the one way the over-claim measurement turns 
 
 // --- (A) Additivity --------------------------------------------------------
 
-TEST_CASE("the render is additive in the notes, which says nothing about apportionment",
-          "[polyphony_separation]") {
+TEST_CASE(
+    "the render is additive in the notes under a gain or a mute, which says nothing "
+    "about apportionment",
+    "[polyphony_separation]") {
   // Structural, and the only claim here that is. Note i's contribution is a
   // function of masks.notes[i] and notes[i] alone, so editing note k moves the
   // whole render by exactly note k's own contribution difference. It is blind to
   // how the masks divided the energy: a mask that took half of the other note is
   // equally present in both renders and cancels out of the difference.
+  // A pitch shift is not claimed: its last frames are not continuous in their input,
+  // so a one-ULP difference in the note's audio can move its tail by about 1e-2.
   REQUIRE(polyphony_stft_defaults().n_fft == kNfft);
   REQUIRE(polyphony_stft_defaults().hop_length == kHopLength);
 
   const std::vector<std::pair<std::string, std::function<void(NoteObject&)>>> edits = {
       {"a gain of -9 dB", [](NoteObject& note) { note.edit.gain_db = -9.0f; }},
-      {"a pitch shift of +1 semitone",
-       [](NoteObject& note) { note.edit.pitch_shift_semitones = 1.0f; }},
-      {"a pitch shift of +4 semitones",
-       [](NoteObject& note) { note.edit.pitch_shift_semitones = 4.0f; }},
       {"a mute", [](NoteObject& note) { note.edit.muted = true; }}};
 
   // Both pairs, because the one bound this file asserts should not depend on
